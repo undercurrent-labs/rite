@@ -1,4 +1,7 @@
-//! Sinatra-style HTTP service with real Rite handlers
+//! Sinatra-style HTTP service with real Rite handlers.
+//! Run: rite run examples/07-http-service/main.rite --allow-all
+//! Watch for: rite: listening on http://127.0.0.1:PORT
+//! Then: curl -sS http://127.0.0.1:PORT/health
 
 @http.listen "127.0.0.1:0" ⟦
   use @http.log

@@ -157,7 +157,11 @@ impl HttpCap {
             .map_err(|e| EvalError::Capability(e.to_string()))?;
         let local_s = local.to_string();
         *self.last_addr.lock() = Some(local_s.clone());
-        *LAST_BOUND_ADDR.lock() = Some(local_s);
+        *LAST_BOUND_ADDR.lock() = Some(local_s.clone());
+        // Surface the bound URL immediately — port 0 is useless without this.
+        // (Also helps when the process blocks until Ctrl-C.)
+        println!("rite: listening on http://{}", local_s);
+        let _ = std::io::Write::flush(&mut std::io::stdout());
 
         let state = Arc::new(state);
         let (shutdown_tx, mut shutdown_rx) = oneshot::channel::<()>();

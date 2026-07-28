@@ -184,11 +184,14 @@ rite run job.rite --allow fs:write=./out
 ```
 
 ```bash
-rite run server.rite --allow-all
-# curl http://127.0.0.1:4040/health
+rite run server.rite
+# expect: rite: listening on http://127.0.0.1:4040
+# other terminal:
+curl -sS http://127.0.0.1:4040/health
+# → {"status":"ok"}
 ```
 
-Loopback listen is allowed under default security; non-loopback needs `net` grants. Server **blocks** until shutdown (Ctrl-C).
+Loopback is allowed under default security. The process **blocks** until Ctrl-C. Full walkthrough: [HTTP services](http.md).
 
 ### 6. REPL-driven helper, then save
 
