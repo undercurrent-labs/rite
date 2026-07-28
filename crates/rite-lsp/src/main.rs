@@ -32,12 +32,7 @@ impl LanguageServer for Backend {
                 )),
                 completion_provider: Some(CompletionOptions {
                     resolve_provider: Some(false),
-                    trigger_characters: Some(vec![
-                        ".".into(),
-                        "@".into(),
-                        "#".into(),
-                        ":".into(),
-                    ]),
+                    trigger_characters: Some(vec![".".into(), "@".into(), "#".into(), ":".into()]),
                     ..Default::default()
                 }),
                 hover_provider: Some(HoverProviderCapability::Simple(true)),
@@ -135,11 +130,7 @@ impl LanguageServer for Backend {
     async fn completion(&self, params: CompletionParams) -> Result<Option<CompletionResponse>> {
         let uri = params.text_document_position.text_document.uri;
         let pos = params.text_document_position.position;
-        let text = self
-            .docs
-            .get(&uri)
-            .map(|e| e.1.clone())
-            .unwrap_or_default();
+        let text = self.docs.get(&uri).map(|e| e.1.clone()).unwrap_or_default();
         let engine = self.engine.lock().await;
         let items = engine.completions(&text, pos.line + 1, pos.character);
         let lsp_items: Vec<CompletionItem> = items
@@ -164,11 +155,7 @@ impl LanguageServer for Backend {
     async fn hover(&self, params: HoverParams) -> Result<Option<Hover>> {
         let uri = params.text_document_position_params.text_document.uri;
         let pos = params.text_document_position_params.position;
-        let text = self
-            .docs
-            .get(&uri)
-            .map(|e| e.1.clone())
-            .unwrap_or_default();
+        let text = self.docs.get(&uri).map(|e| e.1.clone()).unwrap_or_default();
         let engine = self.engine.lock().await;
         Ok(engine
             .hover(&text, pos.line + 1, pos.character)
@@ -187,11 +174,7 @@ impl LanguageServer for Backend {
     ) -> Result<Option<GotoDefinitionResponse>> {
         let uri = params.text_document_position_params.text_document.uri;
         let pos = params.text_document_position_params.position;
-        let text = self
-            .docs
-            .get(&uri)
-            .map(|e| e.1.clone())
-            .unwrap_or_default();
+        let text = self.docs.get(&uri).map(|e| e.1.clone()).unwrap_or_default();
         let engine = self.engine.lock().await;
         let name = match engine.hover(&text, pos.line + 1, pos.character) {
             Some(h) => h.title,
@@ -221,11 +204,7 @@ impl LanguageServer for Backend {
     async fn references(&self, params: ReferenceParams) -> Result<Option<Vec<Location>>> {
         let uri = params.text_document_position.text_document.uri;
         let pos = params.text_document_position.position;
-        let text = self
-            .docs
-            .get(&uri)
-            .map(|e| e.1.clone())
-            .unwrap_or_default();
+        let text = self.docs.get(&uri).map(|e| e.1.clone()).unwrap_or_default();
         let engine = self.engine.lock().await;
         let name = match engine.hover(&text, pos.line + 1, pos.character) {
             Some(h) => h.title,
@@ -297,11 +276,7 @@ impl LanguageServer for Backend {
         params: DocumentSymbolParams,
     ) -> Result<Option<DocumentSymbolResponse>> {
         let uri = params.text_document.uri;
-        let text = self
-            .docs
-            .get(&uri)
-            .map(|e| e.1.clone())
-            .unwrap_or_default();
+        let text = self.docs.get(&uri).map(|e| e.1.clone()).unwrap_or_default();
         let mut engine = self.engine.lock().await;
         let snap = engine.analyze(uri.as_str(), &text);
         let symbols: Vec<SymbolInformation> = snap
@@ -336,11 +311,7 @@ impl LanguageServer for Backend {
 
     async fn formatting(&self, params: DocumentFormattingParams) -> Result<Option<Vec<TextEdit>>> {
         let uri = params.text_document.uri;
-        let text = self
-            .docs
-            .get(&uri)
-            .map(|e| e.1.clone())
-            .unwrap_or_default();
+        let text = self.docs.get(&uri).map(|e| e.1.clone()).unwrap_or_default();
         match format_with_dialect(&text, Dialect::Glyph) {
             Ok(r) => Ok(Some(vec![TextEdit {
                 range: full_range(&text),
@@ -366,11 +337,7 @@ impl LanguageServer for Backend {
     async fn code_action(&self, params: CodeActionParams) -> Result<Option<CodeActionResponse>> {
         let mut actions = Vec::new();
         let uri = params.text_document.uri;
-        let text = self
-            .docs
-            .get(&uri)
-            .map(|e| e.1.clone())
-            .unwrap_or_default();
+        let text = self.docs.get(&uri).map(|e| e.1.clone()).unwrap_or_default();
         if let Ok(r) = convert_source(&text, Dialect::Glyph) {
             actions.push(CodeActionOrCommand::CodeAction(CodeAction {
                 title: "Convert to glyph syntax".into(),
@@ -446,11 +413,7 @@ impl LanguageServer for Backend {
 
     async fn rename(&self, params: RenameParams) -> Result<Option<WorkspaceEdit>> {
         let uri = params.text_document_position.text_document.uri;
-        let text = self
-            .docs
-            .get(&uri)
-            .map(|e| e.1.clone())
-            .unwrap_or_default();
+        let text = self.docs.get(&uri).map(|e| e.1.clone()).unwrap_or_default();
         let pos = params.text_document_position.position;
         let engine = self.engine.lock().await;
         let old = match engine.hover(&text, pos.line + 1, pos.character) {
@@ -494,11 +457,7 @@ impl LanguageServer for Backend {
 
     async fn folding_range(&self, params: FoldingRangeParams) -> Result<Option<Vec<FoldingRange>>> {
         let uri = params.text_document.uri;
-        let text = self
-            .docs
-            .get(&uri)
-            .map(|e| e.1.clone())
-            .unwrap_or_default();
+        let text = self.docs.get(&uri).map(|e| e.1.clone()).unwrap_or_default();
         let mut ranges = Vec::new();
         let mut stack = Vec::new();
         for (i, line) in text.lines().enumerate() {
@@ -520,11 +479,7 @@ impl LanguageServer for Backend {
 
     async fn inlay_hint(&self, params: InlayHintParams) -> Result<Option<Vec<InlayHint>>> {
         let uri = params.text_document.uri;
-        let text = self
-            .docs
-            .get(&uri)
-            .map(|e| e.1.clone())
-            .unwrap_or_default();
+        let text = self.docs.get(&uri).map(|e| e.1.clone()).unwrap_or_default();
         let mut hints = Vec::new();
         for (i, line) in text.lines().enumerate() {
             if line.contains('!') || line.contains(" do ") {
@@ -590,9 +545,8 @@ impl Backend {
                 severity: Some(severity),
                 code: Some(NumberOrString::String(code_str)),
                 code_description: Some(CodeDescription {
-                    href: Url::parse("https://rite.dev/docs/diagnostics").unwrap_or_else(|_| {
-                        Url::parse("https://example.com").unwrap()
-                    }),
+                    href: Url::parse("https://rite.dev/docs/diagnostics")
+                        .unwrap_or_else(|_| Url::parse("https://example.com").unwrap()),
                 }),
                 source: Some("rite".into()),
                 message,
@@ -735,9 +689,7 @@ async fn main() {
     let stdin = tokio::io::stdin();
     let stdout = tokio::io::stdout();
 
-    let roots = std::env::current_dir()
-        .map(|d| vec![d])
-        .unwrap_or_default();
+    let roots = std::env::current_dir().map(|d| vec![d]).unwrap_or_default();
     let (service, socket) = LspService::new(|client| Backend {
         client,
         docs: DashMap::new(),

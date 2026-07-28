@@ -23,7 +23,7 @@ pub fn parse_source(name: &str, text: &str) -> (Option<Program>, Diagnostics, So
 
 pub fn parse_file(file: &SourceFile) -> (Option<Program>, Diagnostics) {
     let (tokens, mut lex_diags) = lex(file);
-    let (program, mut parse_diags) = parse(file.id, &tokens);
+    let (program, parse_diags) = parse(file.id, &tokens);
     lex_diags.extend(parse_diags.into_vec());
     (program, lex_diags)
 }
@@ -140,7 +140,9 @@ fn strip_expr(e: &Expr) -> serde_json::Value {
         Expr::Literal(l) => serde_json::json!({"lit": format!("{:?}", l.kind)}),
         Expr::Ident(i) => serde_json::json!({"ident": i.name}),
         Expr::Atom(a) => serde_json::json!({"atom": a.parts}),
-        Expr::List(l) => serde_json::json!({"list": l.elements.iter().map(strip_expr).collect::<Vec<_>>()}),
+        Expr::List(l) => {
+            serde_json::json!({"list": l.elements.iter().map(strip_expr).collect::<Vec<_>>()})
+        }
         Expr::Record(r) => serde_json::json!({
             "record": r.entries.iter().map(|e| {
                 serde_json::json!({"key": format!("{:?}", e.key), "value": strip_expr(&e.value)})

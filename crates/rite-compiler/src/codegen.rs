@@ -1,6 +1,6 @@
 //! Lower ProgramIr into inspectable Rust that reconstructs and evaluates IR.
 
-use rite_sem::{ProgramIr, ExprIr, ValueLiteral, BinaryOpIr, UnaryOpIr, EffectKind, KeyIr};
+use rite_sem::{BinaryOpIr, EffectKind, ExprIr, KeyIr, ProgramIr, UnaryOpIr, ValueLiteral};
 use std::path::Path;
 
 /// Generate `generated.rs` that embeds IR as JSON and evaluates it.
@@ -28,7 +28,9 @@ pub fn generate_from_ir(ir: &ProgramIr, source_path: &Path) -> Result<String, St
     out.push_str(BASE64_DECODE_FN);
     out.push_str("}\n\n");
 
-    out.push_str("pub async fn rite_main(ctx: &mut RuntimeContext) -> Result<Value, EvalError> {\n");
+    out.push_str(
+        "pub async fn rite_main(ctx: &mut RuntimeContext) -> Result<Value, EvalError> {\n",
+    );
     out.push_str("    let ir = embedded_ir();\n");
     out.push_str("    run_ir(&ir, ctx).await\n");
     out.push_str("}\n\n");
@@ -38,18 +40,11 @@ pub fn generate_from_ir(ir: &ProgramIr, source_path: &Path) -> Result<String, St
     out.push_str(&format!(" modules: {}\n", ir.modules.len()));
     out.push_str(&format!(" functions: {}\n", ir.functions.len()));
     for f in &ir.functions {
-        out.push_str(&format!(
-            " // rite: fn {} span {:?}\n",
-            f.name, f.span
-        ));
+        out.push_str(&format!(" // rite: fn {} span {:?}\n", f.name, f.span));
     }
     if let Some(m) = ir.modules.first() {
         for (i, stmt) in m.statements.iter().enumerate() {
-            out.push_str(&format!(
-                " // rite: stmt[{}] span {:?}\n",
-                i,
-                stmt.span()
-            ));
+            out.push_str(&format!(" // rite: stmt[{}] span {:?}\n", i, stmt.span()));
             let _ = emit_expr_comment(&mut out, stmt, 1);
         }
     }
@@ -71,7 +66,12 @@ fn emit_expr_comment(out: &mut String, expr: &ExprIr, depth: usize) -> Result<()
     let pad = "  ".repeat(depth);
     match expr {
         ExprIr::Constant(v) => out.push_str(&format!("{}// const {:?}\n", pad, v.span())),
-        ExprIr::Binary { left, right, op, span } => {
+        ExprIr::Binary {
+            left,
+            right,
+            op,
+            span,
+        } => {
             out.push_str(&format!("{}// binary {:?} @ {:?}\n", pad, op, span));
             let _ = emit_expr_comment(out, left, depth + 1);
             let _ = emit_expr_comment(out, right, depth + 1);

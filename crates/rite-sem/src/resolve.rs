@@ -42,8 +42,10 @@ struct Scope {
 
 #[derive(Debug, Clone)]
 struct BindingInfo {
+    #[allow(dead_code)]
     local: LocalId,
     mutable: bool,
+    #[allow(dead_code)]
     span: Span,
 }
 
@@ -95,10 +97,40 @@ impl Resolver {
         };
         // Predefine pure builtins
         for name in [
-            "map", "keep", "reject", "reduce", "each", "flatten", "count", "first", "last",
-            "find", "any", "all", "sum", "min", "max", "sort", "unique", "zip", "chunk",
-            "parallel", "ok", "err", "panic", "expect", "fail", "str", "len", "type_of",
-            "require", "collect_results", "group", "lines", "number?", "range",
+            "map",
+            "keep",
+            "reject",
+            "reduce",
+            "each",
+            "flatten",
+            "count",
+            "first",
+            "last",
+            "find",
+            "any",
+            "all",
+            "sum",
+            "min",
+            "max",
+            "sort",
+            "unique",
+            "zip",
+            "chunk",
+            "parallel",
+            "ok",
+            "err",
+            "panic",
+            "expect",
+            "fail",
+            "str",
+            "len",
+            "type_of",
+            "require",
+            "collect_results",
+            "group",
+            "lines",
+            "number?",
+            "range",
         ] {
             r.functions.insert(
                 name.into(),
@@ -244,7 +276,12 @@ impl Resolver {
             }
             Expr::Capability(c) => {
                 let path = c.path.join(".");
-                if self.effectful_caps.iter().any(|e| e == &path || path.starts_with(e)) && !in_effect {
+                if self
+                    .effectful_caps
+                    .iter()
+                    .any(|e| e == &path || path.starts_with(e))
+                    && !in_effect
+                {
                     // Will be checked on call site
                 }
             }
@@ -483,7 +520,9 @@ fn is_effectful(path: &str) -> bool {
         "game.say",
         "store.set",
     ];
-    effectful.iter().any(|e| path == *e || path.starts_with(&format!("{}.", e)))
+    effectful
+        .iter()
+        .any(|e| path == *e || path.starts_with(&format!("{}.", e)))
         || path.starts_with("console.")
         || path == "http.listen"
 }
@@ -545,4 +584,4 @@ fn is_builtin_name(name: &str) -> bool {
 
 // silence unused imports
 #[allow(dead_code)]
-fn _unused(b: &Binding, o: BinOp, l: &LitKind) {}
+fn _unused(_b: &Binding, _o: BinOp, _l: &LitKind) {}

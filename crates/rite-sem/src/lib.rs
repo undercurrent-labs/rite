@@ -41,7 +41,7 @@ pub fn compile_to_ir_with_roots(
     let (graph, mut load_diags) = loader.into_graph();
     modules::merge_exports_into_entry(&mut ast, &graph, &mut load_diags);
 
-    let (resolved, mut rdiags) = resolve(&ast, file);
+    let (resolved, rdiags) = resolve(&ast, file);
     load_diags.extend(rdiags.into_vec());
     if load_diags.has_errors() {
         return (None, load_diags);
@@ -65,10 +65,7 @@ pub fn compile_to_ir_with_roots(
     (Some(ir), load_diags)
 }
 
-pub fn compile_source(
-    name: &str,
-    text: &str,
-) -> (Option<ProgramIr>, Diagnostics, SourceMap) {
+pub fn compile_source(name: &str, text: &str) -> (Option<ProgramIr>, Diagnostics, SourceMap) {
     let mut sources = SourceMap::new();
     let id = sources.add_file(name, text);
     let file = sources.get(id).unwrap().clone();

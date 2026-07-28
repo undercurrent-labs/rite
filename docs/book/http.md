@@ -62,8 +62,14 @@ Handlers can take `|req|` and use:
 ### Middleware
 
 ```rite
-use @http.log
-use @http.recover
+@http.listen "127.0.0.1:0" ⟦
+  use @http.log
+  use @http.recover
+
+  GET "/health" ⟦
+    ^ 200 ⟨status: #ok⟩
+  ⟧
+⟧
 ```
 
 - **`@http.log`** — request logging  

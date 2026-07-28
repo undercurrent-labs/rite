@@ -185,10 +185,7 @@ fn find_workspace_root() -> Option<PathBuf> {
 }
 
 /// Differential helper: run IR in-process (same as compiled path).
-pub async fn run_ir_mode(
-    file: &Path,
-    perms: PermissionSet,
-) -> Result<rite_runtime::Value, String> {
+pub async fn run_ir_mode(file: &Path, perms: PermissionSet) -> Result<rite_runtime::Value, String> {
     let (ir, diags, _) = compile_path(file);
     if diags.has_errors() {
         return Err(format!("compile errors: {}", diags.len()));
@@ -209,7 +206,6 @@ pub async fn run_interpreted(
     file: &Path,
     perms: PermissionSet,
 ) -> Result<(rite_runtime::Value, String, String), String> {
-    let text = std::fs::read_to_string(file).map_err(|e| e.to_string())?;
     let mut ctx = rite_runtime::RuntimeContext::new();
     rite_caps::install_defaults(&mut ctx, perms);
     if let Some(parent) = file.parent() {
@@ -217,9 +213,7 @@ pub async fn run_interpreted(
         ctx.module_roots.push(parent.to_path_buf());
     }
     let mut sources = SourceMap::new();
-    let id = sources
-        .add_path(file)
-        .map_err(|e| e.to_string())?;
+    let id = sources.add_path(file).map_err(|e| e.to_string())?;
     let sf = sources.get(id).unwrap().clone();
     ctx.sources = sources;
     let v = rite_runtime::run_file(&sf, &mut ctx)

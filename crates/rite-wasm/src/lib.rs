@@ -302,24 +302,23 @@ pub fn run_blocking(source: &str, options: RunOptions) -> ExecutionResult {
         let rt = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build();
-        match rt {
-            Ok(rt) => return rt.block_on(run(source, options)),
-            Err(e) => {
-                return ExecutionResult {
-                    ok: false,
-                    value: serde_json::Value::Null,
-                    stdout: String::new(),
-                    stderr: String::new(),
-                    error: Some(e.to_string()),
-                    virtual_http: None,
-                };
-            }
-        }
+        return match rt {
+            Ok(rt) => rt.block_on(run(source, options)),
+            Err(e) => ExecutionResult {
+                ok: false,
+                value: serde_json::Value::Null,
+                stdout: String::new(),
+                stderr: String::new(),
+                error: Some(e.to_string()),
+                virtual_http: None,
+            },
+        };
     }
 
-    // Pure poll loop for wasm32 / no-Tokio builds. Pure scripts + @console complete
-    // on first poll; true host I/O would stay Pending (blocked in browser).
+    #[cfg(not(feature = "native"))]
     {
+        // Pure poll loop for wasm32 / no-Tokio builds. Pure scripts + @console complete
+        // on first poll; true host I/O would stay Pending (blocked in browser).
         use std::future::Future;
         use std::task::{Context, Poll, RawWaker, RawWakerVTable, Waker};
         fn dummy_raw_waker() -> RawWaker {

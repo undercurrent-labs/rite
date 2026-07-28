@@ -45,13 +45,9 @@ impl Environment {
 
     pub fn define_name(&mut self, name: &str, value: Value, mutable: bool) {
         let frame = self.frames.last_mut().expect("frame");
-        frame.by_name.insert(
-            name.to_string(),
-            Binding {
-                value,
-                mutable,
-            },
-        );
+        frame
+            .by_name
+            .insert(name.to_string(), Binding { value, mutable });
     }
 
     pub fn get(&self, name: &str) -> Option<Value> {

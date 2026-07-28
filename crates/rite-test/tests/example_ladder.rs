@@ -87,7 +87,11 @@ fn convert_roundtrip_cli() {
         .current_dir(&root)
         .output()
         .expect("convert");
-    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
     let text = String::from_utf8_lossy(&out.stdout);
     assert!(text.contains('←') || text.contains('◆') || text.contains("Aura"));
 }

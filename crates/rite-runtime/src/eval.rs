@@ -2,23 +2,21 @@
 
 use crate::atom::AtomInterner;
 use crate::budget::{BudgetError, ExecutionBudget};
-use crate::builtins::{
-    call_builtin, compare_values, list_remove_first, membership, merge_records,
-};
+use crate::builtins::{call_builtin, compare_values, list_remove_first, membership, merge_records};
 use crate::env::Environment;
 use crate::value::{Closure, Key, ResultValue, Value};
 use async_trait::async_trait;
 use indexmap::IndexMap;
 use rite_core::{Diagnostics, SourceMap, Span};
 use rite_sem::{
-    BinaryOpIr, BlockIr, EffectKind, EntryPoint, ExprIr, KeyIr, MatchArmIr, PatternIr, ProgramIr,
+    BinaryOpIr, BlockIr, EffectKind, EntryPoint, ExprIr, KeyIr, PatternIr, ProgramIr,
     ResultPatKindIr, StageKind, UnaryOpIr, ValueLiteral,
 };
 use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
 
 static CLOSURE_ID: AtomicU64 = AtomicU64::new(1);
 
@@ -36,7 +34,9 @@ pub enum EvalError {
 impl std::fmt::Display for EvalError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            EvalError::Message(m) | EvalError::Panic(m) | EvalError::Permission(m)
+            EvalError::Message(m)
+            | EvalError::Panic(m)
+            | EvalError::Permission(m)
             | EvalError::Capability(m) => write!(f, "{}", m),
             EvalError::Compile(d) => write!(f, "compile error ({} diagnostics)", d.len()),
             EvalError::Budget(b) => write!(f, "{}", b),
@@ -232,7 +232,11 @@ impl<'a> Evaluator<'a> {
             EntryPoint::Main { .. } => {
                 if let Some(main) = self.ctx.functions.get("main").cloned() {
                     last = self
-                        .call_block(&main.body, &main.params, vec![Value::list(Vec::<Value>::new())])
+                        .call_block(
+                            &main.body,
+                            &main.params,
+                            vec![Value::list(Vec::<Value>::new())],
+                        )
                         .await?;
                 }
             }
@@ -245,9 +249,7 @@ impl<'a> Evaluator<'a> {
         &'b mut self,
         expr: &'b ExprIr,
     ) -> Pin<Box<dyn Future<Output = Result<Value, EvalError>> + Send + 'b>> {
-        Box::pin(async move {
-            self.eval_expr_inner(expr).await
-        })
+        Box::pin(async move { self.eval_expr_inner(expr).await })
     }
 
     async fn eval_expr_inner(&mut self, expr: &ExprIr) -> Result<Value, EvalError> {
@@ -281,9 +283,7 @@ impl<'a> Evaluator<'a> {
                 ..
             } => {
                 let v = self.eval_expr(value).await?;
-                self.ctx
-                    .env
-                    .define(name, *local, v.clone(), *mutable);
+                self.ctx.env.define(name, *local, v.clone(), *mutable);
                 Ok(v)
             }
             ExprIr::Assign { value, span, .. } => {
@@ -320,10 +320,7 @@ impl<'a> Evaluator<'a> {
                 self.call_native(name, argv).await
             }
             ExprIr::CapabilityCall {
-                path,
-                args,
-                effect,
-                ..
+                path, args, effect, ..
             } => {
                 let mut argv = Vec::new();
                 for a in args {
@@ -334,10 +331,7 @@ impl<'a> Evaluator<'a> {
                 if path.first().map(|s| s.as_str()) == Some("console") {
                     return self.eval_console(path, argv).await;
                 }
-                self.ctx
-                    .capabilities
-                    .call(path, argv, eff, self.ctx)
-                    .await
+                self.ctx.capabilities.call(path, argv, eff, self.ctx).await
             }
             ExprIr::Closure(c) => Ok(Value::Function(Closure {
                 id: CLOSURE_ID.fetch_add(1, Ordering::Relaxed),
@@ -346,9 +340,7 @@ impl<'a> Evaluator<'a> {
                 env: Arc::new(parking_lot::RwLock::new(self.ctx.env.clone())),
                 body: c.body.clone(),
             })),
-            ExprIr::Pipeline {
-                input, stages, ..
-            } => {
+            ExprIr::Pipeline { input, stages, .. } => {
                 let mut val = self.eval_expr(input).await?;
                 for stage in stages {
                     val = self.eval_pipeline_stage(val, stage).await?;
@@ -492,7 +484,10 @@ impl<'a> Evaluator<'a> {
                     .iter()
                     .map(|r| {
                         Value::record(vec![
-                            (Key::String("method".into()), Value::string(r.method.clone())),
+                            (
+                                Key::String("method".into()),
+                                Value::string(r.method.clone()),
+                            ),
                             (Key::String("path".into()), Value::string(r.path.clone())),
                         ])
                     })
@@ -568,14 +563,10 @@ impl<'a> Evaluator<'a> {
                         // is itself the function applied to input
                         self.call_value(clos, vec![input]).await
                     }
-                    ExprIr::Global(name) | ExprIr::NativeCall { name, .. } => {
-                        self.call_native(name, vec![input]).await
-                    }
-                    ExprIr::Member {
-                        object,
-                        field,
-                        ..
-                    } if matches!(object.as_ref(), ExprIr::Placeholder(_)) => {
+                    ExprIr::Global(name) => self.call_native(name, vec![input]).await,
+                    ExprIr::Member { object, field, .. }
+                        if matches!(object.as_ref(), ExprIr::Placeholder(_)) =>
+                    {
                         Ok(input.get_field(field))
                     }
                     other => {
@@ -623,17 +614,13 @@ impl<'a> Evaluator<'a> {
                 (Value::Float(a), Value::Float(b)) => Ok(Value::Float(a + b)),
                 (Value::Int(a), Value::Float(b)) => Ok(Value::Float(*a as f64 + b)),
                 (Value::Float(a), Value::Int(b)) => Ok(Value::Float(a + *b as f64)),
-                (Value::String(a), Value::String(b)) => {
-                    Ok(Value::string(format!("{}{}", a, b)))
-                }
+                (Value::String(a), Value::String(b)) => Ok(Value::string(format!("{}{}", a, b))),
                 (Value::List(a), Value::List(b)) => {
                     let mut out = a.clone();
                     out.append(b.clone());
                     Ok(Value::List(out))
                 }
-                (Value::Record(a), Value::Record(b)) => {
-                    Ok(Value::Record(merge_records(a, b)))
-                }
+                (Value::Record(a), Value::Record(b)) => Ok(Value::Record(merge_records(a, b))),
                 (Value::List(a), other) => {
                     let mut out = a.clone();
                     out.push_back(other.clone());
@@ -693,12 +680,9 @@ impl<'a> Evaluator<'a> {
                     let name = self.ctx.atoms.name(*id);
                     if let Value::List(xs) = &r {
                         let atom_val = Value::Atom(*id);
-                        return Ok(Value::Bool(
-                            xs.iter().any(|x| {
-                                x.structural_eq(&atom_val)
-                                    || x.as_str() == Some(name.as_str())
-                            }),
-                        ));
+                        return Ok(Value::Bool(xs.iter().any(|x| {
+                            x.structural_eq(&atom_val) || x.as_str() == Some(name.as_str())
+                        })));
                     }
                     if let Value::Record(rec) = &r {
                         return Ok(Value::Bool(
@@ -759,12 +743,10 @@ impl<'a> Evaluator<'a> {
         self.ctx.budget.check_depth(self.ctx.call_depth + 1)?;
         self.ctx.call_depth += 1;
         let result = match callee {
-            Value::Function(c) => {
-                self.call_block(&c.body, &c.params, args).await
-            }
-            Value::NativeFunction(_) => {
-                Err(EvalError::Message("native function id call not wired".into()))
-            }
+            Value::Function(c) => self.call_block(&c.body, &c.params, args).await,
+            Value::NativeFunction(_) => Err(EvalError::Message(
+                "native function id call not wired".into(),
+            )),
             other => Err(EvalError::Message(format!(
                 "cannot call value of type {}",
                 other.type_name()
@@ -847,7 +829,7 @@ impl<'a> Evaluator<'a> {
             "all" => self.builtin_any_all(args, false).await,
             "group" => self.builtin_group(args).await,
             "parallel" => self.builtin_map(args).await, // sequential fallback with same semantics for pure
-            "import" => Ok(Value::None), // module loading handled at higher layer
+            "import" => Ok(Value::None),                // module loading handled at higher layer
             "print" | "println" => {
                 let s = args
                     .first()
@@ -868,7 +850,12 @@ impl<'a> Evaluator<'a> {
         let mut it = args.into_iter();
         let list = match it.next() {
             Some(Value::List(xs)) => xs,
-            Some(other) => return Err(EvalError::Message(format!("map expects list, got {}", other.type_name()))),
+            Some(other) => {
+                return Err(EvalError::Message(format!(
+                    "map expects list, got {}",
+                    other.type_name()
+                )))
+            }
             None => return Ok(Value::list(Vec::<Value>::new())),
         };
         let f = it.next().unwrap_or(Value::None);
@@ -932,9 +919,7 @@ impl<'a> Evaluator<'a> {
         let f = it.next().unwrap_or(Value::None);
         let mut acc = it.next().unwrap_or(Value::None);
         for item in list {
-            acc = self
-                .call_value(f.clone(), vec![acc, item])
-                .await?;
+            acc = self.call_value(f.clone(), vec![acc, item]).await?;
         }
         Ok(acc)
     }
@@ -955,7 +940,11 @@ impl<'a> Evaluator<'a> {
         Ok(Value::None)
     }
 
-    async fn builtin_any_all(&mut self, args: Vec<Value>, is_any: bool) -> Result<Value, EvalError> {
+    async fn builtin_any_all(
+        &mut self,
+        args: Vec<Value>,
+        is_any: bool,
+    ) -> Result<Value, EvalError> {
         let mut it = args.into_iter();
         let list = match it.next() {
             Some(Value::List(xs)) => xs,
@@ -1035,12 +1024,7 @@ impl<'a> Evaluator<'a> {
                 Ok(Value::None)
             }
             "read_line" => Ok(Value::string("")),
-            _ => {
-                self.ctx
-                    .capabilities
-                    .call(path, args, true, self.ctx)
-                    .await
-            }
+            _ => self.ctx.capabilities.call(path, args, true, self.ctx).await,
         }
     }
 
@@ -1175,30 +1159,25 @@ fn num_binop(
         (Value::Float(a), Value::Float(b)) => Ok(Value::Float(float_op(*a, *b))),
         (Value::Int(a), Value::Float(b)) => Ok(Value::Float(float_op(*a as f64, *b))),
         (Value::Float(a), Value::Int(b)) => Ok(Value::Float(float_op(*a, *b as f64))),
-        _ => Err(EvalError::Message("numeric operation on non-numbers".into())),
+        _ => Err(EvalError::Message(
+            "numeric operation on non-numbers".into(),
+        )),
     }
 }
 
 /// Register HTTP routes for the capability layer (implemented via weak dep pattern).
 /// rite-runtime cannot depend on rite-caps; use a function pointer installed at startup.
-fn http_register_pending(
-    addr: String,
-    routes: &[rite_sem::RouteIr],
-    ctx: &RuntimeContext,
-) {
+fn http_register_pending(addr: String, routes: &[rite_sem::RouteIr], ctx: &RuntimeContext) {
     if let Some(f) = HTTP_REGISTER.get() {
         f(addr, routes, ctx);
     }
 }
 
-static HTTP_REGISTER: std::sync::OnceLock<
-    fn(String, &[rite_sem::RouteIr], &RuntimeContext),
-> = std::sync::OnceLock::new();
+static HTTP_REGISTER: std::sync::OnceLock<fn(String, &[rite_sem::RouteIr], &RuntimeContext)> =
+    std::sync::OnceLock::new();
 
 /// Called by rite-caps/install to wire HTTP route registration.
-pub fn set_http_route_registrar(
-    f: fn(String, &[rite_sem::RouteIr], &RuntimeContext),
-) {
+pub fn set_http_route_registrar(f: fn(String, &[rite_sem::RouteIr], &RuntimeContext)) {
     let _ = HTTP_REGISTER.set(f);
 }
 

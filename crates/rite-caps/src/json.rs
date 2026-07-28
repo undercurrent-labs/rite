@@ -65,7 +65,6 @@ impl JsonCap {
                 }
             }
             "encode" => {
-                let atoms = rite_runtime::AtomInterner::new();
                 // Atoms will show as numbers without interner; use display path
                 let v = args.first().cloned().unwrap_or(Value::None);
                 let json = value_to_json_string(&v, false);
@@ -126,9 +125,7 @@ fn value_to_serde(v: &Value) -> serde_json::Value {
         Value::Float(f) => serde_json::json!(f),
         Value::String(s) => serde_json::json!(s.as_ref()),
         Value::Atom(id) => serde_json::json!(format!("atom:{}", id.0)),
-        Value::List(xs) => {
-            serde_json::Value::Array(xs.iter().map(value_to_serde).collect())
-        }
+        Value::List(xs) => serde_json::Value::Array(xs.iter().map(value_to_serde).collect()),
         Value::Record(r) => {
             let mut map = serde_json::Map::new();
             for (k, v) in r {

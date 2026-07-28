@@ -170,7 +170,10 @@ fn collect_symbols(program: &Program, sources: &SourceMap, out: &mut Vec<SymbolI
 
 fn word_at(source: &str, line: u32, character: u32) -> Option<String> {
     let lines: Vec<&str> = source.lines().collect();
-    let line = lines.get((line.saturating_sub(1)) as usize).copied().unwrap_or("");
+    let line = lines
+        .get((line.saturating_sub(1)) as usize)
+        .copied()
+        .unwrap_or("");
     let col = character as usize;
     if line.is_empty() {
         return None;
@@ -178,7 +181,10 @@ fn word_at(source: &str, line: u32, character: u32) -> Option<String> {
     let bytes = line.as_bytes();
     let mut start = col.min(bytes.len());
     let mut end = start;
-    while start > 0 && (bytes[start - 1].is_ascii_alphanumeric() || bytes[start - 1] == b'_' || bytes[start - 1] == b'@')
+    while start > 0
+        && (bytes[start - 1].is_ascii_alphanumeric()
+            || bytes[start - 1] == b'_'
+            || bytes[start - 1] == b'@')
     {
         start -= 1;
     }
@@ -193,10 +199,22 @@ fn word_at(source: &str, line: u32, character: u32) -> Option<String> {
 
 fn capability_hover(word: &str) -> Option<HoverInfo> {
     let table: HashMap<&str, &str> = [
-        ("@console", "Console I/O capability. Effectful: print, println, warn, error."),
-        ("@fs", "Filesystem capability. Requires fs:read / fs:write permissions."),
-        ("@json", "JSON encode/decode. Pure decode; write requires fs."),
-        ("@http", "HTTP server and client. Browser uses virtual listener."),
+        (
+            "@console",
+            "Console I/O capability. Effectful: print, println, warn, error.",
+        ),
+        (
+            "@fs",
+            "Filesystem capability. Requires fs:read / fs:write permissions.",
+        ),
+        (
+            "@json",
+            "JSON encode/decode. Pure decode; write requires fs.",
+        ),
+        (
+            "@http",
+            "HTTP server and client. Browser uses virtual listener.",
+        ),
         ("@clock", "Clock and sleep. Nondeterministic unless faked."),
         ("@random", "Seedable RNG."),
         ("@game", "Text RPG entity and event runtime."),

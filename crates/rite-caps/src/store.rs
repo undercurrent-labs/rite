@@ -55,10 +55,7 @@ impl StoreCap {
                 let ns = key_str(args.first())?;
                 let key = key_str(args.get(1))?;
                 let val = args.get(2).cloned().unwrap_or(Value::None);
-                self.namespaces
-                    .entry(ns)
-                    .or_default()
-                    .insert(key, val);
+                self.namespaces.entry(ns).or_default().insert(key, val);
                 Ok(Value::ok(Value::None))
             }
             "delete" => {
@@ -91,4 +88,4 @@ impl Default for StoreCap {
 
 // silence
 #[allow(dead_code)]
-fn _k(k: Key) {}
+fn _k(_k: Key) {}

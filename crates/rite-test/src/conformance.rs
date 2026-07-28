@@ -33,7 +33,8 @@ pub async fn run_conformance_suite(root: &Path) -> anyhow::Result<ConformanceRep
         if !case_file.is_file() {
             continue;
         }
-        let expected_exit = read_trim(&case_dir.join("expected.exit")).unwrap_or_else(|| "0".into());
+        let expected_exit =
+            read_trim(&case_dir.join("expected.exit")).unwrap_or_else(|| "0".into());
         let expected_value = read_trim(&case_dir.join("expected.value.json"));
         let expected_stdout = read_trim(&case_dir.join("expected.stdout"));
         let perms = load_perms(&case_dir.join("permissions.toml"));
@@ -50,10 +51,7 @@ pub async fn run_conformance_suite(root: &Path) -> anyhow::Result<ConformanceRep
             (Ok((v_i, out_i, _)), Ok(v_c)) => {
                 if !v_i.structural_eq(v_c) {
                     ok = false;
-                    msg.push_str(&format!(
-                        "value mismatch: interp={:?} ir={:?}; ",
-                        v_i, v_c
-                    ));
+                    msg.push_str(&format!("value mismatch: interp={:?} ir={:?}; ", v_i, v_c));
                 }
                 if let Some(ref exp) = expected_value {
                     let got = format!("{}", v_i);
@@ -65,10 +63,7 @@ pub async fn run_conformance_suite(root: &Path) -> anyhow::Result<ConformanceRep
                         // try int equality
                         if v_i.as_int().map(|n| n.to_string()) != Some(exp_clean.to_string()) {
                             ok = false;
-                            msg.push_str(&format!(
-                                "expected value {} got {}; ",
-                                exp_clean, got
-                            ));
+                            msg.push_str(&format!("expected value {} got {}; ", exp_clean, got));
                         }
                     }
                 }
@@ -139,7 +134,9 @@ fn collect_cases(dir: &Path, out: &mut Vec<PathBuf>) -> anyhow::Result<()> {
 }
 
 fn read_trim(path: &Path) -> Option<String> {
-    std::fs::read_to_string(path).ok().map(|s| s.trim().to_string())
+    std::fs::read_to_string(path)
+        .ok()
+        .map(|s| s.trim().to_string())
 }
 
 fn load_perms(path: &Path) -> PermissionSet {

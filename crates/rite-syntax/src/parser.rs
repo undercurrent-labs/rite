@@ -268,7 +268,8 @@ impl Parser {
 
         // assignment: ident :=
         if self.check(TokenKind::Ident) {
-            if self.pos + 1 < self.tokens.len() && self.tokens[self.pos + 1].kind == TokenKind::Assign
+            if self.pos + 1 < self.tokens.len()
+                && self.tokens[self.pos + 1].kind == TokenKind::Assign
             {
                 let name = self.parse_ident();
                 self.advance(); // :=
@@ -312,7 +313,7 @@ impl Parser {
     }
 
     fn parse_pipeline(&mut self) -> Expr {
-        let mut expr = self.parse_conditional();
+        let expr = self.parse_conditional();
         let mut stages = Vec::new();
         let start = expr.span();
         while self.check(TokenKind::Arrow) {
@@ -401,9 +402,7 @@ impl Parser {
         }
         self.advance();
         let mut arms = Vec::new();
-        while !self.is_eof()
-            && !self.check(TokenKind::BlockClose)
-            && !self.check(TokenKind::RBrace)
+        while !self.is_eof() && !self.check(TokenKind::BlockClose) && !self.check(TokenKind::RBrace)
         {
             if self.check(TokenKind::Semicolon) {
                 self.advance();
@@ -969,9 +968,7 @@ impl Parser {
         };
 
         let mut body = Vec::new();
-        while !self.is_eof()
-            && !self.check(TokenKind::BlockClose)
-            && !self.check(TokenKind::RBrace)
+        while !self.is_eof() && !self.check(TokenKind::BlockClose) && !self.check(TokenKind::RBrace)
         {
             if self.check(TokenKind::Semicolon) {
                 self.advance();
@@ -1107,10 +1104,7 @@ impl Parser {
             } else {
                 None
             };
-            let end = binding
-                .as_ref()
-                .map(|b| pattern_span(b))
-                .unwrap_or(t.span);
+            let end = binding.as_ref().map(|b| pattern_span(b)).unwrap_or(t.span);
             return Pattern::Result(ResultPattern {
                 kind,
                 binding,
@@ -1407,12 +1401,15 @@ impl Parser {
                 span,
                 format!("found {}", self.peek_kind()),
             ));
-            self.tokens.get(self.pos.saturating_sub(1)).cloned().unwrap_or_else(|| Token {
-                kind: TokenKind::Eof,
-                span: Span::DUMMY,
-                file: self.file,
-                text: String::new(),
-            })
+            self.tokens
+                .get(self.pos.saturating_sub(1))
+                .cloned()
+                .unwrap_or_else(|| Token {
+                    kind: TokenKind::Eof,
+                    span: Span::DUMMY,
+                    file: self.file,
+                    text: String::new(),
+                })
         }
     }
 
@@ -1446,11 +1443,7 @@ impl Parser {
 fn is_callable_expr(expr: &Expr) -> bool {
     matches!(
         expr,
-        Expr::Ident(_)
-            | Expr::Member(_)
-            | Expr::Call(_)
-            | Expr::Capability(_)
-            | Expr::Group(_)
+        Expr::Ident(_) | Expr::Member(_) | Expr::Call(_) | Expr::Capability(_) | Expr::Group(_)
     )
 }
 

@@ -3,9 +3,7 @@
 use crate::ir::*;
 use crate::resolve::ResolvedProgram;
 use rite_core::Span;
-use rite_syntax::{
-    BinOp, Block, Expr, Item, LitKind, Pattern, Program, ResultPatKind, Stmt, UnaryOp,
-};
+use rite_syntax::{BinOp, Block, Expr, Item, LitKind, Pattern, ResultPatKind, Stmt, UnaryOp};
 use std::collections::HashMap;
 
 struct Desugar {
@@ -319,21 +317,19 @@ impl Desugar {
 
     fn desugar_expr(&mut self, expr: &Expr) -> ExprIr {
         match expr {
-            Expr::Literal(l) => {
-                match &l.kind {
-                    LitKind::None => ExprIr::Constant(ValueLiteral::None(l.span)),
-                    LitKind::Bool(b) => ExprIr::Constant(ValueLiteral::Bool(*b, l.span)),
-                    LitKind::Int(n) => ExprIr::Constant(ValueLiteral::Int(*n, l.span)),
-                    LitKind::Float(n) => ExprIr::Constant(ValueLiteral::Float(*n, l.span)),
-                    LitKind::String(s) => {
-                        if s.contains('{') && s.contains('}') {
-                            self.desugar_interpolation(s, l.span)
-                        } else {
-                            ExprIr::Constant(ValueLiteral::String(s.clone(), l.span))
-                        }
+            Expr::Literal(l) => match &l.kind {
+                LitKind::None => ExprIr::Constant(ValueLiteral::None(l.span)),
+                LitKind::Bool(b) => ExprIr::Constant(ValueLiteral::Bool(*b, l.span)),
+                LitKind::Int(n) => ExprIr::Constant(ValueLiteral::Int(*n, l.span)),
+                LitKind::Float(n) => ExprIr::Constant(ValueLiteral::Float(*n, l.span)),
+                LitKind::String(s) => {
+                    if s.contains('{') && s.contains('}') {
+                        self.desugar_interpolation(s, l.span)
+                    } else {
+                        ExprIr::Constant(ValueLiteral::String(s.clone(), l.span))
                     }
                 }
-            }
+            },
             Expr::Ident(i) => ExprIr::Global(i.name.clone()),
             Expr::Atom(a) => ExprIr::Atom(a.parts.join("."), a.span),
             Expr::List(l) => ExprIr::BuildList(
@@ -611,7 +607,7 @@ impl Desugar {
                     span: i.span,
                 },
             },
-            Expr::Call(c) => {
+            Expr::Call(_c) => {
                 // value → f(args) becomes f(value, args...)
                 PipelineStageIr {
                     kind: StageKind::Call,
@@ -743,7 +739,10 @@ impl Desugar {
                     ResultPatKind::Some => ResultPatKindIr::Some,
                     ResultPatKind::None => ResultPatKindIr::None,
                 },
-                binding: r.binding.as_ref().map(|b| Box::new(self.desugar_pattern(b))),
+                binding: r
+                    .binding
+                    .as_ref()
+                    .map(|b| Box::new(self.desugar_pattern(b))),
             },
             Pattern::Typed(t) => self.desugar_pattern(&t.pattern),
         }

@@ -1,7 +1,7 @@
 //! Host capabilities and permission system for Rite.
 
-pub mod console;
 pub mod clock;
+pub mod console;
 pub mod env;
 pub mod fs;
 pub mod game;

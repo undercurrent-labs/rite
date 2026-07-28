@@ -15,7 +15,11 @@ use std::sync::Arc;
 use std::time::Duration;
 
 #[derive(Parser, Debug)]
-#[command(name = "rite", version, about = "Rite — esoteric Rust-backed scripting language")]
+#[command(
+    name = "rite",
+    version,
+    about = "Rite — esoteric Rust-backed scripting language"
+)]
 struct Cli {
     /// Verbose version info (with --version)
     #[arg(long, global = true)]
@@ -269,8 +273,8 @@ async fn run(cli: Cli) -> anyhow::Result<ExitCode> {
                 "preserve" => rite_fmt::Dialect::Preserve,
                 _ => rite_fmt::Dialect::Glyph,
             };
-            let converted = rite_fmt::convert_source(&text, dialect)
-                .map_err(|e| anyhow::anyhow!(e))?;
+            let converted =
+                rite_fmt::convert_source(&text, dialect).map_err(|e| anyhow::anyhow!(e))?;
             if check {
                 if converted.text != text {
                     eprintln!("would convert {}", file.display());
@@ -293,9 +297,7 @@ async fn run(cli: Cli) -> anyhow::Result<ExitCode> {
                 Ok(s) if s.success() => Ok(ExitCode::SUCCESS),
                 Ok(s) => Ok(ExitCode::from(s.code().unwrap_or(1) as u8)),
                 Err(_) => {
-                    eprintln!(
-                        "rite-lsp not found on PATH; run: cargo run -p rite-lsp"
-                    );
+                    eprintln!("rite-lsp not found on PATH; run: cargo run -p rite-lsp");
                     Ok(ExitCode::from(2))
                 }
             }
@@ -304,9 +306,7 @@ async fn run(cli: Cli) -> anyhow::Result<ExitCode> {
             port,
             no_open,
             project,
-        } => {
-            run_studio(port, no_open, project.as_deref()).await
-        }
+        } => run_studio(port, no_open, project.as_deref()).await,
         Commands::SyntaxTree { file, json } => {
             // reuse Ast
             let text = std::fs::read_to_string(&file)?;
@@ -350,8 +350,8 @@ async fn run(cli: Cli) -> anyhow::Result<ExitCode> {
                 return Ok(ExitCode::from(4));
             }
             let ir = ir.ok_or_else(|| anyhow::anyhow!("no ir"))?;
-            let code = rite_compiler::generate_from_ir(&ir, &file)
-                .map_err(|e| anyhow::anyhow!(e))?;
+            let code =
+                rite_compiler::generate_from_ir(&ir, &file).map_err(|e| anyhow::anyhow!(e))?;
             println!("{}", code);
             Ok(ExitCode::SUCCESS)
         }
@@ -509,9 +509,7 @@ async fn run(cli: Cli) -> anyhow::Result<ExitCode> {
             }
 
             let mut sources = SourceMap::new();
-            let id = sources
-                .add_path(&file)
-                .map_err(|e| anyhow::anyhow!(e))?;
+            let id = sources.add_path(&file).map_err(|e| anyhow::anyhow!(e))?;
             let sf = sources.get(id).unwrap().clone();
 
             let mut ctx = RuntimeContext::new();
@@ -702,10 +700,7 @@ fn parse_duration(s: &str) -> Option<Duration> {
         return sec.parse().ok().map(Duration::from_secs);
     }
     if let Some(m) = s.strip_suffix('m') {
-        return m
-            .parse::<u64>()
-            .ok()
-            .map(|n| Duration::from_secs(n * 60));
+        return m.parse::<u64>().ok().map(|n| Duration::from_secs(n * 60));
     }
     s.parse::<u64>().ok().map(Duration::from_secs)
 }
@@ -732,10 +727,7 @@ async fn run_docs(cmd: DocsCmd) -> anyhow::Result<ExitCode> {
             );
             for r in &report.results {
                 if !r.ok {
-                    eprintln!(
-                        "FAIL {}:{} [{}] {}",
-                        r.file, r.line, r.mode, r.message
-                    );
+                    eprintln!("FAIL {}:{} [{}] {}", r.file, r.line, r.mode, r.message);
                 }
             }
             if report.failed > 0 {
@@ -779,7 +771,10 @@ fn run_describe(target: DescribeCmd) -> anyhow::Result<ExitCode> {
             if json {
                 println!("{}", serde_json::to_string_pretty(&v)?);
             } else {
-                println!("Rite language version 1 (tool {})", env!("CARGO_PKG_VERSION"));
+                println!(
+                    "Rite language version 1 (tool {})",
+                    env!("CARGO_PKG_VERSION")
+                );
             }
             Ok(ExitCode::SUCCESS)
         }
@@ -840,11 +835,7 @@ fn run_describe(target: DescribeCmd) -> anyhow::Result<ExitCode> {
     }
 }
 
-async fn run_studio(
-    port: u16,
-    no_open: bool,
-    project: Option<&Path>,
-) -> anyhow::Result<ExitCode> {
+async fn run_studio(port: u16, no_open: bool, project: Option<&Path>) -> anyhow::Result<ExitCode> {
     use std::net::SocketAddr;
 
     let token = uuid::Uuid::new_v4().to_string();
@@ -882,6 +873,8 @@ async fn run_studio(
 
 #[derive(Clone)]
 struct StudioState {
+    /// Session token reserved for authenticated Studio API routes.
+    #[allow(dead_code)]
     token: String,
     project: Option<PathBuf>,
 }
@@ -891,7 +884,9 @@ struct SourceBody {
     source: String,
     #[serde(default)]
     dialect: Option<String>,
+    /// Optional client token (auth not yet enforced).
     #[serde(default)]
+    #[allow(dead_code)]
     token: Option<String>,
 }
 

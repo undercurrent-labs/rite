@@ -92,9 +92,9 @@ Save returns a **result** — use `?` or match. Persist the payload with `@fs.wr
 Keep narrative logic in functions:
 
 ```rite
-◆ describe_exit(dir, room) ⟦
-  // pure helper for custom UIs
-  ^ dir + " → " + room
+◆ describe_exit(dir, place) ⟦
+  // pure helper for custom UIs (`room` is a reserved keyword)
+  ^ dir + " -> " + place
 ⟧
 ```
 

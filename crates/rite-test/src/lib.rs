@@ -6,7 +6,7 @@ pub use conformance::{differential_source, run_conformance_suite, ConformanceRep
 
 use rite_caps::{install_defaults, PermissionSet};
 use rite_core::SourceFile;
-use rite_runtime::{run_file, RuntimeContext, Value};
+use rite_runtime::{run_file, RuntimeContext};
 use rite_syntax::{parse_source, Item};
 use serde::Serialize;
 use std::path::{Path, PathBuf};
@@ -45,14 +45,12 @@ pub async fn run_tests(
     let mut passed = 0;
     let mut failed = 0;
     let mut failures = Vec::new();
-    let mut total = 0;
 
     for file in files {
         let text = std::fs::read_to_string(&file)?;
         let (program, diags, _) = parse_source(&file.display().to_string(), &text);
         if diags.has_errors() {
             // Not a test file or parse error — try running whole file as script test
-            total += 1;
             match run_script_test(&file, &text).await {
                 Ok(()) => passed += 1,
                 Err(e) => {
@@ -85,7 +83,6 @@ pub async fn run_tests(
             if file.components().any(|c| c.as_os_str() == "tests")
                 || file.components().any(|c| c.as_os_str() == "conformance")
             {
-                total += 1;
                 match run_script_test(&file, &text).await {
                     Ok(()) => passed += 1,
                     Err(e) => {
@@ -101,7 +98,6 @@ pub async fn run_tests(
         }
 
         for name in tests {
-            total += 1;
             let modes = match mode {
                 TestMode::Interpreted => vec!["interpreted"],
                 TestMode::Compiled => vec!["compiled"],
@@ -118,17 +114,10 @@ pub async fn run_tests(
                         });
                     }
                 }
-                total += if m == "compiled" && matches!(mode, TestMode::Both) {
-                    0
-                } else {
-                    0
-                };
             }
-            // adjust double count for both — simplify: each mode increments total already once per test name
         }
     }
 
-    // Fix total count: recount simply
     let total = passed + failed;
     Ok(TestReport {
         passed,
@@ -149,18 +138,10 @@ async fn run_script_test(file: &Path, text: &str) -> Result<(), String> {
     }
 }
 
-async fn run_named_test(
-    file: &Path,
-    text: &str,
-    name: &str,
-    _mode: &str,
-) -> Result<(), String> {
+async fn run_named_test(file: &Path, text: &str, name: &str, _mode: &str) -> Result<(), String> {
     // Run whole file; functions named __test_{name} are registered
     // Additionally execute the test body by wrapping
-    let wrapped = format!(
-        "{}\n// force run test via calling if present\n",
-        text
-    );
+    let wrapped = format!("{}\n// force run test via calling if present\n", text);
     let mut ctx = RuntimeContext::new();
     install_defaults(&mut ctx, PermissionSet::allow_all());
     let sf = SourceFile::new(rite_core::FileId(0), file.display().to_string(), &wrapped);

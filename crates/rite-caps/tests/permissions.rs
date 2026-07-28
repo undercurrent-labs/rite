@@ -11,7 +11,9 @@ fn default_denies_fs_env_process() {
     assert!(p.check_random().is_ok());
     assert!(p.check_process().is_err());
     assert!(p.check_env("HOME").is_err());
-    assert!(p.check_fs_read(std::path::Path::new("/etc/passwd")).is_err());
+    assert!(p
+        .check_fs_read(std::path::Path::new("/etc/passwd"))
+        .is_err());
     assert!(p.check_fs_write(std::path::Path::new("/tmp/x")).is_err());
 }
 
@@ -46,7 +48,9 @@ fn fs_write_does_not_widen_read_outside() {
     let mut p = PermissionSet::default_secure();
     p.grant(Permission::FsWrite(PathBuf::from("./output")));
     // write root may allow read under same root, but not arbitrary paths
-    assert!(p.check_fs_read(std::path::Path::new("/etc/passwd")).is_err());
+    assert!(p
+        .check_fs_read(std::path::Path::new("/etc/passwd"))
+        .is_err());
 }
 
 #[test]
@@ -59,10 +63,7 @@ fn env_allowlist() {
 
 #[test]
 fn parse_permission_specs() {
-    assert!(matches!(
-        Permission::parse("all").unwrap(),
-        Permission::All
-    ));
+    assert!(matches!(Permission::parse("all").unwrap(), Permission::All));
     assert!(matches!(
         Permission::parse("fs:read=./data").unwrap(),
         Permission::FsRead(_)
@@ -90,12 +91,7 @@ async fn runtime_fs_denied_without_permission() {
 
     let mut ctx = RuntimeContext::new();
     install_defaults(&mut ctx, PermissionSet::default_secure());
-    let result = run_source(
-        "t.rite",
-        r#"@fs.read("/etc/passwd")"#,
-        &mut ctx,
-    )
-    .await;
+    let result = run_source("t.rite", r#"@fs.read("/etc/passwd")"#, &mut ctx).await;
     // Either permission error at capability or result err — must not return ok file contents
     match result {
         Err(e) => {

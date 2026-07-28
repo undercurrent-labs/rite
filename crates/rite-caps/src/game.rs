@@ -238,10 +238,7 @@ impl GameCap {
             }
             "register_world" => Ok(Value::None),
             "say" => {
-                let msg = args
-                    .first()
-                    .map(|v| format!("{}", v))
-                    .unwrap_or_default();
+                let msg = args.first().map(|v| format!("{}", v)).unwrap_or_default();
                 self.state.messages.push(msg);
                 Ok(Value::None)
             }
@@ -258,12 +255,8 @@ impl GameCap {
                     .ok_or_else(|| EvalError::Message("not in a room".into()))?;
                 if let Some(dest) = room.exits.get(&dir).cloned() {
                     // Check if dest is revealed or always open
-                    if !self.rooms.contains_key(&dest)
-                        && !self.state.revealed.contains(&dest)
-                    {
-                        self.state
-                            .messages
-                            .push("You cannot go that way.".into());
+                    if !self.rooms.contains_key(&dest) && !self.state.revealed.contains(&dest) {
+                        self.state.messages.push("You cannot go that way.".into());
                         return Ok(Value::Bool(false));
                     }
                     self.state.location = dest;
@@ -282,9 +275,7 @@ impl GameCap {
                 let id = atom_or_str(args.first())?;
                 if !self.state.inventory.contains(&id) {
                     self.state.inventory.push(id.clone());
-                    self.state
-                        .messages
-                        .push(format!("Taken: {}", id));
+                    self.state.messages.push(format!("Taken: {}", id));
                 }
                 Ok(Value::None)
             }
@@ -351,13 +342,11 @@ impl GameCap {
                     }
                     ["inventory"] | ["i"] => {
                         let inv = self.state.inventory.join(", ");
-                        self.state
-                            .messages
-                            .push(if inv.is_empty() {
-                                "You carry nothing.".into()
-                            } else {
-                                format!("You carry: {}", inv)
-                            });
+                        self.state.messages.push(if inv.is_empty() {
+                            "You carry nothing.".into()
+                        } else {
+                            format!("You carry: {}", inv)
+                        });
                     }
                     ["go", dir] | ["move", dir] => {
                         let _ = self.call("go", vec![Value::string(*dir)])?;
@@ -392,12 +381,7 @@ impl GameCap {
                 Ok(Value::None)
             }
             "messages" => {
-                let msgs: Vec<Value> = self
-                    .state
-                    .messages
-                    .drain(..)
-                    .map(Value::string)
-                    .collect();
+                let msgs: Vec<Value> = self.state.messages.drain(..).map(Value::string).collect();
                 Ok(Value::list(msgs))
             }
             "state" => {

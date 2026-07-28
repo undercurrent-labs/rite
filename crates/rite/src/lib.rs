@@ -1,12 +1,11 @@
 //! Public embedding API for Rite.
 
 use rite_caps::{install_defaults, Permission, PermissionSet};
-use rite_core::{Diagnostics, SourceFile, SourceMap};
-use rite_runtime::{run_file, check_source, EvalError, RuntimeContext, Value};
+use rite_core::{Diagnostics, SourceFile};
+use rite_runtime::{check_source, run_file, EvalError, RuntimeContext, Value};
 use rite_sem::{compile_to_ir, ir_to_json, ProgramIr};
 use rite_syntax::{parse_source, Program};
 use std::path::Path;
-use std::sync::Arc;
 
 pub use rite_caps as caps;
 pub use rite_core as core;
@@ -46,8 +45,7 @@ impl RiteEngine {
 
     pub async fn run_path(&self, path: impl AsRef<Path>) -> Result<Value, EvalError> {
         let path = path.as_ref();
-        let text = std::fs::read_to_string(path)
-            .map_err(|e| EvalError::Message(e.to_string()))?;
+        let text = std::fs::read_to_string(path).map_err(|e| EvalError::Message(e.to_string()))?;
         let name = path
             .file_name()
             .and_then(|s| s.to_str())

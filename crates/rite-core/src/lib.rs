@@ -53,9 +53,7 @@ impl Diagnostics {
     }
 
     pub fn errors(&self) -> impl Iterator<Item = &Diagnostic> {
-        self.items
-            .iter()
-            .filter(|d| d.severity == Severity::Error)
+        self.items.iter().filter(|d| d.severity == Severity::Error)
     }
 
     pub fn render_all(&self, sources: &SourceMap) -> String {

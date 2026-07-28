@@ -598,7 +598,8 @@ impl<'a> Lexer<'a> {
             }
         }
 
-        if self.pos < self.bytes.len() && (self.bytes[self.pos] == b'e' || self.bytes[self.pos] == b'E')
+        if self.pos < self.bytes.len()
+            && (self.bytes[self.pos] == b'e' || self.bytes[self.pos] == b'E')
         {
             is_float = true;
             self.pos += 1;

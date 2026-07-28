@@ -45,7 +45,8 @@ head ← ~ pair ⟦
 ### Nested lists
 
 ```rite
-grid ← [[1, 2], [3, 4]]
+// Nested lists: spaces keep `[[` from being read as a block opener
+grid ← [ [1, 2], [3, 4] ]
 // flatten when you need a single level — use flatten/builtin if available
 ```
 

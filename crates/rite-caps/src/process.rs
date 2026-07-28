@@ -85,10 +85,7 @@ impl ProcessCap {
                 }
                 Ok(Value::err(Value::string(format!("not found: {}", cmd))))
             }
-            other => Err(EvalError::Capability(format!(
-                "unknown @process.{}",
-                other
-            ))),
+            other => Err(EvalError::Capability(format!("unknown @process.{}", other))),
         }
     }
 }

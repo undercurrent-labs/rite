@@ -13,23 +13,15 @@ async fn arithmetic_and_bindings() {
 async fn truthiness() {
     let mut ctx = RuntimeContext::new();
     // empty list is truthy
-    let v = run_source(
-        "t.rite",
-        r#"? [] ⟦ #yes ⟧ : ⟦ #no ⟧"#,
-        &mut ctx,
-    )
-    .await
-    .unwrap();
+    let v = run_source("t.rite", r#"? [] ⟦ #yes ⟧ : ⟦ #no ⟧"#, &mut ctx)
+        .await
+        .unwrap();
     assert!(matches!(v, Value::Atom(_)));
     // false is falsey
     let mut ctx = RuntimeContext::new();
-    let v = run_source(
-        "t.rite",
-        r#"? false ⟦ 1 ⟧ : ⟦ 2 ⟧"#,
-        &mut ctx,
-    )
-    .await
-    .unwrap();
+    let v = run_source("t.rite", r#"? false ⟦ 1 ⟧ : ⟦ 2 ⟧"#, &mut ctx)
+        .await
+        .unwrap();
     assert_eq!(v, Value::Int(2));
 }
 
@@ -81,13 +73,9 @@ async fn match_atoms() {
 #[tokio::test]
 async fn record_merge() {
     let mut ctx = RuntimeContext::new();
-    let v = run_source(
-        "t.rite",
-        r#"⟨a: 1⟩ + ⟨a: 2, b: 3⟩"#,
-        &mut ctx,
-    )
-    .await
-    .unwrap();
+    let v = run_source("t.rite", r#"⟨a: 1⟩ + ⟨a: 2, b: 3⟩"#, &mut ctx)
+        .await
+        .unwrap();
     assert_eq!(v.get_field("a"), Value::Int(2));
     assert_eq!(v.get_field("b"), Value::Int(3));
 }

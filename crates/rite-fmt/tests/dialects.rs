@@ -16,7 +16,9 @@ fn convert_ascii_to_glyph_preserves_semantics() {
 fn convert_glyph_to_ascii_preserves_semantics() {
     let glyph = "◆ square(n) ⟦\n  ^ n * n\n⟧\nsquare(3)\n";
     let ascii = convert_source(glyph, Dialect::Ascii).unwrap();
-    assert!(ascii.text.contains("def") || ascii.text.contains("return") || ascii.text.contains("[["));
+    assert!(
+        ascii.text.contains("def") || ascii.text.contains("return") || ascii.text.contains("[[")
+    );
     parse_both_equivalent(glyph, &ascii.text).unwrap();
 }
 
@@ -42,7 +44,11 @@ fn preserve_dialect_returns_source() {
 fn strings_not_rewritten_by_convert() {
     let src = r#"s ← "use def <- -> return""#;
     let out = convert_source(src, Dialect::Glyph).unwrap().text;
-    assert!(out.contains("use def <- -> return"), "string mutated: {}", out);
+    assert!(
+        out.contains("use def <- -> return"),
+        "string mutated: {}",
+        out
+    );
 }
 
 #[test]

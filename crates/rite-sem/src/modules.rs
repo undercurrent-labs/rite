@@ -1,6 +1,5 @@
 //! Module loading, cycle detection, and pub export merging.
 
-use crate::ir::*;
 use crate::resolve::{resolve, FunctionMeta, ResolvedProgram};
 use rite_core::{
     simple_error, Diagnostics, FileId, SourceFile, SourceMap, Span, E024_IMPORT_CYCLE,
@@ -249,7 +248,7 @@ pub fn merge_exports_into_entry(
                     }
                     if alias.is_none() {
                         // bring into scope under original name
-                        let mut f2 = f.clone();
+                        let f2 = f.clone();
                         // keep as accessible (treat as local after import)
                         entry.items.insert(0, Item::Function(f2));
                     }

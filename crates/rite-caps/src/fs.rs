@@ -119,10 +119,7 @@ impl FsCap {
             "write" => {
                 let path = path_arg(&args, 0)?;
                 let path = perms.check_fs_write(&path).map_err(EvalError::Permission)?;
-                let content = args
-                    .get(1)
-                    .map(|v| format!("{}", v))
-                    .unwrap_or_default();
+                let content = args.get(1).map(|v| format!("{}", v)).unwrap_or_default();
                 match std::fs::write(&path, content) {
                     Ok(()) => Ok(Value::ok(Value::None)),
                     Err(e) => Ok(io_err("fs.write", &path, e)),
@@ -131,10 +128,7 @@ impl FsCap {
             "append" => {
                 let path = path_arg(&args, 0)?;
                 let path = perms.check_fs_write(&path).map_err(EvalError::Permission)?;
-                let content = args
-                    .get(1)
-                    .map(|v| format!("{}", v))
-                    .unwrap_or_default();
+                let content = args.get(1).map(|v| format!("{}", v)).unwrap_or_default();
                 use std::io::Write;
                 match std::fs::OpenOptions::new()
                     .create(true)
@@ -168,14 +162,8 @@ impl FsCap {
                 match std::fs::metadata(&path) {
                     Ok(m) => Ok(Value::ok(Value::record(vec![
                         (Key::String("len".into()), Value::Int(m.len() as i64)),
-                        (
-                            Key::String("is_file".into()),
-                            Value::Bool(m.is_file()),
-                        ),
-                        (
-                            Key::String("is_dir".into()),
-                            Value::Bool(m.is_dir()),
-                        ),
+                        (Key::String("is_file".into()), Value::Bool(m.is_file())),
+                        (Key::String("is_dir".into()), Value::Bool(m.is_dir())),
                     ]))),
                     Err(e) => Ok(io_err("fs.metadata", &path, e)),
                 }
@@ -190,7 +178,9 @@ impl FsCap {
                     .check_fs_read(std::path::Path::new("."))
                     .map_err(EvalError::Permission)?;
                 let mut matches = Vec::new();
-                for entry in glob::glob(pattern).map_err(|e| EvalError::Capability(e.to_string()))? {
+                for entry in
+                    glob::glob(pattern).map_err(|e| EvalError::Capability(e.to_string()))?
+                {
                     if let Ok(p) = entry {
                         matches.push(Value::string(p.display().to_string()));
                     }
@@ -259,10 +249,7 @@ fn io_err(op: &str, path: &std::path::Path, e: std::io::Error) -> Value {
     };
     Value::err(Value::record(vec![
         (Key::String("kind".into()), Value::string(kind)),
-        (
-            Key::String("message".into()),
-            Value::string(e.to_string()),
-        ),
+        (Key::String("message".into()), Value::string(e.to_string())),
         (Key::String("operation".into()), Value::string(op)),
         (
             Key::String("path".into()),

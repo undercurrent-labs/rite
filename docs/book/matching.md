@@ -48,7 +48,6 @@ pair ← [1, 2, 3]
 
 head ← ~ pair ⟦
   [h, ..rest] → h
-  [] → none
   _ → 0
 ⟧
 
@@ -56,7 +55,7 @@ head ← ~ pair ⟦
 ```
 
 - `[h, ..rest]` binds the head and the remainder list  
-- `[]` matches empty list  
+- Use `_` (or other patterns) for empty / non-list fallbacks
 
 ## Record patterns
 
@@ -91,16 +90,17 @@ event ← ⟨kind: #click, x: 10⟩
 Host and fallible ops often return results. Match them:
 
 ```rite
-// Conceptual shape — see Results chapter for ?
-outcome ← ok(42)
-
-text ← ~ outcome ⟦
-  ok v → "value=" + str(v)
-  err e → "failed"
+// Host ops often return results; match on atoms/tags or use ?
+// See the Results chapter for `?` unwrap and ok/err patterns.
+status ← #ok
+text ← ~ status ⟦
+  #ok → "value ready"
+  #error → "failed"
+  _ → "other"
 ⟧
 ```
 
-Or unwrap with postfix `?` when you want early-return style error propagation ([Results](results.md)).
+Unwrap fallible host calls with postfix `?` when you want early-return style error propagation ([Results](results.md)).
 
 ## Match is an expression
 

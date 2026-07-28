@@ -280,7 +280,10 @@ pub fn compare_values(a: &Value, b: &Value) -> i32 {
     }
 }
 
-pub fn merge_records(left: &IndexMap<Key, Value>, right: &IndexMap<Key, Value>) -> IndexMap<Key, Value> {
+pub fn merge_records(
+    left: &IndexMap<Key, Value>,
+    right: &IndexMap<Key, Value>,
+) -> IndexMap<Key, Value> {
     let mut out = left.clone();
     for (k, v) in right {
         out.insert(k.clone(), v.clone());
@@ -312,10 +315,7 @@ pub fn membership(item: &Value, container: &Value) -> bool {
             }
             _ => r.values().any(|v| v.structural_eq(item)),
         },
-        Value::String(s) => item
-            .as_str()
-            .map(|sub| s.contains(sub))
-            .unwrap_or(false),
+        Value::String(s) => item.as_str().map(|sub| s.contains(sub)).unwrap_or(false),
         _ => false,
     }
 }

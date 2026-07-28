@@ -81,25 +81,20 @@ impl ClockCap {
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| EvalError::Message("clock.parse expects string".into()))?;
                 match DateTime::parse_from_rfc3339(s) {
-                    Ok(dt) => Ok(Value::ok(Value::string(dt.with_timezone(&Utc).to_rfc3339()))),
+                    Ok(dt) => Ok(Value::ok(Value::string(
+                        dt.with_timezone(&Utc).to_rfc3339(),
+                    ))),
                     Err(e) => Ok(Value::err(Value::string(e.to_string()))),
                 }
             }
             "format" => {
-                let s = args
-                    .first()
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("");
+                let s = args.first().and_then(|v| v.as_str()).unwrap_or("");
                 // simplified: return as-is; pattern ignored beyond identity for v1
                 let _pattern = args.get(1).and_then(|v| v.as_str()).unwrap_or("%+");
                 Ok(Value::string(s))
             }
             "sleep" => {
-                let ms = args
-                    .first()
-                    .and_then(|v| v.as_int())
-                    .unwrap_or(0)
-                    .max(0) as u64;
+                let ms = args.first().and_then(|v| v.as_int()).unwrap_or(0).max(0) as u64;
                 tokio::time::sleep(Duration::from_millis(ms)).await;
                 Ok(Value::None)
             }

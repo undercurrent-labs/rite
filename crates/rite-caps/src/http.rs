@@ -208,10 +208,7 @@ impl HttpCap {
         }
 
         Ok(Value::record(vec![
-            (
-                Key::String("addr".into()),
-                Value::string(local.to_string()),
-            ),
+            (Key::String("addr".into()), Value::string(local.to_string())),
             (Key::String("status".into()), Value::string("stopped")),
         ]))
     }
@@ -240,11 +237,7 @@ async fn dispatch_fallback(state: ServerState, req: Request<Body>) -> Response {
             return dispatch_rite(state.clone(), idx, req).await;
         }
     }
-    (
-        StatusCode::NOT_FOUND,
-        Json(json!({"error": "not_found"})),
-    )
-        .into_response()
+    (StatusCode::NOT_FOUND, Json(json!({"error": "not_found"}))).into_response()
 }
 
 async fn dispatch_rite(state: ServerState, idx: usize, req: Request<Body>) -> Response {
@@ -265,10 +258,7 @@ async fn dispatch_rite(state: ServerState, idx: usize, req: Request<Body>) -> Re
             q.split('&')
                 .filter_map(|pair| {
                     let mut it = pair.splitn(2, '=');
-                    Some((
-                        it.next()?.to_string(),
-                        it.next().unwrap_or("").to_string(),
-                    ))
+                    Some((it.next()?.to_string(), it.next().unwrap_or("").to_string()))
                 })
                 .collect()
         })
@@ -291,10 +281,7 @@ async fn dispatch_rite(state: ServerState, idx: usize, req: Request<Body>) -> Re
     }
 
     let req_value = Value::record(vec![
-        (
-            Key::String("method".into()),
-            Value::string(method.as_str()),
-        ),
+        (Key::String("method".into()), Value::string(method.as_str())),
         (Key::String("path".into()), Value::Record(path_rec)),
         (Key::String("query".into()), Value::Record(query_rec)),
         (Key::String("uri".into()), Value::string(path.clone())),
@@ -406,10 +393,7 @@ fn status_body(status: u16, body: Value, ctx: &RuntimeContext) -> Response {
         Value::None => code.into_response(),
         Value::Bytes(b) => (
             code,
-            [(
-                axum::http::header::CONTENT_TYPE,
-                "application/octet-stream",
-            )],
+            [(axum::http::header::CONTENT_TYPE, "application/octet-stream")],
             b.to_vec(),
         )
             .into_response(),

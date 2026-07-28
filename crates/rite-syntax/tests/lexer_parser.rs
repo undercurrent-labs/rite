@@ -1,5 +1,5 @@
-use rite_syntax::{lex, parse_both_equivalent, parse_source, TokenKind};
 use rite_core::{FileId, SourceFile};
+use rite_syntax::{lex, parse_both_equivalent, parse_source, TokenKind};
 
 #[test]
 fn glyph_ascii_equivalent_binding() {
@@ -8,11 +8,7 @@ fn glyph_ascii_equivalent_binding() {
 
 #[test]
 fn glyph_ascii_equivalent_function() {
-    parse_both_equivalent(
-        "◆ f(x) ⟦ ^ x ⟧",
-        "def f(x) [[ return x ]]",
-    )
-    .unwrap();
+    parse_both_equivalent("◆ f(x) ⟦ ^ x ⟧", "def f(x) [[ return x ]]").unwrap();
 }
 
 #[test]

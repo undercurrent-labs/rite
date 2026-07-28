@@ -134,10 +134,7 @@ impl Diagnostic {
                     .map(|p| p.display().to_string())
                     .unwrap_or_else(|| file.name.clone());
 
-                out.push_str(&format!(
-                    "\n  --> {}:{}:{}\n",
-                    path, lc.line, lc.column
-                ));
+                out.push_str(&format!("\n  --> {}:{}:{}\n", path, lc.line, lc.column));
                 out.push_str(&format!("   |\n"));
                 out.push_str(&format!("{:4} | {}\n", lc.line, line_text));
 
@@ -147,13 +144,25 @@ impl Diagnostic {
                 let mut underline = String::new();
                 underline.push_str(&" ".repeat(marker_start));
                 if label.primary {
-                    underline.push_str(&"^".repeat(span_len.min(line_text.len().saturating_sub(marker_start).max(1))));
+                    underline.push_str(
+                        &"^".repeat(
+                            span_len.min(line_text.len().saturating_sub(marker_start).max(1)),
+                        ),
+                    );
                 } else {
-                    underline.push_str(&"-".repeat(span_len.min(line_text.len().saturating_sub(marker_start).max(1))));
+                    underline.push_str(
+                        &"-".repeat(
+                            span_len.min(line_text.len().saturating_sub(marker_start).max(1)),
+                        ),
+                    );
                 }
                 out.push_str(&format!("   | {}\n", underline));
                 if !label.message.is_empty() {
-                    out.push_str(&format!("   | {} {}\n", " ".repeat(marker_start), label.message));
+                    out.push_str(&format!(
+                        "   | {} {}\n",
+                        " ".repeat(marker_start),
+                        label.message
+                    ));
                 }
             } else if !label.span.span.is_dummy() {
                 out.push_str(&format!("  at {}\n", label.span.span));

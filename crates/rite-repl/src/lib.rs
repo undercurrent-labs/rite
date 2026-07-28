@@ -7,7 +7,10 @@ use rustyline::error::ReadlineError;
 use rustyline::DefaultEditor;
 
 pub async fn run_repl(perms: PermissionSet) -> anyhow::Result<()> {
-    println!("Rite {} — type :help for commands", env!("CARGO_PKG_VERSION"));
+    println!(
+        "Rite {} — type :help for commands",
+        env!("CARGO_PKG_VERSION")
+    );
     let mut rl = DefaultEditor::new()?;
     let mut ctx = RuntimeContext::new();
     install_defaults(&mut ctx, perms.clone());

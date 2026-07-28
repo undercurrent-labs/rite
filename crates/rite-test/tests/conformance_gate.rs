@@ -10,11 +10,7 @@ async fn conformance_suite_passes() {
             eprintln!("FAIL {}: {}", r.path, r.message);
         }
     }
-    assert_eq!(
-        report.failed, 0,
-        "{} conformance failures",
-        report.failed
-    );
+    assert_eq!(report.failed, 0, "{} conformance failures", report.failed);
     assert!(report.passed > 0, "expected at least one case");
 }
 

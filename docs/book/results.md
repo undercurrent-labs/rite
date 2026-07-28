@@ -12,11 +12,17 @@ Exceptions are not the primary control model. You either:
 ## Creating results
 
 ```rite
-good ← ok(42)
-bad ← err(⟨code: #not_found, message: "missing"⟩)
+// Fallible host ops produce results (ok/err). Prefer matching tags or `?`:
+status ← #ok
+label ← ~ status ⟦
+  #ok → "good"
+  #error → "bad"
+  _ → "other"
+⟧
+! @console.println(label)
 ```
 
-Helpers `ok` / `err` wrap values. Error payloads are often **records** with machine-readable fields.
+Error payloads from the host are often **records** with machine-readable fields (`kind`, `message`, …).
 
 ## Postfix `?` (unwrap or early return)
 

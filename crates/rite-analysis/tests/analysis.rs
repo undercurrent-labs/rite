@@ -20,7 +20,9 @@ undefined_name
 fn completions_include_builtins_and_functions() {
     let eng = AnalysisEngine::new();
     let items = eng.completions("◆ foo() ⟦ ^ 1 ⟧\n", 1, 0);
-    assert!(items.iter().any(|i| i.label == "map" || i.label == "@console"));
+    assert!(items
+        .iter()
+        .any(|i| i.label == "map" || i.label == "@console"));
     assert!(items.iter().any(|i| i.label == "foo"));
 }
 

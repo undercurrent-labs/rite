@@ -171,17 +171,17 @@ pub fn generate(path: Option<&Path>, out: &Path) -> anyhow::Result<()> {
     md.push_str(&format!("Version {}\n\n", index.version));
     for s in &sections {
         md.push_str(&format!("## {}\n\n{}\n\n", s.title, s.body_markdown));
-        std::fs::write(out.join(format!("{}.md", s.id)), format!("# {}\n\n{}", s.title, s.body_markdown))?;
+        std::fs::write(
+            out.join(format!("{}.md", s.id)),
+            format!("# {}\n\n{}", s.title, s.body_markdown),
+        )?;
     }
     md.push_str("## Capability API\n\n");
     for cap in &capabilities {
         md.push_str(&format!("### @{}\n\n", cap.name));
         for f in &cap.functions {
             let eff = if f.effectful { " (effectful)" } else { "" };
-            md.push_str(&format!(
-                "- `{}{}` — {}\n",
-                f.name, eff, f.docs
-            ));
+            md.push_str(&format!("- `{}{}` — {}\n", f.name, eff, f.docs));
         }
         md.push('\n');
     }
@@ -409,8 +409,7 @@ Rite is an expression-oriented scripting language with glyphic and ASCII syntax.
     });
     std::fs::write(output.join("SKILL.md"), skill)?;
 
-    let aliases = std::fs::read_to_string("grammar/aliases.json")
-        .unwrap_or_else(|_| "{}".into());
+    let aliases = std::fs::read_to_string("grammar/aliases.json").unwrap_or_else(|_| "{}".into());
     std::fs::write(output.join("machine/aliases.json"), &aliases)?;
     std::fs::write(
         output.join("machine/version.json"),

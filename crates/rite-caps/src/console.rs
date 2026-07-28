@@ -58,10 +58,7 @@ impl ConsoleCap {
         _ctx: &RuntimeContext,
     ) -> Result<Value, EvalError> {
         perms.check_console().map_err(EvalError::Permission)?;
-        let msg = args
-            .first()
-            .map(|v| format!("{}", v))
-            .unwrap_or_default();
+        let msg = args.first().map(|v| format!("{}", v)).unwrap_or_default();
         match method {
             "print" => {
                 print!("{}", msg);
@@ -101,10 +98,7 @@ impl ConsoleCap {
                 }
                 Ok(Value::string(line))
             }
-            other => Err(EvalError::Capability(format!(
-                "unknown @console.{}",
-                other
-            ))),
+            other => Err(EvalError::Capability(format!("unknown @console.{}", other))),
         }
     }
 }

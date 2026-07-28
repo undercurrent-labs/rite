@@ -95,10 +95,12 @@ async fn health_and_echo_and_sum() {
     assert_eq!(sum.status(), 200);
     let sum_body: serde_json::Value = sum.json().await.unwrap();
     // total may be nested depending on coercion
-    let total = sum_body
-        .get("total")
-        .and_then(|v| v.as_i64())
-        .or_else(|| sum_body.get("body").and_then(|b| b.get("total")).and_then(|v| v.as_i64()));
+    let total = sum_body.get("total").and_then(|v| v.as_i64()).or_else(|| {
+        sum_body
+            .get("body")
+            .and_then(|b| b.get("total"))
+            .and_then(|v| v.as_i64())
+    });
     assert_eq!(total, Some(42), "sum body: {}", sum_body);
 
     server.abort();

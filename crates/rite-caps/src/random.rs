@@ -104,10 +104,7 @@ impl RandomCap {
                 self.rng = StdRng::seed_from_u64(seed);
                 Ok(Value::None)
             }
-            other => Err(EvalError::Capability(format!(
-                "unknown @random.{}",
-                other
-            ))),
+            other => Err(EvalError::Capability(format!("unknown @random.{}", other))),
         }
     }
 }
