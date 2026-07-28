@@ -921,7 +921,8 @@ async fn studio_format(Json(body): Json<SourceBody>) -> Json<serde_json::Value> 
 }
 
 async fn studio_run(Json(body): Json<SourceBody>) -> Json<serde_json::Value> {
-    let result = rite_wasm::run_blocking(
+    // Await the async runner — do not call run_blocking() here (nested Tokio panic).
+    let result = rite_wasm::run(
         &body.source,
         rite_wasm::RunOptions {
             allow_all: true,
@@ -930,7 +931,8 @@ async fn studio_run(Json(body): Json<SourceBody>) -> Json<serde_json::Value> {
             files: Default::default(),
             browser_safe: false,
         },
-    );
+    )
+    .await;
     Json(serde_json::to_value(result).unwrap_or_default())
 }
 

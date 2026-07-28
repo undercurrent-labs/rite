@@ -295,14 +295,24 @@ pub async fn run(source: &str, options: RunOptions) -> ExecutionResult {
     }
 }
 
+/// Run to completion from **sync** code.
+///
+/// Safe both outside Tokio and **inside** an existing multi-thread runtime
+/// (e.g. Axum `rite studio` handlers). Prefer awaiting [`run`] from async code.
 pub fn run_blocking(source: &str, options: RunOptions) -> ExecutionResult {
     #[cfg(feature = "native")]
     {
-        // Prefer a real Tokio runtime when available (native host / CLI studio API).
-        let rt = tokio::runtime::Builder::new_current_thread()
+        // Already on a Tokio worker (Studio / Axum / #[tokio::test])?
+        // Creating a nested runtime panics with:
+        //   "Cannot start a runtime from within a runtime"
+        if let Ok(handle) = tokio::runtime::Handle::try_current() {
+            return tokio::task::block_in_place(|| handle.block_on(run(source, options)));
+        }
+
+        match tokio::runtime::Builder::new_current_thread()
             .enable_all()
-            .build();
-        return match rt {
+            .build()
+        {
             Ok(rt) => rt.block_on(run(source, options)),
             Err(e) => ExecutionResult {
                 ok: false,
@@ -312,7 +322,7 @@ pub fn run_blocking(source: &str, options: RunOptions) -> ExecutionResult {
                 error: Some(e.to_string()),
                 virtual_http: None,
             },
-        };
+        }
     }
 
     #[cfg(not(feature = "native"))]
@@ -465,5 +475,41 @@ mod tests {
             "expected 144 in stdout, got {:?}",
             r.stdout
         );
+    }
+
+    #[cfg(feature = "native")]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn run_blocking_inside_tokio_runtime() {
+        // Regression: rite studio Axum handlers used to panic with
+        // "Cannot start a runtime from within a runtime".
+        let r = run_blocking(
+            "1 + 2",
+            RunOptions {
+                allow_all: true,
+                browser_safe: false,
+                timeout_ms: Some(2000),
+                ..Default::default()
+            },
+        );
+        assert!(r.ok, "{:?}", r.error);
+        assert_eq!(r.value, serde_json::json!(3));
+    }
+
+    #[cfg(feature = "native")]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn run_async_inside_tokio_runtime() {
+        let r = run(
+            r#"! @console.println("studio")
+42"#,
+            RunOptions {
+                allow_all: true,
+                browser_safe: false,
+                timeout_ms: Some(2000),
+                ..Default::default()
+            },
+        )
+        .await;
+        assert!(r.ok, "{:?}", r.error);
+        assert!(r.stdout.contains("studio"), "{:?}", r.stdout);
     }
 }
