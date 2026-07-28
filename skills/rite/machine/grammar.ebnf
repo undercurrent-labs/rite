@@ -1,0 +1,127 @@
+(* Rite v1 normative EBNF — refined only when behavior remains equivalent *)
+
+program          = { item | statement } ;
+
+item             = function_decl
+                 | data_decl
+                 | event_decl
+                 | import_decl
+                 | test_decl ;
+
+function_decl    = [ "pub" ] def_kw identifier [ type_params ]
+                   "(" [ parameter_list ] ")"
+                   [ return_annotation ] block ;
+
+data_decl        = def_kw identifier record_type ;
+
+event_decl       = def_kw ( "item" | "room" | "world" ) atom block ;
+
+test_decl        = def_kw "test" string_literal block ;
+
+import_decl      = "use" module_path [ "as" identifier ] ;
+
+statement        = binding
+                 | expression
+                 | return_expr
+                 | assignment ;
+
+binding          = pattern ( bind_op | mutable_bind_op ) expression ;
+assignment       = identifier ":=" expression ;
+
+expression       = pipeline ;
+
+pipeline         = conditional { pipe_op pipeline_stage } ;
+
+pipeline_stage   = call_expr
+                 | member_expr
+                 | identifier
+                 | block
+                 | placeholder ;
+
+conditional      = if_kw expression block [ ":" block ]
+                 | match_expr
+                 | logic_or ;
+
+match_expr       = match_kw expression block ;
+
+match_arm        = pattern pipe_op expression ;
+
+logic_or         = logic_and { "or" logic_and } ;
+logic_and        = equality { "and" equality } ;
+equality         = comparison { ( "=" | "!=" ) comparison } ;
+comparison       = term { ( "<" | "<=" | ">" | ">=" | in_kw | not_in_kw ) term } ;
+term             = factor { ( "+" | "-" ) factor } ;
+factor           = unary { ( "*" | "/" | "%" ) unary } ;
+unary            = [ "-" | "not" | effect_kw ] postfix ;
+
+postfix          = call_expr { "?" } ;  (* postfix ? is try-unwrap *)
+
+call_expr        = primary { call_suffix | member_suffix | index_suffix } ;
+call_suffix      = "(" [ argument_list ] ")" ;
+member_suffix    = "." identifier ;
+index_suffix     = "[" expression "]" ;
+
+primary          = literal
+                 | identifier
+                 | atom
+                 | list_literal
+                 | record_literal
+                 | block
+                 | "(" expression ")"
+                 | capability_ref
+                 | placeholder
+                 | http_listen
+                 | route_decl ;
+
+capability_ref   = host_kw identifier { "." identifier } ;
+
+http_listen      = host_kw "http" "." "listen" expression block ;
+route_decl       = http_method string_literal [ parameter_header ] block ;
+http_method      = "GET" | "POST" | "PUT" | "PATCH" | "DELETE" | "HEAD" | "OPTIONS" ;
+
+block            = block_open [ parameter_header ] { item | statement | match_arm | route_decl | middleware } block_close
+                 | "{" [ parameter_header ] { item | statement } "}" ;
+
+parameter_header = "|" [ parameter_list ] "|" ;
+middleware       = "use" expression ;
+
+list_literal     = "[" [ expression { "," expression } [ "," ] ] "]" ;
+record_literal   = record_open [ record_entry { "," record_entry } [ "," ] ] record_close ;
+record_entry     = ( identifier | string_literal | atom ) ":" expression ;
+
+pattern          = identifier
+                 | atom
+                 | literal
+                 | "_"
+                 | list_pattern
+                 | record_pattern
+                 | option_pattern
+                 | result_pattern
+                 | typed_pattern ;
+
+list_pattern     = "[" [ pattern { "," pattern } [ "," ".." pattern ] ] "]" ;
+record_pattern   = record_open [ pattern_field { "," pattern_field } ] record_close ;
+result_pattern   = ( "ok" | "err" | "some" | "none" ) [ pattern ] ;
+
+return_expr      = return_kw [ expression ] ;
+
+literal          = number | string_literal | "true" | "false" | "none" ;
+atom             = atom_kw identifier { "." identifier } ;
+placeholder      = "$" ;
+
+def_kw           = "◆" | "def" ;
+bind_op          = "←" | "<-" ;
+mutable_bind_op  = "↢" | "<~" ;
+pipe_op          = "→" | "->" ;
+return_kw        = "^" | "return" ;
+if_kw            = "?" | "if" ;
+match_kw         = "~" | "match" ;
+effect_kw        = "!" | "do" ;
+host_kw          = "@" | "host." ;
+atom_kw          = "#" | ":" ;
+block_open       = "⟦" | "[[" ;
+block_close      = "⟧" | "]]" ;
+record_open      = "⟨" | "<<" ;
+record_close     = "⟩" | ">>" ;
+in_kw            = "∈" | "in" ;
+not_in_kw        = "∉" | "not" "in" ;

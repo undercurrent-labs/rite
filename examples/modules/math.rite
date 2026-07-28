@@ -1,0 +1,13 @@
+//! Pure math helpers (public exports)
+
+pub ◆ square(value) ⟦
+  ^ value * value
+⟧
+
+pub ◆ double(value) ⟦
+  ^ value * 2
+⟧
+
+◆ private_helper(x) ⟦
+  ^ x
+⟧

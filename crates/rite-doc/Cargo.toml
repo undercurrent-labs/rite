@@ -1,0 +1,17 @@
+[package]
+name = "rite-doc"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Rite documentation generator"
+
+[dependencies]
+rite-core = { workspace = true }
+rite-syntax = { workspace = true }
+rite-caps = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+rite-sem = { workspace = true }
+rite-wasm = { workspace = true }
+tokio = { workspace = true }

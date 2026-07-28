@@ -1,0 +1,18 @@
+[
+  {
+    "code": "E021",
+    "summary": "effectful capability call requires `!`"
+  },
+  {
+    "code": "E020",
+    "summary": "undefined name"
+  },
+  {
+    "code": "E040",
+    "summary": "permission denied"
+  },
+  {
+    "code": "E024",
+    "summary": "circular import"
+  }
+]

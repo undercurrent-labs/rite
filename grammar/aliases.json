@@ -1,0 +1,23 @@
+{
+  "version": "1",
+  "aliases": {
+    "definition": { "ascii": "def", "glyph": "◆", "token": "Def" },
+    "bind": { "ascii": "<-", "glyph": "←", "token": "Bind" },
+    "bind_mut": { "ascii": "<~", "glyph": "↢", "token": "BindMut" },
+    "pipe": { "ascii": "->", "glyph": "→", "token": "Arrow" },
+    "return": { "ascii": "return", "glyph": "^", "token": "Return" },
+    "if": { "ascii": "if", "glyph": "?", "token": "If" },
+    "match": { "ascii": "match", "glyph": "~", "token": "Match" },
+    "effect": { "ascii": "do", "glyph": "!", "token": "Effect" },
+    "host": { "ascii": "host.", "glyph": "@", "token": "Host" },
+    "atom": { "ascii": ":", "glyph": "#", "token": "Atom" },
+    "block_open": { "ascii": "[[", "glyph": "⟦", "token": "BlockOpen" },
+    "block_close": { "ascii": "]]", "glyph": "⟧", "token": "BlockClose" },
+    "record_open": { "ascii": "<<", "glyph": "⟨", "token": "RecordOpen" },
+    "record_close": { "ascii": ">>", "glyph": "⟩", "token": "RecordClose" },
+    "in": { "ascii": "in", "glyph": "∈", "token": "In" },
+    "not_in": { "ascii": "not in", "glyph": "∉", "token": "NotIn" },
+    "coalesce": { "ascii": "??", "glyph": "??", "token": "Coalesce" },
+    "assign": { "ascii": ":=", "glyph": ":=", "token": "Assign" }
+  }
+}

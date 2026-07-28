@@ -1,0 +1,9 @@
+//! Values, atoms, lists, records
+
+name ← "Aura"
+score ← 42
+tags ← [#demo, #v1]
+rec ← ⟨name: name, score: score, tags: tags⟩
+
+! @console.println(rec)
+! @console.println(? score > 0 ⟦ #ok ⟧ : ⟦ #nope ⟧)

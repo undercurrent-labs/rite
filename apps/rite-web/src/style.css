@@ -1,0 +1,89 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: #0b0f14;
+  color: #e2e8f0;
+}
+
+/* Markdown docs */
+.prose-rite {
+  @apply text-slate-300 leading-relaxed;
+}
+
+.prose-rite h1 {
+  @apply text-3xl font-semibold text-white tracking-tight mt-0 mb-4;
+}
+
+.prose-rite h2 {
+  @apply text-xl font-semibold text-white mt-10 mb-3 border-b border-slate-800 pb-2;
+}
+
+.prose-rite h3 {
+  @apply text-lg font-medium text-slate-100 mt-8 mb-2;
+}
+
+.prose-rite p {
+  @apply my-4;
+}
+
+.prose-rite a {
+  @apply text-rite-accent underline decoration-rite-accent/30 underline-offset-2 hover:decoration-rite-accent;
+}
+
+.prose-rite ul,
+.prose-rite ol {
+  @apply my-4 pl-6 space-y-1;
+}
+
+.prose-rite ul {
+  @apply list-disc;
+}
+
+.prose-rite ol {
+  @apply list-decimal;
+}
+
+.prose-rite li {
+  @apply text-slate-300;
+}
+
+.prose-rite code {
+  @apply font-mono text-[0.9em] text-rite-green bg-slate-900/80 px-1.5 py-0.5 rounded;
+}
+
+.prose-rite pre {
+  @apply my-5 rounded-lg border border-slate-800 bg-rite-panel p-4 overflow-x-auto text-sm;
+}
+
+.prose-rite pre code {
+  @apply bg-transparent p-0 text-slate-200;
+}
+
+.prose-rite blockquote {
+  @apply border-l-2 border-rite-pink/60 pl-4 my-4 text-slate-400 italic;
+}
+
+.prose-rite table {
+  @apply w-full my-6 text-sm border-collapse;
+}
+
+.prose-rite th,
+.prose-rite td {
+  @apply border border-slate-800 px-3 py-2 text-left;
+}
+
+.prose-rite th {
+  @apply bg-rite-panel text-slate-200;
+}
+
+.prose-rite hr {
+  @apply border-slate-800 my-10;
+}

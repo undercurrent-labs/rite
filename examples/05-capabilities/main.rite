@@ -1,0 +1,8 @@
+//! Capabilities and effects
+
+! @console.println("console ok")
+now ← ! @clock.now()
+! @console.println(now)
+! @random.seed(1)
+n ← ! @random.int(1, 6)
+! @console.println(n)

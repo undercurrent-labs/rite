@@ -1,0 +1,76 @@
+{
+  "name": "rite",
+  "displayName": "Rite",
+  "description": "Rite language support — syntax, LSP, run/check/compile, dialect conversion",
+  "version": "1.0.0",
+  "publisher": "undercurrent-labs",
+  "engines": { "vscode": "^1.85.0" },
+  "categories": ["Programming Languages"],
+  "activationEvents": ["onLanguage:rite"],
+  "main": "./out/extension.js",
+  "contributes": {
+    "languages": [{
+      "id": "rite",
+      "aliases": ["Rite", "rite"],
+      "extensions": [".rite"],
+      "configuration": "./language-configuration.json",
+      "icon": { "light": "./icons/rite.svg", "dark": "./icons/rite.svg" }
+    }],
+    "grammars": [{
+      "language": "rite",
+      "scopeName": "source.rite",
+      "path": "./syntaxes/rite.tmLanguage.json"
+    }],
+    "snippets": [{
+      "language": "rite",
+      "path": "./snippets/rite.json"
+    }],
+    "commands": [
+      { "command": "rite.runFile", "title": "Rite: Run File" },
+      { "command": "rite.runSelection", "title": "Rite: Run Selection" },
+      { "command": "rite.checkFile", "title": "Rite: Check File" },
+      { "command": "rite.compileFile", "title": "Rite: Compile File" },
+      { "command": "rite.formatDocument", "title": "Rite: Format Document" },
+      { "command": "rite.convertGlyph", "title": "Rite: Convert to Glyph Syntax" },
+      { "command": "rite.convertAscii", "title": "Rite: Convert to ASCII Syntax" },
+      { "command": "rite.toggleGlyphPresentation", "title": "Rite: Toggle Glyph Presentation" },
+      { "command": "rite.openRepl", "title": "Rite: Open REPL" },
+      { "command": "rite.openStudio", "title": "Rite: Open Studio" },
+      { "command": "rite.showGeneratedRust", "title": "Rite: Show Generated Rust" },
+      { "command": "rite.showSyntaxTree", "title": "Rite: Show Syntax Tree" },
+      { "command": "rite.showSemanticIr", "title": "Rite: Show Semantic IR" },
+      { "command": "rite.openDocumentation", "title": "Rite: Open Documentation" },
+      { "command": "rite.restartLsp", "title": "Rite: Restart Language Server" },
+      { "command": "rite.showLspLogs", "title": "Rite: Show Language Server Logs" }
+    ],
+    "configuration": {
+      "title": "Rite",
+      "properties": {
+        "rite.binaryPath": { "type": "string", "default": "", "description": "Path to rite CLI" },
+        "rite.lspPath": { "type": "string", "default": "", "description": "Path to rite-lsp" },
+        "rite.languageVersion": { "type": "string", "default": "1" },
+        "rite.defaultDialect": { "type": "string", "enum": ["glyph", "ascii", "mixed", "preserve"], "default": "glyph" },
+        "rite.formatOnSave": { "type": "boolean", "default": true },
+        "rite.renderOnlyGlyph": { "type": "boolean", "default": false },
+        "rite.inlayHints": { "type": "boolean", "default": true },
+        "rite.trace.server": { "type": "string", "enum": ["off", "messages", "verbose"], "default": "off" },
+        "rite.studioUrl": { "type": "string", "default": "http://127.0.0.1:4041" },
+        "rite.compilerOutput": { "type": "string", "default": ".rite/build" }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p .",
+    "package": "vsce package --no-dependencies",
+    "vscode:prepublish": "npm run compile"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.85.0",
+    "typescript": "^5.3.0",
+    "@vscode/vsce": "^2.22.0"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^9.0.1"
+  }
+}

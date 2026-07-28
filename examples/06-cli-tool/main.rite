@@ -1,0 +1,6 @@
+//! Tiny CLI-style transform
+
+args ← ["alpha", "beta", "gamma"]
+upper ← args → map { |s| s }
+! @console.println(upper → count)
+! @console.println(upper)

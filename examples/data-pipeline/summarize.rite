@@ -1,0 +1,18 @@
+//! Summarize demo event data
+
+rows ← [
+  ⟨level: #info, service: "api"⟩,
+  ⟨level: #error, service: "api"⟩,
+  ⟨level: #error, service: "worker"⟩
+]
+
+failures ← rows → keep { |row| row.level = #error }
+total ← rows → count
+fail_count ← failures → count
+
+report ← ⟨
+  total_events: total,
+  total_failures: fail_count
+⟩
+
+! @console.println(report)

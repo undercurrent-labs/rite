@@ -1,0 +1,95 @@
+[workspace]
+resolver = "2"
+exclude = [".rite"]
+members = [
+    "crates/rite-core",
+    "crates/rite-syntax",
+    "crates/rite-sem",
+    "crates/rite-runtime",
+    "crates/rite-caps",
+    "crates/rite-compiler",
+    "crates/rite-fmt",
+    "crates/rite-doc",
+    "crates/rite-test",
+    "crates/rite-repl",
+    "crates/rite-analysis",
+    "crates/rite-lsp",
+    "crates/rite-wasm",
+    "crates/rite",
+    "crates/rite-cli",
+    "xtask",
+]
+default-members = ["crates/rite-cli"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+repository = "https://github.com/undercurrent-labs/rite"
+authors = ["Rite Contributors"]
+rust-version = "1.75"
+
+[workspace.dependencies]
+rite-core = { path = "crates/rite-core" }
+rite-syntax = { path = "crates/rite-syntax" }
+rite-sem = { path = "crates/rite-sem" }
+rite-runtime = { path = "crates/rite-runtime" }
+rite-caps = { path = "crates/rite-caps" }
+rite-compiler = { path = "crates/rite-compiler" }
+rite-fmt = { path = "crates/rite-fmt" }
+rite-doc = { path = "crates/rite-doc" }
+rite-test = { path = "crates/rite-test" }
+rite-repl = { path = "crates/rite-repl" }
+rite-analysis = { path = "crates/rite-analysis" }
+rite-lsp = { path = "crates/rite-lsp" }
+rite-wasm = { path = "crates/rite-wasm" }
+rite = { path = "crates/rite" }
+
+tokio = { version = "1", features = ["full"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+indexmap = { version = "2", features = ["serde"] }
+im = "15"
+thiserror = "2"
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+uuid = { version = "1", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+regex = "1"
+glob = "0.3"
+axum = "0.8"
+tower = "0.5"
+tower-http = { version = "0.6", features = ["trace", "limit", "timeout"] }
+hyper = "1"
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+bytes = "1"
+futures = "0.3"
+async-trait = "0.1"
+parking_lot = "0.12"
+dashmap = "6"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+unicode-width = "0.2"
+similar = "2"
+tempfile = "3"
+proptest = "1"
+insta = "1"
+sha2 = "0.10"
+hex = "0.4"
+walkdir = "2"
+pulldown-cmark = "0.12"
+handlebars = "6"
+rand = "0.8"
+rand_chacha = "0.3"
+mime_guess = "2"
+http-body-util = "0.1"
+tokio-util = { version = "0.7", features = ["rt"] }
+ctrlc = "3"
+rustyline = "15"
+atty = "0.2"
+once_cell = "1"
+smallvec = "1"
+
+[profile.release]
+lto = true
+codegen-units = 1

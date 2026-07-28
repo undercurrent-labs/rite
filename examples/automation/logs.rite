@@ -1,0 +1,15 @@
+//! Automation: scan for ERROR lines
+
+sample ← [
+  "INFO boot",
+  "ERROR disk full",
+  "INFO ok",
+  "ERROR panic in worker"
+]
+
+// keep lines that contain ERROR via membership
+errors ← sample → keep { |line| "ERROR" ∈ line }
+count_err ← errors → count
+! @console.println("found errors:")
+! @console.println(errors)
+! @console.println(count_err)

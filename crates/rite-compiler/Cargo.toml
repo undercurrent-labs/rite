@@ -1,0 +1,18 @@
+[package]
+name = "rite-compiler"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Rite AOT Rust code generation and cargo build"
+
+[dependencies]
+rite-core = { workspace = true }
+rite-syntax = { workspace = true }
+rite-sem = { workspace = true }
+rite-runtime = { workspace = true }
+rite-caps = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+hex = { workspace = true }
+anyhow = { workspace = true }

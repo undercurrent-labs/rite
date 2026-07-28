@@ -1,0 +1,69 @@
+# Rust
+/target
+**/*.rs.bk
+# Keep Cargo.lock for reproducible CLI/tooling builds (binary workspace)
+# (do not ignore)
+
+# Local / generated
+/.rite
+/docs/generated
+/dist
+
+# JS / package managers
+node_modules/
+**/node_modules/
+.pnpm-store/
+npm-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Build outputs
+**/dist/
+apps/*/dist/
+editors/vscode/*.vsix
+editors/vscode/out/
+*.tsbuildinfo
+
+# WASM build products (regenerate: bash scripts/build-wasm.sh)
+apps/*/public/wasm/
+apps/*/dist/wasm/
+
+# Cloudflare / Wrangler (may contain account ids)
+.wrangler/
+**/.wrangler/
+**/.cache/wrangler/
+**/wrangler-account.json
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.p12
+id_rsa*
+credentials.json
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json.example
+
+# Test / coverage
+coverage/
+*.lcov
+.nyc_output/
+
+# Misc
+*.log
+tmp/
+.temp/
+
+# Private / internal specs (not published)
+/mvp.md
+/v1.md

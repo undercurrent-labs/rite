@@ -1,0 +1,17 @@
+[package]
+name = "rite-repl"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Rite interactive REPL"
+
+[dependencies]
+rite-core = { workspace = true }
+rite-syntax = { workspace = true }
+rite-sem = { workspace = true }
+rite-runtime = { workspace = true }
+rite-caps = { workspace = true }
+rite-fmt = { workspace = true }
+tokio = { workspace = true }
+anyhow = { workspace = true }
+rustyline = { workspace = true }

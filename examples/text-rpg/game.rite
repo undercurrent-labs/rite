@@ -1,0 +1,43 @@
+//! Violet Gate — a small text RPG (≥5 rooms)
+
+! @game.register_item(#glyph_key, ⟨name: "Violet Glyph Key", weight: 1⟩)
+! @game.register_item(#sun_shard, ⟨name: "Sun Shard", weight: 1⟩)
+
+! @game.register_room(#corridor, ⟨
+  text: "A narrow corridor of fractured violet glass. Exits: east vault, west atrium, north archives.",
+  exits: ⟨east: "vault", west: "atrium", north: "archives"⟩
+⟩)
+
+! @game.register_room(#vault, ⟨
+  text: "A sealed gate hums beneath fractured violet glass.",
+  exits: ⟨west: "corridor"⟩
+⟩)
+
+! @game.register_room(#atrium, ⟨
+  text: "Rain of neon drips from a broken skylight. A pedestal holds a violet glyph key.",
+  exits: ⟨east: "corridor", south: "garden"⟩
+⟩)
+
+! @game.register_room(#archives, ⟨
+  text: "Dusty data-scrolls line the shelves. One shelf is marked: SUN PROTOCOL.",
+  exits: ⟨south: "corridor"⟩
+⟩)
+
+! @game.register_room(#garden, ⟨
+  text: "A rooftop garden of fiber-optic vines. The city grid glows below.",
+  exits: ⟨north: "atrium"⟩
+⟩)
+
+! @game.start(#atrium)
+! @game.take(#glyph_key)
+! @console.println(@game.look())
+! @game.command("east")
+! @console.println(@game.look())
+! @game.command("inventory")
+msgs ← @game.messages()
+! @console.println(msgs)
+save ← @game.save()?
+! @console.println("saved")
+! @game.load(save)?
+! @console.println("reloaded")
+! @console.println(@game.state())

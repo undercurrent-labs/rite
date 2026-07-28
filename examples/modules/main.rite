@@ -1,0 +1,4 @@
+use math
+
+! @console.println(str(square(12)))
+! @console.println(str(double(7)))

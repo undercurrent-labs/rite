@@ -1,0 +1,442 @@
+{
+  "clock": [
+    {
+      "arity": 0,
+      "docs": "Current UTC timestamp as ISO-8601 string.",
+      "effectful": true,
+      "name": "now",
+      "permission": "clock"
+    },
+    {
+      "arity": 1,
+      "docs": "Parse an ISO-8601 timestamp.",
+      "effectful": false,
+      "name": "parse",
+      "permission": "clock"
+    },
+    {
+      "arity": 2,
+      "docs": "Format a timestamp with a pattern.",
+      "effectful": false,
+      "name": "format",
+      "permission": "clock"
+    },
+    {
+      "arity": 1,
+      "docs": "Sleep for a duration in milliseconds.",
+      "effectful": true,
+      "name": "sleep",
+      "permission": "clock"
+    },
+    {
+      "arity": 1,
+      "docs": "Normalize a duration value to milliseconds.",
+      "effectful": false,
+      "name": "duration",
+      "permission": "clock"
+    }
+  ],
+  "console": [
+    {
+      "arity": 1,
+      "docs": "Write a value to stdout without a trailing newline.",
+      "effectful": true,
+      "name": "print",
+      "permission": "console"
+    },
+    {
+      "arity": 1,
+      "docs": "Write a value to stdout with a trailing newline.",
+      "effectful": true,
+      "name": "println",
+      "permission": "console"
+    },
+    {
+      "arity": 1,
+      "docs": "Write a warning to stderr.",
+      "effectful": true,
+      "name": "warn",
+      "permission": "console"
+    },
+    {
+      "arity": 1,
+      "docs": "Write an error to stderr.",
+      "effectful": true,
+      "name": "error",
+      "permission": "console"
+    },
+    {
+      "arity": 1,
+      "docs": "Write a debug representation to stdout.",
+      "effectful": true,
+      "name": "inspect",
+      "permission": "console"
+    },
+    {
+      "arity": 1,
+      "docs": "Read a line from stdin with optional prompt.",
+      "effectful": true,
+      "name": "read_line",
+      "permission": "console"
+    }
+  ],
+  "env": [
+    {
+      "arity": 1,
+      "docs": "Get an environment variable or none.",
+      "effectful": false,
+      "name": "get",
+      "permission": "env"
+    },
+    {
+      "arity": 1,
+      "docs": "Get a required environment variable as result.",
+      "effectful": false,
+      "name": "require",
+      "permission": "env"
+    },
+    {
+      "arity": 0,
+      "docs": "Return allowed environment variables as a record.",
+      "effectful": false,
+      "name": "all",
+      "permission": "env"
+    }
+  ],
+  "fs": [
+    {
+      "arity": 1,
+      "docs": "Read a UTF-8 text file.",
+      "effectful": false,
+      "name": "read",
+      "permission": "fs:read"
+    },
+    {
+      "arity": 1,
+      "docs": "Read a file as bytes.",
+      "effectful": false,
+      "name": "read_bytes",
+      "permission": "fs:read"
+    },
+    {
+      "arity": 2,
+      "docs": "Write text to a file.",
+      "effectful": true,
+      "name": "write",
+      "permission": "fs:write"
+    },
+    {
+      "arity": 2,
+      "docs": "Append text to a file.",
+      "effectful": true,
+      "name": "append",
+      "permission": "fs:write"
+    },
+    {
+      "arity": 1,
+      "docs": "Read file lines as a list of strings.",
+      "effectful": false,
+      "name": "lines",
+      "permission": "fs:read"
+    },
+    {
+      "arity": 1,
+      "docs": "Check whether a path exists.",
+      "effectful": false,
+      "name": "exists",
+      "permission": "fs:read"
+    },
+    {
+      "arity": 1,
+      "docs": "Return file metadata record.",
+      "effectful": false,
+      "name": "metadata",
+      "permission": "fs:read"
+    },
+    {
+      "arity": 1,
+      "docs": "Expand a glob pattern to matching paths.",
+      "effectful": false,
+      "name": "glob",
+      "permission": "fs:read"
+    },
+    {
+      "arity": 1,
+      "docs": "Create a directory.",
+      "effectful": true,
+      "name": "mkdir",
+      "permission": "fs:write"
+    },
+    {
+      "arity": 1,
+      "docs": "Remove a file or directory.",
+      "effectful": true,
+      "name": "remove",
+      "permission": "fs:write"
+    },
+    {
+      "arity": 2,
+      "docs": "Copy a file.",
+      "effectful": true,
+      "name": "copy",
+      "permission": "fs:write"
+    },
+    {
+      "arity": 2,
+      "docs": "Move/rename a file.",
+      "effectful": true,
+      "name": "move",
+      "permission": "fs:write"
+    }
+  ],
+  "game": [
+    {
+      "arity": 2,
+      "docs": "Register an item entity.",
+      "effectful": true,
+      "name": "register_item",
+      "permission": ""
+    },
+    {
+      "arity": 2,
+      "docs": "Register a room entity.",
+      "effectful": true,
+      "name": "register_room",
+      "permission": ""
+    },
+    {
+      "arity": 2,
+      "docs": "Register world metadata.",
+      "effectful": true,
+      "name": "register_world",
+      "permission": ""
+    },
+    {
+      "arity": 1,
+      "docs": "Emit a narrative message.",
+      "effectful": true,
+      "name": "say",
+      "permission": ""
+    },
+    {
+      "arity": 1,
+      "docs": "Reveal a room or flag.",
+      "effectful": true,
+      "name": "reveal",
+      "permission": ""
+    },
+    {
+      "arity": 1,
+      "docs": "Move through an exit.",
+      "effectful": true,
+      "name": "go",
+      "permission": ""
+    },
+    {
+      "arity": 1,
+      "docs": "Add item to inventory.",
+      "effectful": true,
+      "name": "take",
+      "permission": ""
+    },
+    {
+      "arity": 1,
+      "docs": "Remove item from inventory.",
+      "effectful": true,
+      "name": "drop",
+      "permission": ""
+    },
+    {
+      "arity": 0,
+      "docs": "Describe current room.",
+      "effectful": false,
+      "name": "look",
+      "permission": ""
+    },
+    {
+      "arity": 0,
+      "docs": "List inventory item ids.",
+      "effectful": false,
+      "name": "inventory",
+      "permission": ""
+    },
+    {
+      "arity": 0,
+      "docs": "Serialize game state to JSON string.",
+      "effectful": false,
+      "name": "save",
+      "permission": ""
+    },
+    {
+      "arity": 1,
+      "docs": "Load game state from JSON string.",
+      "effectful": true,
+      "name": "load",
+      "permission": ""
+    },
+    {
+      "arity": 1,
+      "docs": "Start game at a room.",
+      "effectful": true,
+      "name": "start",
+      "permission": ""
+    },
+    {
+      "arity": 1,
+      "docs": "Parse and run a player command.",
+      "effectful": true,
+      "name": "command",
+      "permission": ""
+    },
+    {
+      "arity": 0,
+      "docs": "Drain pending narrative messages.",
+      "effectful": false,
+      "name": "messages",
+      "permission": ""
+    },
+    {
+      "arity": 0,
+      "docs": "Return current game state record.",
+      "effectful": false,
+      "name": "state",
+      "permission": ""
+    }
+  ],
+  "http": [
+    {
+      "arity": 2,
+      "docs": "Start an HTTP server and block until shutdown.",
+      "effectful": true,
+      "name": "listen",
+      "permission": "net"
+    },
+    {
+      "arity": 1,
+      "docs": "Build an explicit HTTP response record.",
+      "effectful": false,
+      "name": "response",
+      "permission": ""
+    }
+  ],
+  "json": [
+    {
+      "arity": 1,
+      "docs": "Parse a JSON string into a Rite value.",
+      "effectful": false,
+      "name": "decode",
+      "permission": ""
+    },
+    {
+      "arity": 1,
+      "docs": "Serialize a value to compact JSON.",
+      "effectful": false,
+      "name": "encode",
+      "permission": ""
+    },
+    {
+      "arity": 1,
+      "docs": "Serialize a value to pretty JSON.",
+      "effectful": false,
+      "name": "encode_pretty",
+      "permission": ""
+    },
+    {
+      "arity": 1,
+      "docs": "Read and parse a JSON file.",
+      "effectful": false,
+      "name": "read",
+      "permission": "fs:read"
+    },
+    {
+      "arity": 2,
+      "docs": "Write a value as JSON to a file.",
+      "effectful": true,
+      "name": "write",
+      "permission": "fs:write"
+    }
+  ],
+  "process": [
+    {
+      "arity": 3,
+      "docs": "Run a command with argument array (no shell).",
+      "effectful": true,
+      "name": "run",
+      "permission": "process"
+    },
+    {
+      "arity": 1,
+      "docs": "Locate an executable on PATH.",
+      "effectful": false,
+      "name": "which",
+      "permission": "process"
+    }
+  ],
+  "random": [
+    {
+      "arity": 2,
+      "docs": "Random integer in [min, max].",
+      "effectful": true,
+      "name": "int",
+      "permission": "random"
+    },
+    {
+      "arity": 0,
+      "docs": "Random float in [0, 1).",
+      "effectful": true,
+      "name": "float",
+      "permission": "random"
+    },
+    {
+      "arity": 1,
+      "docs": "Choose a random element from a list.",
+      "effectful": true,
+      "name": "choose",
+      "permission": "random"
+    },
+    {
+      "arity": 1,
+      "docs": "Return a shuffled copy of a list.",
+      "effectful": true,
+      "name": "shuffle",
+      "permission": "random"
+    },
+    {
+      "arity": 0,
+      "docs": "Generate a UUID v4 string.",
+      "effectful": true,
+      "name": "uuid",
+      "permission": "random"
+    },
+    {
+      "arity": 1,
+      "docs": "Reseed the RNG for deterministic sequences.",
+      "effectful": true,
+      "name": "seed",
+      "permission": "random"
+    }
+  ],
+  "store": [
+    {
+      "arity": 2,
+      "docs": "Get a value from an in-memory namespace.",
+      "effectful": false,
+      "name": "get",
+      "permission": ""
+    },
+    {
+      "arity": 3,
+      "docs": "Set a value in an in-memory namespace.",
+      "effectful": true,
+      "name": "set",
+      "permission": ""
+    },
+    {
+      "arity": 2,
+      "docs": "Delete a key from a namespace.",
+      "effectful": true,
+      "name": "delete",
+      "permission": ""
+    }
+  ]
+}

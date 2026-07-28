@@ -1,0 +1,13 @@
+name = "rite-studio"
+# SPA asset serving behavior improved for non-HTML static files (e.g. /install)
+compatibility_date = "2025-04-01"
+
+# Unified product site: home + docs + studio SPA
+[assets]
+directory = "./dist"
+not_found_handling = "single-page-application"
+# Serve real files (install.sh, wasm) even when SPA fallback is enabled
+html_handling = "auto-trailing-slash"
+
+# Deploy: pnpm site:build && wrangler deploy  (from apps/rite-web)
+# Preview: wrangler dev

@@ -1,0 +1,85 @@
+{
+  "name": "Rite",
+  "scopeName": "source.rite",
+  "patterns": [
+    { "include": "#comments" },
+    { "include": "#strings" },
+    { "include": "#numbers" },
+    { "include": "#atoms" },
+    { "include": "#capabilities" },
+    { "include": "#keywords" },
+    { "include": "#operators" },
+    { "include": "#http-methods" }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        { "name": "comment.line.documentation.rite", "match": "///.*$" },
+        { "name": "comment.line.double-slash.rite", "match": "//.*$" },
+        {
+          "name": "comment.block.rite",
+          "begin": "/\\*",
+          "end": "\\*/"
+        }
+      ]
+    },
+    "strings": {
+      "patterns": [
+        {
+          "name": "string.quoted.double.rite",
+          "begin": "\"",
+          "end": "\"",
+          "patterns": [
+            { "name": "constant.character.escape.rite", "match": "\\\\." },
+            { "name": "meta.interpolation.rite", "match": "\\{[^}]+\\}" }
+          ]
+        },
+        {
+          "name": "string.quoted.raw.rite",
+          "begin": "r\"",
+          "end": "\""
+        }
+      ]
+    },
+    "numbers": {
+      "name": "constant.numeric.rite",
+      "match": "\\b(0x[0-9a-fA-F_]+|0b[01_]+|[0-9][0-9_]*(\\.[0-9_]+)?([eE][+-]?[0-9_]+)?)\\b"
+    },
+    "atoms": {
+      "name": "constant.other.atom.rite",
+      "match": "(#[\\w.]+|:[\\w.]+)"
+    },
+    "capabilities": {
+      "patterns": [
+        {
+          "name": "support.module.capability.rite",
+          "match": "(@|host\\.)(console|fs|json|http|clock|env|process|random|game|store)\\b"
+        },
+        {
+          "name": "support.function.capability.rite",
+          "match": "\\.(print|println|read|write|listen|decode|encode|now)\\b"
+        }
+      ]
+    },
+    "keywords": {
+      "patterns": [
+        {
+          "name": "keyword.control.rite",
+          "match": "\\b(def|return|if|match|do|use|as|pub|and|or|not|true|false|none|in|test|ok|err|some)\\b"
+        },
+        {
+          "name": "keyword.operator.glyph.rite",
+          "match": "[◆←↢→^?~!@⟦⟧⟨⟩∈∉]"
+        }
+      ]
+    },
+    "operators": {
+      "name": "keyword.operator.rite",
+      "match": "(<-|<~|->|:=|\\?\\?|!=|<=|>=|\\+|\\-|\\*|/|%|=|<|>|\\.\\.)"
+    },
+    "http-methods": {
+      "name": "keyword.other.http.rite",
+      "match": "\\b(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\\b"
+    }
+  }
+}

@@ -1,0 +1,94 @@
+use crate::permissions::PermissionSet;
+use crate::registry::NativeFunctionDescriptor;
+use rite_runtime::{EvalError, Key, Value};
+use std::process::Stdio;
+
+pub struct ProcessCap;
+
+impl ProcessCap {
+    pub const DESCRIPTORS: &'static [NativeFunctionDescriptor] = &[
+        NativeFunctionDescriptor {
+            name: "run",
+            docs: "Run a command with argument array (no shell).",
+            arity: 3,
+            effectful: true,
+            permission: "process",
+        },
+        NativeFunctionDescriptor {
+            name: "which",
+            docs: "Locate an executable on PATH.",
+            arity: 1,
+            effectful: false,
+            permission: "process",
+        },
+    ];
+
+    pub async fn call(
+        &self,
+        method: &str,
+        args: Vec<Value>,
+        perms: &PermissionSet,
+    ) -> Result<Value, EvalError> {
+        perms.check_process().map_err(EvalError::Permission)?;
+        match method {
+            "run" => {
+                let cmd = args
+                    .first()
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| EvalError::Message("process.run expects command".into()))?
+                    .to_string();
+                let mut argv: Vec<String> = Vec::new();
+                if let Some(Value::List(xs)) = args.get(1) {
+                    for x in xs {
+                        if let Some(s) = x.as_str() {
+                            argv.push(s.to_string());
+                        } else {
+                            argv.push(format!("{}", x));
+                        }
+                    }
+                }
+                let output = tokio::process::Command::new(&cmd)
+                    .args(&argv)
+                    .stdout(Stdio::piped())
+                    .stderr(Stdio::piped())
+                    .output()
+                    .await
+                    .map_err(|e| EvalError::Capability(e.to_string()))?;
+                Ok(Value::ok(Value::record(vec![
+                    (
+                        Key::String("status".into()),
+                        Value::Int(output.status.code().unwrap_or(-1) as i64),
+                    ),
+                    (
+                        Key::String("stdout".into()),
+                        Value::string(String::from_utf8_lossy(&output.stdout).to_string()),
+                    ),
+                    (
+                        Key::String("stderr".into()),
+                        Value::string(String::from_utf8_lossy(&output.stderr).to_string()),
+                    ),
+                ])))
+            }
+            "which" => {
+                let cmd = args
+                    .first()
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| EvalError::Message("process.which expects name".into()))?;
+                // simple PATH search
+                if let Ok(path_var) = std::env::var("PATH") {
+                    for dir in std::env::split_paths(&path_var) {
+                        let candidate = dir.join(cmd);
+                        if candidate.is_file() {
+                            return Ok(Value::ok(Value::string(candidate.display().to_string())));
+                        }
+                    }
+                }
+                Ok(Value::err(Value::string(format!("not found: {}", cmd))))
+            }
+            other => Err(EvalError::Capability(format!(
+                "unknown @process.{}",
+                other
+            ))),
+        }
+    }
+}

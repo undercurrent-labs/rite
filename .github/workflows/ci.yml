@@ -1,0 +1,144 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: -Dwarnings
+
+jobs:
+  rust:
+    name: Rust (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest]
+        # macOS/windows can be enabled when runners are available
+        # os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: fmt
+        run: cargo fmt --all -- --check
+      - name: clippy
+        run: cargo clippy --workspace --all-targets --features native -p rite-wasm -- -D warnings
+        continue-on-error: true
+      - name: test
+        run: cargo test --workspace --all-features
+      - name: build release tools
+        run: cargo build -p rite-cli -p rite-lsp --release
+      - name: doctests
+        run: ./target/release/rite docs check || cargo run -p rite-cli -- docs check
+      - name: agent bundle
+        run: ./target/release/rite docs agent --output skills/rite || cargo run -p rite-cli -- docs agent --output skills/rite
+      - name: upload binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: rite-binaries-${{ matrix.os }}
+          path: |
+            target/release/rite
+            target/release/rite-lsp
+          if-no-files-found: warn
+
+  wasm:
+    name: WASM
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: jetli/wasm-pack-action@v0.4.0
+      - uses: Swatinem/rust-cache@v2
+      - name: build wasm
+        run: bash scripts/build-wasm.sh
+      - name: upload wasm
+        uses: actions/upload-artifact@v4
+        with:
+          name: rite-wasm
+          path: apps/rite-studio/public/wasm
+
+  studio:
+    name: Studio
+    runs-on: ubuntu-latest
+    needs: [wasm]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - uses: actions/download-artifact@v4
+        with:
+          name: rite-wasm
+          path: apps/rite-studio/public/wasm
+      - name: install & build
+        working-directory: apps/rite-studio
+        run: |
+          pnpm install
+          pnpm build
+      - name: upload studio dist
+        uses: actions/upload-artifact@v4
+        with:
+          name: rite-studio-dist
+          path: apps/rite-studio/dist
+
+  vscode:
+    name: VS Code extension
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: compile extension
+        working-directory: editors/vscode
+        run: |
+          npm install
+          npm run compile
+      - name: package vsix
+        working-directory: editors/vscode
+        run: npx --yes @vscode/vsce package --no-dependencies -o rite.vsix
+        continue-on-error: true
+      - name: upload vsix
+        uses: actions/upload-artifact@v4
+        with:
+          name: rite-vsix
+          path: editors/vscode/*.vsix
+          if-no-files-found: warn
+
+  release-manifest:
+    name: Release manifest
+    runs-on: ubuntu-latest
+    needs: [rust, wasm, studio]
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+      - name: write version manifest
+        run: |
+          mkdir -p dist
+          cat > dist/version-manifest.json <<EOF
+          {
+            "release": "${{ github.ref_name }}",
+            "language_version": "1",
+            "formatter_version": "1",
+            "lsp_protocol": "3.17",
+            "commit": "${{ github.sha }}"
+          }
+          EOF
+      - uses: actions/upload-artifact@v4
+        with:
+          name: version-manifest
+          path: dist/version-manifest.json

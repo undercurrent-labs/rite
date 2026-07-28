@@ -1,0 +1,14 @@
+# Cloudflare static asset headers (copied to dist on build)
+
+/install
+  Content-Type: text/x-shellscript; charset=utf-8
+  Cache-Control: public, max-age=300, must-revalidate
+  X-Content-Type-Options: nosniff
+
+/install.sh
+  Content-Type: text/x-shellscript; charset=utf-8
+  Cache-Control: public, max-age=300, must-revalidate
+  X-Content-Type-Options: nosniff
+
+/wasm/*
+  Cache-Control: public, max-age=3600, must-revalidate

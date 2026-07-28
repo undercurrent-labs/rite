@@ -1,0 +1,34 @@
+[package]
+name = "rite-wasm"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Browser-facing Rite API (WASM-ready)"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+rite-core = { workspace = true }
+rite-syntax = { workspace = true }
+rite-sem = { workspace = true }
+rite-fmt = { workspace = true }
+rite-analysis = { workspace = true }
+# Pure evaluator (wasm-safe; no Tokio/mio)
+rite-runtime = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+# Native full stack (caps + HTTP + process)
+rite-compiler = { workspace = true, optional = true }
+rite-caps = { workspace = true, optional = true }
+tokio = { workspace = true, optional = true }
+# WASM glue
+wasm-bindgen = { version = "0.2", optional = true }
+serde-wasm-bindgen = { version = "0.6", optional = true }
+console_error_panic_hook = { version = "0.1", optional = true }
+getrandom = { version = "0.2", optional = true, features = ["js"] }
+
+[features]
+default = ["native"]
+native = ["rite-compiler", "rite-caps", "tokio"]
+wasm = ["wasm-bindgen", "serde-wasm-bindgen", "console_error_panic_hook", "getrandom"]

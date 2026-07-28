@@ -1,0 +1,77 @@
+{
+  "Function": {
+    "prefix": "def",
+    "body": ["◆ ${1:name}(${2:args}) ⟦", "  ^ $0", "⟧"],
+    "description": "Function declaration (glyph)"
+  },
+  "Function ASCII": {
+    "prefix": "defa",
+    "body": ["def ${1:name}(${2:args}) [[", "  return $0", "]]"],
+    "description": "Function declaration (ASCII)"
+  },
+  "Pipeline": {
+    "prefix": "pipe",
+    "body": ["${1:xs}", "  → map { |x| $0 }", "  → keep { |x| true }"],
+    "description": "Pipeline"
+  },
+  "Match": {
+    "prefix": "match",
+    "body": ["~ ${1:value} ⟦", "  ${2:#ok} → $0", "  _ → none", "⟧"],
+    "description": "Pattern match"
+  },
+  "Result handling": {
+    "prefix": "res",
+    "body": ["~ ${1:result} ⟦", "  ok value → value", "  err fault → ^ err(fault)", "⟧"],
+    "description": "ok/err match"
+  },
+  "HTTP listen": {
+    "prefix": "http",
+    "body": [
+      "@http.listen \"${1:127.0.0.1:0}\" ⟦",
+      "  GET \"/health\" ⟦",
+      "    ^ 200 ⟨status: #ok⟩",
+      "  ⟧",
+      "⟧"
+    ],
+    "description": "HTTP listener"
+  },
+  "GET route": {
+    "prefix": "get",
+    "body": ["GET \"${1:/path}\" |req| ⟦", "  ^ 200 $0", "⟧"],
+    "description": "GET route"
+  },
+  "POST route": {
+    "prefix": "post",
+    "body": ["POST \"${1:/path}\" |req| ⟦", "  payload ← req.json?", "  ^ 200 payload", "⟧"],
+    "description": "POST route"
+  },
+  "Doc comment": {
+    "prefix": "///",
+    "body": [
+      "/// ${1:Summary.}",
+      "///",
+      "/// # Parameters",
+      "///",
+      "/// - `${2:arg}`: ${3:description}",
+      "///",
+      "/// # Returns",
+      "///",
+      "/// ${4:description}",
+      "///",
+      "/// # Effects",
+      "///",
+      "/// ${5:None.}"
+    ],
+    "description": "Documentation comment"
+  },
+  "RPG room": {
+    "prefix": "room",
+    "body": [
+      "! @game.register_room(#${1:id}, ⟨",
+      "  text: \"${2:description}\",",
+      "  exits: ⟨${3:north}: \"${4:other}\"⟩",
+      "⟩)"
+    ],
+    "description": "Register RPG room"
+  }
+}

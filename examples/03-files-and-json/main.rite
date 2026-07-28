@@ -1,0 +1,7 @@
+//! Files and JSON (needs fs permissions)
+
+data ← ⟨hello: "world", n: 1⟩
+text ← @json.encode(data)
+! @console.println(text)
+decoded ← @json.decode(text)?
+! @console.println(decoded)

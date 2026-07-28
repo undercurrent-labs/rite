@@ -1,0 +1,5 @@
+// Should fail without fs permission when reading
+// Run with: rite run tests/e2e/permission_denied.rite
+// (no --allow-all)
+result ← @fs.read("/etc/passwd")
+result

@@ -1,0 +1,189 @@
+# Build installable CLI binaries and publish a GitHub Release.
+# Trigger: push tag v*  (e.g. git tag v0.1.0 && git push origin v0.1.0)
+# Or: Actions → Release binaries → Run workflow
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version tag to release (e.g. v0.1.0). Creates/uses this tag name for assets."
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Linux x86_64 (most servers + many work laptops / WSL)
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            archive: tar
+          # macOS Intel
+          - os: macos-13
+            target: x86_64-apple-darwin
+            archive: tar
+          # macOS Apple Silicon
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            archive: tar
+          # Windows x86_64 (manual zip; Unix install.sh not used)
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            archive: zip
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: release-${{ matrix.target }}
+
+      - name: Build
+        shell: bash
+        run: |
+          set -euo pipefail
+          HOST="$(rustc -vV | sed -n 's/^host: //p')"
+          if [[ "$HOST" == "${{ matrix.target }}" ]]; then
+            cargo build -p rite-cli -p rite-lsp --release
+            BIN=target/release
+          else
+            cargo build -p rite-cli -p rite-lsp --release --target ${{ matrix.target }}
+            BIN=target/${{ matrix.target }}/release
+          fi
+          echo "BIN=$BIN" >> "$GITHUB_ENV"
+
+      - name: Package (Unix)
+        if: matrix.archive == 'tar'
+        shell: bash
+        run: |
+          set -euo pipefail
+          TARGET="${{ matrix.target }}"
+          STAGE="rite-${TARGET}"
+          mkdir -p "dist/${STAGE}"
+          cp "${BIN}/rite" "dist/${STAGE}/rite"
+          cp "${BIN}/rite-lsp" "dist/${STAGE}/rite-lsp"
+          chmod +x "dist/${STAGE}/rite" "dist/${STAGE}/rite-lsp"
+          strip "dist/${STAGE}/rite" 2>/dev/null || true
+          strip "dist/${STAGE}/rite-lsp" 2>/dev/null || true
+          tar -C dist -czf "dist/rite-${TARGET}.tar.gz" "${STAGE}"
+          (cd dist && sha256sum "rite-${TARGET}.tar.gz" > "SHA256SUMS-${TARGET}")
+          ls -la dist/
+
+      - name: Package (Windows)
+        if: matrix.archive == 'zip'
+        shell: bash
+        run: |
+          set -euo pipefail
+          TARGET="${{ matrix.target }}"
+          STAGE="rite-${TARGET}"
+          mkdir -p "dist/${STAGE}"
+          cp "${BIN}/rite.exe" "dist/${STAGE}/rite.exe"
+          cp "${BIN}/rite-lsp.exe" "dist/${STAGE}/rite-lsp.exe"
+          (cd dist && zip -r "rite-${TARGET}.zip" "${STAGE}")
+          (cd dist && sha256sum "rite-${TARGET}.zip" > "SHA256SUMS-${TARGET}" || shasum -a 256 "rite-${TARGET}.zip" > "SHA256SUMS-${TARGET}")
+          ls -la dist/
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: rite-${{ matrix.target }}
+          path: |
+            dist/rite-*
+            dist/SHA256SUMS-*
+
+  publish:
+    name: Publish GitHub Release
+    needs: [build]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve version
+        id: ver
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            V="${{ inputs.version }}"
+          else
+            V="${GITHUB_REF_NAME}"
+          fi
+          case "$V" in v*) ;; *) V="v${V}" ;; esac
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          echo "Publishing $V"
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Assemble dist
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          # Flatten artifacts
+          find artifacts -type f \( -name 'rite-*.tar.gz' -o -name 'rite-*.zip' -o -name 'SHA256SUMS-*' \) -exec cp -v {} dist/ \;
+          # Merge checksums
+          cat dist/SHA256SUMS-* | sort -k2 > dist/SHA256SUMS
+          rm -f dist/SHA256SUMS-*
+          # Version manifest
+          cat > dist/version-manifest.json <<EOF
+          {
+            "version": "${{ steps.ver.outputs.version }}",
+            "commit": "${{ github.sha }}",
+            "repo": "${{ github.repository }}"
+          }
+          EOF
+          ls -la dist/
+          cat dist/SHA256SUMS
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.ver.outputs.version }}
+          name: Rite ${{ steps.ver.outputs.version }}
+          generate_release_notes: true
+          draft: false
+          prerelease: ${{ contains(steps.ver.outputs.version, '-') }}
+          files: |
+            dist/*.tar.gz
+            dist/*.zip
+            dist/SHA256SUMS
+            dist/version-manifest.json
+          body: |
+            ## Install (no clone)
+
+            ```bash
+            curl -fsSL https://rite.undrc.dev/install | sh
+            ```
+
+            Pin a version:
+
+            ```bash
+            curl -fsSL https://rite.undrc.dev/install | RITE_VERSION=${{ steps.ver.outputs.version }} sh
+            ```
+
+            Binaries install to `~/.local/bin` by default (`rite` + `rite-lsp`).
+
+            ### Manual download
+
+            Grab the archive for your platform from the assets below, verify against `SHA256SUMS`, extract, and put `rite` on your `PATH`.
+
+            Docs: https://rite.undrc.dev/docs/installation
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

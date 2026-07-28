@@ -1,0 +1,29 @@
+//! Violet Gate — ASCII variant
+
+def item :glyph_key [[
+  name "Violet Glyph Key"
+  weight 1
+]]
+
+def room :corridor [[
+  text "A narrow corridor of fractured violet glass."
+]]
+
+def room :vault [[
+  text "A sealed gate hums beneath fractured violet glass."
+]]
+
+def room :atrium [[
+  text "Rain of neon drips from a broken skylight."
+]]
+
+def room :archives [[
+  text "Dusty data-scrolls line the shelves."
+]]
+
+def room :garden [[
+  text "A rooftop garden of fiber-optic vines."
+]]
+
+do host.game.start(:atrium)
+do host.console.println(host.game.look())

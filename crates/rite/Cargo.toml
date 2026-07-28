@@ -1,0 +1,19 @@
+[package]
+name = "rite"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Rite embedding API and engine facade"
+
+[dependencies]
+rite-core = { workspace = true }
+rite-syntax = { workspace = true }
+rite-sem = { workspace = true }
+rite-runtime = { workspace = true }
+rite-caps = { workspace = true }
+rite-fmt = { workspace = true }
+tokio = { workspace = true }
+async-trait = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }

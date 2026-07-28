@@ -1,0 +1,115 @@
+# Canonical sigils and ASCII aliases for Rite v1
+
+[[sigil]]
+canonical = "◆"
+ascii = ["def"]
+token = "Def"
+meaning = "Declaration"
+
+[[sigil]]
+canonical = "←"
+ascii = ["<-"]
+token = "Bind"
+meaning = "Immutable binding"
+
+[[sigil]]
+canonical = "↢"
+ascii = ["<~"]
+token = "BindMut"
+meaning = "Mutable binding"
+
+[[sigil]]
+canonical = "→"
+ascii = ["->"]
+token = "Arrow"
+meaning = "Pipeline or match branch"
+
+[[sigil]]
+canonical = "^"
+ascii = ["return"]
+token = "Return"
+meaning = "Explicit return or yield"
+
+[[sigil]]
+canonical = "?"
+ascii = ["if"]
+token = "If"
+meaning = "Conditional (prefix) / try unwrap (postfix)"
+
+[[sigil]]
+canonical = "~"
+ascii = ["match"]
+token = "Match"
+meaning = "Pattern match"
+
+[[sigil]]
+canonical = "!"
+ascii = ["do"]
+token = "Effect"
+meaning = "Perform effect"
+
+[[sigil]]
+canonical = "@"
+ascii = ["host."]
+token = "Host"
+meaning = "Host capability namespace"
+
+[[sigil]]
+canonical = "#"
+ascii = [":"]
+token = "Atom"
+meaning = "Atom prefix"
+
+[[sigil]]
+canonical = "⟦"
+ascii = ["[["]
+token = "BlockOpen"
+meaning = "Executable block open"
+
+[[sigil]]
+canonical = "⟧"
+ascii = ["]]"]
+token = "BlockClose"
+meaning = "Executable block close"
+
+[[sigil]]
+canonical = "⟨"
+ascii = ["<<"]
+token = "RecordOpen"
+meaning = "Record literal open"
+
+[[sigil]]
+canonical = "⟩"
+ascii = [">>"]
+token = "RecordClose"
+meaning = "Record literal close"
+
+[[sigil]]
+canonical = "∈"
+ascii = ["in"]
+token = "In"
+meaning = "Membership"
+
+[[sigil]]
+canonical = "∉"
+ascii = ["not in"]
+token = "NotIn"
+meaning = "Non-membership"
+
+[[sigil]]
+canonical = "??"
+ascii = ["??"]
+token = "Coalesce"
+meaning = "Null/default coalescing"
+
+[[sigil]]
+canonical = ":="
+ascii = [":="]
+token = "Assign"
+meaning = "Mutable assignment"
+
+[[sigil]]
+canonical = ".."
+ascii = [".."]
+token = "Rest"
+meaning = "Rest/spread in patterns"

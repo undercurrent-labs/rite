@@ -1,0 +1,23 @@
+//! Sinatra-style HTTP service with real Rite handlers
+
+@http.listen "127.0.0.1:0" ⟦
+  use @http.log
+  use @http.recover
+
+  GET "/health" ⟦
+    ^ 200 ⟨status: #ok⟩
+  ⟧
+
+  GET "/echo/:word" |req| ⟦
+    ^ 200 ⟨echo: req.path.word, query: req.query⟩
+  ⟧
+
+  POST "/sum" |req| ⟦
+    payload ← req.json?
+    numbers ← payload.numbers ?? []
+    ^ 200 ⟨
+      total: numbers → sum,
+      count: numbers → count
+    ⟩
+  ⟧
+⟧

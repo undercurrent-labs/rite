@@ -1,0 +1,16 @@
+//! Pattern matching
+
+status ← #ok
+msg ← ~ status ⟦
+  #ok → "ready"
+  #error → "failed"
+  _ → "unknown"
+⟧
+! @console.println(msg)
+
+pair ← [1, 2, 3]
+head ← ~ pair ⟦
+  [h, ..rest] → h
+  _ → 0
+⟧
+! @console.println(head)

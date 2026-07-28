@@ -1,0 +1,39 @@
+[package]
+name = "rite-caps"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Rite host capabilities and permissions"
+
+[dependencies]
+rite-core = { workspace = true }
+rite-runtime = { workspace = true }
+rite-sem = { workspace = true }
+async-trait = { workspace = true }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+indexmap = { workspace = true }
+chrono = { workspace = true }
+glob = { workspace = true }
+uuid = { workspace = true }
+rand = { workspace = true }
+rand_chacha = { workspace = true }
+parking_lot = { workspace = true }
+axum = { workspace = true }
+tower = { workspace = true }
+tower-http = { workspace = true }
+bytes = { workspace = true }
+futures = { workspace = true }
+tracing = { workspace = true }
+regex = { workspace = true }
+walkdir = { workspace = true }
+ctrlc = { workspace = true }
+hyper = { workspace = true }
+hyper-util = { version = "0.1", features = ["tokio"] }
+http-body-util = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+reqwest = { workspace = true }
+tokio = { workspace = true }

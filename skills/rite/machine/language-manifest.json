@@ -1,0 +1,13 @@
+{
+  "dialects": [
+    "ascii",
+    "glyph",
+    "mixed",
+    "preserve"
+  ],
+  "extensions": [
+    ".rite"
+  ],
+  "name": "rite",
+  "version": "1"
+}

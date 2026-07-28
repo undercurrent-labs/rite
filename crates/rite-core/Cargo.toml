@@ -1,0 +1,14 @@
+[package]
+name = "rite-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Source model, spans, and diagnostics for Rite"
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
