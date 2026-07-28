@@ -17,6 +17,8 @@ pub enum Value {
     Record(IndexMap<Key, Value>),
     Function(Closure),
     NativeFunction(NativeFnId),
+    /// Named pure/host-dispatch builtin resolved at call time (shadowable by locals).
+    NativeName(String),
     Result(ResultValue),
     Handle(HostHandle),
     Bytes(Arc<[u8]>),
@@ -106,6 +108,7 @@ impl Value {
             Value::Record(_) => "record",
             Value::Function(_) => "function",
             Value::NativeFunction(_) => "native",
+            Value::NativeName(_) => "native",
             Value::Result(_) => "result",
             Value::Handle(_) => "handle",
             Value::Bytes(_) => "bytes",
@@ -137,6 +140,7 @@ impl Value {
             (Value::Bytes(a), Value::Bytes(b)) => a == b,
             (Value::Function(a), Value::Function(b)) => a.id == b.id,
             (Value::NativeFunction(a), Value::NativeFunction(b)) => a == b,
+            (Value::NativeName(a), Value::NativeName(b)) => a == b,
             (Value::Handle(a), Value::Handle(b)) => a.kind == b.kind && a.id == b.id,
             _ => false,
         }
@@ -201,6 +205,7 @@ impl Value {
                 c.params.len()
             ),
             Value::NativeFunction(n) => format!("<native {}>", n.0),
+            Value::NativeName(n) => format!("<native {}>", n),
             Value::Result(ResultValue::Ok(v)) => format!("ok({})", v.to_display(atoms)),
             Value::Result(ResultValue::Err(v)) => format!("err({})", v.to_display(atoms)),
             Value::Handle(h) => format!("<handle {}:{}>", h.kind, h.id),

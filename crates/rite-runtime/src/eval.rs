@@ -281,6 +281,10 @@ impl<'a> Evaluator<'a> {
                         .get(name)
                         .ok_or_else(|| EvalError::Message(format!("undefined function {}", name)));
                 }
+                // Shadowable builtins: prefer env binding above; else native dispatch token.
+                if is_runtime_builtin(name) {
+                    return Ok(Value::NativeName(name.clone()));
+                }
                 Err(EvalError::Message(format!("undefined name `{}`", name)))
             }
             ExprIr::Bind {
@@ -345,6 +349,7 @@ impl<'a> Evaluator<'a> {
                 id: CLOSURE_ID.fetch_add(1, Ordering::Relaxed),
                 name: None,
                 params: c.param_names.clone(),
+                // Share ambient env so mutables assigned inside map/each/for are visible.
                 env: Arc::new(parking_lot::RwLock::new(self.ctx.env.clone())),
                 body: c.body.clone(),
             })),
@@ -530,7 +535,13 @@ impl<'a> Evaluator<'a> {
         stage: &rite_sem::PipelineStageIr,
     ) -> Result<Value, EvalError> {
         match &stage.kind {
-            StageKind::MemberProjection(field) => Ok(input.get_field(field)),
+            StageKind::MemberProjection(field) => match input {
+                Value::List(xs) => {
+                    let out: Vec<Value> = xs.iter().map(|x| x.get_field(field)).collect();
+                    Ok(Value::list(out))
+                }
+                other => Ok(other.get_field(field)),
+            },
             StageKind::Block | StageKind::Call | StageKind::PlaceholderCall => {
                 match &stage.expr {
                     ExprIr::NativeCall { name, args, .. } => {
@@ -755,14 +766,23 @@ impl<'a> Evaluator<'a> {
         self.ctx.call_depth += 1;
         let result = match callee {
             Value::Function(c) => {
-                // Nested / lambda closures capture the env at creation time. Install
-                // that lexical environment for the call so free variables resolve.
-                // Top-level `◆` defs are registered with an empty env and intentionally
-                // use the ambient environment (module bindings defined at runtime).
+                // Closures capture env at creation. If we are still inside the defining
+                // stack (ambient depth ≥ capture depth), prefer the ambient env so
+                // mutable assigns in `for`/`each` bodies affect outer bindings.
+                // If the closure has escaped (returned, stored), install the capture.
                 let captured = c.env.read().clone();
-                let use_lexical = captured.depth() > 1
+                let has_capture = captured.depth() > 1
                     || !captured.bindings_snapshot().is_empty();
-                if use_lexical {
+                // Compose and other synthetic closures stash private names (`__f`);
+                // always install their capture. Escaped closures (returned) too.
+                let needs_capture = has_capture
+                    && (self.ctx.env.depth() < captured.depth()
+                        || c.name.as_deref() == Some("compose")
+                        || captured
+                            .bindings_snapshot()
+                            .iter()
+                            .any(|(k, _)| k.starts_with("__")));
+                if needs_capture {
                     let saved = std::mem::replace(&mut self.ctx.env, captured);
                     let r = self.call_block(&c.body, &c.params, args).await;
                     self.ctx.env = saved;
@@ -770,6 +790,11 @@ impl<'a> Evaluator<'a> {
                 } else {
                     self.call_block(&c.body, &c.params, args).await
                 }
+            }
+            Value::NativeName(name) => {
+                // Indirection avoids infinitely sized async future (call_value ↔ map/each).
+                let name = name.clone();
+                Box::pin(self.call_native(&name, args)).await
             }
             Value::NativeFunction(_) => Err(EvalError::Message(
                 "native function id call not wired".into(),
@@ -857,6 +882,8 @@ impl<'a> Evaluator<'a> {
             "group" => self.builtin_group(args).await,
             "parallel" => self.builtin_map(args).await, // sequential fallback with same semantics for pure
             "import" => Ok(Value::None),                // module loading handled at higher layer
+            "while_loop" => self.builtin_while_loop(args).await,
+            "compose" => self.builtin_compose(args).await,
             "print" | "println" => {
                 let s = args
                     .first()
@@ -871,6 +898,62 @@ impl<'a> Evaluator<'a> {
             }
             other => call_builtin(other, args),
         }
+    }
+
+    async fn builtin_while_loop(&mut self, args: Vec<Value>) -> Result<Value, EvalError> {
+        let mut it = args.into_iter();
+        let pred = it.next().unwrap_or(Value::None);
+        let body = it.next().unwrap_or(Value::None);
+        let mut steps = 0u64;
+        loop {
+            self.ctx.budget.tick()?;
+            steps += 1;
+            if steps > 1_000_000 {
+                return Err(EvalError::Message("while loop exceeded iteration guard".into()));
+            }
+            let c = self.call_value(pred.clone(), vec![Value::None]).await?;
+            if !c.is_truthy() {
+                break;
+            }
+            let _ = self.call_value(body.clone(), vec![Value::None]).await?;
+        }
+        Ok(Value::None)
+    }
+
+    async fn builtin_compose(&mut self, args: Vec<Value>) -> Result<Value, EvalError> {
+        // compose(f, g) → function x => f(g(x)); compose(f, g, x) applies immediately.
+        let mut it = args.into_iter();
+        let f = it.next().unwrap_or(Value::None);
+        let g = it.next().unwrap_or(Value::None);
+        if let Some(x) = it.next() {
+            let y = self.call_value(g, vec![x]).await?;
+            return self.call_value(f, vec![y]).await;
+        }
+        use rite_sem::{BlockIr, ExprIr, LocalId};
+        use rite_core::Span;
+        let mut env = crate::env::Environment::new();
+        env.define_name("__f", f, false);
+        env.define_name("__g", g, false);
+        let body = BlockIr {
+            params: vec![LocalId(0)],
+            body: vec![ExprIr::Call {
+                callee: Box::new(ExprIr::Global("__f".into())),
+                args: vec![ExprIr::Call {
+                    callee: Box::new(ExprIr::Global("__g".into())),
+                    args: vec![ExprIr::Global("x".into())],
+                    span: Span::DUMMY,
+                }],
+                span: Span::DUMMY,
+            }],
+            span: Span::DUMMY,
+        };
+        Ok(Value::Function(Closure {
+            id: CLOSURE_ID.fetch_add(1, Ordering::Relaxed),
+            name: Some("compose".into()),
+            params: vec!["x".into()],
+            env: Arc::new(parking_lot::RwLock::new(env)),
+            body,
+        }))
     }
 
     async fn builtin_map(&mut self, args: Vec<Value>) -> Result<Value, EvalError> {
@@ -1211,3 +1294,18 @@ pub fn set_http_route_registrar(f: fn(String, &[rite_sem::RouteIr], &RuntimeCont
 // silence
 #[allow(dead_code)]
 fn _span(_s: Span) {}
+
+
+fn is_runtime_builtin(name: &str) -> bool {
+    matches!(
+        name,
+        "map" | "keep" | "reject" | "reduce" | "each" | "flatten" | "count" | "first" | "last"
+            | "rest" | "tail" | "init" | "butlast" | "take" | "drop" | "reverse" | "concat"
+            | "find" | "any" | "all" | "sum" | "min" | "max" | "sort" | "unique" | "zip" | "chunk"
+            | "parallel" | "ok" | "err" | "panic" | "expect" | "fail" | "str" | "len" | "type_of"
+            | "require" | "collect_results" | "group" | "lines" | "words" | "join" | "range"
+            | "range_incl" | "keys" | "values" | "abs" | "clamp" | "pow" | "idiv" | "xor"
+            | "and_then" | "or_else" | "is_ok" | "is_err" | "unwrap_or" | "repeat" | "contains"
+            | "enumerate" | "with_index" | "compose" | "while_loop" | "print" | "println"
+    )
+}

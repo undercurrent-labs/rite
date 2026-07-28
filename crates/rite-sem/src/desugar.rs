@@ -130,6 +130,7 @@ pub fn desugar_program(resolved: &ResolvedProgram) -> ProgramIr {
                             rite_syntax::RecordKey::Ident(i) => KeyIr::Ident(i.name.clone()),
                             rite_syntax::RecordKey::String(s) => KeyIr::String(s.clone()),
                             rite_syntax::RecordKey::Atom(a) => KeyIr::Atom(a.parts.join(".")),
+                            rite_syntax::RecordKey::Spread => KeyIr::Ident("_spread".into()),
                         };
                         (key, d.desugar_expr(&e.value))
                     })
@@ -292,20 +293,26 @@ impl Desugar {
                 }
             }
             Stmt::Assign(a) => {
-                let lid = self.fresh_local(); // resolved later by name in runtime
+                let lid = self.fresh_local();
+                let rhs = if let Some(op) = a.op {
+                    // c += 1  →  c := c + 1
+                    ExprIr::Binary {
+                        op: bin_op(op),
+                        left: Box::new(ExprIr::Global(a.name.name.clone())),
+                        right: Box::new(self.desugar_expr(&a.value)),
+                        span: a.span,
+                    }
+                } else {
+                    self.desugar_expr(&a.value)
+                };
                 ExprIr::Assign {
                     local: lid,
                     value: Box::new(ExprIr::Seq(
-                        vec![
-                            ExprIr::Global(a.name.name.clone()),
-                            self.desugar_expr(&a.value),
-                        ],
+                        vec![ExprIr::Global(a.name.name.clone()), rhs],
                         a.span,
                     )),
                     span: a.span,
                 }
-                // Better representation:
-                // Use Global assign via special form
             }
             Stmt::Expr(e) => self.desugar_expr(e),
             Stmt::Return(r) => ExprIr::Return(
@@ -332,30 +339,132 @@ impl Desugar {
             },
             Expr::Ident(i) => ExprIr::Global(i.name.clone()),
             Expr::Atom(a) => ExprIr::Atom(a.parts.join("."), a.span),
-            Expr::List(l) => ExprIr::BuildList(
-                l.elements.iter().map(|e| self.desugar_expr(e)).collect(),
-                l.span,
-            ),
+            Expr::List(l) => {
+                // Expand spreads: [a, ..xs, b] → concat([a], xs, [b]) when any spread present
+                let has_spread = l.elements.iter().any(|e| {
+                    matches!(e, Expr::Unary(u) if u.op == UnaryOp::Spread)
+                });
+                if has_spread {
+                    let mut parts = Vec::new();
+                    for e in &l.elements {
+                        if let Expr::Unary(u) = e {
+                            if u.op == UnaryOp::Spread {
+                                parts.push(self.desugar_expr(&u.expr));
+                                continue;
+                            }
+                        }
+                        parts.push(ExprIr::BuildList(vec![self.desugar_expr(e)], e.span()));
+                    }
+                    ExprIr::NativeCall {
+                        name: "concat".into(),
+                        args: parts,
+                        effect: EffectKind::Pure,
+                        span: l.span,
+                    }
+                } else {
+                    ExprIr::BuildList(
+                        l.elements.iter().map(|e| self.desugar_expr(e)).collect(),
+                        l.span,
+                    )
+                }
+            }
             Expr::Record(r) => {
-                let entries = r
+                // Spreads: ⟨..a, k: v, ..b⟩ → fold merge
+                let has_spread = r
                     .entries
                     .iter()
-                    .map(|e| {
-                        let key = match &e.key {
-                            rite_syntax::RecordKey::Ident(i) => KeyIr::Ident(i.name.clone()),
-                            rite_syntax::RecordKey::String(s) => KeyIr::String(s.clone()),
-                            rite_syntax::RecordKey::Atom(a) => KeyIr::Atom(a.parts.join(".")),
+                    .any(|e| matches!(e.key, rite_syntax::RecordKey::Spread));
+                if has_spread {
+                    let mut acc: Option<ExprIr> = None;
+                    for e in &r.entries {
+                        let piece = match &e.key {
+                            rite_syntax::RecordKey::Spread => self.desugar_expr(&e.value),
+                            other => {
+                                let key = match other {
+                                    rite_syntax::RecordKey::Ident(i) => KeyIr::Ident(i.name.clone()),
+                                    rite_syntax::RecordKey::String(s) => KeyIr::String(s.clone()),
+                                    rite_syntax::RecordKey::Atom(a) => {
+                                        KeyIr::Atom(a.parts.join("."))
+                                    }
+                                    rite_syntax::RecordKey::Spread => unreachable!(),
+                                };
+                                ExprIr::BuildRecord(
+                                    vec![(key, self.desugar_expr(&e.value))],
+                                    e.span,
+                                )
+                            }
                         };
-                        (key, self.desugar_expr(&e.value))
-                    })
-                    .collect();
-                ExprIr::BuildRecord(entries, r.span)
+                        acc = Some(match acc {
+                            None => piece,
+                            Some(left) => ExprIr::Binary {
+                                op: BinaryOpIr::Add, // record merge
+                                left: Box::new(left),
+                                right: Box::new(piece),
+                                span: r.span,
+                            },
+                        });
+                    }
+                    acc.unwrap_or(ExprIr::BuildRecord(vec![], r.span))
+                } else {
+                    let entries = r
+                        .entries
+                        .iter()
+                        .map(|e| {
+                            let key = match &e.key {
+                                rite_syntax::RecordKey::Ident(i) => KeyIr::Ident(i.name.clone()),
+                                rite_syntax::RecordKey::String(s) => KeyIr::String(s.clone()),
+                                rite_syntax::RecordKey::Atom(a) => KeyIr::Atom(a.parts.join(".")),
+                                rite_syntax::RecordKey::Spread => KeyIr::Ident("_spread".into()),
+                            };
+                            (key, self.desugar_expr(&e.value))
+                        })
+                        .collect();
+                    ExprIr::BuildRecord(entries, r.span)
+                }
             }
-            Expr::Binary(b) => ExprIr::Binary {
-                op: bin_op(b.op),
-                left: Box::new(self.desugar_expr(&b.left)),
-                right: Box::new(self.desugar_expr(&b.right)),
-                span: b.span,
+            Expr::Binary(b) => match b.op {
+                BinOp::Xor => ExprIr::NativeCall {
+                    name: "xor".into(),
+                    args: vec![self.desugar_expr(&b.left), self.desugar_expr(&b.right)],
+                    effect: EffectKind::Pure,
+                    span: b.span,
+                },
+                BinOp::Power => ExprIr::NativeCall {
+                    name: "pow".into(),
+                    args: vec![self.desugar_expr(&b.left), self.desugar_expr(&b.right)],
+                    effect: EffectKind::Pure,
+                    span: b.span,
+                },
+                BinOp::Idiv => ExprIr::NativeCall {
+                    name: "idiv".into(),
+                    args: vec![self.desugar_expr(&b.left), self.desugar_expr(&b.right)],
+                    effect: EffectKind::Pure,
+                    span: b.span,
+                },
+                BinOp::Range => ExprIr::NativeCall {
+                    name: "range".into(),
+                    args: vec![self.desugar_expr(&b.left), self.desugar_expr(&b.right)],
+                    effect: EffectKind::Pure,
+                    span: b.span,
+                },
+                BinOp::RangeIncl => ExprIr::NativeCall {
+                    name: "range_incl".into(),
+                    args: vec![self.desugar_expr(&b.left), self.desugar_expr(&b.right)],
+                    effect: EffectKind::Pure,
+                    span: b.span,
+                },
+                BinOp::Compose => ExprIr::NativeCall {
+                    name: "compose".into(),
+                    args: vec![self.desugar_expr(&b.left), self.desugar_expr(&b.right)],
+                    effect: EffectKind::Pure,
+                    span: b.span,
+                },
+                other => ExprIr::Binary {
+                    op: bin_op(other),
+                    left: Box::new(self.desugar_expr(&b.left)),
+                    right: Box::new(self.desugar_expr(&b.right)),
+                    span: b.span,
+                },
             },
             Expr::Unary(u) => {
                 if u.op == UnaryOp::Effect {
@@ -393,6 +502,7 @@ impl Desugar {
                         UnaryOp::Neg => UnaryOpIr::Neg,
                         UnaryOp::Not => UnaryOpIr::Not,
                         UnaryOp::Effect => UnaryOpIr::Effect,
+                        UnaryOp::Spread => UnaryOpIr::Not, // should be expanded in list/record
                     },
                     expr: Box::new(self.desugar_expr(&u.expr)),
                     span: u.span,
@@ -408,17 +518,8 @@ impl Desugar {
                         span: c.span,
                     };
                 }
-                // Builtin call by name
-                if let Expr::Ident(i) = c.callee.as_ref() {
-                    if is_builtin(&i.name) {
-                        return ExprIr::NativeCall {
-                            name: i.name.clone(),
-                            args: c.args.iter().map(|a| self.desugar_expr(a)).collect(),
-                            effect: EffectKind::Pure,
-                            span: c.span,
-                        };
-                    }
-                }
+                // Builtins desugar as ordinary calls so local/nested defs can shadow them.
+                // Runtime Global lookup returns NativeName for unbound builtin names.
                 ExprIr::Call {
                     callee: Box::new(self.desugar_expr(&c.callee)),
                     args: c.args.iter().map(|a| self.desugar_expr(a)).collect(),
@@ -766,6 +867,9 @@ fn bin_op(op: BinOp) -> BinaryOpIr {
         BinOp::Or => BinaryOpIr::Or,
         BinOp::In => BinaryOpIr::In,
         BinOp::NotIn => BinaryOpIr::NotIn,
+        // Desugared to native calls before bin_op in most paths; fallback:
+        BinOp::Xor | BinOp::Power | BinOp::Idiv | BinOp::Range | BinOp::RangeIncl
+        | BinOp::Compose => BinaryOpIr::Add,
     }
 }
 
@@ -781,6 +885,14 @@ fn is_builtin(name: &str) -> bool {
             | "count"
             | "first"
             | "last"
+            | "rest"
+            | "tail"
+            | "init"
+            | "butlast"
+            | "take"
+            | "drop"
+            | "reverse"
+            | "concat"
             | "find"
             | "any"
             | "all"
@@ -804,7 +916,28 @@ fn is_builtin(name: &str) -> bool {
             | "collect_results"
             | "group"
             | "lines"
+            | "words"
+            | "join"
             | "range"
+            | "range_incl"
+            | "keys"
+            | "values"
+            | "abs"
+            | "clamp"
+            | "pow"
+            | "idiv"
+            | "xor"
+            | "and_then"
+            | "or_else"
+            | "is_ok"
+            | "is_err"
+            | "unwrap_or"
+            | "repeat"
+            | "contains"
+            | "enumerate"
+            | "with_index"
+            | "compose"
+            | "while_loop"
             | "print"
             | "println"
     )

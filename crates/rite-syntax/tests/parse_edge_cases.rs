@@ -122,9 +122,12 @@ fn reserved_room_not_ident() {
 }
 
 #[test]
-fn ok_err_keywords_not_calls() {
-    let (_p, d, _) = parse_source("t.rite", "x ← ok(1)");
-    assert!(d.has_errors(), "ok() should not parse as call");
+fn ok_err_keywords_are_calls() {
+    // Sugar pack: ok(1) / err(e) construct results
+    parse_ok("x ← ok(1)");
+    parse_ok("x ← err(\"nope\")");
+    parse_ok("x ← ✓ 1");
+    parse_ok("x ← ✗ \"e\"");
 }
 
 #[test]
@@ -271,3 +274,4 @@ fn empty_list_and_record() {
     parse_ok("⟨⟩");
     parse_ok("<<>>");
 }
+

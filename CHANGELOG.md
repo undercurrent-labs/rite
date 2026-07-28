@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.1.3] — 2026-07-28
+
+### Added — Sugar pack
+
+- **Ranges:** `1..n` exclusive, `1..=n` / `1‥n` inclusive
+- **Pipeline stages:** `rest`/`tail`, `take`/`drop`, `init`, `reverse`, `words`, `lines`, `join`, `enumerate`, field projection `→ .name`
+- **Control:** ASCII `else`, `unless`/`¿`, `for`/`∀ … ∈`, `loop n`, `while`
+- **Assign:** `+=` `-=` `*=` `/=` `%=`
+- **Numeric:** `**` / `pow`, `÷` / `idiv`, `abs`, `clamp`, `repeat`, `concat`
+- **Logic:** `xor` / `⊻` (plus existing `∧∨¬`)
+- **Results:** `✓`/`✗` marks, `is_ok`/`is_err`/`unwrap_or`/`or_else`
+- **Print:** `say` / `¶`
+- **Compose:** `f ∘ g` / `compose(f, g)`
+- Docs: `docs/book/sugar.md`; example: `examples/sugar/demo.rite`
+- Tests: `crates/rite-caps/tests/sugar_pack.rs`
+
+### Notes
+
+- List/record `..spread` inside literals is deferred (use `concat` / record `+` merge). Match rest patterns unchanged.
+
 ## [0.1.2] — 2026-07-28
 
 ### Fixed

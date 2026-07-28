@@ -1,0 +1,25 @@
+// Rite sugar pack demo — ranges, pipelines, for, say, compose, results
+xs ← 1..=5
+evens ← xs → keep { |n| n % 2 = 0 }
+say "evens sum = " + str(evens → sum)
+
+s ↢ 0
+for n in xs ⟦
+  s += n
+⟧
+¶ "for-sum = " + str(s)
+
+◆ double(n) ⟦ ^ n * 2 ⟧
+◆ inc(n) ⟦ ^ n + 1 ⟧
+f ← double ∘ inc
+say "compose(3) = " + str(f(3))
+
+msg ← ~ ✓ "ok" ⟦
+  ok v → "got " + v
+  err e → "fail"
+⟧
+say msg
+
+say "words = " + str("rite is sugar" → words → count)
+say "2**8 = " + str(2 ** 8)
+say "concat = " + str(concat([1], [2, 3]) → sum)

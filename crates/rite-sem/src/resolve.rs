@@ -106,6 +106,14 @@ impl Resolver {
             "count",
             "first",
             "last",
+            "rest",
+            "tail",
+            "init",
+            "butlast",
+            "take",
+            "drop",
+            "reverse",
+            "concat",
             "find",
             "any",
             "all",
@@ -129,8 +137,31 @@ impl Resolver {
             "collect_results",
             "group",
             "lines",
+            "words",
+            "join",
             "number?",
             "range",
+            "range_incl",
+            "keys",
+            "values",
+            "abs",
+            "clamp",
+            "pow",
+            "idiv",
+            "xor",
+            "and_then",
+            "or_else",
+            "is_ok",
+            "is_err",
+            "unwrap_or",
+            "repeat",
+            "contains",
+            "enumerate",
+            "with_index",
+            "compose",
+            "while_loop",
+            "print",
+            "println",
         ] {
             r.functions.insert(
                 name.into(),
@@ -146,17 +177,21 @@ impl Resolver {
     }
 
     fn resolve_program(&mut self, program: &Program) {
-        // First pass: collect function declarations
+        // First pass: collect function declarations (may shadow builtins)
         for item in &program.items {
             if let Item::Function(f) = item {
-                if self.functions.contains_key(&f.name.name) {
-                    self.diagnostics.push(simple_error(
-                        E022_DUPLICATE_BINDING,
-                        format!("duplicate function `{}`", f.name.name),
-                        program.file,
-                        f.name.span,
-                        "already defined",
-                    ));
+                if let Some(existing) = self.functions.get(&f.name.name) {
+                    // Builtins are pre-inserted with DUMMY span; real redefinition of a
+                    // user function is an error. Shadowing a builtin is allowed.
+                    if existing.span != Span::DUMMY {
+                        self.diagnostics.push(simple_error(
+                            E022_DUPLICATE_BINDING,
+                            format!("duplicate function `{}`", f.name.name),
+                            program.file,
+                            f.name.span,
+                            "already defined",
+                        ));
+                    }
                 }
                 self.functions.insert(
                     f.name.name.clone(),
@@ -557,6 +592,14 @@ fn is_builtin_name(name: &str) -> bool {
             | "count"
             | "first"
             | "last"
+            | "rest"
+            | "tail"
+            | "init"
+            | "butlast"
+            | "take"
+            | "drop"
+            | "reverse"
+            | "concat"
             | "find"
             | "any"
             | "all"
@@ -577,14 +620,33 @@ fn is_builtin_name(name: &str) -> bool {
             | "len"
             | "type_of"
             | "require"
+            | "words"
+            | "join"
+            | "range_incl"
+            | "keys"
+            | "values"
+            | "abs"
+            | "clamp"
+            | "pow"
+            | "idiv"
+            | "xor"
+            | "and_then"
+            | "or_else"
+            | "is_ok"
+            | "is_err"
+            | "unwrap_or"
+            | "repeat"
+            | "contains"
+            | "enumerate"
+            | "with_index"
+            | "compose"
+            | "while_loop"
+            | "print"
+            | "println"
             | "collect_results"
             | "group"
             | "lines"
             | "range"
-            | "print"
-            | "println"
-            | "true"
-            | "false"
             | "none"
     )
 }

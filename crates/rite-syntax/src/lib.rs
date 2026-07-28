@@ -149,6 +149,7 @@ fn strip_expr(e: &Expr) -> serde_json::Value {
                     RecordKey::Ident(i) => serde_json::json!({"ident": i.name}),
                     RecordKey::String(s) => serde_json::json!({"string": s}),
                     RecordKey::Atom(a) => serde_json::json!({"atom": a.parts}),
+                    RecordKey::Spread => serde_json::json!({"spread": true}),
                 };
                 serde_json::json!({"key": key, "value": strip_expr(&e.value)})
             }).collect::<Vec<_>>()

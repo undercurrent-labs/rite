@@ -121,6 +121,14 @@ impl<'a> Lexer<'a> {
                 self.pos += 2;
                 self.make(TokenKind::Assign, start, self.pos)
             }
+            b'.' if self.starts_with("...") => {
+                self.pos += 3;
+                self.make(TokenKind::Spread, start, self.pos)
+            }
+            b'.' if self.starts_with("..=") => {
+                self.pos += 3;
+                self.make(TokenKind::RangeIncl, start, self.pos)
+            }
             b'.' if self.starts_with("..") => {
                 self.pos += 2;
                 self.make(TokenKind::Rest, start, self.pos)
@@ -129,8 +137,37 @@ impl<'a> Lexer<'a> {
                 self.pos += 2;
                 self.make(TokenKind::NotEq, start, self.pos)
             }
-            b'/' if self.starts_with("//") => self.line_comment(start),
+            b'+' if self.starts_with("+=") => {
+                self.pos += 2;
+                self.make(TokenKind::PlusAssign, start, self.pos)
+            }
+            b'-' if self.starts_with("-=") => {
+                self.pos += 2;
+                self.make(TokenKind::MinusAssign, start, self.pos)
+            }
+            b'*' if self.starts_with("**") => {
+                self.pos += 2;
+                self.make(TokenKind::Power, start, self.pos)
+            }
+            b'*' if self.starts_with("*=") => {
+                self.pos += 2;
+                self.make(TokenKind::StarAssign, start, self.pos)
+            }
+            b'/' if self.starts_with("//") => {
+                // Line comment takes precedence only when // is not idiv in expr context;
+                // idiv is `//` between expressions — comments start at // after whitespace.
+                // Keep traditional: // starts a comment (use idiv keyword or ÷ glyph for int div).
+                self.line_comment(start)
+            }
+            b'/' if self.starts_with("/=") => {
+                self.pos += 2;
+                self.make(TokenKind::SlashAssign, start, self.pos)
+            }
             b'/' if self.starts_with("/*") => self.block_comment(start),
+            b'%' if self.starts_with("%=") => {
+                self.pos += 2;
+                self.make(TokenKind::PercentAssign, start, self.pos)
+            }
             b'h' if self.starts_with("host.") => {
                 self.pos += 5;
                 self.make(TokenKind::Host, start, self.pos)
@@ -330,6 +367,16 @@ impl<'a> Lexer<'a> {
             ("∧", TokenKind::And),
             ("∨", TokenKind::Or),
             ("¬", TokenKind::Not),
+            ("‥", TokenKind::RangeIncl), // inclusive range dots
+            ("÷", TokenKind::Idiv),
+            ("∀", TokenKind::ForAll),
+            ("¿", TokenKind::Unless),
+            ("¶", TokenKind::Paragraph),
+            ("✓", TokenKind::OkMark),
+            ("✗", TokenKind::ErrMark),
+            ("∘", TokenKind::Compose),
+            ("⊻", TokenKind::Xor),
+            ("×", TokenKind::Star), // multiply / also used with repeat via call
         ];
         for (sigil, kind) in pairs {
             if rest.starts_with(sigil) {

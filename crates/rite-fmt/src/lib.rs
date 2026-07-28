@@ -355,7 +355,15 @@ impl Formatter {
             }
             Stmt::Assign(a) => {
                 self.out.push_str(&a.name.name);
-                self.out.push_str(" := ");
+                match a.op {
+                    None => self.out.push_str(" := "),
+                    Some(BinOp::Add) => self.out.push_str(" += "),
+                    Some(BinOp::Sub) => self.out.push_str(" -= "),
+                    Some(BinOp::Mul) => self.out.push_str(" *= "),
+                    Some(BinOp::Div) => self.out.push_str(" /= "),
+                    Some(BinOp::Rem) => self.out.push_str(" %= "),
+                    Some(_) => self.out.push_str(" := "),
+                }
                 self.expr(&a.value);
             }
             Stmt::Return(r) => {
@@ -440,9 +448,14 @@ impl Formatter {
                     if i > 0 {
                         self.out.push_str(", ");
                     }
-                    self.record_key(&e.key);
-                    self.out.push_str(": ");
-                    self.expr(&e.value);
+                    if matches!(e.key, rite_syntax::RecordKey::Spread) {
+                        self.out.push_str("..");
+                        self.expr(&e.value);
+                    } else {
+                        self.record_key(&e.key);
+                        self.out.push_str(": ");
+                        self.expr(&e.value);
+                    }
                 }
                 self.out.push_str(&self.sigil("⟩", ">>"));
             }
@@ -475,6 +488,12 @@ impl Formatter {
                         self.expr(&b.right);
                         return;
                     }
+                    BinOp::Xor => self.out.push_str(&self.sigil("⊻", "xor")),
+                    BinOp::Power => self.out.push_str("**"),
+                    BinOp::Idiv => self.out.push_str(&self.sigil("÷", "idiv")),
+                    BinOp::Range => self.out.push_str(".."),
+                    BinOp::RangeIncl => self.out.push_str(&self.sigil("‥", "..=")),
+                    BinOp::Compose => self.out.push_str(&self.sigil("∘", "compose")),
                 }
                 self.out.push(' ');
                 self.expr(&b.right);
@@ -487,6 +506,7 @@ impl Formatter {
                         self.out.push_str(&self.sigil("!", "do"));
                         self.out.push(' ');
                     }
+                    UnaryOp::Spread => self.out.push_str(".."),
                 }
                 self.expr(&u.expr);
             }
@@ -669,6 +689,7 @@ impl Formatter {
                 self.out.push_str(&self.sigil("#", ":"));
                 self.out.push_str(&a.parts.join("."));
             }
+            rite_syntax::RecordKey::Spread => self.out.push_str(".."),
         }
     }
 

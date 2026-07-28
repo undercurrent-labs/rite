@@ -110,6 +110,8 @@ pub struct Binding {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Assign {
     pub name: Ident,
+    /// None = `:=`; Some(op) = op-assign (`+=`, …) desugared as `name := name op value`.
+    pub op: Option<BinOp>,
     pub value: Expr,
     pub span: Span,
 }
@@ -218,6 +220,8 @@ pub enum RecordKey {
     Ident(Ident),
     String(String),
     Atom(AtomLit),
+    /// `..rec` spread — value is the record expression to merge.
+    Spread,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -243,8 +247,14 @@ pub enum BinOp {
     GtEq,
     And,
     Or,
+    Xor,
     In,
     NotIn,
+    Power,
+    Idiv,
+    Range,      // a..b exclusive
+    RangeIncl,  // a..=b or a‥b inclusive
+    Compose,    // f ∘ g
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -259,6 +269,7 @@ pub enum UnaryOp {
     Neg,
     Not,
     Effect,
+    Spread, // ..expr inside list/record
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

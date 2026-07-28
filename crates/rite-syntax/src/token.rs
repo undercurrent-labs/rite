@@ -24,7 +24,29 @@ pub enum TokenKind {
     NotIn,
     Coalesce,
     Assign,
-    Rest,
+    Rest,       // ..
+    Spread,     // ... list/record spread
+    RangeIncl,  // ..= or ‥
+    Power,      // **
+    Idiv,       // //
+    PlusAssign, // +=
+    MinusAssign,
+    StarAssign,
+    SlashAssign,
+    PercentAssign,
+    // Sugar keywords / sigils
+    Else,
+    For,
+    Unless,
+    While,
+    Loop,
+    Say,
+    Xor,
+    Compose, // ∘
+    ForAll,  // ∀
+    OkMark,  // ✓
+    ErrMark, // ✗
+    Paragraph, // ¶
 
     // Punctuation
     LParen,
@@ -192,6 +214,13 @@ pub fn keyword_or_ident(text: &str) -> TokenKind {
         "ok" => TokenKind::Ok,
         "err" => TokenKind::Err,
         "some" => TokenKind::Some,
+        "else" => TokenKind::Else,
+        "for" => TokenKind::For,
+        "unless" => TokenKind::Unless,
+        "while" => TokenKind::While,
+        "loop" => TokenKind::Loop,
+        "say" => TokenKind::Say,
+        "xor" => TokenKind::Xor,
         "GET" => TokenKind::Get,
         "POST" => TokenKind::Post,
         "PUT" => TokenKind::Put,

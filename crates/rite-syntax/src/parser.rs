@@ -266,20 +266,101 @@ impl Parser {
         }
         self.pos = checkpoint;
 
-        // assignment: ident :=
-        if self.check(TokenKind::Ident) {
-            if self.pos + 1 < self.tokens.len()
-                && self.tokens[self.pos + 1].kind == TokenKind::Assign
-            {
+        // assignment: ident := or op-assign += -= *= /= %=
+        if self.check(TokenKind::Ident) && self.pos + 1 < self.tokens.len() {
+            let next = self.tokens[self.pos + 1].kind;
+            let op = match next {
+                TokenKind::Assign => Some(None),
+                TokenKind::PlusAssign => Some(Some(BinOp::Add)),
+                TokenKind::MinusAssign => Some(Some(BinOp::Sub)),
+                TokenKind::StarAssign => Some(Some(BinOp::Mul)),
+                TokenKind::SlashAssign => Some(Some(BinOp::Div)),
+                TokenKind::PercentAssign => Some(Some(BinOp::Rem)),
+                _ => None,
+            };
+            if let Some(op) = op {
                 let name = self.parse_ident();
-                self.advance(); // :=
+                self.advance(); // := or op=
                 let value = self.parse_expression();
                 let span = name.span.merge(value.span());
                 if self.check(TokenKind::Semicolon) {
                     self.advance();
                 }
-                return Some(Stmt::Assign(Assign { name, value, span }));
+                return Some(Stmt::Assign(Assign {
+                    name,
+                    op,
+                    value,
+                    span,
+                }));
             }
+        }
+
+        // for x in xs ⟦ … ⟧  /  ∀ x ∈ xs ⟦ … ⟧
+        if self.check(TokenKind::For) || self.check(TokenKind::ForAll) {
+            return Some(self.parse_for_in_stmt());
+        }
+
+        // say / ¶ expr  →  ! @console.println(expr)
+        if self.check(TokenKind::Say) || self.check(TokenKind::Paragraph) {
+            let start = self.advance().span;
+            let value = self.parse_expression();
+            let span = start.merge(value.span());
+            if self.check(TokenKind::Semicolon) {
+                self.advance();
+            }
+            return Some(Stmt::Expr(Expr::Unary(UnaryExpr {
+                op: UnaryOp::Effect,
+                expr: Box::new(Expr::Call(CallExpr {
+                    callee: Box::new(Expr::Capability(CapabilityRef {
+                        path: vec!["console".into(), "println".into()],
+                        span,
+                    })),
+                    args: vec![value],
+                    span,
+                })),
+                span,
+            })));
+        }
+
+        // unless / ¿ cond ⟦ … ⟧
+        if self.check(TokenKind::Unless) {
+            let start = self.advance().span;
+            let prev = self.allow_trailing_block;
+            self.allow_trailing_block = false;
+            let condition = self.parse_expression();
+            self.allow_trailing_block = prev;
+            let then_branch = self.parse_block();
+            let else_branch = if self.check(TokenKind::Colon) || self.check(TokenKind::Else) {
+                self.advance();
+                Some(self.parse_block())
+            } else {
+                None
+            };
+            let end = else_branch
+                .as_ref()
+                .map(|b| b.span)
+                .unwrap_or(then_branch.span);
+            let not_cond = Expr::Unary(UnaryExpr {
+                op: UnaryOp::Not,
+                expr: Box::new(condition),
+                span: start,
+            });
+            return Some(Stmt::Expr(Expr::If(IfExpr {
+                condition: Box::new(not_cond),
+                then_branch,
+                else_branch,
+                span: start.merge(end),
+            })));
+        }
+
+        // while cond ⟦ … ⟧ — desugar to recursive local helper via special form
+        if self.check(TokenKind::While) {
+            return Some(self.parse_while_stmt());
+        }
+
+        // loop n ⟦ … ⟧ — iterate n times
+        if self.check(TokenKind::Loop) {
+            return Some(self.parse_loop_stmt());
         }
 
         if self.at_expr_start() {
@@ -290,6 +371,139 @@ impl Parser {
             return Some(Stmt::Expr(expr));
         }
         None
+    }
+
+    fn parse_for_in_stmt(&mut self) -> Stmt {
+        let start = self.advance().span; // for / ∀
+        let var = self.parse_ident();
+        // in / ∈
+        if self.check(TokenKind::In) {
+            self.advance();
+        } else {
+            self.error_expected("in / ∈");
+        }
+        let prev = self.allow_trailing_block;
+        self.allow_trailing_block = false;
+        let iter = self.parse_expression();
+        self.allow_trailing_block = prev;
+        let body = self.parse_block();
+        let span = start.merge(body.span);
+        // Desugar: iter → each { |var| body }
+        let stage = Expr::Call(CallExpr {
+            callee: Box::new(Expr::Ident(Ident {
+                name: "each".into(),
+                span,
+            })),
+            args: vec![Expr::Block(Block {
+                params: vec![Param {
+                    name: var,
+                    ty: None,
+                    span,
+                }],
+                body: body.body,
+                span: body.span,
+            })],
+            span,
+        });
+        Stmt::Expr(Expr::Pipeline(PipelineExpr {
+            input: Box::new(iter),
+            stages: vec![stage],
+            span,
+        }))
+    }
+
+    fn parse_while_stmt(&mut self) -> Stmt {
+        // while cond ⟦ body ⟧  →  invoke a small recursive loop via __while sugar:
+        // desugar to: (◆ __w() ⟦ ? cond ⟦ body; ^ __w() ⟧ ⟧)()
+        let start = self.advance().span;
+        let prev = self.allow_trailing_block;
+        self.allow_trailing_block = false;
+        let cond = self.parse_expression();
+        self.allow_trailing_block = prev;
+        let body = self.parse_block();
+        let span = start.merge(body.span);
+        // Represent as Call to builtin-like "while_loop" with cond-closure and body-closure
+        // Runtime: while_loop(pred_fn, body_fn)
+        Stmt::Expr(Expr::Call(CallExpr {
+            callee: Box::new(Expr::Ident(Ident {
+                name: "while_loop".into(),
+                span,
+            })),
+            args: vec![
+                // Dummy param forces closure (not bare block value).
+                Expr::Block(Block {
+                    params: vec![Param {
+                        name: Ident {
+                            name: "__".into(),
+                            span,
+                        },
+                        ty: None,
+                        span,
+                    }],
+                    body: vec![Item::Statement(Stmt::Expr(cond))],
+                    span,
+                }),
+                Expr::Block(Block {
+                    params: vec![Param {
+                        name: Ident {
+                            name: "__".into(),
+                            span,
+                        },
+                        ty: None,
+                        span,
+                    }],
+                    body: body.body,
+                    span: body.span,
+                }),
+            ],
+            span,
+        }))
+    }
+
+    fn parse_loop_stmt(&mut self) -> Stmt {
+        // loop n ⟦ body ⟧ → range(0,n) → each { |_| body }
+        let start = self.advance().span;
+        let n = self.parse_expression();
+        let body = self.parse_block();
+        let span = start.merge(body.span);
+        let range_call = Expr::Call(CallExpr {
+            callee: Box::new(Expr::Ident(Ident {
+                name: "range".into(),
+                span,
+            })),
+            args: vec![
+                Expr::Literal(Literal {
+                    kind: LitKind::Int(0),
+                    span,
+                }),
+                n,
+            ],
+            span,
+        });
+        let stage = Expr::Call(CallExpr {
+            callee: Box::new(Expr::Ident(Ident {
+                name: "each".into(),
+                span,
+            })),
+            args: vec![Expr::Block(Block {
+                params: vec![Param {
+                    name: Ident {
+                        name: "_".into(),
+                        span,
+                    },
+                    ty: None,
+                    span,
+                }],
+                body: body.body,
+                span: body.span,
+            })],
+            span,
+        });
+        Stmt::Expr(Expr::Pipeline(PipelineExpr {
+            input: Box::new(range_call),
+            stages: vec![stage],
+            span,
+        }))
     }
 
     fn try_parse_binding_pattern(&mut self) -> Option<Pattern> {
@@ -359,7 +573,7 @@ impl Parser {
             let condition = self.parse_expression();
             self.allow_trailing_block = prev;
             let then_branch = self.parse_block();
-            let else_branch = if self.check(TokenKind::Colon) {
+            let else_branch = if self.check(TokenKind::Colon) || self.check(TokenKind::Else) {
                 self.advance();
                 Some(self.parse_block())
             } else {
@@ -458,13 +672,29 @@ impl Parser {
     }
 
     fn parse_or(&mut self) -> Expr {
-        let mut left = self.parse_and();
+        let mut left = self.parse_xor();
         while self.check(TokenKind::Or) {
+            self.advance();
+            let right = self.parse_xor();
+            let span = left.span().merge(right.span());
+            left = Expr::Binary(BinaryExpr {
+                op: BinOp::Or,
+                left: Box::new(left),
+                right: Box::new(right),
+                span,
+            });
+        }
+        left
+    }
+
+    fn parse_xor(&mut self) -> Expr {
+        let mut left = self.parse_and();
+        while self.check(TokenKind::Xor) {
             self.advance();
             let right = self.parse_and();
             let span = left.span().merge(right.span());
             left = Expr::Binary(BinaryExpr {
-                op: BinOp::Or,
+                op: BinOp::Xor,
                 left: Box::new(left),
                 right: Box::new(right),
                 span,
@@ -510,7 +740,7 @@ impl Parser {
     }
 
     fn parse_comparison(&mut self) -> Expr {
-        let mut left = self.parse_term();
+        let mut left = self.parse_range();
         loop {
             let op = match self.peek_kind() {
                 TokenKind::Lt => BinOp::Lt,
@@ -522,12 +752,47 @@ impl Parser {
                 _ => break,
             };
             self.advance();
-            let right = self.parse_term();
+            let right = self.parse_range();
             let span = left.span().merge(right.span());
             left = Expr::Binary(BinaryExpr {
                 op,
                 left: Box::new(left),
                 right: Box::new(right),
+                span,
+            });
+        }
+        left
+    }
+
+    fn parse_range(&mut self) -> Expr {
+        let left = self.parse_term();
+        if self.check(TokenKind::Rest) {
+            // a..b exclusive
+            let start = left.span();
+            self.advance();
+            let right = self.parse_term();
+            let span = start.merge(right.span());
+            return Expr::Call(CallExpr {
+                callee: Box::new(Expr::Ident(Ident {
+                    name: "range".into(),
+                    span,
+                })),
+                args: vec![left, right],
+                span,
+            });
+        }
+        if self.check(TokenKind::RangeIncl) {
+            // a..=b or a‥b inclusive
+            let start = left.span();
+            self.advance();
+            let right = self.parse_term();
+            let span = start.merge(right.span());
+            return Expr::Call(CallExpr {
+                callee: Box::new(Expr::Ident(Ident {
+                    name: "range_incl".into(),
+                    span,
+                })),
+                args: vec![left, right],
                 span,
             });
         }
@@ -555,23 +820,62 @@ impl Parser {
     }
 
     fn parse_factor(&mut self) -> Expr {
-        let mut left = self.parse_unary();
+        let mut left = self.parse_power();
         while matches!(
             self.peek_kind(),
-            TokenKind::Star | TokenKind::Slash | TokenKind::Percent
+            TokenKind::Star | TokenKind::Slash | TokenKind::Percent | TokenKind::Idiv
         ) {
             let op = match self.advance().kind {
                 TokenKind::Star => BinOp::Mul,
+                TokenKind::Idiv => BinOp::Idiv,
                 TokenKind::Slash => BinOp::Div,
                 TokenKind::Percent => BinOp::Rem,
                 _ => unreachable!(),
             };
-            let right = self.parse_unary();
+            let right = self.parse_power();
             let span = left.span().merge(right.span());
             left = Expr::Binary(BinaryExpr {
                 op,
                 left: Box::new(left),
                 right: Box::new(right),
+                span,
+            });
+        }
+        left
+    }
+
+    fn parse_power(&mut self) -> Expr {
+        let left = self.parse_compose();
+        if self.check(TokenKind::Power) {
+            let start = left.span();
+            self.advance();
+            let right = self.parse_power(); // right-associative
+            let span = start.merge(right.span());
+            return Expr::Call(CallExpr {
+                callee: Box::new(Expr::Ident(Ident {
+                    name: "pow".into(),
+                    span,
+                })),
+                args: vec![left, right],
+                span,
+            });
+        }
+        left
+    }
+
+    fn parse_compose(&mut self) -> Expr {
+        let mut left = self.parse_unary();
+        while self.check(TokenKind::Compose) {
+            self.advance();
+            let right = self.parse_unary();
+            let span = left.span().merge(right.span());
+            // f ∘ g  →  { |x| f(g(x)) }  represented as call compose(f, g)
+            left = Expr::Call(CallExpr {
+                callee: Box::new(Expr::Ident(Ident {
+                    name: "compose".into(),
+                    span,
+                })),
+                args: vec![left, right],
                 span,
             });
         }
@@ -615,7 +919,9 @@ impl Parser {
     fn parse_postfix(&mut self) -> Expr {
         let mut expr = self.parse_primary();
         loop {
-            if self.check(TokenKind::LParen) {
+            // Only treat `(` as call on callable forms — not after record/list
+            // literals, so a newline + `(x + y).z` does not glue onto `⟨…⟩`.
+            if self.check(TokenKind::LParen) && is_callable_expr(&expr) {
                 let start = expr.span();
                 self.advance();
                 let args = self.parse_arg_list(TokenKind::RParen);
@@ -726,6 +1032,91 @@ impl Parser {
                 })
             }
             TokenKind::Atom => Expr::Atom(self.parse_atom_lit()),
+            TokenKind::OkMark | TokenKind::Ok => {
+                let start = self.advance().span;
+                if self.check(TokenKind::LParen) {
+                    self.advance();
+                    let inner = self.parse_expression();
+                    let end = self.expect(TokenKind::RParen).span;
+                    let span = start.merge(end);
+                    Expr::Call(CallExpr {
+                        callee: Box::new(Expr::Ident(Ident {
+                            name: "ok".into(),
+                            span,
+                        })),
+                        args: vec![inner],
+                        span,
+                    })
+                } else if matches!(self.peek_kind(), TokenKind::OkMark | TokenKind::Ok) {
+                    // bare
+                    Expr::Call(CallExpr {
+                        callee: Box::new(Expr::Ident(Ident {
+                            name: "ok".into(),
+                            span: start,
+                        })),
+                        args: vec![Expr::Literal(Literal {
+                            kind: LitKind::None,
+                            span: start,
+                        })],
+                        span: start,
+                    })
+                } else if self.at_expr_start()
+                    && !self.check(TokenKind::BlockOpen)
+                    && !self.check(TokenKind::LBrace)
+                {
+                    let inner = self.parse_unary();
+                    let span = start.merge(inner.span());
+                    Expr::Call(CallExpr {
+                        callee: Box::new(Expr::Ident(Ident {
+                            name: "ok".into(),
+                            span,
+                        })),
+                        args: vec![inner],
+                        span,
+                    })
+                } else {
+                    Expr::Ident(Ident {
+                        name: "ok".into(),
+                        span: start,
+                    })
+                }
+            }
+            TokenKind::ErrMark | TokenKind::Err => {
+                let start = self.advance().span;
+                if self.check(TokenKind::LParen) {
+                    self.advance();
+                    let inner = self.parse_expression();
+                    let end = self.expect(TokenKind::RParen).span;
+                    let span = start.merge(end);
+                    Expr::Call(CallExpr {
+                        callee: Box::new(Expr::Ident(Ident {
+                            name: "err".into(),
+                            span,
+                        })),
+                        args: vec![inner],
+                        span,
+                    })
+                } else if self.at_expr_start()
+                    && !self.check(TokenKind::BlockOpen)
+                    && !self.check(TokenKind::LBrace)
+                {
+                    let inner = self.parse_unary();
+                    let span = start.merge(inner.span());
+                    Expr::Call(CallExpr {
+                        callee: Box::new(Expr::Ident(Ident {
+                            name: "err".into(),
+                            span,
+                        })),
+                        args: vec![inner],
+                        span,
+                    })
+                } else {
+                    Expr::Ident(Ident {
+                        name: "err".into(),
+                        span: start,
+                    })
+                }
+            }
             TokenKind::Ident => {
                 // HTTP method routes only inside blocks — treat as ident here
                 // But GET "/path" is route
@@ -922,6 +1313,7 @@ impl Parser {
                 RecordKey::Ident(i) => i.span,
                 RecordKey::Atom(a) => a.span,
                 RecordKey::String(_) => self.prev_span(),
+                RecordKey::Spread => self.prev_span(),
             }
             .merge(value.span());
             entries.push(RecordEntry { key, value, span });
@@ -1302,6 +1694,15 @@ impl Parser {
                 | TokenKind::Delete
                 | TokenKind::Head
                 | TokenKind::Options
+                | TokenKind::OkMark
+                | TokenKind::ErrMark
+                | TokenKind::Say
+                | TokenKind::Paragraph
+                | TokenKind::For
+                | TokenKind::ForAll
+                | TokenKind::Unless
+                | TokenKind::While
+                | TokenKind::Loop
         )
     }
 
