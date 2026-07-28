@@ -771,8 +771,7 @@ impl<'a> Evaluator<'a> {
                 // mutable assigns in `for`/`each` bodies affect outer bindings.
                 // If the closure has escaped (returned, stored), install the capture.
                 let captured = c.env.read().clone();
-                let has_capture = captured.depth() > 1
-                    || !captured.bindings_snapshot().is_empty();
+                let has_capture = captured.depth() > 1 || !captured.bindings_snapshot().is_empty();
                 // Compose and other synthetic closures stash private names (`__f`);
                 // always install their capture. Escaped closures (returned) too.
                 let needs_capture = has_capture
@@ -909,7 +908,9 @@ impl<'a> Evaluator<'a> {
             self.ctx.budget.tick()?;
             steps += 1;
             if steps > 1_000_000 {
-                return Err(EvalError::Message("while loop exceeded iteration guard".into()));
+                return Err(EvalError::Message(
+                    "while loop exceeded iteration guard".into(),
+                ));
             }
             let c = self.call_value(pred.clone(), vec![Value::None]).await?;
             if !c.is_truthy() {
@@ -929,8 +930,8 @@ impl<'a> Evaluator<'a> {
             let y = self.call_value(g, vec![x]).await?;
             return self.call_value(f, vec![y]).await;
         }
-        use rite_sem::{BlockIr, ExprIr, LocalId};
         use rite_core::Span;
+        use rite_sem::{BlockIr, ExprIr, LocalId};
         let mut env = crate::env::Environment::new();
         env.define_name("__f", f, false);
         env.define_name("__g", g, false);
@@ -1295,17 +1296,72 @@ pub fn set_http_route_registrar(f: fn(String, &[rite_sem::RouteIr], &RuntimeCont
 #[allow(dead_code)]
 fn _span(_s: Span) {}
 
-
 fn is_runtime_builtin(name: &str) -> bool {
     matches!(
         name,
-        "map" | "keep" | "reject" | "reduce" | "each" | "flatten" | "count" | "first" | "last"
-            | "rest" | "tail" | "init" | "butlast" | "take" | "drop" | "reverse" | "concat"
-            | "find" | "any" | "all" | "sum" | "min" | "max" | "sort" | "unique" | "zip" | "chunk"
-            | "parallel" | "ok" | "err" | "panic" | "expect" | "fail" | "str" | "len" | "type_of"
-            | "require" | "collect_results" | "group" | "lines" | "words" | "join" | "range"
-            | "range_incl" | "keys" | "values" | "abs" | "clamp" | "pow" | "idiv" | "xor"
-            | "and_then" | "or_else" | "is_ok" | "is_err" | "unwrap_or" | "repeat" | "contains"
-            | "enumerate" | "with_index" | "compose" | "while_loop" | "print" | "println"
+        "map"
+            | "keep"
+            | "reject"
+            | "reduce"
+            | "each"
+            | "flatten"
+            | "count"
+            | "first"
+            | "last"
+            | "rest"
+            | "tail"
+            | "init"
+            | "butlast"
+            | "take"
+            | "drop"
+            | "reverse"
+            | "concat"
+            | "find"
+            | "any"
+            | "all"
+            | "sum"
+            | "min"
+            | "max"
+            | "sort"
+            | "unique"
+            | "zip"
+            | "chunk"
+            | "parallel"
+            | "ok"
+            | "err"
+            | "panic"
+            | "expect"
+            | "fail"
+            | "str"
+            | "len"
+            | "type_of"
+            | "require"
+            | "collect_results"
+            | "group"
+            | "lines"
+            | "words"
+            | "join"
+            | "range"
+            | "range_incl"
+            | "keys"
+            | "values"
+            | "abs"
+            | "clamp"
+            | "pow"
+            | "idiv"
+            | "xor"
+            | "and_then"
+            | "or_else"
+            | "is_ok"
+            | "is_err"
+            | "unwrap_or"
+            | "repeat"
+            | "contains"
+            | "enumerate"
+            | "with_index"
+            | "compose"
+            | "while_loop"
+            | "print"
+            | "println"
     )
 }

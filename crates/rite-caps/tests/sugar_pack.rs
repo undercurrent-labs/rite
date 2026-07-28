@@ -40,16 +40,10 @@ async fn pipeline_field_projection() {
 #[tokio::test]
 async fn words_lines_join_enumerate() {
     assert_eq!(eval(r#""a b c" → words → count"#).await, Value::Int(3));
-    assert_eq!(
-        eval("\"a\\nb\\nc\" → lines → count").await,
-        Value::Int(3)
-    );
+    assert_eq!(eval("\"a\\nb\\nc\" → lines → count").await, Value::Int(3));
     let v = eval(r#"["a", "b"] → join("-")"#).await;
     assert_eq!(v.as_str(), Some("a-b"));
-    assert_eq!(
-        eval("[10, 20] → enumerate → count").await,
-        Value::Int(2)
-    );
+    assert_eq!(eval("[10, 20] → enumerate → count").await, Value::Int(2));
 }
 
 #[tokio::test]
@@ -58,10 +52,7 @@ async fn ascii_else_keyword() {
         eval(r#"if false [[ 1 ]] else [[ 2 ]]"#).await,
         Value::Int(2)
     );
-    assert_eq!(
-        eval(r#"if true [[ 1 ]] else [[ 2 ]]"#).await,
-        Value::Int(1)
-    );
+    assert_eq!(eval(r#"if true [[ 1 ]] else [[ 2 ]]"#).await, Value::Int(1));
 }
 
 #[tokio::test]

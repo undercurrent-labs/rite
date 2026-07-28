@@ -252,9 +252,9 @@ pub enum BinOp {
     NotIn,
     Power,
     Idiv,
-    Range,      // a..b exclusive
-    RangeIncl,  // a..=b or a‥b inclusive
-    Compose,    // f ∘ g
+    Range,     // a..b exclusive
+    RangeIncl, // a..=b or a‥b inclusive
+    Compose,   // f ∘ g
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

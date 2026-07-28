@@ -38,7 +38,11 @@ fn write_temp(name: &str, body: &str) -> PathBuf {
 fn check_ok_and_fail() {
     let ok = write_temp("ok", "1 + 2\n");
     let out = run_rite(&["check", ok.to_str().unwrap()]);
-    assert!(out.status.success(), "stderr={}", String::from_utf8_lossy(&out.stderr));
+    assert!(
+        out.status.success(),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
 
     let bad = write_temp("bad", "@@@\n");
     let out = run_rite(&["check", bad.to_str().unwrap()]);
@@ -54,7 +58,11 @@ fn run_prints_value_and_stdout() {
 "#,
     );
     let out = run_rite(&["run", f.to_str().unwrap(), "--allow-all"]);
-    assert!(out.status.success(), "stderr={}", String::from_utf8_lossy(&out.stderr));
+    assert!(
+        out.status.success(),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
     let combined = format!(
         "{}{}",
         String::from_utf8_lossy(&out.stdout),
@@ -68,18 +76,20 @@ fn fmt_glyph_and_ascii() {
     // fmt writes in place; convert --stdout prints without mutating.
     let f = write_temp("fmt", "x <- 1\n");
     let out = run_rite(&["fmt", f.to_str().unwrap()]);
-    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
     let text = std::fs::read_to_string(&f).unwrap();
     assert!(text.contains('←') || text.contains('x'), "{text}");
 
-    let out = run_rite(&[
-        "convert",
-        f.to_str().unwrap(),
-        "--to",
-        "ascii",
-        "--stdout",
-    ]);
-    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    let out = run_rite(&["convert", f.to_str().unwrap(), "--to", "ascii", "--stdout"]);
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
     let text = String::from_utf8_lossy(&out.stdout);
     assert!(text.contains("<-") || text.contains('x'), "{text}");
 }
@@ -87,14 +97,12 @@ fn fmt_glyph_and_ascii() {
 #[test]
 fn convert_roundtrip() {
     let f = write_temp("conv", "x ← 1\n");
-    let out = run_rite(&[
-        "convert",
-        f.to_str().unwrap(),
-        "--to",
-        "ascii",
-        "--stdout",
-    ]);
-    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    let out = run_rite(&["convert", f.to_str().unwrap(), "--to", "ascii", "--stdout"]);
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
     let ascii = String::from_utf8_lossy(&out.stdout);
     assert!(ascii.contains("<-"), "{ascii}");
 }
@@ -104,7 +112,10 @@ fn version_command() {
     let out = run_rite(&["version"]);
     assert!(out.status.success());
     let s = String::from_utf8_lossy(&out.stdout);
-    assert!(s.contains("0.") || s.contains("rite") || !s.is_empty(), "{s}");
+    assert!(
+        s.contains("0.") || s.contains("rite") || !s.is_empty(),
+        "{s}"
+    );
 }
 
 #[test]
@@ -212,14 +223,18 @@ fn modules_example_runs() {
         return;
     }
     let out = run_rite(&["run", main.to_str().unwrap(), "--allow-all"]);
-    assert!(out.status.success(), "stderr={}", String::from_utf8_lossy(&out.stderr));
+    assert!(
+        out.status.success(),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
 }
 
 #[test]
 fn permission_denied_fs_exits_nonzero() {
     let f = write_temp("deny", r#"@fs.read("/etc/passwd")"#);
     let out = run_rite(&["run", f.to_str().unwrap()]); // default secure
-    // non-zero or runtime error message
+                                                       // non-zero or runtime error message
     let err = String::from_utf8_lossy(&out.stderr);
     let out_s = String::from_utf8_lossy(&out.stdout);
     assert!(
@@ -247,7 +262,11 @@ abs(-5)
 "#,
     );
     let out = run_rite(&["run", f.to_str().unwrap(), "--allow-all"]);
-    assert!(out.status.success(), "stderr={}", String::from_utf8_lossy(&out.stderr));
+    assert!(
+        out.status.success(),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(
         stdout.trim() == "5" || stdout.trim().ends_with('5') || stdout.contains("\n5"),
@@ -266,7 +285,10 @@ fn run_division_by_zero_exits_nonzero() {
         String::from_utf8_lossy(&out.stdout)
     )
     .to_lowercase();
-    assert!(err.contains("zero") || err.contains("div") || err.contains("runtime"), "{err}");
+    assert!(
+        err.contains("zero") || err.contains("div") || err.contains("runtime"),
+        "{err}"
+    );
 }
 
 #[test]
@@ -275,7 +297,11 @@ fn check_logical_glyphs_no_hang() {
     let start = std::time::Instant::now();
     let out = run_rite(&["check", f.to_str().unwrap()]);
     assert!(start.elapsed() < Duration::from_secs(2), "lexer hang?");
-    assert!(out.status.success(), "stderr={}", String::from_utf8_lossy(&out.stderr));
+    assert!(
+        out.status.success(),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
 }
 
 #[test]
@@ -290,7 +316,13 @@ bomb(0)
 "#,
     );
     let out = Command::new(rite_bin())
-        .args(["run", f.to_str().unwrap(), "--allow-all", "--max-steps", "100"])
+        .args([
+            "run",
+            f.to_str().unwrap(),
+            "--allow-all",
+            "--max-steps",
+            "100",
+        ])
         .current_dir(workspace())
         .output()
         .expect("spawn");

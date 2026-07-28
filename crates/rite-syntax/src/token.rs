@@ -42,10 +42,10 @@ pub enum TokenKind {
     Loop,
     Say,
     Xor,
-    Compose, // ∘
-    ForAll,  // ∀
-    OkMark,  // ✓
-    ErrMark, // ✗
+    Compose,   // ∘
+    ForAll,    // ∀
+    OkMark,    // ✓
+    ErrMark,   // ✗
     Paragraph, // ¶
 
     // Punctuation

@@ -341,9 +341,10 @@ impl Desugar {
             Expr::Atom(a) => ExprIr::Atom(a.parts.join("."), a.span),
             Expr::List(l) => {
                 // Expand spreads: [a, ..xs, b] → concat([a], xs, [b]) when any spread present
-                let has_spread = l.elements.iter().any(|e| {
-                    matches!(e, Expr::Unary(u) if u.op == UnaryOp::Spread)
-                });
+                let has_spread = l
+                    .elements
+                    .iter()
+                    .any(|e| matches!(e, Expr::Unary(u) if u.op == UnaryOp::Spread));
                 if has_spread {
                     let mut parts = Vec::new();
                     for e in &l.elements {
@@ -381,7 +382,9 @@ impl Desugar {
                             rite_syntax::RecordKey::Spread => self.desugar_expr(&e.value),
                             other => {
                                 let key = match other {
-                                    rite_syntax::RecordKey::Ident(i) => KeyIr::Ident(i.name.clone()),
+                                    rite_syntax::RecordKey::Ident(i) => {
+                                        KeyIr::Ident(i.name.clone())
+                                    }
                                     rite_syntax::RecordKey::String(s) => KeyIr::String(s.clone()),
                                     rite_syntax::RecordKey::Atom(a) => {
                                         KeyIr::Atom(a.parts.join("."))
@@ -868,83 +871,11 @@ fn bin_op(op: BinOp) -> BinaryOpIr {
         BinOp::In => BinaryOpIr::In,
         BinOp::NotIn => BinaryOpIr::NotIn,
         // Desugared to native calls before bin_op in most paths; fallback:
-        BinOp::Xor | BinOp::Power | BinOp::Idiv | BinOp::Range | BinOp::RangeIncl
+        BinOp::Xor
+        | BinOp::Power
+        | BinOp::Idiv
+        | BinOp::Range
+        | BinOp::RangeIncl
         | BinOp::Compose => BinaryOpIr::Add,
     }
-}
-
-fn is_builtin(name: &str) -> bool {
-    matches!(
-        name,
-        "map"
-            | "keep"
-            | "reject"
-            | "reduce"
-            | "each"
-            | "flatten"
-            | "count"
-            | "first"
-            | "last"
-            | "rest"
-            | "tail"
-            | "init"
-            | "butlast"
-            | "take"
-            | "drop"
-            | "reverse"
-            | "concat"
-            | "find"
-            | "any"
-            | "all"
-            | "sum"
-            | "min"
-            | "max"
-            | "sort"
-            | "unique"
-            | "zip"
-            | "chunk"
-            | "parallel"
-            | "ok"
-            | "err"
-            | "panic"
-            | "expect"
-            | "fail"
-            | "str"
-            | "len"
-            | "type_of"
-            | "require"
-            | "collect_results"
-            | "group"
-            | "lines"
-            | "words"
-            | "join"
-            | "range"
-            | "range_incl"
-            | "keys"
-            | "values"
-            | "abs"
-            | "clamp"
-            | "pow"
-            | "idiv"
-            | "xor"
-            | "and_then"
-            | "or_else"
-            | "is_ok"
-            | "is_err"
-            | "unwrap_or"
-            | "repeat"
-            | "contains"
-            | "enumerate"
-            | "with_index"
-            | "compose"
-            | "while_loop"
-            | "print"
-            | "println"
-    )
-}
-
-// Fix broken match for method names
-#[allow(dead_code)]
-fn fix_method(s: &str) -> String {
-    s.to_uppercase()
 }

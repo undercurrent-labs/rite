@@ -392,9 +392,7 @@ fn builtin_pow(args: Vec<Value>) -> Result<Value, EvalError> {
     let base = it.next().unwrap_or(Value::Int(0));
     let exp = it.next().unwrap_or(Value::Int(0));
     match (&base, &exp) {
-        (Value::Int(a), Value::Int(b)) if *b >= 0 && *b <= 32 => {
-            Ok(Value::Int(a.pow(*b as u32)))
-        }
+        (Value::Int(a), Value::Int(b)) if *b >= 0 && *b <= 32 => Ok(Value::Int(a.pow(*b as u32))),
         (Value::Int(a), Value::Int(b)) => Ok(Value::Float((*a as f64).powf(*b as f64))),
         (Value::Float(a), Value::Float(b)) => Ok(Value::Float(a.powf(*b))),
         (Value::Int(a), Value::Float(b)) => Ok(Value::Float((*a as f64).powf(*b))),
@@ -481,7 +479,9 @@ fn builtin_repeat(args: Vec<Value>) -> Result<Value, EvalError> {
             }
             Ok(Value::List(out))
         }
-        other => Ok(Value::list(std::iter::repeat(other).take(n).collect::<Vec<_>>())),
+        other => Ok(Value::list(
+            std::iter::repeat(other).take(n).collect::<Vec<_>>(),
+        )),
     }
 }
 

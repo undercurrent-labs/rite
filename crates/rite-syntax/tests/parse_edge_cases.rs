@@ -4,7 +4,11 @@ use rite_syntax::{parse_both_equivalent, parse_source};
 
 fn parse_ok(src: &str) {
     let (p, d, _) = parse_source("t.rite", src);
-    assert!(!d.has_errors(), "unexpected errors for `{src}`: {:?}", d.into_vec());
+    assert!(
+        !d.has_errors(),
+        "unexpected errors for `{src}`: {:?}",
+        d.into_vec()
+    );
     assert!(p.is_some(), "no program for `{src}`");
 }
 
@@ -33,7 +37,11 @@ fn dual_dialect_core_forms() {
     parse_both_equivalent("x ← 1", "x <- 1").unwrap();
     parse_both_equivalent("c ↢ 0", "c <~ 0").unwrap();
     parse_both_equivalent("◆ f(x) ⟦ ^ x ⟧", "def f(x) [[ return x ]]").unwrap();
-    parse_both_equivalent("! @console.println(\"a\")", "do host.console.println(\"a\")").unwrap();
+    parse_both_equivalent(
+        "! @console.println(\"a\")",
+        "do host.console.println(\"a\")",
+    )
+    .unwrap();
     parse_both_equivalent("#ok", ":ok").unwrap();
     parse_both_equivalent("⟨a: 1⟩", "<<a: 1>>").unwrap();
 }
@@ -115,10 +123,12 @@ fn nested_lists_need_spaces() {
 fn reserved_room_not_ident() {
     let (_p, d, _) = parse_source("t.rite", r#"◆ f(room) ⟦ ^ room ⟧"#);
     // room is reserved — expect error
-    assert!(d.has_errors() || {
-        // some builds may parse and fail later
-        true
-    });
+    assert!(
+        d.has_errors() || {
+            // some builds may parse and fail later
+            true
+        }
+    );
 }
 
 #[test]
@@ -274,4 +284,3 @@ fn empty_list_and_record() {
     parse_ok("⟨⟩");
     parse_ok("<<>>");
 }
-

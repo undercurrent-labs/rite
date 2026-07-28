@@ -451,7 +451,7 @@ a + b
 async fn console_and_stdout() {
     let mut ctx = RuntimeContext::new();
     install_defaults(&mut ctx, PermissionSet::allow_all());
-    let _ = run_source("t.rite", r#"! @console.println("hi")"# , &mut ctx)
+    let _ = run_source("t.rite", r#"! @console.println("hi")"#, &mut ctx)
         .await
         .unwrap();
     assert!(ctx.stdout.join("").contains("hi"));
@@ -538,7 +538,7 @@ async fn unicode_string_content() {
 
 #[tokio::test]
 async fn membership_in_list() {
-    // glyph ∈ may work; ascii `in` 
+    // glyph ∈ may work; ascii `in`
     let v = eval(r#"2 ∈ [1, 2, 3]"#).await;
     // may be bool true
     assert!(
@@ -649,7 +649,10 @@ async fn fs_read_denied_under_secure() {
         }
         Err(e) => {
             let s = e.to_string().to_lowercase();
-            assert!(s.contains("permission") || s.contains("denied") || s.contains("fs"), "{s}");
+            assert!(
+                s.contains("permission") || s.contains("denied") || s.contains("fs"),
+                "{s}"
+            );
         }
     }
 }
@@ -659,10 +662,12 @@ async fn process_denied_under_secure() {
     let mut ctx = RuntimeContext::new();
     install_defaults(&mut ctx, PermissionSet::default_secure());
     let r = run_source("t.rite", r#"@process.run("true")"#, &mut ctx).await;
-    assert!(r.is_err() || {
-        // err value
-        true
-    });
+    assert!(
+        r.is_err() || {
+            // err value
+            true
+        }
+    );
 }
 
 #[tokio::test]
@@ -913,10 +918,7 @@ async fn if_else_expression() {
     assert_eq!(eval(r#"? true ⟦ 1 ⟧ : ⟦ 2 ⟧"#).await, Value::Int(1));
     assert_eq!(eval(r#"? false ⟦ 1 ⟧ : ⟦ 2 ⟧"#).await, Value::Int(2));
     // ASCII uses `:` for else (same as glyph); keyword `else` is not a separator.
-    assert_eq!(
-        eval(r#"if true [[ 10 ]] : [[ 20 ]]"#).await,
-        Value::Int(10)
-    );
+    assert_eq!(eval(r#"if true [[ 10 ]] : [[ 20 ]]"#).await, Value::Int(10));
     assert_eq!(
         eval(r#"if false [[ 10 ]] : [[ 20 ]]"#).await,
         Value::Int(20)
@@ -958,10 +960,7 @@ async fn match_rest_pattern_tail() {
 
 #[tokio::test]
 async fn nested_lists_spaces_required() {
-    assert_eq!(
-        eval("[ [1, 2], [3, 4] ] → count").await,
-        Value::Int(2)
-    );
+    assert_eq!(eval("[ [1, 2], [3, 4] ] → count").await, Value::Int(2));
     assert_eq!(
         eval(
             r#"
@@ -1065,8 +1064,11 @@ abs(-5)
 #[tokio::test]
 async fn string_interpolation_basic() {
     // if interpolation is supported
-    let r = eval_ok_or_err(r#"n ← 3
-"n={n}""#).await;
+    let r = eval_ok_or_err(
+        r#"n ← 3
+"n={n}""#,
+    )
+    .await;
     if let Ok(v) = r {
         let s = v.as_str().unwrap_or("");
         assert!(s.contains('3') || s.contains("n="), "{s}");
