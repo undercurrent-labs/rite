@@ -9,12 +9,15 @@ fn workspace_root() -> PathBuf {
 
 fn rite_bin() -> PathBuf {
     let root = workspace_root();
-    let debug = root.join("target/debug/rite");
-    if debug.exists() {
-        debug
-    } else {
-        PathBuf::from("rite")
+    // Prefer workspace binaries (debug first — matches `cargo test` + pre-build in CI)
+    for rel in ["target/debug/rite", "target/release/rite"] {
+        let p = root.join(rel);
+        if p.exists() {
+            return p;
+        }
     }
+    // Last resort: PATH
+    PathBuf::from("rite")
 }
 
 fn run_ok(rel: &str) {

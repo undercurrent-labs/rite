@@ -31,14 +31,17 @@ jobs:
       - name: clippy
         run: cargo clippy --workspace --all-targets --features native -p rite-wasm -- -D warnings
         continue-on-error: true
+      # example_ladder integration tests spawn target/debug/rite
+      - name: build debug CLI
+        run: cargo build -p rite-cli -p rite-lsp
       - name: test
         run: cargo test --workspace --all-features
       - name: build release tools
         run: cargo build -p rite-cli -p rite-lsp --release
       - name: doctests
-        run: ./target/release/rite docs check || cargo run -p rite-cli -- docs check
+        run: ./target/release/rite docs check
       - name: agent bundle
-        run: ./target/release/rite docs agent --output skills/rite || cargo run -p rite-cli -- docs agent --output skills/rite
+        run: ./target/release/rite docs agent --output skills/rite
       - name: upload binaries
         uses: actions/upload-artifact@v4
         with:
