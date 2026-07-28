@@ -114,9 +114,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+      # Root package.json has packageManager=pnpm; don't auto-setup pnpm for this npm job
       - uses: actions/setup-node@v5
         with:
           node-version: 20
+          package-manager-cache: false
       - name: compile extension
         working-directory: editors/vscode
         run: |
@@ -124,7 +126,7 @@ jobs:
           npm run compile
       - name: package vsix
         working-directory: editors/vscode
-        run: npx --yes @vscode/vsce package --no-dependencies -o rite.vsix
+        run: npx --yes @vscode/vsce@3 package --no-dependencies -o rite.vsix
         continue-on-error: true
       - name: upload vsix
         uses: actions/upload-artifact@v5
