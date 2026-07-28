@@ -47,7 +47,12 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
         with:
+          # Host triple is always installed; matrix.target may be a cross triple (Intel Mac on ARM runners).
           targets: ${{ matrix.target }}
+
+      - name: Ensure rustup target present
+        shell: bash
+        run: rustup target add "${{ matrix.target }}"
 
       - uses: Swatinem/rust-cache@v2
         with:
@@ -58,12 +63,14 @@ jobs:
         run: |
           set -euo pipefail
           HOST="$(rustc -vV | sed -n 's/^host: //p')"
+          rustup show
+          rustup target list --installed
           if [[ "$HOST" == "${{ matrix.target }}" ]]; then
             cargo build -p rite-cli -p rite-lsp --release
             BIN=target/release
           else
             # e.g. x86_64-apple-darwin on aarch64 macos-latest
-            cargo build -p rite-cli -p rite-lsp --release --target ${{ matrix.target }}
+            cargo build -p rite-cli -p rite-lsp --release --target "${{ matrix.target }}"
             BIN=target/${{ matrix.target }}/release
           fi
           echo "BIN=$BIN" >> "$GITHUB_ENV"
