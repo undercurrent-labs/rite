@@ -33,6 +33,8 @@ pub struct ServerState {
     pub routes: Vec<RiteRoute>,
     pub functions: HashMap<String, FunctionEntry>,
     pub perms: PermissionSet,
+    /// Middleware short names from `use @http.log` / `⊏ @http.recover` → `["log","recover"]`.
+    pub middleware: Vec<String>,
     pub lock: Arc<AsyncMutex<()>>,
 }
 
@@ -55,6 +57,20 @@ impl HttpCap {
             name: "response",
             docs: "Build an explicit HTTP response record.",
             arity: 1,
+            effectful: false,
+            permission: "",
+        },
+        NativeFunctionDescriptor {
+            name: "log",
+            docs: "Middleware: log each request as `rite: METHOD path status duration` to stderr. Enable with `use @http.log` or `⊏ @http.log`.",
+            arity: 0,
+            effectful: false,
+            permission: "",
+        },
+        NativeFunctionDescriptor {
+            name: "recover",
+            docs: "Middleware: convert handler panics/errors into JSON 500 responses. Enable with `use @http.recover` or `⊏ @http.recover`.",
+            arity: 0,
             effectful: false,
             permission: "",
         },
@@ -85,7 +101,9 @@ impl HttpCap {
                     ),
                 ]))
             }
-            "log" | "recover" => Ok(Value::None),
+            // Middleware identifiers are resolved at listen-time via `use` / `⊏`.
+            // Calling them as values is a no-op document of the plug-in.
+            "log" | "recover" => Ok(Value::Atom(ctx.atoms.intern(&format!("http.{}", method)))),
             other => Err(EvalError::Capability(format!("unknown @http.{}", other))),
         }
     }
@@ -136,6 +154,7 @@ impl HttpCap {
             routes,
             functions: ctx.functions.clone(),
             perms: perms.clone(),
+            middleware: vec![],
             lock: Arc::new(AsyncMutex::new(())),
         };
         self.serve(addr_str, state, perms).await
@@ -313,6 +332,10 @@ async fn dispatch_rite(state: ServerState, idx: usize, req: Request<Body>) -> Re
         ),
     ]);
 
+    let use_log = state.middleware.iter().any(|m| m == "log");
+    let use_recover = state.middleware.iter().any(|m| m == "recover");
+    let t0 = std::time::Instant::now();
+
     let mut ctx = RuntimeContext::new();
     crate::install_defaults(&mut ctx, state.perms.clone());
     for (name, f) in &state.functions {
@@ -333,12 +356,26 @@ async fn dispatch_rite(state: ServerState, idx: usize, req: Request<Body>) -> Re
         .call_block_public(&route.body, &[param], vec![req_value])
         .await;
 
-    match result {
+    // Handler console output is buffered on the per-request RuntimeContext —
+    // flush it so `! @console.println` is visible in the server process.
+    flush_handler_io(&ctx);
+
+    let response = match result {
         Ok(v) => coerce_response(v, &ctx),
         Err(EvalError::Return(v)) => coerce_response(v, &ctx),
+        Err(EvalError::Panic(m)) if use_recover => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": "panic", "message": m})),
+        )
+            .into_response(),
         Err(EvalError::Panic(m)) => (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(json!({"error": "panic", "message": m})),
+        )
+            .into_response(),
+        Err(e) if use_recover => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": "handler_error", "message": e.to_string()})),
         )
             .into_response(),
         Err(e) => (
@@ -346,6 +383,32 @@ async fn dispatch_rite(state: ServerState, idx: usize, req: Request<Body>) -> Re
             Json(json!({"error": "handler_error", "message": e.to_string()})),
         )
             .into_response(),
+    };
+
+    if use_log {
+        let status = response.status().as_u16();
+        let ms = t0.elapsed().as_millis();
+        // Apache-ish one-liner access log to the process stderr (doesn't mix with handler body).
+        eprintln!("rite: {} {} {} {}ms", method.as_str(), path, status, ms);
+        let _ = std::io::Write::flush(&mut std::io::stderr());
+    }
+
+    response
+}
+
+/// Emit buffered handler stdout/stderr to the real process streams.
+fn flush_handler_io(ctx: &RuntimeContext) {
+    if !ctx.stdout.is_empty() {
+        for line in &ctx.stdout {
+            print!("{}", line);
+        }
+        let _ = std::io::Write::flush(&mut std::io::stdout());
+    }
+    if !ctx.stderr.is_empty() {
+        for line in &ctx.stderr {
+            eprint!("{}", line);
+        }
+        let _ = std::io::Write::flush(&mut std::io::stderr());
     }
 }
 

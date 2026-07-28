@@ -1,10 +1,11 @@
 //! Sinatra-style HTTP service with real Rite handlers
 
 @http.listen "127.0.0.1:0" ⟦
-  use @http.log
-  use @http.recover
+  ⊏ @http.log
+  ⊏ @http.recover
 
   GET "/health" ⟦
+    ! @console.println("health")
     ^ 200 ⟨status: #ok⟩
   ⟧
 

@@ -1369,13 +1369,13 @@ impl Parser {
                 self.advance();
                 continue;
             }
-            // middleware: use expr
+            // middleware: use / ⊏ expr  (`use @http.log` or glyph `⊏ @http.log`)
             if self.check(TokenKind::Use) {
                 // Could be import or middleware — in block after http.listen, it's middleware
                 // Heuristic: if next is Host or LBrace or Ident path without only module path...
-                // Spec: `use @http.log` or `use { |req, next| ... }`
+                // Spec: `use @http.log` / `⊏ @http.log` or `use { |req, next| ... }`
                 let checkpoint = self.pos;
-                self.advance(); // use
+                self.advance(); // use / ⊏
                 if self.check(TokenKind::Host)
                     || self.check(TokenKind::LBrace)
                     || self.check(TokenKind::BlockOpen)

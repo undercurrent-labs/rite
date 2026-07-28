@@ -31,7 +31,12 @@ pub fn install_defaults(ctx: &mut RuntimeContext, perms: PermissionSet) -> Arc<H
     host
 }
 
-fn register_http_routes(addr: String, routes: &[RouteIr], ctx: &RuntimeContext) {
+fn register_http_routes(
+    addr: String,
+    routes: &[RouteIr],
+    middleware: &[String],
+    ctx: &RuntimeContext,
+) {
     let rite_routes: Vec<http::RiteRoute> = routes
         .iter()
         .map(|r| http::RiteRoute {
@@ -46,10 +51,23 @@ fn register_http_routes(addr: String, routes: &[RouteIr], ctx: &RuntimeContext) 
     } else {
         PermissionSet::default_secure()
     };
+    let mw: Vec<String> = middleware
+        .iter()
+        .map(|m| {
+            // Normalize "http.log" / "log" / "@http.log"
+            let s = m.trim_start_matches('@');
+            if let Some(rest) = s.strip_prefix("http.") {
+                rest.to_string()
+            } else {
+                s.to_string()
+            }
+        })
+        .collect();
     let state = http::ServerState {
         routes: rite_routes,
         functions: ctx.functions.clone(),
         perms,
+        middleware: mw,
         lock: Arc::new(AsyncMutex::new(())),
     };
     let _ = FunctionEntry {

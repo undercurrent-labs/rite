@@ -23,6 +23,7 @@ Rite is a **sigil language**: dense glyphs with ASCII twins, all desugaring into
 | `∧ ∨ ¬ ⊻` | `and or not xor` | Logic |
 | `✓ v` / `✗ e` | `ok(v)` / `err(e)` | Result marks |
 | `¶ x` | `say x` | Print line |
+| `⊏` | `use` | Import / HTTP middleware plug-in |
 | `f ∘ g` | `compose(f, g)` | Function compose |
 | `abs` `clamp` `concat` `repeat` | same | Numeric / list helpers |
 | `unwrap_or` `is_ok` `is_err` `or_else` | same | Result helpers |

@@ -285,7 +285,7 @@ impl Formatter {
                 self.block(&func.body);
             }
             Item::Import(imp) => {
-                self.out.push_str("use ");
+                self.out.push_str(&self.sigil("⊏ ", "use "));
                 for (i, s) in imp.path.segments.iter().enumerate() {
                     if i > 0 {
                         self.out.push('.');

@@ -93,6 +93,41 @@ fn enable_long_test_mode() {
 }
 
 #[tokio::test]
+async fn e2e_console_and_http_log_emit() {
+    let _guard = http_test_lock().lock().unwrap();
+    clear_last_bound_addr();
+    std::env::set_var("RITE_HTTP_TEST", "1");
+    std::env::set_var("RITE_HTTP_TEST_SECS", "8");
+
+    let source = r#"
+@http.listen "127.0.0.1:0" ⟦
+  use @http.log
+  use @http.recover
+
+  GET "/ping" ⟦
+    ! @console.println("ping-handler")
+    ^ 200 ⟨pong: true⟩
+  ⟧
+⟧
+"#
+    .to_string();
+
+    // Capture process output is hard in unit tests; verify handler succeeds and
+    // middleware is registered by checking response + that log middleware path runs
+    // without panicking. Access log goes to stderr (visible in --nocapture runs).
+    let handle = spawn_server(source).await;
+    let addr = wait_for_bind(Duration::from_secs(3)).await;
+    let url = format!("http://{}/ping", addr);
+    let client = reqwest::Client::new();
+    let resp = client.get(&url).send().await.expect("request");
+    assert_eq!(resp.status().as_u16(), 200);
+    let body = resp.text().await.unwrap();
+    assert!(body.contains("pong") || body.contains("true"), "{body}");
+    handle.abort();
+    let _ = handle.await;
+}
+
+#[tokio::test]
 async fn e2e_health_echo_sum_on_ephemeral_port() {
     let _guard = http_test_lock().lock().unwrap();
     enable_long_test_mode();

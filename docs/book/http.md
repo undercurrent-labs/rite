@@ -92,10 +92,11 @@ Use that URL with `curl`. Prefer a fixed port while learning.
 
 ```rite
 @http.listen "127.0.0.1:4040" ⟦
-  use @http.log
-  use @http.recover
+  use @http.log          // or glyph: ⊏ @http.log
+  use @http.recover      // or glyph: ⊏ @http.recover
 
   GET "/health" ⟦
+    ! @console.println("health check")   // prints to the server process stdout
     ^ 200 ⟨status: #ok⟩
   ⟧
 
@@ -110,6 +111,26 @@ Use that URL with `curl`. Prefer a fixed port while learning.
       total: numbers → sum,
       count: numbers → count
     ⟩
+  ⟧
+⟧
+```
+
+### Middleware
+
+| Form | Glyph | Effect |
+|------|-------|--------|
+| `use @http.log` | `⊏ @http.log` | Access log on **stderr**: `rite: GET /path 200 3ms` |
+| `use @http.recover` | `⊏ @http.recover` | Handler errors/panics → JSON `500` instead of raw failure |
+
+Handler `! @console.println(...)` writes to the **server process stdout** (flushed after each request). That is separate from the access log on stderr.
+
+```rite
+@http.listen "127.0.0.1:4040" ⟦
+  ⊏ @http.log
+  ⊏ @http.recover
+  GET "/health" ⟦
+    ! @console.println("hit")
+    ^ 200 ⟨status: #ok⟩
   ⟧
 ⟧
 ```

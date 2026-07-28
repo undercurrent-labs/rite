@@ -377,6 +377,7 @@ impl<'a> Lexer<'a> {
             ("∘", TokenKind::Compose),
             ("⊻", TokenKind::Xor),
             ("×", TokenKind::Star), // multiply / also used with repeat via call
+            ("⊏", TokenKind::Use),  // use / plug-in (imports + HTTP middleware)
         ];
         for (sigil, kind) in pairs {
             if rest.starts_with(sigil) {

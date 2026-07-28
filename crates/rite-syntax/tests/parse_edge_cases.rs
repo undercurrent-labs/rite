@@ -77,6 +77,24 @@ fn match_scrutinee_not_trailing_block() {
 }
 
 #[test]
+fn http_middleware_use_and_glyph() {
+    parse_ok(
+        r#"@http.listen "127.0.0.1:0" ⟦
+  use @http.log
+  use @http.recover
+  GET "/health" ⟦ ^ 200 ⟨status: #ok⟩ ⟧
+⟧"#,
+    );
+    parse_ok(
+        r#"@http.listen "127.0.0.1:0" ⟦
+  ⊏ @http.log
+  ⊏ @http.recover
+  GET "/health" ⟦ ^ 200 ⟨status: #ok⟩ ⟧
+⟧"#,
+    );
+}
+
+#[test]
 fn http_listen_minimal() {
     parse_ok(
         r#"@http.listen "127.0.0.1:4040" ⟦

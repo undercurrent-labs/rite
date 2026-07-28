@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.1.4] — 2026-07-28
+
+### Fixed
+
+- HTTP handlers: `! @console.println` (and other console output) now flushes to the server process after each request (was trapped in a per-request buffer)
+- `use @http.log` / `use @http.recover` actually wire middleware (were no-ops)
+
+### Added
+
+- Access log middleware `@http.log` → stderr: `rite: GET /path 200 3ms`
+- Glyph **`⊏`** as dual of `use` (imports + HTTP middleware plug-in)
+
 ## [0.1.3] — 2026-07-28
 
 ### Added — Sugar pack

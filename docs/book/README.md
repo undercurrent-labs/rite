@@ -39,6 +39,7 @@ This book is a linear path. You can stop after any chapter and experiment in [St
 | `~` | `match` | Pattern match |
 | `!` | `do` | Effectful statement |
 | `@` | `host.` | Host capability |
+| `⊏` | `use` | Import / middleware plug-in |
 | `#atom` | `:atom` | Atom / symbol |
 | `⟦ ⟧` | `[[ ]]` | Block |
 | `⟨ ⟩` | `<< >>` | Record |

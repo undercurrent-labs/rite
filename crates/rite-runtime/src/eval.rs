@@ -491,7 +491,16 @@ impl<'a> Evaluator<'a> {
                     .as_str()
                     .map(|s| s.to_string())
                     .unwrap_or_else(|| format!("{}", a));
-                let _ = middleware;
+                // Middleware names: `use @http.log` → CapabilityCall path ["http","log"]
+                let mw_names: Vec<String> = middleware
+                    .iter()
+                    .filter_map(|m| match m {
+                        ExprIr::CapabilityCall { path, .. } => Some(path.join(".")),
+                        ExprIr::NativeCall { name, .. } => Some(name.clone()),
+                        ExprIr::Global(name) => Some(name.clone()),
+                        _ => None,
+                    })
+                    .collect();
                 // Build route table with real Rite bodies for per-request evaluation
                 let rite_routes: Vec<Value> = routes
                     .iter()
@@ -505,10 +514,7 @@ impl<'a> Evaluator<'a> {
                         ])
                     })
                     .collect();
-                // Side-channel route IR into HTTP cap (via env var encoded marker not needed —
-                // store on RuntimeContext extension through capability install).
-                // Attach via thread-local pending handlers through a helper if available.
-                http_register_pending(addr_str.clone(), routes, self.ctx);
+                http_register_pending(addr_str.clone(), routes, &mw_names, self.ctx);
                 self.ctx
                     .capabilities
                     .call(
@@ -1278,17 +1284,23 @@ fn num_binop(
 
 /// Register HTTP routes for the capability layer (implemented via weak dep pattern).
 /// rite-runtime cannot depend on rite-caps; use a function pointer installed at startup.
-fn http_register_pending(addr: String, routes: &[rite_sem::RouteIr], ctx: &RuntimeContext) {
+fn http_register_pending(
+    addr: String,
+    routes: &[rite_sem::RouteIr],
+    middleware: &[String],
+    ctx: &RuntimeContext,
+) {
     if let Some(f) = HTTP_REGISTER.get() {
-        f(addr, routes, ctx);
+        f(addr, routes, middleware, ctx);
     }
 }
 
-static HTTP_REGISTER: std::sync::OnceLock<fn(String, &[rite_sem::RouteIr], &RuntimeContext)> =
-    std::sync::OnceLock::new();
+static HTTP_REGISTER: std::sync::OnceLock<
+    fn(String, &[rite_sem::RouteIr], &[String], &RuntimeContext),
+> = std::sync::OnceLock::new();
 
 /// Called by rite-caps/install to wire HTTP route registration.
-pub fn set_http_route_registrar(f: fn(String, &[rite_sem::RouteIr], &RuntimeContext)) {
+pub fn set_http_route_registrar(f: fn(String, &[rite_sem::RouteIr], &[String], &RuntimeContext)) {
     let _ = HTTP_REGISTER.set(f);
 }
 
