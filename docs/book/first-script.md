@@ -128,4 +128,5 @@ Type expressions and statements interactively. Good for trying pipelines and mat
 
 ## Next
 
-Learn the [value model](values.md): numbers, atoms, lists, records, and truthiness.
+- Daily scratch work: [One-liners & REPL](one-liners.md)  
+- Or dive into the [value model](values.md): numbers, atoms, lists, records, and truthiness.

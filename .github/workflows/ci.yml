@@ -172,6 +172,8 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           workingDirectory: apps/rite-web
+          # Match local deploy tooling (assets Workers need modern wrangler)
+          wranglerVersion: "4.28.0"
           command: deploy
 
   release-manifest:

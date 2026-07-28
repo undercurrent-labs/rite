@@ -155,7 +155,9 @@ impl HttpCap {
         let local = listener
             .local_addr()
             .map_err(|e| EvalError::Capability(e.to_string()))?;
-        *self.last_addr.lock() = Some(local.to_string());
+        let local_s = local.to_string();
+        *self.last_addr.lock() = Some(local_s.clone());
+        *LAST_BOUND_ADDR.lock() = Some(local_s);
 
         let state = Arc::new(state);
         let (shutdown_tx, mut shutdown_rx) = oneshot::channel::<()>();
@@ -171,12 +173,17 @@ impl HttpCap {
             }
         });
 
-        // For port 0 / tests: also auto-stop after a short window when RITE_HTTP_TEST=1
+        // For tests: auto-stop after a grace window when RITE_HTTP_TEST=1 so
+        // servers don't hang forever if the test task is aborted late.
         let test_mode = std::env::var("RITE_HTTP_TEST").ok().as_deref() == Some("1");
         if test_mode {
+            let secs: u64 = std::env::var("RITE_HTTP_TEST_SECS")
+                .ok()
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(30);
             let stx = shutdown_tx.clone();
             tokio::spawn(async move {
-                tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+                tokio::time::sleep(std::time::Duration::from_secs(secs)).await;
                 if let Some(tx) = stx.lock().take() {
                     let _ = tx.send(());
                 }
@@ -470,6 +477,18 @@ fn match_path(pattern: &str, path: &str) -> Option<HashMap<String, String>> {
 
 static PENDING_SERVER: Mutex<Option<ServerState>> = Mutex::new(None);
 static PENDING_ADDR: Mutex<Option<String>> = Mutex::new(None);
+/// Most recent successfully bound listen address (for tests / tooling).
+static LAST_BOUND_ADDR: Mutex<Option<String>> = Mutex::new(None);
+
+/// Address of the last `@http.listen` bind (e.g. `"127.0.0.1:54321"`).
+pub fn last_bound_addr() -> Option<String> {
+    LAST_BOUND_ADDR.lock().clone()
+}
+
+/// Clear the last-bound address (tests).
+pub fn clear_last_bound_addr() {
+    *LAST_BOUND_ADDR.lock() = None;
+}
 
 pub fn set_pending_server(addr: String, state: ServerState) {
     *PENDING_ADDR.lock() = Some(addr);

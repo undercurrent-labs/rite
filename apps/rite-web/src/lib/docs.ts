@@ -8,6 +8,7 @@ export type DocChapter = {
 export const DOC_CHAPTERS: DocChapter[] = [
   { slug: "installation", title: "Installation", file: "installation.md" },
   { slug: "first-script", title: "First script", file: "first-script.md" },
+  { slug: "one-liners", title: "One-liners & REPL", file: "one-liners.md" },
   { slug: "values", title: "Values and atoms", file: "values.md" },
   { slug: "bindings", title: "Bindings", file: "bindings.md" },
   { slug: "functions", title: "Functions", file: "functions.md" },

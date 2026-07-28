@@ -74,6 +74,23 @@ impl ExecutionBudget {
         self
     }
 
+    /// Reset wall-clock start and step counter for a new evaluation unit.
+    ///
+    /// Critical for long-lived hosts (REPL): the default budget starts a 60s
+    /// wall clock at construction. Without a restart, idle time in the REPL
+    /// counts against the next evaluation and surfaces as
+    /// "execution wall-clock timeout exceeded".
+    pub fn restart(&mut self) {
+        self.inner = Arc::new(BudgetInner {
+            steps: AtomicU64::new(0),
+            cancelled: AtomicBool::new(false),
+        });
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            self.started = Instant::now();
+        }
+    }
+
     pub fn tick(&self) -> Result<(), BudgetError> {
         if self.inner.cancelled.load(Ordering::Relaxed) {
             return Err(BudgetError::Cancelled);
@@ -148,3 +165,19 @@ impl std::fmt::Display for BudgetError {
 }
 
 impl std::error::Error for BudgetError {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::thread;
+    use std::time::Duration;
+
+    #[test]
+    fn restart_clears_wall_clock() {
+        let mut b = ExecutionBudget::new().with_timeout(Duration::from_millis(30));
+        thread::sleep(Duration::from_millis(40));
+        assert!(matches!(b.tick(), Err(BudgetError::Timeout)));
+        b.restart();
+        assert!(b.tick().is_ok());
+    }
+}
