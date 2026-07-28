@@ -1,0 +1,8 @@
+◆ area(w, h) ⟦
+  ◆ clamp(n) ⟦
+    ? n < 0 ⟦ ^ 0 ⟧
+    ^ n
+  ⟧
+  ^ clamp(w) * clamp(h)
+⟧
+area(3, 4)

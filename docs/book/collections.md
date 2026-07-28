@@ -27,19 +27,19 @@ n ← xs → count
 
 ### Indexing and ends
 
-Depending on builtins available in your build:
-
-- `first` / `last` — ends of a sequence  
-- `count` / length-style helpers  
-- Spread / rest patterns in **match**: `[h, ..rest]`
+- Pipeline stages: `first` / `last` / `count` / `sum` / …  
+- Empty list: `[] → first` and `[] → last` yield **`none`** (no panic).  
+- **Rest is a match pattern**, not a pipeline stage: write `[h, ..rest]` in `~` / `match`, not `xs → rest`.
 
 ```rite
 pair ← [10, 20, 30]
-head ← ~ pair ⟦
-  [h, ..rest] → h
-  _ → none
+head ← pair → first
+tail_sum ← ~ pair ⟦
+  [h, ..rest] → rest → sum
+  _ → 0
 ⟧
-! @console.println(head)
+! @console.println(str(head))       // 10
+! @console.println(str(tail_sum))   // 50
 ```
 
 ### Nested lists

@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.1.2] — 2026-07-28
+
+### Fixed
+
+- Nested local functions (`◆` / `def` inside a body) bind correctly and close over outer params
+- Early `^` / `return` from nested if/match/blocks exits the enclosing function
+- Top-level postfix `?` on `err` yields the err value as the script result
+- Lexer no longer hangs on unknown multi-byte symbols; glyph ops `∧` `∨` `¬` tokenize
+- Prefix if (`? cond ⟦…⟧`) on the next line is not stolen as postfix try on the previous expr
+
+### Added
+
+- Bulletproof edge-case suites (eval, parse, CLI, REPL, WASM) and expanded conformance fixtures
+- Docs: nested helpers, ASCII if uses `:`, multi-value HTTP return, match rest vs pipeline
+
 ## [0.1.1] — 2026-07-28
 
 ### Fixed

@@ -1,0 +1,5 @@
+a ← [] → first
+b ← [] → last
+? a = none ⟦
+  ? b = none ⟦ 1 ⟧ : ⟦ 0 ⟧
+⟧ : ⟦ 0 ⟧

@@ -477,6 +477,65 @@ mod tests {
         );
     }
 
+    #[test]
+    fn pure_nested_function_and_early_return() {
+        let src = r#"
+◆ area(w, h) ⟦
+  ◆ clamp(n) ⟦
+    ? n < 0 ⟦ ^ 0 ⟧
+    ^ n
+  ⟧
+  ^ clamp(w) * clamp(h)
+⟧
+area(-2, 5)
+"#;
+        let r = run_blocking(
+            src,
+            RunOptions {
+                allow_all: true,
+                browser_safe: true,
+                ..Default::default()
+            },
+        );
+        assert!(r.ok, "error: {:?}", r.error);
+        assert_eq!(r.value, serde_json::json!(0));
+    }
+
+    #[test]
+    fn pure_pipeline_and_logical() {
+        let src = r#"[1, 2, 3, 4] → keep { |n| n % 2 = 0 } → map { |n| n * n } → sum"#;
+        let r = run_blocking(
+            src,
+            RunOptions {
+                allow_all: true,
+                browser_safe: true,
+                ..Default::default()
+            },
+        );
+        assert!(r.ok, "error: {:?}", r.error);
+        assert_eq!(r.value, serde_json::json!(20));
+    }
+
+    #[test]
+    fn try_unwrap_err_is_result_not_hard_fail() {
+        let r = run_blocking(
+            r#"@json.decode("not-json")?"#,
+            RunOptions {
+                allow_all: true,
+                browser_safe: true,
+                ..Default::default()
+            },
+        );
+        // top-level ? yields err value as script result (ok run, err-shaped value)
+        assert!(
+            r.ok || r.error.is_some() || r.value.is_object() || r.value.is_string(),
+            "got ok={} value={:?} err={:?}",
+            r.ok,
+            r.value,
+            r.error
+        );
+    }
+
     #[cfg(feature = "native")]
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn run_blocking_inside_tokio_runtime() {

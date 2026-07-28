@@ -224,7 +224,15 @@ impl<'a> Evaluator<'a> {
         let mut last = Value::None;
         if let Some(module) = ir.modules.first() {
             for stmt in &module.statements {
-                last = self.eval_expr(stmt).await?;
+                match self.eval_expr(stmt).await {
+                    // Top-level `^` / postfix `?` on err: script result is the returned value.
+                    Err(EvalError::Return(v)) => {
+                        last = v;
+                        break;
+                    }
+                    Err(e) => return Err(e),
+                    Ok(v) => last = v,
+                }
             }
         }
 
@@ -722,12 +730,15 @@ impl<'a> Evaluator<'a> {
     }
 
     async fn eval_block(&mut self, block: &BlockIr) -> Result<Value, EvalError> {
+        // Nested blocks (if/match bodies, bare blocks) must *propagate* `^` / `return`
+        // as `EvalError::Return` so it can exit the enclosing function. Only
+        // `call_block` (function/closure boundary) converts Return → Ok.
         self.ctx.env.push_frame();
         let mut last = Value::None;
         let result = async {
             for expr in &block.body {
                 match self.eval_expr(expr).await {
-                    Err(EvalError::Return(v)) => return Ok(v),
+                    Err(EvalError::Return(v)) => return Err(EvalError::Return(v)),
                     Err(e) => return Err(e),
                     Ok(v) => last = v,
                 }
@@ -743,7 +754,23 @@ impl<'a> Evaluator<'a> {
         self.ctx.budget.check_depth(self.ctx.call_depth + 1)?;
         self.ctx.call_depth += 1;
         let result = match callee {
-            Value::Function(c) => self.call_block(&c.body, &c.params, args).await,
+            Value::Function(c) => {
+                // Nested / lambda closures capture the env at creation time. Install
+                // that lexical environment for the call so free variables resolve.
+                // Top-level `◆` defs are registered with an empty env and intentionally
+                // use the ambient environment (module bindings defined at runtime).
+                let captured = c.env.read().clone();
+                let use_lexical = captured.depth() > 1
+                    || !captured.bindings_snapshot().is_empty();
+                if use_lexical {
+                    let saved = std::mem::replace(&mut self.ctx.env, captured);
+                    let r = self.call_block(&c.body, &c.params, args).await;
+                    self.ctx.env = saved;
+                    r
+                } else {
+                    self.call_block(&c.body, &c.params, args).await
+                }
+            }
             Value::NativeFunction(_) => Err(EvalError::Message(
                 "native function id call not wired".into(),
             )),

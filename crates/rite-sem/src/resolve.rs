@@ -210,6 +210,13 @@ impl Resolver {
         for p in &block.params {
             self.define(&p.name.name, false, p.span, file);
         }
+        // Nested `◆` / `def` bind in the enclosing block (docs: local helpers).
+        // Pre-declare so later statements and sibling helpers can reference them.
+        for item in &block.body {
+            if let Item::Function(f) = item {
+                self.define(&f.name.name, false, f.name.span, file);
+            }
+        }
         for item in &block.body {
             self.resolve_item(item, file);
         }

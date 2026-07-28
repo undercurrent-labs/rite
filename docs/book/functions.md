@@ -32,8 +32,9 @@ do host.console.println(str(square(4)))
 
 ## Return rules
 
-1. **`^` / `return`** exits the function immediately with a value.
+1. **`^` / `return`** exits the function immediately with a value — including from nested `if` / match / bare blocks.
 2. The **last expression** in a block can also act as the result when you structure bodies that way — explicit `^` is clearer for readers and early exits.
+3. **Multi-value return** (HTTP handlers): juxta expressions after `^` become a list, e.g. `^ 200 ⟨status: #ok⟩` → `[200, ⟨status: #ok⟩]`. Keep status/body on the same return statement; don’t put unrelated following statements on the juxta list.
 
 ```rite
 ◆ abs(n) ⟦
@@ -79,7 +80,7 @@ The `{ |args| body }` form is the small anonymous function used by `map`, `keep`
 
 ## Local helpers
 
-Non-exported helpers are just functions without `pub` (modules) or nested defs:
+Non-exported helpers are just functions without `pub` (modules) or **nested defs** inside a function body. Nested `◆` / `def` bind in the enclosing block and close over outer parameters:
 
 ```rite
 ◆ area(w, h) ⟦
@@ -89,6 +90,46 @@ Non-exported helpers are just functions without `pub` (modules) or nested defs:
   ⟧
   ^ clamp(w) * clamp(h)
 ⟧
+
+! @console.println(str(area(3, 4)))   // 12
+! @console.println(str(area(-1, 4)))  // 0
+```
+
+ASCII:
+
+```rite
+def area(w, h) [[
+  def clamp(n) [[
+    if n < 0 [[
+      return 0
+    ]]
+    return n
+  ]]
+  return clamp(w) * clamp(h)
+]]
+```
+
+You can also **return** a nested function (it keeps its capture):
+
+```rite
+◆ make_adder(n) ⟦
+  ◆ add(x) ⟦ ^ x + n ⟧
+  ^ add
+⟧
+plus3 ← make_adder(3)
+! @console.println(str(plus3(10)))  // 13
+```
+
+## Conditionals (`if` / `?`)
+
+Both dialects use **`:`** between the then-block and else-block. The keyword `else` is **not** a separator (it would be read as a name).
+
+```rite
+// Glyph
+label ← ? x = none ⟦ "empty" ⟧ : ⟦ "full" ⟧
+
+// ASCII — same colon for else
+label <- if x = none [[ "empty" ]] : [[ "full" ]]
 ```
 
 ## Calling

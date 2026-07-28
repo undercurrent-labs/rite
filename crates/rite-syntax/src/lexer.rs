@@ -327,6 +327,9 @@ impl<'a> Lexer<'a> {
             ("⟩", TokenKind::RecordClose),
             ("∈", TokenKind::In),
             ("∉", TokenKind::NotIn),
+            ("∧", TokenKind::And),
+            ("∨", TokenKind::Or),
+            ("¬", TokenKind::Not),
         ];
         for (sigil, kind) in pairs {
             if rest.starts_with(sigil) {
@@ -624,14 +627,27 @@ impl<'a> Lexer<'a> {
     }
 
     fn ident_or_keyword(&mut self, start: usize) -> Token {
-        // Consume Unicode ident
+        // Consume Unicode ident. If the first char is not a valid ident start
+        // (e.g. an unknown multi-byte symbol that matched the high-bit arm),
+        // advance past it as an unexpected character — never emit a zero-width
+        // token, which would infinite-loop the tokenizer.
+        let first = self.peek_char_full();
+        if !is_ident_start(first) {
+            let len = first.len_utf8().max(1);
+            self.pos += len;
+            self.diagnostics.push(simple_error(
+                E002_UNEXPECTED_CHAR,
+                format!("unexpected character {:?}", first),
+                self.file,
+                Span::from_range(start, self.pos),
+                "not valid here",
+            ));
+            return self.make(TokenKind::Error, start, self.pos);
+        }
+        self.pos += first.len_utf8();
         while self.pos < self.bytes.len() {
             let ch = self.peek_char_full();
-            if self.pos == start {
-                if !is_ident_start(ch) {
-                    break;
-                }
-            } else if !is_ident_continue(ch) {
+            if !is_ident_continue(ch) {
                 break;
             }
             self.pos += ch.len_utf8();
@@ -639,11 +655,7 @@ impl<'a> Lexer<'a> {
         let text = &self.src[start..self.pos];
         let kind = keyword_or_ident(text);
         let mut tok = self.make(kind, start, self.pos);
-        if kind == TokenKind::Ident {
-            tok.text = text.to_string();
-        } else {
-            tok.text = text.to_string();
-        }
+        tok.text = text.to_string();
         tok
     }
 

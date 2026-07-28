@@ -413,6 +413,59 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn early_return_from_if_in_repl() {
+        let mut s = ReplSession::new(PermissionSet::allow_all());
+        let r1 = s
+            .eval(
+                r#"◆ abs(n) ⟦
+  ? n < 0 ⟦
+    ^ -n
+  ⟧
+  ^ n
+⟧"#,
+            )
+            .await;
+        assert!(r1.ok, "{:?}", r1.error);
+        let r2 = s.eval("abs(-5)").await;
+        assert!(r2.ok, "{:?}", r2.error);
+        assert_eq!(r2.display.as_deref(), Some("5"));
+        let r3 = s.eval("abs(5)").await;
+        assert!(r3.ok, "{:?}", r3.error);
+        assert_eq!(r3.display.as_deref(), Some("5"));
+    }
+
+    #[tokio::test]
+    async fn nested_local_function_in_repl() {
+        let mut s = ReplSession::new(PermissionSet::allow_all());
+        let r1 = s
+            .eval(
+                r#"◆ area(w, h) ⟦
+  ◆ clamp(n) ⟦
+    ? n < 0 ⟦ ^ 0 ⟧
+    ^ n
+  ⟧
+  ^ clamp(w) * clamp(h)
+⟧"#,
+            )
+            .await;
+        assert!(r1.ok, "{:?}", r1.error);
+        let r2 = s.eval("area(3, 4)").await;
+        assert!(r2.ok, "{:?}", r2.error);
+        assert_eq!(r2.display.as_deref(), Some("12"));
+    }
+
+    #[tokio::test]
+    async fn logical_ops_in_repl() {
+        let mut s = ReplSession::new(PermissionSet::allow_all());
+        let r = s.eval("true and false or not false").await;
+        assert!(r.ok, "{:?}", r.error);
+        assert_eq!(r.display.as_deref(), Some("true"));
+        let r = s.eval("true ∧ false").await;
+        assert!(r.ok, "{:?}", r.error);
+        assert_eq!(r.display.as_deref(), Some("false"));
+    }
+
+    #[tokio::test]
     async fn pipeline_one_liner() {
         let mut s = ReplSession::new(PermissionSet::allow_all());
         let r = s

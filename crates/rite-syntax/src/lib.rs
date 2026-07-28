@@ -145,7 +145,12 @@ fn strip_expr(e: &Expr) -> serde_json::Value {
         }
         Expr::Record(r) => serde_json::json!({
             "record": r.entries.iter().map(|e| {
-                serde_json::json!({"key": format!("{:?}", e.key), "value": strip_expr(&e.value)})
+                let key = match &e.key {
+                    RecordKey::Ident(i) => serde_json::json!({"ident": i.name}),
+                    RecordKey::String(s) => serde_json::json!({"string": s}),
+                    RecordKey::Atom(a) => serde_json::json!({"atom": a.parts}),
+                };
+                serde_json::json!({"key": key, "value": strip_expr(&e.value)})
             }).collect::<Vec<_>>()
         }),
         Expr::Binary(b) => serde_json::json!({

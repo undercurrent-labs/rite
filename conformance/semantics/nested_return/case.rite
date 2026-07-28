@@ -1,0 +1,6 @@
+◆ outer(x) ⟦
+  ◆ inner() ⟦ ^ x * 2 ⟧
+  ^ inner
+⟧
+f ← outer(21)
+f()

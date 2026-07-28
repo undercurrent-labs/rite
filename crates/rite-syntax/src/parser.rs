@@ -646,9 +646,12 @@ impl Parser {
                     span: start.merge(end_tok.span),
                 });
             } else if self.check(TokenKind::If) {
-                // Postfix ? is try-unwrap. The token kind for `?` is If.
-                // Only treat as try when previous expr is complete (not prefix if).
-                // Prefix if is handled in parse_conditional. Here ? after primary = try.
+                // Postfix `?` is try-unwrap. The token kind for `?` is also prefix if.
+                // If this `?` starts a new conditional (`? cond ⟦…⟧` on the next line),
+                // do not attach it as try on the previous expression.
+                if self.looks_like_prefix_if() {
+                    break;
+                }
                 let start = expr.span();
                 self.advance();
                 expr = Expr::Try(TryExpr {
@@ -1320,6 +1323,84 @@ impl Parser {
                 | TokenKind::True
                 | TokenKind::False
         )
+    }
+
+    /// True when the current `?` token starts prefix if (`? cond ⟦…⟧`) rather than
+    /// postfix try (`expr?`). Used so a following-line conditional is not glued onto
+    /// the previous expression (e.g. `[] → last` then `? x = none ⟦…⟧`).
+    fn looks_like_prefix_if(&self) -> bool {
+        if self.peek_kind() != TokenKind::If {
+            return false;
+        }
+        // `expr?` followed by another `? cond ⟦…⟧`: the first `?` is try.
+        if self
+            .tokens
+            .get(self.pos + 1)
+            .map(|t| t.kind == TokenKind::If)
+            .unwrap_or(false)
+        {
+            return false;
+        }
+        let mut i = self.pos + 1;
+        let mut depth_paren = 0i32;
+        let mut depth_bracket = 0i32;
+        let mut depth_brace = 0i32;
+        let mut saw_expr = false;
+        let limit = (self.pos + 48).min(self.tokens.len());
+        while i < limit {
+            let kind = self.tokens[i].kind;
+            let at_top = depth_paren == 0 && depth_bracket == 0 && depth_brace == 0;
+            match kind {
+                TokenKind::Eof => return false,
+                // `? <condition> ⟦` — prefix if
+                TokenKind::BlockOpen | TokenKind::LBrace if at_top && saw_expr => {
+                    return true;
+                }
+                // Next statement is a binding/assign — this `?` was postfix try
+                TokenKind::Bind | TokenKind::BindMut | TokenKind::Assign | TokenKind::Semicolon
+                    if at_top =>
+                {
+                    return false;
+                }
+                // Cannot appear in an if-condition; stop (postfix try or unrelated)
+                TokenKind::Return | TokenKind::Def | TokenKind::Match | TokenKind::Effect
+                    if at_top =>
+                {
+                    return false;
+                }
+                // Closed the enclosing block without seeing if-body
+                TokenKind::BlockClose | TokenKind::RBrace if at_top => {
+                    return false;
+                }
+                TokenKind::LParen => {
+                    depth_paren += 1;
+                    saw_expr = true;
+                }
+                TokenKind::RParen => {
+                    depth_paren = depth_paren.saturating_sub(1);
+                    saw_expr = true;
+                }
+                TokenKind::LBracket => {
+                    depth_bracket += 1;
+                    saw_expr = true;
+                }
+                TokenKind::RBracket => {
+                    depth_bracket = depth_bracket.saturating_sub(1);
+                    saw_expr = true;
+                }
+                TokenKind::RecordOpen => {
+                    depth_brace += 1;
+                    saw_expr = true;
+                }
+                TokenKind::RecordClose => {
+                    depth_brace = depth_brace.saturating_sub(1);
+                    saw_expr = true;
+                }
+                _ => saw_expr = true,
+            }
+            i += 1;
+        }
+        false
     }
 
     fn is_http_method(&self) -> bool {

@@ -1,0 +1,7 @@
+◆ check() ⟦
+  ? (true ∧ false) ∨ (¬ false) ⟦
+    ^ 1
+  ⟧
+  ^ 0
+⟧
+check()
