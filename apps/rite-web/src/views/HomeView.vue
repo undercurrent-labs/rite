@@ -177,7 +177,7 @@ do host.console.println(str(square(12)))`;
         </p>
         <pre
           class="mt-4 overflow-x-auto rounded-lg border border-rite-border bg-rite-bg p-4 font-mono text-sm text-slate-300"
-        >curl -fsSL https://rite.undrc.dev/install | sh
+        >curl -fsSL https://rite.undrc.dev/install | bash
 # → ~/.local/bin/rite  (+ rite-lsp)
 export PATH="$HOME/.local/bin:$PATH"
 rite version</pre>

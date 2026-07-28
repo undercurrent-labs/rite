@@ -183,13 +183,13 @@ jobs:
             ## Install (no clone)
 
             ```bash
-            curl -fsSL https://rite.undrc.dev/install | sh
+            curl -fsSL https://rite.undrc.dev/install | bash
             ```
 
             Pin a version:
 
             ```bash
-            curl -fsSL https://rite.undrc.dev/install | RITE_VERSION=${{ steps.ver.outputs.version }} sh
+            curl -fsSL https://rite.undrc.dev/install | RITE_VERSION=${{ steps.ver.outputs.version }} bash
             ```
 
             Binaries install to `~/.local/bin` by default (`rite` + `rite-lsp`).

@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # Install Rite CLI (and optionally rite-lsp) from GitHub Releases — no clone required.
 #
-# Usage:
-#   curl -fsSL https://rite.undrc.dev/install | sh
-#   curl -fsSL https://rite.undrc.dev/install.sh | sh
+# Usage (requires bash — not dash/sh):
+#   curl -fsSL https://rite.undrc.dev/install | bash
+#   curl -fsSL https://rite.undrc.dev/install.sh | bash
 #
-#   RITE_VERSION=v0.1.0 sh install.sh
-#   RITE_INSTALL_DIR=$HOME/bin INSTALL_LSP=0 sh install.sh
+#   RITE_VERSION=v0.1.0 bash install.sh
+#   RITE_INSTALL_DIR=$HOME/bin INSTALL_LSP=0 bash install.sh
 #
 # Environment:
 #   RITE_VERSION       Tag to install (default: latest release). Example: v0.1.0
@@ -15,6 +15,14 @@
 #   INSTALL_LSP        Install rite-lsp too (default: 1)
 #   RITE_BASE_URL      Override asset base (default: GitHub releases download URL)
 #   RITE_DRY_RUN       If 1, print actions only
+
+# `curl | sh` often runs dash, which breaks [[ and other bashisms.
+if [ -z "${BASH_VERSION:-}" ]; then
+  printf 'error: this installer requires bash (not sh/dash).\n' >&2
+  printf '  curl -fsSL https://rite.undrc.dev/install | bash\n' >&2
+  exit 1
+fi
+
 set -euo pipefail
 
 REPO="${RITE_REPO:-undercurrent-labs/rite}"

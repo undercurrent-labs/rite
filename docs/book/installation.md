@@ -5,13 +5,13 @@ You do **not** need the source tree to use Rite for personal scripts and one-lin
 ## Quick install (recommended)
 
 ```bash
-curl -fsSL https://rite.undrc.dev/install | sh
+curl -fsSL https://rite.undrc.dev/install | bash
 ```
 
 Same script:
 
 ```bash
-curl -fsSL https://rite.undrc.dev/install.sh | sh
+curl -fsSL https://rite.undrc.dev/install.sh | bash
 ```
 
 This will:
@@ -61,7 +61,7 @@ rite run /tmp/hi.rite
 ### Security notes
 
 - Prefer reading the script once:  
-  `curl -fsSL https://rite.undrc.dev/install.sh -o install-rite.sh && less install-rite.sh && sh install-rite.sh`
+  `curl -fsSL https://rite.undrc.dev/install.sh -o install-rite.sh && less install-rite.sh && bash install-rite.sh`
 - Installer **refuses** archives that fail checksum verification
 - Binaries are built by CI from tagged commits (see `.github/workflows/release.yml`)
 

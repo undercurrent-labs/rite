@@ -14,7 +14,7 @@ cp -a "$ROOT/apps/rite-studio/public/wasm/." "$ROOT/apps/rite-web/public/wasm/"
 echo "==> Installer endpoints (/install, /install.sh)"
 mkdir -p "$ROOT/apps/rite-web/public"
 install -m 644 "$ROOT/scripts/install.sh" "$ROOT/apps/rite-web/public/install.sh"
-# curl …/install | sh  (no extension; must be a real asset, not SPA HTML)
+# curl …/install | bash  (no extension; must be a real asset, not SPA HTML)
 install -m 644 "$ROOT/scripts/install.sh" "$ROOT/apps/rite-web/public/install"
 
 echo "==> Install JS deps (if needed)"

@@ -11,7 +11,7 @@ Status and architecture notes: [`IMPLEMENTATION.md`](IMPLEMENTATION.md). Languag
 ### Install CLI (no clone)
 
 ```bash
-curl -fsSL https://rite.undrc.dev/install | sh
+curl -fsSL https://rite.undrc.dev/install | bash
 export PATH="$HOME/.local/bin:$PATH"
 rite version
 ```
