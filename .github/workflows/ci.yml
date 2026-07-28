@@ -75,9 +75,10 @@ jobs:
     needs: [wasm]
     steps:
       - uses: actions/checkout@v4
+      # Must match package.json "packageManager": "pnpm@9.0.0" exactly
       - uses: pnpm/action-setup@v4
         with:
-          version: 9
+          version: 9.0.0
       - uses: actions/setup-node@v4
         with:
           node-version: 20
@@ -86,16 +87,27 @@ jobs:
         with:
           name: rite-wasm
           path: apps/rite-studio/public/wasm
-      - name: install & build
-        working-directory: apps/rite-studio
+      - name: install & build product site
         run: |
           pnpm install
-          pnpm build
+          # studio SPA is pulled into rite-web; build both
+          pnpm --dir apps/rite-studio build
+          # seed install endpoints + wasm for web
+          mkdir -p apps/rite-web/public/wasm
+          cp -a apps/rite-studio/public/wasm/. apps/rite-web/public/wasm/ || true
+          install -m 644 scripts/install.sh apps/rite-web/public/install.sh
+          install -m 644 scripts/install.sh apps/rite-web/public/install
+          pnpm --dir apps/rite-web build
       - name: upload studio dist
         uses: actions/upload-artifact@v4
         with:
           name: rite-studio-dist
           path: apps/rite-studio/dist
+      - name: upload web dist
+        uses: actions/upload-artifact@v4
+        with:
+          name: rite-web-dist
+          path: apps/rite-web/dist
 
   vscode:
     name: VS Code extension
