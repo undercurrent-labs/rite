@@ -29,8 +29,9 @@ CYAN=$'\033[0;36m'
 DIM=$'\033[2m'
 RESET=$'\033[0m'
 
-info()  { printf '%s==>%s %s\n' "$CYAN" "$RESET" "$*"; }
-ok()    { printf '%sOK%s  %s\n' "$GREEN" "$RESET" "$*"; }
+# Status lines MUST go to stderr — resolve_version/detect_target are captured via $()
+info()  { printf '%s==>%s %s\n' "$CYAN" "$RESET" "$*" >&2; }
+ok()    { printf '%sOK%s  %s\n' "$GREEN" "$RESET" "$*" >&2; }
 die()   { printf '%serror:%s %s\n' "$RED" "$RESET" "$*" >&2; exit 1; }
 need()  { command -v "$1" >/dev/null 2>&1 || die "missing required command: $1"; }
 
@@ -80,8 +81,15 @@ resolve_version() {
   json="$(curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest")" || \
     die "could not query GitHub API (network, rate limit, or no releases yet)"
 
-  tag="$(printf '%s' "$json" | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)"
-  [[ -n "$tag" ]] || die "no GitHub Releases found for ${REPO}. Tag a release (e.g. v0.1.0) or set RITE_VERSION=…"
+  # Prefer jq when present; otherwise take the first top-level tag_name only.
+  if command -v jq >/dev/null 2>&1; then
+    tag="$(printf '%s' "$json" | jq -r '.tag_name // empty')"
+  else
+    tag="$(printf '%s' "$json" | tr ',' '\n' | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)"
+  fi
+  tag="$(printf '%s' "$tag" | tr -d '\r\n' | head -c 64)"
+  [[ -n "$tag" && "$tag" != "null" ]] || die "no GitHub Releases found for ${REPO}. Tag a release (e.g. v0.1.0) or set RITE_VERSION=…"
+  # Only the tag on stdout (captured by caller)
   printf '%s\n' "$tag"
 }
 
@@ -99,26 +107,32 @@ main() {
   local target version asset base url sums_url tmp dir expected actual bin
   target="$(detect_target)"
   version="$(resolve_version)"
+  # Guard against accidental whitespace/newlines in captured values
+  target="$(printf '%s' "$target" | tr -d '[:space:]')"
+  version="$(printf '%s' "$version" | tr -d '[:space:]')"
   asset="rite-${target}.tar.gz"
   base="${RITE_BASE_URL:-https://github.com/${REPO}/releases/download/${version}}"
   url="${base}/${asset}"
   sums_url="${base}/SHA256SUMS"
 
   info "Rite install"
-  printf '    repo:     %s\n' "$REPO"
-  printf '    version:  %s\n' "$version"
-  printf '    target:   %s\n' "$target"
-  printf '    asset:    %s\n' "$asset"
-  printf '    dest:     %s\n' "$INSTALL_DIR"
-  printf '    lsp:      %s\n' "$INSTALL_LSP"
+  printf '    repo:     %s\n' "$REPO" >&2
+  printf '    version:  %s\n' "$version" >&2
+  printf '    target:   %s\n' "$target" >&2
+  printf '    asset:    %s\n' "$asset" >&2
+  printf '    dest:     %s\n' "$INSTALL_DIR" >&2
+  printf '    lsp:      %s\n' "$INSTALL_LSP" >&2
+  printf '    url:      %s\n' "$url" >&2
 
   if [[ "$DRY_RUN" == "1" ]]; then
     info "dry run — would download: $url"
     exit 0
   fi
 
-  tmp="$(mktemp -d "${TMPDIR:-/tmp}/rite-install.XXXXXX")"
-  trap 'rm -rf "$tmp"' EXIT
+  # Not `local`: EXIT trap must still see this path under `set -u`
+  RITE_INSTALL_TMP="$(mktemp -d "${TMPDIR:-/tmp}/rite-install.XXXXXX")"
+  tmp="$RITE_INSTALL_TMP"
+  trap 'rm -rf "${RITE_INSTALL_TMP:-}"' EXIT
 
   info "downloading ${asset}…"
   if ! curl -fsSL "$url" -o "${tmp}/${asset}"; then
