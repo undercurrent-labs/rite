@@ -94,11 +94,7 @@ fn package_vsix_clean() {
 
     assert!(out.is_file(), "vsix missing at {}", out.display());
     let meta = std::fs::metadata(&out).unwrap();
-    assert!(
-        meta.len() > 1000,
-        "vsix too small: {} bytes",
-        meta.len()
-    );
+    assert!(meta.len() > 1000, "vsix too small: {} bytes", meta.len());
 }
 
 #[test]
