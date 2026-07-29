@@ -5,6 +5,13 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
+echo "======== rustfmt (same as CI Rust job) ========"
+if command -v cargo >/dev/null 2>&1; then
+  cargo fmt --all -- --check
+else
+  echo "skip cargo fmt (cargo not on PATH)"
+fi
+
 echo "======== package-skill (relative OUT — CI path) ========"
 # Relative path is the bug class that broke Release; must stay relative here.
 rm -rf dist/skill-check
