@@ -1,11 +1,19 @@
 <script setup lang="ts">
 import { onMounted, ref } from "vue";
 
-const skillTar = "/skill/rite-agent-skill.tar.gz";
-const skillZip = "/skill/rite-agent-skill.zip";
-const vsix = "/vscode/rite.vsix";
+/** Site static files (must be real assets in dist — not SPA HTML). */
+const skillTarSite = "/skill/rite-agent-skill.tar.gz";
+const skillZipSite = "/skill/rite-agent-skill.zip";
+const vsixSite = "/vscode/rite.vsix";
+/** GitHub Releases latest/download — reliable binary downloads. */
+const skillTarGh =
+  "https://github.com/undercurrent-labs/rite/releases/latest/download/rite-agent-skill.tar.gz";
+const skillZipGh =
+  "https://github.com/undercurrent-labs/rite/releases/latest/download/rite-agent-skill.zip";
+const vsixGh =
+  "https://github.com/undercurrent-labs/rite/releases/latest/download/rite.vsix";
 const installCli = "curl -fsSL https://rite.undrc.dev/install | bash";
-const latestTag = ref("v0.1.8");
+const latestTag = ref("v0.1.9");
 
 onMounted(async () => {
   try {
@@ -69,18 +77,40 @@ rite update</pre>
     <!-- Downloads -->
     <section class="mt-10">
       <h2 class="text-xl font-semibold text-white">Direct downloads</h2>
+      <p class="mt-2 text-sm text-slate-500">
+        Prefer GitHub for large binaries. Site mirrors under
+        <code class="text-slate-400">/skill/</code> after deploy.
+      </p>
       <ul class="mt-4 space-y-3 text-slate-300">
         <li>
-          <a :href="skillTar" class="text-rite-accent hover:underline">rite-agent-skill.tar.gz</a>
-          <span class="text-slate-500"> — skill bundle for agents</span>
+          <a :href="skillTarGh" class="text-rite-accent hover:underline" target="_blank" rel="noopener"
+            >rite-agent-skill.tar.gz</a
+          >
+          <span class="text-slate-500"> (GitHub)</span>
+          ·
+          <a :href="skillTarSite" class="text-slate-400 hover:text-rite-accent hover:underline"
+            >site mirror</a
+          >
         </li>
         <li>
-          <a :href="skillZip" class="text-rite-accent hover:underline">rite-agent-skill.zip</a>
-          <span class="text-slate-500"> — same bundle as zip</span>
+          <a :href="skillZipGh" class="text-rite-accent hover:underline" target="_blank" rel="noopener"
+            >rite-agent-skill.zip</a
+          >
+          <span class="text-slate-500"> (GitHub)</span>
+          ·
+          <a :href="skillZipSite" class="text-slate-400 hover:text-rite-accent hover:underline"
+            >site mirror</a
+          >
         </li>
         <li>
-          <a :href="vsix" class="text-rite-accent hover:underline">rite.vsix</a>
-          <span class="text-slate-500"> — VS Code / Cursor extension (when published)</span>
+          <a :href="vsixGh" class="text-rite-accent hover:underline" target="_blank" rel="noopener"
+            >rite.vsix</a
+          >
+          <span class="text-slate-500"> (GitHub)</span>
+          ·
+          <a :href="vsixSite" class="text-slate-400 hover:text-rite-accent hover:underline"
+            >site mirror</a
+          >
         </li>
         <li>
           <a
@@ -88,9 +118,8 @@ rite update</pre>
             class="text-rite-accent hover:underline"
             target="_blank"
             rel="noopener"
-            >GitHub Releases</a
+            >All GitHub Releases assets</a
           >
-          <span class="text-slate-500"> — platform binaries, checksums, skill, vsix</span>
         </li>
       </ul>
     </section>
@@ -114,15 +143,17 @@ rite update</pre>
     <!-- Manual agent install -->
     <section class="mt-12">
       <h2 class="text-xl font-semibold text-white">Manual skill install (no CLI yet)</h2>
-      <pre class="mt-3 overflow-x-auto rounded-lg bg-black/40 p-4 font-mono text-sm text-slate-300">curl -fsSL https://rite.undrc.dev/skill/rite-agent-skill.tar.gz -o skill.tgz
+      <pre class="mt-3 overflow-x-auto rounded-lg bg-black/40 p-4 font-mono text-sm text-slate-300"># GitHub (recommended)
+curl -fsSL -o skill.tgz \
+  https://github.com/undercurrent-labs/rite/releases/latest/download/rite-agent-skill.tar.gz
+# or site mirror: https://rite.undrc.dev/skill/rite-agent-skill.tar.gz
+
 mkdir -p ~/.grok/skills
 tar -xzf skill.tgz -C ~/.grok/skills
 # → ~/.grok/skills/rite/SKILL.md
 
-# Claude Code
+# Claude / Cursor
 mkdir -p ~/.claude/skills &amp;&amp; tar -xzf skill.tgz -C ~/.claude/skills
-
-# Cursor
 mkdir -p ~/.cursor/skills &amp;&amp; tar -xzf skill.tgz -C ~/.cursor/skills</pre>
     </section>
 

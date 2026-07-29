@@ -12,3 +12,24 @@
 
 /wasm/*
   Cache-Control: public, max-age=3600, must-revalidate
+
+# Agent skill bundles (must not fall through as text/html SPA)
+/skill/*
+  Cache-Control: public, max-age=300, must-revalidate
+  X-Content-Type-Options: nosniff
+
+/skill/*.zip
+  Content-Type: application/zip
+  Content-Disposition: attachment
+
+/skill/*.tar.gz
+  Content-Type: application/gzip
+  Content-Disposition: attachment
+
+/vscode/*
+  Cache-Control: public, max-age=300, must-revalidate
+  X-Content-Type-Options: nosniff
+
+/vscode/*.vsix
+  Content-Type: application/octet-stream
+  Content-Disposition: attachment

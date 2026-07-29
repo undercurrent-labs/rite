@@ -132,6 +132,33 @@ fn package_skill_script_resolves_absolute_out() {
     );
 }
 
+#[test]
+fn site_public_skill_assets_exist_after_package() {
+    // Mirrors the site build step: package into apps/rite-web/public/skill
+    // so Cloudflare serves real files instead of SPA index.html.
+    let root = workspace();
+    let out = root.join("apps/rite-web/public/skill");
+    run_ok(
+        Command::new("bash")
+            .arg("scripts/package-skill.sh")
+            .arg("apps/rite-web/public/skill")
+            .current_dir(&root),
+    );
+    let zip = out.join("rite-agent-skill.zip");
+    let tar = out.join("rite-agent-skill.tar.gz");
+    assert!(zip.is_file(), "missing {}", zip.display());
+    assert!(tar.is_file(), "missing {}", tar.display());
+    // Zip must not be HTML (SPA mistake)
+    let head: Vec<u8> = std::fs::read(&zip).unwrap().into_iter().take(32).collect();
+    let head_str = String::from_utf8_lossy(&head);
+    assert!(
+        !head_str.contains("<!DOCTYPE") && !head_str.contains("<html"),
+        "skill zip looks like HTML"
+    );
+    // ZIP local file header magic PK\x03\x04
+    assert_eq!(&head[0..2], b"PK", "skill zip missing PK magic");
+}
+
 fn _ensure_path(p: &Path) {
     let _ = p;
 }

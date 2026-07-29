@@ -51,5 +51,18 @@ if [[ ! -f "$ROOT/apps/rite-web/dist/wasm/rite_wasm_bg.wasm" ]]; then
   cp -a "$ROOT/apps/rite-web/public/wasm/." "$ROOT/apps/rite-web/dist/wasm/"
 fi
 
+# Hard fail if skill packages missing from dist (SPA would otherwise serve HTML for /skill/*)
+if [[ ! -f "$ROOT/apps/rite-web/dist/skill/rite-agent-skill.tar.gz" ]] \
+   || [[ ! -f "$ROOT/apps/rite-web/dist/skill/rite-agent-skill.zip" ]]; then
+  echo "error: skill packages missing from dist — /skill/* would 200 HTML on Cloudflare" >&2
+  ls -laR "$ROOT/apps/rite-web/public/skill" "$ROOT/apps/rite-web/dist/skill" 2>/dev/null || true
+  exit 1
+fi
+if grep -q '<!DOCTYPE html' "$ROOT/apps/rite-web/dist/skill/rite-agent-skill.zip" 2>/dev/null; then
+  echo "error: skill zip looks like HTML" >&2
+  exit 1
+fi
+
 echo "==> Site ready at apps/rite-web/dist"
 ls -la "$ROOT/apps/rite-web/dist" | head -20
+ls -la "$ROOT/apps/rite-web/dist/skill/"

@@ -113,12 +113,13 @@ pub fn archive_name_for_host() -> anyhow::Result<String> {
     }
 }
 
-/// Prefer GitHub release asset; fall back to site URL.
+/// Prefer GitHub release asset; fall back to latest/download + site URLs.
 pub fn skill_download_candidates(release: Option<&Release>) -> Vec<(String, String)> {
     let mut out = Vec::new();
     if let Some(r) = release {
         for name in [
             "rite-agent-skill.tar.gz",
+            "rite-agent-skill.zip",
             "rite-skill.tar.gz",
             "skill.tar.gz",
         ] {
@@ -127,7 +128,15 @@ pub fn skill_download_candidates(release: Option<&Release>) -> Vec<(String, Stri
             }
         }
     }
-    // Site static endpoints (built into product site)
+    // Stable GitHub "latest" asset URLs (work even without API asset listing)
+    let repo = config::default_repo();
+    for name in ["rite-agent-skill.tar.gz", "rite-agent-skill.zip"] {
+        out.push((
+            name.into(),
+            format!("https://github.com/{repo}/releases/latest/download/{name}"),
+        ));
+    }
+    // Site static endpoints (must be real files in dist, not SPA HTML)
     let base = config::site_base();
     out.push((
         "rite-agent-skill.tar.gz".into(),

@@ -93,6 +93,7 @@ jobs:
           path: apps/rite-studio/public/wasm
       - name: install & build product site
         run: |
+          set -euo pipefail
           pnpm install
           # studio SPA is pulled into rite-web; build both
           pnpm --dir apps/rite-studio build
@@ -101,7 +102,17 @@ jobs:
           cp -a apps/rite-studio/public/wasm/. apps/rite-web/public/wasm/ || true
           install -m 644 scripts/install.sh apps/rite-web/public/install.sh
           install -m 644 scripts/install.sh apps/rite-web/public/install
+          # Agent skill archives must be real static files (not SPA HTML fallback)
+          bash scripts/package-skill.sh apps/rite-web/public/skill
+          # Optional VSIX if vscode job artifact present later; placeholder ok
+          mkdir -p apps/rite-web/public/vscode
           pnpm --dir apps/rite-web build
+          # Fail deploy if skill packages never made it into dist
+          test -f apps/rite-web/dist/skill/rite-agent-skill.tar.gz
+          test -f apps/rite-web/dist/skill/rite-agent-skill.zip
+          test -f apps/rite-web/dist/install.sh || test -f apps/rite-web/dist/install
+          file apps/rite-web/dist/skill/rite-agent-skill.zip
+          ls -la apps/rite-web/dist/skill/
       - name: upload studio dist
         uses: actions/upload-artifact@v5
         with:
@@ -166,9 +177,16 @@ jobs:
           path: apps/rite-web/dist
       - name: Verify dist
         run: |
+          set -euo pipefail
           test -f apps/rite-web/dist/index.html
           test -f apps/rite-web/dist/install.sh || test -f apps/rite-web/dist/install
-          ls -la apps/rite-web/dist | head -20
+          test -f apps/rite-web/dist/skill/rite-agent-skill.tar.gz
+          test -f apps/rite-web/dist/skill/rite-agent-skill.zip
+          # Must be zip/gzip, not SPA HTML mistaken for a download
+          file apps/rite-web/dist/skill/rite-agent-skill.zip | grep -qiE 'zip|archive'
+          ! grep -q '<!DOCTYPE html' apps/rite-web/dist/skill/rite-agent-skill.zip
+          ls -la apps/rite-web/dist/skill/
+          ls -la apps/rite-web/dist | head -25
       - name: Deploy Worker (rite-studio)
         uses: cloudflare/wrangler-action@v3
         with:
