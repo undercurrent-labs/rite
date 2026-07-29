@@ -1,6 +1,6 @@
-# Files and JSON
+# Files, JSON, and CSV
 
-Most automation scripts read files, parse JSON, transform records, and write outputs. Rite’s `@fs` and `@json` capabilities cover that path.
+Most automation scripts read files, parse structured data, transform records, and write outputs. Rite’s `@fs`, `@json`, and `@csv` capabilities cover that path.
 
 ## JSON encode / decode
 
@@ -73,6 +73,46 @@ report ← ⟨total: total, count: items → count⟩
 ```
 
 Keep steps 3 pure when you can — easier to test in Studio without FS.
+
+## CSV encode / decode
+
+```rite
+rows ← [
+  ⟨name: "Ada", age: "36"⟩,
+  ⟨name: "Bob", age: "42"⟩
+]
+text ← @csv.encode(rows)
+! @console.println(text)
+
+decoded ← @csv.decode(text)?
+! @console.println(decoded)
+```
+
+| Call | Meaning |
+|------|---------|
+| `@csv.decode(text, opts?)` | Parse CSV → `ok(list<record>)` / `err(...)` |
+| `@csv.encode(rows, opts?)` | Serialize list of records (or list of lists) → string |
+| `@csv.read(path, opts?)` | Read file + decode (needs `fs:read`) |
+| `@csv.write(path, rows, opts?)` | Encode + write file (needs `fs:write`) |
+
+**Options** (optional record, all default-friendly):
+
+| Field | Default | Notes |
+|-------|---------|-------|
+| `headers` | `true` | First row is column names when decoding; write a header row when encoding records |
+| `delimiter` | `","` | Single-character field separator |
+| `skip_empty` | `true` | Drop blank lines on decode |
+
+With `headers: true` (default), each row is a **record** of string fields. With `headers: false`, each row is a **list** of string cells. Values are strings by default for safe round-trips.
+
+```rite
+// TSV
+rows ← @csv.decode(text, ⟨delimiter: "\t"⟩)?
+```
+
+```bash
+rite run examples/csv/main.rite --allow-all
+```
 
 ## Paths and safety
 

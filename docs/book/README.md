@@ -18,14 +18,15 @@ This book is a linear path. You can stop after any chapter and experiment in [St
 10. [Results and errors](results.md) — `ok` / `err`, `?`, match
 11. [**Sugar pack**](sugar.md) — ranges, for/while, say, compose, op-assign, …
 12. [Effects and capabilities](effects.md) — `!` / `do`, permissions
-13. [Files and JSON](files-json.md) — `@fs`, `@json`
-14. [HTTP services](http.md) — `@http.listen`, routes, middleware
-15. [Modules](modules.md) — `use`, `pub`, cycles
-16. [Compiling to Rust](compiling.md) — `rite build`, IR, parity
-17. [Text RPG](rpg.md) — `@game` tutorial
-18. [Embedding](embedding.md) — `RiteEngine` from Rust
-19. [Browser & Studio](browser.md) — hosted site, WASM limits
-20. [Testing (contributors)](testing.md) — suite map, HTTP I/O capture, PR checklist
+13. [Files, JSON, and CSV](files-json.md) — `@fs`, `@json`, `@csv`
+14. [Databases](db.md) — `@db` (DuckDB), SQL, transactions
+15. [HTTP services](http.md) — `@http.listen`, routes, middleware
+16. [Modules](modules.md) — `use`, `pub`, relative paths, aliases
+17. [Compiling to Rust](compiling.md) — `rite build`, IR, parity
+18. [Text RPG](rpg.md) — `@game` tutorial
+19. [Embedding](embedding.md) — `RiteEngine` from Rust
+20. [Browser & Studio](browser.md) — hosted site, WASM limits
+21. [Testing (contributors)](testing.md) — suite map, HTTP I/O capture, PR checklist
 
 ## Glyph ↔ ASCII at a glance
 

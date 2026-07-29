@@ -121,6 +121,9 @@ Use that URL with `curl`. Prefer a fixed port while learning.
 |------|-------|--------|
 | `use @http.log` | `⊏ @http.log` | Access log on **stderr**: `rite: GET /path 200 3ms` |
 | `use @http.recover` | `⊏ @http.recover` | Handler errors/panics → JSON `500` instead of raw failure |
+| `use { \|req, next\| … }` | `⊏ { \|req, next\| … }` | Custom middleware: call `next(req)` to continue, or return a response to short-circuit |
+
+Declaration order is **outer-first** (first `use` runs first). Built-ins and custom closures share the same chain.
 
 Handler `! @console.println(...)` writes to the **server process stdout** (flushed after each request). That is separate from the access log on stderr.
 
@@ -141,31 +144,46 @@ rite run examples/07-http-service/main.rite --allow-all
 
 (That example uses port `0` — watch the `listening on` line.)
 
-### Request value (`|req|`)
+### Custom middleware (HTTP auth)
 
-| Field | Meaning |
-|-------|---------|
-| `req.path` | Path parameters (`:word` → `req.path.word`) |
-| `req.query` | Query string as a record |
-| `req.json` | Parsed JSON body as a **result** (unwrap with `?`) |
-| `req.uri` | Path string |
-| `req.method` | `"GET"`, `"POST"`, … |
-
-### Middleware
+Closures receive the request and a **`next`** callable. Call `next(req)` to run the rest of the chain (more middleware + the route). Return a status/body **without** calling `next` to short-circuit (typical for auth failures).
 
 ```rite
 @http.listen "127.0.0.1:4040" ⟦
   use @http.log
   use @http.recover
 
-  GET "/health" ⟦
-    ^ 200 ⟨status: #ok⟩
-  ⟧
+  use { |req, next|
+    token ← req.headers.authorization ?? ""
+    ? token = "Bearer secret" ⟦
+      next(req)
+    ⟧ else ⟦
+      ^ 401 ⟨error: #unauthorized⟩
+    ⟧
+  }
+
+  GET "/health" ⟦ ^ 200 ⟨status: #ok⟩ ⟧
+  GET "/secret" ⟦ ^ 200 ⟨ok: true⟩ ⟧
 ⟧
 ```
 
-- **`@http.log`** — request logging  
-- **`@http.recover`** — turn panics into safer error responses  
+```bash
+rite run examples/08-middleware/main.rite --allow-all
+# curl without token → 401; with -H 'Authorization: Bearer secret' → 200
+```
+
+Header names on `req.headers` are **lowercase** (`authorization`, `content-type`, …).
+
+### Request value (`|req|`)
+
+| Field | Meaning |
+|-------|---------|
+| `req.path` | Path parameters (`:word` → `req.path.word`) |
+| `req.query` | Query string as a record |
+| `req.headers` | Request headers as a record (lowercase names → string) |
+| `req.json` | Parsed JSON body as a **result** (unwrap with `?`) |
+| `req.uri` | Path string |
+| `req.method` | `"GET"`, `"POST"`, … |
 
 ## Permissions
 

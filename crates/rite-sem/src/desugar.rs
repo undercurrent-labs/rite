@@ -10,13 +10,24 @@ struct Desugar {
     next_local: u32,
     functions: Vec<FunctionIr>,
     func_map: HashMap<String, FuncId>,
+    /// Import aliases: `use math as m` → `"m"` so `m.square` → `m__square`.
+    import_aliases: HashMap<String, String>,
 }
 
 pub fn desugar_program(resolved: &ResolvedProgram) -> ProgramIr {
+    let mut import_aliases = HashMap::new();
+    for item in &resolved.ast.items {
+        if let Item::Import(i) = item {
+            if let Some(alias) = &i.alias {
+                import_aliases.insert(alias.name.clone(), alias.name.clone());
+            }
+        }
+    }
     let mut d = Desugar {
         next_local: 0,
         functions: Vec::new(),
         func_map: HashMap::new(),
+        import_aliases,
     };
     // Pre-register functions
     for item in &resolved.ast.items {
@@ -537,6 +548,13 @@ impl Desugar {
                         field: m.field.name.clone(),
                         span: m.span,
                     };
+                }
+                // `use math as m` → `m.square` rewrites to global `m__square`
+                if let Expr::Ident(obj) = m.object.as_ref() {
+                    if self.import_aliases.contains_key(&obj.name) {
+                        let mangled = format!("{}__{}", obj.name, m.field.name);
+                        return ExprIr::Global(mangled);
+                    }
                 }
                 ExprIr::Member {
                     object: Box::new(self.desugar_expr(&m.object)),

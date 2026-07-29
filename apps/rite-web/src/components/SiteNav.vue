@@ -39,11 +39,13 @@ const barClass = computed(() =>
         to="/"
         class="group flex items-center gap-2 font-semibold tracking-wide text-rite-accent shrink-0"
       >
-        <span
-          class="inline-flex h-7 w-7 items-center justify-center rounded-md border border-rite-accent/30 bg-rite-panel text-sm group-hover:border-rite-accent/60"
-          aria-hidden="true"
-          >◆</span
-        >
+        <img
+          src="/brand/logo.png"
+          alt=""
+          width="28"
+          height="28"
+          class="h-7 w-7 rounded-md border border-rite-accent/30 bg-rite-panel object-cover group-hover:border-rite-accent/60"
+        />
         <span class="text-slate-100 group-hover:text-white">Rite</span>
       </RouterLink>
 

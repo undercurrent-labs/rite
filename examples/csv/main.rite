@@ -1,0 +1,14 @@
+//! CSV encode / decode demo
+
+rows ← [
+  ⟨name: "Ada", role: "analyst"⟩,
+  ⟨name: "Bob", role: "ops"⟩
+]
+
+text ← @csv.encode(rows)
+! @console.println(text)
+
+decoded ← @csv.decode(text)?
+count ← decoded → count
+! @console.println("rows=" + str(count))
+! @console.println(decoded)

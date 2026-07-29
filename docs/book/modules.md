@@ -49,8 +49,47 @@ The runtime resolves `use math` to `math.rite` next to the entry file (and confi
 ## Import rules
 
 1. **`use name`** loads the module and brings **public** exports into scope.  
-2. **Circular imports** are errors (`E024`) and include the import chain in diagnostics.  
-3. Prefer **acyclic** graphs: leaves = pure helpers, root = main/server.  
+2. **`use path as alias`** — call exports as `alias.name(...)` (e.g. `use math as m` → `m.square(12)`).  
+3. **`use ./rel` / `use ../pkg/mod`** — path relative to the **importing file**.  
+4. **`pub use name`** — re-export that module’s public names from this file (facades).  
+5. **Circular imports** are errors (`E024`) and include the import chain in diagnostics.  
+6. Prefer **acyclic** graphs: leaves = pure helpers, root = main/server.
+
+### Relative imports
+
+```text
+app/
+  main.rite
+  lib/
+    helpers.rite
+```
+
+```rite
+// app/main.rite
+use ./lib/helpers
+
+! @console.println(str(triple(5)))
+```
+
+Resolves to `lib/helpers.rite` (or `lib/helpers/mod.rite`) next to the importer.
+
+### Aliases
+
+```rite
+use math as m
+! @console.println(str(m.square(12)))
+```
+
+### Re-exports
+
+```rite
+// facade.rite
+pub use math
+
+// main.rite
+use facade
+! @console.println(str(square(3)))
+```
 
 ## What to export
 

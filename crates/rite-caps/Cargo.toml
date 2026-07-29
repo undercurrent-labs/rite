@@ -32,6 +32,17 @@ ctrlc = { workspace = true }
 hyper = { workspace = true }
 hyper-util = { version = "0.1", features = ["tokio"] }
 http-body-util = { workspace = true }
+csv = "1"
+
+[features]
+default = ["duckdb"]
+# Native DuckDB host for @db (off on wasm / when linking is undesirable).
+duckdb = ["dep:duckdb"]
+
+[dependencies.duckdb]
+version = "1.10505.0"
+optional = true
+features = ["bundled"]
 
 [dev-dependencies]
 tempfile = { workspace = true }

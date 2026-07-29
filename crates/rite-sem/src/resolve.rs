@@ -203,6 +203,12 @@ impl Resolver {
                     },
                 );
             }
+            // `use mod as m` — bind alias name so `m.fn` resolves (desugar rewrites to m__fn)
+            if let Item::Import(imp) = item {
+                if let Some(alias) = &imp.alias {
+                    self.define(&alias.name, false, alias.span, program.file);
+                }
+            }
         }
         // Second pass: walk for effect checks and undefined names
         for item in &program.items {

@@ -5,6 +5,9 @@ const labs = "https://undrc.dev";
 
 <template>
   <footer class="border-t border-rite-border py-8 text-center text-sm text-slate-500">
+    <p class="mb-3 flex justify-center">
+      <img src="/brand/logo.png" alt="Rite" width="40" height="40" class="h-10 w-10 rounded-lg opacity-90" />
+    </p>
     <p>
       Rite ·
       <RouterLink to="/docs" class="hover:text-slate-300">Docs</RouterLink>

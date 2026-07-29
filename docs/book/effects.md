@@ -35,6 +35,7 @@ Some contexts bind host results in expressions (`text ← @fs.read(path)?`). The
 | **net** / HTTP | denied |
 | **env** | denied |
 | **process** | denied |
+| **db** (DuckDB) | denied |
 
 So hello-world console scripts run without flags; reading files does not.
 
@@ -53,8 +54,13 @@ rite run app.rite \
   --allow fs:read=./data \
   --allow fs:write=./output \
   --allow net=api.example.com \
-  --allow env=APP_MODE
+  --allow env=APP_MODE \
+  --allow db \
+  --allow db=./data
 ```
+
+- `--allow db` — in-memory DuckDB only  
+- `--allow db=./data` — file-backed DBs under that path prefix
 
 Patterns are path/host oriented — tighten to the minimum your script needs.
 
@@ -73,6 +79,8 @@ Lists registered host modules and related metadata.
 | `@console` | print, println, warn, error, inspect |
 | `@fs` | read, write, list, … (permissioned paths) |
 | `@json` | encode, decode |
+| `@csv` | encode, decode, read, write |
+| `@db` | DuckDB open/query/exec/prepare/transactions (native) |
 | `@clock` | now, sleep, parse, … |
 | `@random` | seed, int, … |
 | `@env` | get/set environment (permissioned) |

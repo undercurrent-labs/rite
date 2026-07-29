@@ -1,0 +1,5 @@
+//! Nested helper module
+
+pub ◆ triple(value) ⟦
+  ^ value * 3
+⟧

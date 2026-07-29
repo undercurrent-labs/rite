@@ -8,11 +8,15 @@ use axum::response::{IntoResponse, Response};
 use axum::Json;
 use indexmap::IndexMap;
 use parking_lot::Mutex;
-use rite_runtime::{EvalError, Evaluator, FunctionEntry, Key, RuntimeContext, Value};
+use rite_runtime::{
+    set_http_next_invoker, EvalError, Evaluator, FunctionEntry, HostHandle, HttpMiddleware, Key,
+    RuntimeContext, Value,
+};
 use rite_sem::BlockIr;
 use serde_json::json;
 use std::collections::HashMap;
 use std::convert::Infallible;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use tokio::sync::{oneshot, Mutex as AsyncMutex};
 
@@ -33,8 +37,8 @@ pub struct ServerState {
     pub routes: Vec<RiteRoute>,
     pub functions: HashMap<String, FunctionEntry>,
     pub perms: PermissionSet,
-    /// Middleware short names from `use @http.log` / `⊏ @http.recover` → `["log","recover"]`.
-    pub middleware: Vec<String>,
+    /// Middleware from `use @http.log` / `use { |req, next| … }`.
+    pub middleware: Vec<HttpMiddleware>,
     pub lock: Arc<AsyncMutex<()>>,
 }
 
@@ -282,6 +286,7 @@ async fn dispatch_rite(state: ServerState, idx: usize, req: Request<Body>) -> Re
     let method = req.method().clone();
     let uri = req.uri().clone();
     let path = uri.path().to_string();
+    let headers = req.headers().clone();
     let query: HashMap<String, String> = uri
         .query()
         .map(|q| {
@@ -309,11 +314,22 @@ async fn dispatch_rite(state: ServerState, idx: usize, req: Request<Body>) -> Re
     for (k, v) in &query {
         query_rec.insert(Key::String(k.clone()), Value::string(v.clone()));
     }
+    let mut headers_rec = IndexMap::new();
+    for (name, value) in headers.iter() {
+        let key = name.as_str().to_ascii_lowercase();
+        if let Ok(v) = value.to_str() {
+            // First value wins for multi-value headers (good enough for auth).
+            headers_rec
+                .entry(Key::String(key))
+                .or_insert_with(|| Value::string(v));
+        }
+    }
 
     let req_value = Value::record(vec![
         (Key::String("method".into()), Value::string(method.as_str())),
         (Key::String("path".into()), Value::Record(path_rec)),
         (Key::String("query".into()), Value::Record(query_rec)),
+        (Key::String("headers".into()), Value::Record(headers_rec)),
         (Key::String("uri".into()), Value::string(path.clone())),
         (
             Key::String("text".into()),
@@ -332,8 +348,22 @@ async fn dispatch_rite(state: ServerState, idx: usize, req: Request<Body>) -> Re
         ),
     ]);
 
-    let use_log = state.middleware.iter().any(|m| m == "log");
-    let use_recover = state.middleware.iter().any(|m| m == "recover");
+    let use_log = state
+        .middleware
+        .iter()
+        .any(|m| matches!(m, HttpMiddleware::Named(n) if n == "log"));
+    let use_recover = state
+        .middleware
+        .iter()
+        .any(|m| matches!(m, HttpMiddleware::Named(n) if n == "recover"));
+    let customs: Vec<rite_runtime::Closure> = state
+        .middleware
+        .iter()
+        .filter_map(|m| match m {
+            HttpMiddleware::Function(c) => Some(c.clone()),
+            _ => None,
+        })
+        .collect();
     let t0 = std::time::Instant::now();
 
     let mut ctx = RuntimeContext::new();
@@ -351,10 +381,16 @@ async fn dispatch_rite(state: ServerState, idx: usize, req: Request<Body>) -> Re
     }
 
     let param = route.param_name.clone().unwrap_or_else(|| "req".into());
-    let mut eval = Evaluator::new(&mut ctx);
-    let result = eval
-        .call_block_public(&route.body, &[param], vec![req_value])
-        .await;
+    let result = run_middleware_chain(
+        &mut ctx,
+        &customs,
+        0,
+        req_value,
+        &route.body,
+        &param,
+        state.perms.clone(),
+    )
+    .await;
 
     // Handler console output is buffered on the per-request RuntimeContext —
     // flush it so `! @console.println` is visible in the server process.
@@ -394,6 +430,119 @@ async fn dispatch_rite(state: ServerState, idx: usize, req: Request<Body>) -> Re
     }
 
     response
+}
+
+static NEXT_ID: AtomicU64 = AtomicU64::new(1);
+
+/// Run custom middleware outer→inner, then the route handler.
+/// Each layer receives `(req, next)` where `next` is a callable `http.next` handle.
+fn run_middleware_chain<'a>(
+    ctx: &'a mut RuntimeContext,
+    customs: &'a [rite_runtime::Closure],
+    index: usize,
+    req_value: Value,
+    handler_body: &'a BlockIr,
+    handler_param: &'a str,
+    perms: PermissionSet,
+) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Value, EvalError>> + Send + 'a>> {
+    Box::pin(async move {
+        if index >= customs.len() {
+            let mut eval = Evaluator::new(ctx);
+            return eval
+                .call_block_public(handler_body, &[handler_param.to_string()], vec![req_value])
+                .await;
+        }
+
+        let mw = customs[index].clone();
+        let next_id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
+
+        {
+            let cont = NextContinuation {
+                customs: customs.to_vec(),
+                index: index + 1,
+                handler_body: handler_body.clone(),
+                handler_param: handler_param.to_string(),
+                perms: perms.clone(),
+                functions: ctx.functions.clone(),
+            };
+            next_continuations().lock().insert(next_id, cont);
+        }
+
+        // Ensure global next() invoker is installed (idempotent).
+        ensure_http_next_invoker();
+
+        let next_val = Value::Handle(HostHandle {
+            kind: "http.next".into(),
+            id: next_id,
+        });
+
+        let mut eval = Evaluator::new(ctx);
+        let result = eval
+            .call_value_public(Value::Function(mw), vec![req_value, next_val])
+            .await;
+
+        if index == 0 {
+            set_http_next_invoker(None);
+            next_continuations().lock().clear();
+        }
+
+        result
+    })
+}
+
+#[derive(Clone)]
+struct NextContinuation {
+    customs: Vec<rite_runtime::Closure>,
+    index: usize,
+    handler_body: BlockIr,
+    handler_param: String,
+    perms: PermissionSet,
+    functions: HashMap<String, FunctionEntry>,
+}
+
+fn next_continuations() -> &'static Mutex<HashMap<u64, NextContinuation>> {
+    static MAP: std::sync::OnceLock<Mutex<HashMap<u64, NextContinuation>>> =
+        std::sync::OnceLock::new();
+    MAP.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+fn ensure_http_next_invoker() {
+    // Always refresh so a prior clear doesn't leave us without a hook.
+    set_http_next_invoker(Some(Arc::new(|id, args| {
+        Box::pin(async move {
+            let cont = next_continuations()
+                .lock()
+                .remove(&id)
+                .ok_or_else(|| EvalError::Message("middleware next() already used".into()))?;
+            let req = args.into_iter().next().unwrap_or(Value::None);
+            let mut inner = RuntimeContext::new();
+            crate::install_defaults(&mut inner, cont.perms.clone());
+            inner.allow_all = cont.perms.allow_all;
+            for (name, f) in &cont.functions {
+                inner.functions.insert(name.clone(), f.clone());
+                let clos = Value::Function(rite_runtime::Closure {
+                    id: 0,
+                    name: Some(name.clone()),
+                    params: f.params.clone(),
+                    env: Arc::new(parking_lot::RwLock::new(rite_runtime::Environment::new())),
+                    body: f.body.clone(),
+                });
+                inner.env.define_name(name, clos, false);
+            }
+            let result = run_middleware_chain(
+                &mut inner,
+                &cont.customs,
+                cont.index,
+                req,
+                &cont.handler_body,
+                &cont.handler_param,
+                cont.perms.clone(),
+            )
+            .await;
+            flush_handler_io(&inner);
+            result
+        })
+    })));
 }
 
 /// Emit buffered handler stdout/stderr to the real process streams (and optional test sink).
@@ -447,6 +596,7 @@ pub fn take_test_io_capture() -> TestIoCapture {
 }
 
 /// Middleware names from the last `@http.listen` registration (for contract tests).
+/// Custom closures appear as `"<custom>"`.
 pub fn last_registered_middleware() -> Vec<String> {
     LAST_MIDDLEWARE.lock().clone()
 }
@@ -597,7 +747,14 @@ pub fn clear_last_bound_addr() {
 }
 
 pub fn set_pending_server(addr: String, state: ServerState) {
-    *LAST_MIDDLEWARE.lock() = state.middleware.clone();
+    *LAST_MIDDLEWARE.lock() = state
+        .middleware
+        .iter()
+        .map(|m| match m {
+            HttpMiddleware::Named(n) => n.clone(),
+            HttpMiddleware::Function(_) => "<custom>".into(),
+        })
+        .collect();
     *PENDING_ADDR.lock() = Some(addr);
     *PENDING_SERVER.lock() = Some(state);
 }

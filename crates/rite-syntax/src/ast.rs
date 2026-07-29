@@ -62,6 +62,9 @@ pub struct TestDecl {
 pub struct ImportDecl {
     pub path: ModulePath,
     pub alias: Option<Ident>,
+    /// `pub use` re-exports the module's public names from this module.
+    #[serde(default)]
+    pub is_pub: bool,
     pub span: Span,
 }
 

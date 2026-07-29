@@ -1,23 +1,28 @@
-//! Sinatra-style HTTP service with real Rite handlers
+//! Sinatra-style HTTP with built-in + custom auth middleware
 
 @http.listen "127.0.0.1:0" ⟦
   use @http.log
   use @http.recover
 
+  // Bearer token gate — short-circuit with 401, or call next(req)
+  use { |req, next|
+    token ← req.headers.authorization ?? ""
+    ? token = "Bearer secret" ⟦
+      next(req)
+    ⟧ else ⟦
+      ^ 401 ⟨error: #unauthorized⟩
+    ⟧
+  }
+
   GET "/health" ⟦
     ^ 200 ⟨status: #ok⟩
   ⟧
 
-  GET "/echo/:word" |req| ⟦
-    ^ 200 ⟨echo: req.path.word, query: req.query⟩
+  GET "/secret" ⟦
+    ^ 200 ⟨ok: true, message: "you are in"⟩
   ⟧
 
-  POST "/sum" |req| ⟦
-    payload ← req.json?
-    numbers ← payload.numbers ?? []
-    ^ 200 ⟨
-      total: numbers → sum,
-      count: numbers → count
-    ⟩
+  GET "/echo/:word" |req| ⟦
+    ^ 200 ⟨echo: req.path.word, query: req.query⟩
   ⟧
 ⟧

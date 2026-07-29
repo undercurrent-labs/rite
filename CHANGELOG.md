@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.1.6] — 2026-07-28
+
+### Added
+
+- **`@csv`** capability (mirror `@json`): `decode` / `encode` / `read` / `write` with headers, delimiter, skip_empty options
+- **Custom HTTP middleware**: `use { |req, next| … }` with callable `next(req)`; `req.headers` (lowercase); Bearer auth example in `examples/08-middleware`
+- **Modules polish**: relative `use ./path` / `use ../path`, fixed `use mod as alias` → `alias.fn`, `pub use` re-exports
+- **`@db` (DuckDB)**: `open` / `close` / `exec` / `query` / `prepare` / `query_prepared` / `exec_prepared` / `begin` / `commit` / `rollback`; permissions `--allow db` and `--allow db=path`
+- **Branding**: logo mark, favicon, OG image for site + Studio + README
+
+### Docs
+
+- Book chapters: CSV section, `db.md`, middleware auth, modules relative/alias/re-export
+
 ## [0.1.5] — 2026-07-28
 
 ### Added — Test suite hardening

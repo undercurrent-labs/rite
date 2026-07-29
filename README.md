@@ -1,5 +1,9 @@
 # Rite
 
+<p align="center">
+  <img src="docs/brand/logo.png" alt="Rite" width="96" height="96" />
+</p>
+
 **Rite** is a Rust-backed scripting language with glyphic + ASCII syntax, explicit effects, capabilities, HTTP/game DSLs, interpreter + IR compilation, **LSP**, **VS Code extension**, **WASM API**, and **Rite Studio**.
 
 Status and architecture notes: [`IMPLEMENTATION.md`](IMPLEMENTATION.md). Language docs: [docs/book](docs/book/README.md).

@@ -71,6 +71,15 @@ pub struct HostHandle {
     pub id: u64,
 }
 
+/// Middleware entry collected at `@http.listen` time.
+#[derive(Debug, Clone)]
+pub enum HttpMiddleware {
+    /// Built-in plug-in name: `log`, `recover`, …
+    Named(String),
+    /// Rite closure `use { |req, next| … }`.
+    Function(Closure),
+}
+
 impl Value {
     pub fn string(s: impl Into<String>) -> Self {
         Value::String(Arc::from(s.into()))

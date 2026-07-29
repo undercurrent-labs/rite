@@ -1,5 +1,7 @@
 use crate::clock::ClockCap;
 use crate::console::ConsoleCap;
+use crate::csv::CsvCap;
+use crate::db::DbCap;
 use crate::env::EnvCap;
 use crate::fs::FsCap;
 use crate::game::GameCap;
@@ -38,6 +40,7 @@ pub struct HostCapabilities {
     pub console: ConsoleCap,
     pub fs: FsCap,
     pub json: JsonCap,
+    pub csv: CsvCap,
     pub clock: ClockCap,
     pub env: EnvCap,
     pub process: ProcessCap,
@@ -45,6 +48,7 @@ pub struct HostCapabilities {
     pub http: HttpCap,
     pub game: Arc<RwLock<GameCap>>,
     pub store: Arc<RwLock<StoreCap>>,
+    pub db: Arc<RwLock<DbCap>>,
 }
 
 impl HostCapabilities {
@@ -53,6 +57,7 @@ impl HostCapabilities {
             console: ConsoleCap,
             fs: FsCap,
             json: JsonCap,
+            csv: CsvCap,
             clock: ClockCap::new(),
             env: EnvCap,
             process: ProcessCap,
@@ -60,6 +65,7 @@ impl HostCapabilities {
             http: HttpCap::new(),
             game: Arc::new(RwLock::new(GameCap::new())),
             store: Arc::new(RwLock::new(StoreCap::new())),
+            db: Arc::new(RwLock::new(DbCap::new())),
             perms,
         }
     }
@@ -69,6 +75,7 @@ impl HostCapabilities {
             ("console", ConsoleCap::DESCRIPTORS),
             ("fs", FsCap::DESCRIPTORS),
             ("json", JsonCap::DESCRIPTORS),
+            ("csv", CsvCap::DESCRIPTORS),
             ("clock", ClockCap::DESCRIPTORS),
             ("env", EnvCap::DESCRIPTORS),
             ("process", ProcessCap::DESCRIPTORS),
@@ -76,6 +83,7 @@ impl HostCapabilities {
             ("http", HttpCap::DESCRIPTORS),
             ("game", GameCap::DESCRIPTORS),
             ("store", StoreCap::DESCRIPTORS),
+            ("db", DbCap::DESCRIPTORS),
         ]
     }
 }
@@ -120,6 +128,7 @@ impl CapabilityHost for HostCapabilities {
             "console" => self.console.call(method, args, &self.perms, ctx).await,
             "fs" => self.fs.call(method, args, &self.perms).await,
             "json" => self.json.call(method, args, &self.perms).await,
+            "csv" => self.csv.call(method, args, &self.perms).await,
             "clock" => self.clock.call(method, args, effect, &self.perms).await,
             "env" => self.env.call(method, args, &self.perms).await,
             "process" => self.process.call(method, args, &self.perms).await,
@@ -136,6 +145,10 @@ impl CapabilityHost for HostCapabilities {
             "store" => {
                 let mut store = self.store.write();
                 store.call(method, args)
+            }
+            "db" => {
+                let db = self.db.read();
+                db.call(method, args, &self.perms)
             }
             other => Err(EvalError::Capability(format!(
                 "unknown capability `@{}`",

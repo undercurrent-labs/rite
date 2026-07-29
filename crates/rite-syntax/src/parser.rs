@@ -75,7 +75,12 @@ impl Parser {
 
     fn parse_item_or_stmt(&mut self) -> Option<Item> {
         if self.check(TokenKind::Use) {
-            return Some(Item::Import(self.parse_import()));
+            return Some(Item::Import(self.parse_import(false)));
+        }
+        // `pub use path` re-export
+        if self.check(TokenKind::Pub) && self.check_nth(1, TokenKind::Use) {
+            self.advance(); // pub
+            return Some(Item::Import(self.parse_import(true)));
         }
         if self.check(TokenKind::Pub) || self.check(TokenKind::Def) {
             return Some(self.parse_decl_item());
@@ -160,7 +165,7 @@ impl Parser {
         })
     }
 
-    fn parse_import(&mut self) -> ImportDecl {
+    fn parse_import(&mut self, is_pub: bool) -> ImportDecl {
         let start = self.advance().span; // use
         let path = self.parse_module_path();
         let alias = if self.check(TokenKind::As) {
@@ -173,11 +178,38 @@ impl Parser {
         ImportDecl {
             path,
             alias,
+            is_pub,
             span: start.merge(end),
         }
     }
 
     fn parse_module_path(&mut self) -> ModulePath {
+        // Relative: `./helpers`, `../lib/util` (slash-separated after ./ or ../)
+        if self.check(TokenKind::Dot) {
+            let start = self.peek().span;
+            self.advance(); // first .
+            let parent = if self.check(TokenKind::Dot) {
+                self.advance();
+                true
+            } else {
+                false
+            };
+            if self.check(TokenKind::Slash) {
+                self.advance();
+            }
+            let mut segments = vec![Ident {
+                name: if parent { "..".into() } else { ".".into() },
+                span: start,
+            }];
+            segments.push(self.parse_ident());
+            while self.check(TokenKind::Slash) || self.check(TokenKind::Dot) {
+                self.advance();
+                segments.push(self.parse_ident());
+            }
+            let span = start.merge(segments.last().map(|s| s.span).unwrap_or(start));
+            return ModulePath { segments, span };
+        }
+
         let mut segments = vec![self.parse_ident()];
         while self.check(TokenKind::Dot) {
             self.advance();
@@ -1843,6 +1875,22 @@ impl Parser {
 
     fn check(&self, kind: TokenKind) -> bool {
         self.peek_kind() == kind
+    }
+
+    fn check_nth(&self, n: usize, kind: TokenKind) -> bool {
+        self.tokens
+            .get(self.pos + n)
+            .map(|t| t.kind == kind)
+            .unwrap_or(false)
+    }
+
+    fn peek(&self) -> Token {
+        self.tokens.get(self.pos).cloned().unwrap_or_else(|| Token {
+            kind: TokenKind::Eof,
+            span: Span::DUMMY,
+            file: self.file,
+            text: String::new(),
+        })
     }
 
     fn peek_kind(&self) -> TokenKind {

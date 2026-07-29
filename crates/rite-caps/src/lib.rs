@@ -2,6 +2,8 @@
 
 pub mod clock;
 pub mod console;
+pub mod csv;
+pub mod db;
 pub mod env;
 pub mod fs;
 pub mod game;
@@ -16,7 +18,7 @@ pub mod store;
 pub use permissions::{Permission, PermissionSet};
 pub use registry::{CapabilityRegistry, HostCapabilities};
 
-use rite_runtime::{set_http_route_registrar, FunctionEntry, RuntimeContext};
+use rite_runtime::{set_http_route_registrar, FunctionEntry, HttpMiddleware, RuntimeContext};
 use rite_sem::RouteIr;
 use std::sync::Arc;
 use tokio::sync::Mutex as AsyncMutex;
@@ -34,7 +36,7 @@ pub fn install_defaults(ctx: &mut RuntimeContext, perms: PermissionSet) -> Arc<H
 fn register_http_routes(
     addr: String,
     routes: &[RouteIr],
-    middleware: &[String],
+    middleware: &[HttpMiddleware],
     ctx: &RuntimeContext,
 ) {
     let rite_routes: Vec<http::RiteRoute> = routes
@@ -51,16 +53,15 @@ fn register_http_routes(
     } else {
         PermissionSet::default_secure()
     };
-    let mw: Vec<String> = middleware
+    let mw: Vec<HttpMiddleware> = middleware
         .iter()
-        .map(|m| {
-            // Normalize "http.log" / "log" / "@http.log"
-            let s = m.trim_start_matches('@');
-            if let Some(rest) = s.strip_prefix("http.") {
-                rest.to_string()
-            } else {
-                s.to_string()
+        .map(|m| match m {
+            HttpMiddleware::Named(s) => {
+                let s = s.trim_start_matches('@');
+                let short = s.strip_prefix("http.").unwrap_or(s).to_string();
+                HttpMiddleware::Named(short)
             }
+            other => other.clone(),
         })
         .collect();
     let state = http::ServerState {

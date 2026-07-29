@@ -13,6 +13,10 @@ pub enum Permission {
     Process,
     Clock,
     Random,
+    /// In-memory DuckDB only (`--allow db`).
+    DbMemory,
+    /// File-backed DuckDB under a path prefix (`--allow db=./data`).
+    Db(PathBuf),
     All,
 }
 
@@ -65,6 +69,12 @@ impl Permission {
         if spec == "env" {
             return Ok(Permission::EnvAll);
         }
+        if spec == "db" {
+            return Ok(Permission::DbMemory);
+        }
+        if let Some(rest) = spec.strip_prefix("db=") {
+            return Ok(Permission::Db(PathBuf::from(rest)));
+        }
         Err(format!("unknown permission spec: {}", spec))
     }
 }
@@ -81,6 +91,10 @@ pub struct PermissionSet {
     pub fs_read: Vec<PathBuf>,
     pub fs_write: Vec<PathBuf>,
     pub net: HashSet<String>,
+    /// Allow in-memory DuckDB (`:memory:`).
+    pub db_memory: bool,
+    /// Allowed roots for file-backed DuckDB databases.
+    pub db_paths: Vec<PathBuf>,
 }
 
 impl PermissionSet {
@@ -97,7 +111,41 @@ impl PermissionSet {
             fs_read: Vec::new(),
             fs_write: Vec::new(),
             net: HashSet::new(),
+            db_memory: false,
+            db_paths: Vec::new(),
         }
+    }
+
+    /// Allow opening in-memory DBs (or any open when `allow_all`).
+    pub fn check_db_open(&self) -> Result<(), String> {
+        if self.allow_all || self.db_memory || !self.db_paths.is_empty() {
+            Ok(())
+        } else {
+            Err("db permission denied (use --allow db or --allow db=./path)".into())
+        }
+    }
+
+    /// Allow opening a file-backed database under an allowed root.
+    pub fn check_db_path(&self, path: &Path) -> Result<PathBuf, String> {
+        if self.allow_all {
+            return Ok(canonicalize_loose(path));
+        }
+        if self.db_paths.is_empty() {
+            return Err(format!(
+                "db file permission denied for `{}` (use --allow db=./path)",
+                path.display()
+            ));
+        }
+        let canon = canonicalize_loose(path);
+        for root in &self.db_paths {
+            if path_under(&canon, root) {
+                return Ok(canon);
+            }
+        }
+        Err(format!(
+            "db file permission denied for `{}`",
+            path.display()
+        ))
     }
 
     pub fn allow_all() -> Self {
@@ -108,6 +156,7 @@ impl PermissionSet {
             random: true,
             process: true,
             env_all: true,
+            db_memory: true,
             ..Self::default()
         }
     }
@@ -127,6 +176,13 @@ impl PermissionSet {
             Permission::FsWrite(p) => self.fs_write.push(canonicalize_loose(&p)),
             Permission::Net(h) => {
                 self.net.insert(h);
+            }
+            Permission::DbMemory => {
+                self.db_memory = true;
+            }
+            Permission::Db(p) => {
+                self.db_memory = true; // file grant implies memory too
+                self.db_paths.push(canonicalize_loose(&p));
             }
         }
     }
@@ -171,6 +227,11 @@ impl PermissionSet {
             Permission::Net(_) => {
                 self.allow_all = false;
                 self.net.clear();
+            }
+            Permission::DbMemory | Permission::Db(_) => {
+                self.allow_all = false;
+                self.db_memory = false;
+                self.db_paths.clear();
             }
         }
     }

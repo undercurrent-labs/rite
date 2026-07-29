@@ -24,12 +24,48 @@ pub struct ModuleGraph {
     pub load_order: Vec<String>,
 }
 
-/// Resolve a module path like `tools.math` relative to `from_dir` and optional `roots`.
+/// Resolve a module path like `tools.math` or `./helpers` relative to `from_dir` and optional `roots`.
 pub fn resolve_module_path(
     module_path: &[String],
     from_dir: &Path,
     roots: &[PathBuf],
 ) -> Option<PathBuf> {
+    // Relative: `.` / `..` prefix from `use ./foo` / `use ../lib/bar`
+    if module_path.first().map(|s| s.as_str()) == Some(".")
+        || module_path.first().map(|s| s.as_str()) == Some("..")
+    {
+        let mut base = from_dir.to_path_buf();
+        let mut i = 0;
+        while i < module_path.len() {
+            match module_path[i].as_str() {
+                "." => {
+                    i += 1;
+                }
+                ".." => {
+                    if let Some(parent) = base.parent() {
+                        base = parent.to_path_buf();
+                    }
+                    i += 1;
+                }
+                _ => break,
+            }
+        }
+        let rest = module_path[i..].join("/");
+        if rest.is_empty() {
+            return None;
+        }
+        let candidates = [
+            base.join(format!("{}.rite", rest)),
+            base.join(&rest).join("mod.rite"),
+        ];
+        for c in candidates {
+            if c.is_file() {
+                return Some(c);
+            }
+        }
+        return None;
+    }
+
     let rel = module_path.join("/");
     let candidates = |base: &Path| -> Vec<PathBuf> {
         vec![
@@ -143,7 +179,12 @@ impl<'a> ModuleLoader<'a> {
                         format!("module `{}` not found", key),
                         file,
                         imp.span,
-                        "looked for path.rite and path/mod.rite",
+                        format!(
+                            "looked for {}.rite and {}/mod.rite under {}",
+                            segs.join("/"),
+                            segs.join("/"),
+                            from_dir.display()
+                        ),
                     ));
                     continue;
                 }
@@ -194,6 +235,26 @@ impl<'a> ModuleLoader<'a> {
                         }
                     }
                 }
+                // `pub use other` re-exports: pull already-loaded module exports
+                for item in &child.items {
+                    if let Item::Import(imp) = item {
+                        if !imp.is_pub {
+                            continue;
+                        }
+                        let dep_key = imp
+                            .path
+                            .segments
+                            .iter()
+                            .map(|s| s.name.as_str())
+                            .collect::<Vec<_>>()
+                            .join(".");
+                        if let Some(dep) = self.graph.modules.get(&dep_key) {
+                            for (n, meta) in &dep.exports {
+                                exports.insert(n.clone(), meta.clone());
+                            }
+                        }
+                    }
+                }
                 self.graph.modules.insert(
                     key.clone(),
                     LoadedModule {
@@ -219,7 +280,8 @@ pub fn merge_exports_into_entry(
     diagnostics: &mut Diagnostics,
 ) {
     // Build import alias map from entry
-    let mut bindings: Vec<(Option<String>, String, HashMap<String, FunctionMeta>)> = Vec::new();
+    let mut bindings: Vec<(Option<String>, String, HashMap<String, FunctionMeta>, bool)> =
+        Vec::new();
     for item in &entry.items {
         if let Item::Import(imp) = item {
             let key = imp
@@ -231,36 +293,55 @@ pub fn merge_exports_into_entry(
                 .join(".");
             let alias = imp.alias.as_ref().map(|a| a.name.clone());
             if let Some(m) = graph.modules.get(&key) {
-                bindings.push((alias, key, m.exports.clone()));
+                bindings.push((alias, key, m.exports.clone(), imp.is_pub));
             }
         }
     }
 
     // Inject pub functions from modules that were imported without alias into entry scope
     // by appending function decls from loaded modules (only pub ones).
-    for (alias, key, exports) in &bindings {
+    // Also inject re-exported names from transitive `pub use` targets already in exports map.
+    for (alias, key, exports, is_pub_reexport) in &bindings {
         if let Some(mod_ast) = graph.modules.get(key) {
             for item in &mod_ast.program.items {
                 if let Item::Function(f) = item {
                     if !f.is_pub {
-                        // If someone tries to reference private later, resolver will catch
                         continue;
                     }
                     if alias.is_none() {
-                        // bring into scope under original name
-                        let f2 = f.clone();
-                        // keep as accessible (treat as local after import)
+                        let mut f2 = f.clone();
+                        // Re-exports keep pub so further importers can see them when this is a lib.
+                        if !*is_pub_reexport {
+                            f2.is_pub = false;
+                        }
                         entry.items.insert(0, Item::Function(f2));
                     }
-                    let _ = exports;
+                }
+            }
+            // Inject re-exported functions that live only in exports map (from nested pub use)
+            if alias.is_none() {
+                for (name, _meta) in exports {
+                    let already = entry
+                        .items
+                        .iter()
+                        .any(|i| matches!(i, Item::Function(f) if f.name.name == *name));
+                    if already {
+                        continue;
+                    }
+                    // Find definition in any loaded module
+                    if let Some(f) = find_pub_function(graph, name) {
+                        let mut f2 = f;
+                        if !*is_pub_reexport {
+                            f2.is_pub = false;
+                        }
+                        entry.items.insert(0, Item::Function(f2));
+                    }
                 }
             }
         }
-        // alias form: we still inject as `alias_name` wrappers later at desugar
-        if alias.is_some() {
-            // For aliased imports, inject with prefixed names `__mod_alias_fn`
+        // alias form: inject with prefixed names `alias__fn` so desugar can rewrite `m.fn`
+        if let Some(prefix) = alias {
             if let Some(mod_ast) = graph.modules.get(key) {
-                let prefix = alias.as_ref().unwrap();
                 for item in &mod_ast.program.items {
                     if let Item::Function(f) = item {
                         if f.is_pub {
@@ -271,12 +352,28 @@ pub fn merge_exports_into_entry(
                         }
                     }
                 }
+                for (name, _) in exports {
+                    let pref = format!("{}__{}", prefix, name);
+                    let already = entry
+                        .items
+                        .iter()
+                        .any(|i| matches!(i, Item::Function(f) if f.name.name == pref));
+                    if already {
+                        continue;
+                    }
+                    if let Some(f) = find_pub_function(graph, name) {
+                        let mut f2 = f;
+                        f2.name.name = pref;
+                        f2.is_pub = false;
+                        entry.items.insert(0, Item::Function(f2));
+                    }
+                }
             }
         }
     }
 
     // Validate no private re-export attempt is needed — warn if import of empty exports
-    for (alias, key, exports) in &bindings {
+    for (alias, key, exports, _) in &bindings {
         if exports.is_empty() {
             diagnostics.push(simple_error(
                 E025_PRIVATE_IMPORT,
@@ -288,6 +385,19 @@ pub fn merge_exports_into_entry(
         }
         let _ = alias;
     }
+}
+
+fn find_pub_function(graph: &ModuleGraph, name: &str) -> Option<rite_syntax::FunctionDecl> {
+    for m in graph.modules.values() {
+        for item in &m.program.items {
+            if let Item::Function(f) = item {
+                if f.is_pub && f.name.name == name {
+                    return Some(f.clone());
+                }
+            }
+        }
+    }
+    None
 }
 
 /// Expand a multi-module program into one ProgramIr by compiling entry after merge.

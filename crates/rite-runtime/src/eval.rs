@@ -491,16 +491,53 @@ impl<'a> Evaluator<'a> {
                     .as_str()
                     .map(|s| s.to_string())
                     .unwrap_or_else(|| format!("{}", a));
-                // Middleware names: `use @http.log` → CapabilityCall path ["http","log"]
-                let mw_names: Vec<String> = middleware
-                    .iter()
-                    .filter_map(|m| match m {
-                        ExprIr::CapabilityCall { path, .. } => Some(path.join(".")),
-                        ExprIr::NativeCall { name, .. } => Some(name.clone()),
-                        ExprIr::Global(name) => Some(name.clone()),
-                        _ => None,
-                    })
-                    .collect();
+                // Middleware: `use @http.log` → Named, `use { |req, next| … }` → Function
+                let mut mw_specs: Vec<crate::value::HttpMiddleware> = Vec::new();
+                for m in middleware {
+                    match m {
+                        ExprIr::CapabilityCall { path, .. } => {
+                            let name = path.join(".");
+                            let short = name
+                                .strip_prefix("http.")
+                                .unwrap_or(name.as_str())
+                                .trim_start_matches('@')
+                                .to_string();
+                            mw_specs.push(crate::value::HttpMiddleware::Named(short));
+                        }
+                        ExprIr::NativeCall { name, .. } => {
+                            mw_specs.push(crate::value::HttpMiddleware::Named(name.clone()));
+                        }
+                        ExprIr::Global(name) => {
+                            mw_specs.push(crate::value::HttpMiddleware::Named(name.clone()));
+                        }
+                        ExprIr::Closure(_) => {
+                            let v = self.eval_expr(m).await?;
+                            if let Value::Function(c) = v {
+                                mw_specs.push(crate::value::HttpMiddleware::Function(c));
+                            }
+                        }
+                        other => {
+                            // Evaluate (e.g. already-resolved values) and classify
+                            let v = self.eval_expr(other).await?;
+                            match v {
+                                Value::Function(c) => {
+                                    mw_specs.push(crate::value::HttpMiddleware::Function(c));
+                                }
+                                Value::Atom(id) => {
+                                    let n = self.ctx.atoms.name(id);
+                                    let short =
+                                        n.strip_prefix("http.").unwrap_or(n.as_str()).to_string();
+                                    mw_specs.push(crate::value::HttpMiddleware::Named(short));
+                                }
+                                Value::String(s) => {
+                                    mw_specs
+                                        .push(crate::value::HttpMiddleware::Named(s.to_string()));
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
+                }
                 // Build route table with real Rite bodies for per-request evaluation
                 let rite_routes: Vec<Value> = routes
                     .iter()
@@ -514,7 +551,7 @@ impl<'a> Evaluator<'a> {
                         ])
                     })
                     .collect();
-                http_register_pending(addr_str.clone(), routes, &mw_names, self.ctx);
+                http_register_pending(addr_str.clone(), routes, &mw_specs, self.ctx);
                 self.ctx
                     .capabilities
                     .call(
@@ -804,6 +841,9 @@ impl<'a> Evaluator<'a> {
             Value::NativeFunction(_) => Err(EvalError::Message(
                 "native function id call not wired".into(),
             )),
+            Value::Handle(h) if h.kind == "http.next" => {
+                Box::pin(invoke_http_next(h.id, args)).await
+            }
             other => Err(EvalError::Message(format!(
                 "cannot call value of type {}",
                 other.type_name()
@@ -820,6 +860,15 @@ impl<'a> Evaluator<'a> {
         args: Vec<Value>,
     ) -> Result<Value, EvalError> {
         self.call_block(body, params, args).await
+    }
+
+    /// Call a Rite function/closure value (used by HTTP middleware).
+    pub async fn call_value_public(
+        &mut self,
+        callee: Value,
+        args: Vec<Value>,
+    ) -> Result<Value, EvalError> {
+        self.call_value(callee, args).await
     }
 
     async fn call_block(
@@ -1287,7 +1336,7 @@ fn num_binop(
 fn http_register_pending(
     addr: String,
     routes: &[rite_sem::RouteIr],
-    middleware: &[String],
+    middleware: &[crate::value::HttpMiddleware],
     ctx: &RuntimeContext,
 ) {
     if let Some(f) = HTTP_REGISTER.get() {
@@ -1296,12 +1345,39 @@ fn http_register_pending(
 }
 
 static HTTP_REGISTER: std::sync::OnceLock<
-    fn(String, &[rite_sem::RouteIr], &[String], &RuntimeContext),
+    fn(String, &[rite_sem::RouteIr], &[crate::value::HttpMiddleware], &RuntimeContext),
 > = std::sync::OnceLock::new();
 
 /// Called by rite-caps/install to wire HTTP route registration.
-pub fn set_http_route_registrar(f: fn(String, &[rite_sem::RouteIr], &[String], &RuntimeContext)) {
+pub fn set_http_route_registrar(
+    f: fn(String, &[rite_sem::RouteIr], &[crate::value::HttpMiddleware], &RuntimeContext),
+) {
     let _ = HTTP_REGISTER.set(f);
+}
+
+/// Async invoker for `http.next` handles used by custom middleware (`next(req)`).
+pub type HttpNextInvoker = Arc<
+    dyn Fn(u64, Vec<Value>) -> Pin<Box<dyn Future<Output = Result<Value, EvalError>> + Send>>
+        + Send
+        + Sync,
+>;
+
+static HTTP_NEXT_INVOKER: parking_lot::RwLock<Option<HttpNextInvoker>> =
+    parking_lot::RwLock::new(None);
+
+/// Install (or clear with `None`) the host callback for middleware `next(req)`.
+pub fn set_http_next_invoker(invoker: Option<HttpNextInvoker>) {
+    *HTTP_NEXT_INVOKER.write() = invoker;
+}
+
+async fn invoke_http_next(id: u64, args: Vec<Value>) -> Result<Value, EvalError> {
+    let invoker = HTTP_NEXT_INVOKER.read().clone();
+    match invoker {
+        Some(f) => f(id, args).await,
+        None => Err(EvalError::Message(
+            "http middleware next() is only valid inside a request handler chain".into(),
+        )),
+    }
 }
 
 // silence
