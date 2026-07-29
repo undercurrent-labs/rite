@@ -231,13 +231,108 @@ enum FormatStyle {
 #[tokio::main]
 async fn main() -> ExitCode {
     let _ = tracing_subscriber::fmt::try_init();
-    let cli = Cli::parse();
+    // Shebang / direct-exec: `rite script.rite` → `rite run script.rite` when the
+    // first positional arg is not a known subcommand (kernel passes the script path).
+    let cli = Cli::parse_from(rewrite_argv_for_implicit_run(std::env::args().collect()));
     match run(cli).await {
         Ok(code) => code,
         Err(e) => {
             eprintln!("error: {:#}", e);
             ExitCode::from(2)
         }
+    }
+}
+
+/// Known top-level subcommands (must stay in sync with [`Commands`]).
+fn is_known_subcommand(name: &str) -> bool {
+    matches!(
+        name,
+        "run"
+            | "build"
+            | "check"
+            | "fmt"
+            | "repl"
+            | "test"
+            | "doc"
+            | "explain"
+            | "ast"
+            | "ir"
+            | "capabilities"
+            | "convert"
+            | "lsp"
+            | "studio"
+            | "syntax-tree"
+            | "semantic-ir"
+            | "emit-rust"
+            | "docs"
+            | "describe"
+            | "version"
+            | "help"
+    )
+}
+
+/// If the first positional argument is not a subcommand, treat it as a script path
+/// and insert `run` so clap parses `rite script.rite …` like `rite run script.rite …`.
+///
+/// Skips leading global flags (`--verbose`, `-V`, etc.). Does not rewrite when the
+/// first positional is already a known command.
+pub(crate) fn rewrite_argv_for_implicit_run(mut args: Vec<String>) -> Vec<String> {
+    if args.len() < 2 {
+        return args;
+    }
+    let mut i = 1;
+    while i < args.len() {
+        let a = args[i].as_str();
+        if a == "--" {
+            break;
+        }
+        if a.starts_with('-') {
+            // Global options only (no value-taking globals today).
+            i += 1;
+            continue;
+        }
+        // First positional argument
+        if is_known_subcommand(a) {
+            return args;
+        }
+        args.insert(i, "run".to_string());
+        return args;
+    }
+    args
+}
+
+#[cfg(test)]
+mod argv_tests {
+    use super::rewrite_argv_for_implicit_run;
+
+    fn args(xs: &[&str]) -> Vec<String> {
+        xs.iter().map(|s| s.to_string()).collect()
+    }
+
+    #[test]
+    fn injects_run_for_script_path() {
+        let out = rewrite_argv_for_implicit_run(args(&["rite", "hello.rite", "--allow-all"]));
+        assert_eq!(out, args(&["rite", "run", "hello.rite", "--allow-all"]));
+    }
+
+    #[test]
+    fn leaves_known_subcommand() {
+        let out = rewrite_argv_for_implicit_run(args(&["rite", "version"]));
+        assert_eq!(out, args(&["rite", "version"]));
+        let out = rewrite_argv_for_implicit_run(args(&["rite", "fmt", "a.rite"]));
+        assert_eq!(out, args(&["rite", "fmt", "a.rite"]));
+    }
+
+    #[test]
+    fn skips_global_verbose_flag() {
+        let out = rewrite_argv_for_implicit_run(args(&["rite", "--verbose", "script.rite"]));
+        assert_eq!(out, args(&["rite", "--verbose", "run", "script.rite"]));
+    }
+
+    #[test]
+    fn absolute_path_from_shebang() {
+        let out = rewrite_argv_for_implicit_run(args(&["rite", "/tmp/tool.rite"]));
+        assert_eq!(out, args(&["rite", "run", "/tmp/tool.rite"]));
     }
 }
 

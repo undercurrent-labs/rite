@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.7] — 2026-07-29
+
+### Added
+
+- **Implicit `run`**: `rite script.rite` (and shebang `#!/usr/bin/env rite`) when the first positional arg is not a subcommand
+- Docs: shebang / executable scripts section in first-script guide
+
 ## [0.1.6] — 2026-07-28
 
 ### Added

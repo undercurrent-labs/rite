@@ -20,9 +20,35 @@ Run:
 
 ```bash
 rite run hello.rite
+# same thing (implicit run when the first arg is not a subcommand):
+rite hello.rite
 ```
 
 Console is allowed by default, so you usually do **not** need `--allow-all` for this script.
+
+### Executable scripts (shebang)
+
+Put a shebang on line 1, then `chmod +x`:
+
+```rite
+#!/usr/bin/env rite
+! @console.println("direct exec")
+```
+
+```bash
+chmod +x hello.rite
+./hello.rite
+```
+
+The kernel runs `rite /path/to/hello.rite`; Rite treats a non-subcommand first argument as `run`. The lexer ignores the `#!` line.
+
+| Shebang | Notes |
+|---------|--------|
+| `#!/usr/bin/env rite` | **Recommended** — uses `rite` from your `PATH` (`~/.local/bin`, etc.) |
+| `#!/usr/bin/env -S rite run --allow-all` | Explicit `run` + permissions (portable multi-arg form) |
+| `#!/bin/rite` | Only works if the binary is literally at `/bin/rite` (unusual; the installer uses `~/.local/bin`) |
+
+Permissions match `rite run`: grant host access on the shebang with `env -S` when needed.
 
 ASCII form of the same program:
 

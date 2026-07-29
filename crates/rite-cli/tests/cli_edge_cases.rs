@@ -72,6 +72,41 @@ fn run_prints_value_and_stdout() {
 }
 
 #[test]
+fn implicit_run_when_first_arg_is_script_path() {
+    // Shebang `#!/usr/bin/env rite` / `#!/bin/rite` → kernel runs `rite /path/to/script`.
+    let f = write_temp(
+        "implicit_run",
+        r#"! @console.println("implicit-run-ok")
+"#,
+    );
+    let out = run_rite(&[f.to_str().unwrap(), "--allow-all"]);
+    assert!(
+        out.status.success(),
+        "stderr={} stdout={}",
+        String::from_utf8_lossy(&out.stderr),
+        String::from_utf8_lossy(&out.stdout)
+    );
+    let combined = format!(
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(combined.contains("implicit-run-ok"), "{combined}");
+}
+
+#[test]
+fn known_subcommand_not_rewritten_to_run() {
+    let out = run_rite(&["version"]);
+    assert!(
+        out.status.success(),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains("rite "), "{stdout}");
+}
+
+#[test]
 fn fmt_glyph_and_ascii() {
     // fmt writes in place; convert --stdout prints without mutating.
     let f = write_temp("fmt", "x <- 1\n");
