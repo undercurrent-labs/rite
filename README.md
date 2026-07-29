@@ -20,7 +20,7 @@ export PATH="$HOME/.local/bin:$PATH"
 rite version
 ```
 
-Requires a [GitHub Release](https://github.com/undercurrent-labs/rite/releases) with platform binaries. Pin with `RITE_VERSION=v0.1.0`. Details: [docs/book/installation.md](docs/book/installation.md).
+Requires a [GitHub Release](https://github.com/undercurrent-labs/rite/releases) with platform binaries. Pin with `RITE_VERSION=v0.1.8` (or omit for latest). Details: [docs/book/installation.md](docs/book/installation.md).
 
 ### From source
 

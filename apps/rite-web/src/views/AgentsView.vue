@@ -1,8 +1,25 @@
 <script setup lang="ts">
+import { onMounted, ref } from "vue";
+
 const skillTar = "/skill/rite-agent-skill.tar.gz";
 const skillZip = "/skill/rite-agent-skill.zip";
 const vsix = "/vscode/rite.vsix";
 const installCli = "curl -fsSL https://rite.undrc.dev/install | bash";
+const latestTag = ref("v0.1.8");
+
+onMounted(async () => {
+  try {
+    const res = await fetch(
+      "https://api.github.com/repos/undercurrent-labs/rite/releases/latest",
+      { headers: { Accept: "application/vnd.github+json" } }
+    );
+    if (!res.ok) return;
+    const data = (await res.json()) as { tag_name?: string };
+    if (data.tag_name) latestTag.value = data.tag_name;
+  } catch {
+    /* keep fallback */
+  }
+});
 </script>
 
 <template>
@@ -21,10 +38,15 @@ const installCli = "curl -fsSL https://rite.undrc.dev/install | bash";
     <!-- Quick install -->
     <section class="mt-12 rounded-xl border border-rite-border bg-rite-panel p-6">
       <h2 class="text-xl font-semibold text-white">One-liners</h2>
+      <p class="mt-2 text-sm text-slate-400">
+        Latest release:
+        <code class="text-rite-green">{{ latestTag }}</code>
+      </p>
       <div class="mt-4 space-y-4 font-mono text-sm">
         <div>
           <p class="mb-1 text-xs text-rite-muted">CLI (+ LSP)</p>
-          <pre class="overflow-x-auto rounded-lg bg-black/40 p-3 text-rite-green">{{ installCli }}</pre>
+          <pre class="overflow-x-auto rounded-lg bg-black/40 p-3 text-rite-green">{{ installCli }}
+# pin: RITE_VERSION={{ latestTag }} curl -fsSL https://rite.undrc.dev/install | bash</pre>
         </div>
         <div>
           <p class="mb-1 text-xs text-rite-muted">Agent skill (Grok / Claude / Cursor)</p>

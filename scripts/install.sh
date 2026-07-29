@@ -5,11 +5,11 @@
 #   curl -fsSL https://rite.undrc.dev/install | bash
 #   curl -fsSL https://rite.undrc.dev/install.sh | bash
 #
-#   RITE_VERSION=v0.1.0 bash install.sh
+#   RITE_VERSION=v0.1.8 bash install.sh
 #   RITE_INSTALL_DIR=$HOME/bin INSTALL_LSP=0 bash install.sh
 #
 # Environment:
-#   RITE_VERSION       Tag to install (default: latest release). Example: v0.1.0
+#   RITE_VERSION       Tag to install (default: latest release). Example: v0.1.8
 #   RITE_REPO          GitHub repo (default: undercurrent-labs/rite)
 #   RITE_INSTALL_DIR   Install directory (default: $HOME/.local/bin)
 #   INSTALL_LSP        Install rite-lsp too (default: 1)
@@ -96,7 +96,7 @@ resolve_version() {
     tag="$(printf '%s' "$json" | tr ',' '\n' | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)"
   fi
   tag="$(printf '%s' "$tag" | tr -d '\r\n' | head -c 64)"
-  [[ -n "$tag" && "$tag" != "null" ]] || die "no GitHub Releases found for ${REPO}. Tag a release (e.g. v0.1.0) or set RITE_VERSION=…"
+  [[ -n "$tag" && "$tag" != "null" ]] || die "no GitHub Releases found for ${REPO}. Tag a release (e.g. v0.1.8) or set RITE_VERSION=…"
   # Only the tag on stdout (captured by caller)
   printf '%s\n' "$tag"
 }

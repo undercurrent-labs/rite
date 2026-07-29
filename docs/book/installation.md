@@ -24,14 +24,16 @@ This will:
 ### Pin a version
 
 ```bash
-curl -fsSL https://rite.undrc.dev/install | RITE_VERSION=v0.1.0 sh
+curl -fsSL https://rite.undrc.dev/install | RITE_VERSION=v0.1.8 bash
 ```
+
+Use the latest tag from [Releases](https://github.com/undercurrent-labs/rite/releases) (omit `RITE_VERSION` to install whatever is current).
 
 ### Options
 
 | Variable | Default | Meaning |
 |----------|---------|---------|
-| `RITE_VERSION` | latest release | Tag such as `v0.1.0` |
+| `RITE_VERSION` | latest release | Tag such as `v0.1.8` |
 | `RITE_INSTALL_DIR` | `$HOME/.local/bin` | Where binaries go |
 | `INSTALL_LSP` | `1` | Set `0` to skip `rite-lsp` |
 | `RITE_REPO` | `undercurrent-labs/rite` | GitHub repo for assets |
@@ -88,7 +90,7 @@ WSL: use the Linux one-liner inside the distro.
 
 If the installer says there are no releases, either:
 
-- Someone needs to publish a tag (maintainers: `git tag v0.1.0 && git push origin v0.1.0`), or  
+- Someone needs to publish a tag (maintainers: `git tag v0.1.8 && git push origin v0.1.8`), or  
 - Use [from source](#from-source-contributors) / `cargo install` below, or  
 - Use [Studio](https://rite.undrc.dev/studio) in the browser for pure scripts (no CLI)
 
@@ -180,12 +182,12 @@ cd editors/vscode && npm install && npm run compile
 
 ```bash
 # on main, green CI
-git tag v0.1.0
-git push origin v0.1.0
+git tag v0.1.8
+git push origin v0.1.8
 # → GitHub Actions "Release" builds assets + publishes the Release
 ```
 
-Or **Actions → Release → Run workflow** and enter `v0.1.0`.
+Or **Actions → Release → Run workflow** and enter the tag (e.g. `v0.1.8`).
 
 Local package for the current machine only:
 

@@ -1,4 +1,23 @@
 <script setup lang="ts">
+import { onMounted, ref } from "vue";
+
+/** Shown for pin examples; refreshed from GitHub Releases when possible. */
+const latestTag = ref("v0.1.8");
+
+onMounted(async () => {
+  try {
+    const res = await fetch(
+      "https://api.github.com/repos/undercurrent-labs/rite/releases/latest",
+      { headers: { Accept: "application/vnd.github+json" } }
+    );
+    if (!res.ok) return;
+    const data = (await res.json()) as { tag_name?: string };
+    if (data.tag_name) latestTag.value = data.tag_name;
+  } catch {
+    /* keep fallback */
+  }
+});
+
 const pillars = [
   {
     title: "Glyphic + ASCII",
@@ -188,12 +207,16 @@ do host.console.println(str(square(12)))`;
 export PATH="$HOME/.local/bin:$PATH"
 rite version</pre>
         <p class="mt-3 text-sm text-slate-500">
-          Pin with
-          <code class="text-rite-green text-xs">RITE_VERSION=v0.1.0</code>
+          Latest release
+          <code class="text-rite-green text-xs">{{ latestTag }}</code>
+          · pin with
+          <code class="text-rite-green text-xs">RITE_VERSION={{ latestTag }}</code>
           · details in
           <RouterLink to="/docs/installation" class="text-rite-accent hover:underline"
             >Installation</RouterLink
           >
+          ·
+          <RouterLink to="/agents" class="text-rite-accent hover:underline">Agents</RouterLink>
           · or try
           <RouterLink to="/studio" class="text-rite-accent hover:underline">Studio</RouterLink>
           with zero install.
