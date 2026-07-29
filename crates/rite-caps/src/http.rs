@@ -389,27 +389,66 @@ async fn dispatch_rite(state: ServerState, idx: usize, req: Request<Body>) -> Re
         let status = response.status().as_u16();
         let ms = t0.elapsed().as_millis();
         // Apache-ish one-liner access log to the process stderr (doesn't mix with handler body).
-        eprintln!("rite: {} {} {} {}ms", method.as_str(), path, status, ms);
-        let _ = std::io::Write::flush(&mut std::io::stderr());
+        let line = format!("rite: {} {} {} {}ms", method.as_str(), path, status, ms);
+        emit_process_stderr(&format!("{line}\n"));
     }
 
     response
 }
 
-/// Emit buffered handler stdout/stderr to the real process streams.
+/// Emit buffered handler stdout/stderr to the real process streams (and optional test sink).
 fn flush_handler_io(ctx: &RuntimeContext) {
     if !ctx.stdout.is_empty() {
         for line in &ctx.stdout {
-            print!("{}", line);
+            emit_process_stdout(line);
         }
-        let _ = std::io::Write::flush(&mut std::io::stdout());
     }
     if !ctx.stderr.is_empty() {
         for line in &ctx.stderr {
-            eprint!("{}", line);
+            emit_process_stderr(line);
         }
-        let _ = std::io::Write::flush(&mut std::io::stderr());
     }
+}
+
+fn emit_process_stdout(s: &str) {
+    print!("{s}");
+    let _ = std::io::Write::flush(&mut std::io::stdout());
+    if let Some(cap) = TEST_IO.lock().as_mut() {
+        cap.stdout.push_str(s);
+    }
+}
+
+fn emit_process_stderr(s: &str) {
+    eprint!("{s}");
+    let _ = std::io::Write::flush(&mut std::io::stderr());
+    if let Some(cap) = TEST_IO.lock().as_mut() {
+        cap.stderr.push_str(s);
+    }
+}
+
+/// In-process capture of HTTP handler I/O for tests (same process as the server task).
+#[derive(Debug, Default, Clone)]
+pub struct TestIoCapture {
+    pub stdout: String,
+    pub stderr: String,
+}
+
+static TEST_IO: Mutex<Option<TestIoCapture>> = Mutex::new(None);
+static LAST_MIDDLEWARE: Mutex<Vec<String>> = Mutex::new(Vec::new());
+
+/// Begin capturing process-emitted handler stdout/stderr and access logs.
+pub fn begin_test_io_capture() {
+    *TEST_IO.lock() = Some(TestIoCapture::default());
+}
+
+/// Stop capturing and return the accumulated buffers (empty if never started).
+pub fn take_test_io_capture() -> TestIoCapture {
+    TEST_IO.lock().take().unwrap_or_default()
+}
+
+/// Middleware names from the last `@http.listen` registration (for contract tests).
+pub fn last_registered_middleware() -> Vec<String> {
+    LAST_MIDDLEWARE.lock().clone()
 }
 
 pub fn coerce_response(v: Value, ctx: &RuntimeContext) -> Response {
@@ -558,6 +597,7 @@ pub fn clear_last_bound_addr() {
 }
 
 pub fn set_pending_server(addr: String, state: ServerState) {
+    *LAST_MIDDLEWARE.lock() = state.middleware.clone();
     *PENDING_ADDR.lock() = Some(addr);
     *PENDING_SERVER.lock() = Some(state);
 }

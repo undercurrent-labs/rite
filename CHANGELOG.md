@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.1.5] — 2026-07-28
+
+### Added — Test suite hardening
+
+- **HTTP observability suite** (`http_observability.rs`): middleware registration, access log on/off, handler console flush, recover → 500, glyph `⊏ @http.log`
+- **Test I/O capture** (`begin_test_io_capture` / `take_test_io_capture` / `last_registered_middleware`) so side effects are assertable in-process
+- **Sugar dual-dialect suite** (`sugar_dual_dialect.rs`)
+- **Example gates** + **docs contract** CLI tests
+- Contributor guide: `docs/book/testing.md`
+
+### Fixed
+
+- (from 0.1.4) HTTP console flush + real `@http.log` / recover — regressions now locked
+
 ## [0.1.4] — 2026-07-28
 
 ### Fixed

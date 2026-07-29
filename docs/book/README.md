@@ -25,6 +25,7 @@ This book is a linear path. You can stop after any chapter and experiment in [St
 17. [Text RPG](rpg.md) — `@game` tutorial
 18. [Embedding](embedding.md) — `RiteEngine` from Rust
 19. [Browser & Studio](browser.md) — hosted site, WASM limits
+20. [Testing (contributors)](testing.md) — suite map, HTTP I/O capture, PR checklist
 
 ## Glyph ↔ ASCII at a glance
 

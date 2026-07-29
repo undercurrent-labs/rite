@@ -112,9 +112,7 @@ async fn e2e_console_and_http_log_emit() {
 "#
     .to_string();
 
-    // Capture process output is hard in unit tests; verify handler succeeds and
-    // middleware is registered by checking response + that log middleware path runs
-    // without panicking. Access log goes to stderr (visible in --nocapture runs).
+    // Full stream assertions live in http_observability.rs; here we keep a smoke path.
     let handle = spawn_server(source).await;
     let addr = wait_for_bind(Duration::from_secs(3)).await;
     let url = format!("http://{}/ping", addr);
