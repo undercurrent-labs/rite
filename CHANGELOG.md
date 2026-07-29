@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.1.8] — 2026-07-29
+
+### Added
+
+- **`rite skill install|update|status|path`** — install agent skill into Grok/Claude/Cursor (cached under `~/.local/share/rite`, state in `~/.config/rite/config.json`)
+- **`rite update` / `self-update`** — check/install CLI from GitHub Releases; report skill freshness vs last pull
+- **`rite vscode install|download|info`** — fetch `.vsix` and install via `code`/`cursor`
+- **Site `/agents`** — agent-friendly install docs + skill/vsix download endpoints
+- **Release assets**: `rite-agent-skill.tar.gz` / `.zip`, `rite.vsix`
+- Packaging scripts: `scripts/package-skill.sh`; site build copies skill to `/skill/`
+
 ## [0.1.7] — 2026-07-29
 
 ### Added

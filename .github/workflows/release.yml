@@ -121,9 +121,45 @@ jobs:
             dist/rite-*
             dist/SHA256SUMS-*
 
+  vscode:
+    name: VS Code VSIX
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 20
+          package-manager-cache: false
+      - name: Package VSIX
+        working-directory: editors/vscode
+        run: |
+          set -euo pipefail
+          npm install
+          npm run compile
+          npx --yes @vscode/vsce@3 package --no-dependencies -o rite.vsix
+          ls -la rite.vsix
+      - name: Upload VSIX artifact
+        uses: actions/upload-artifact@v5
+        with:
+          name: rite-vsix
+          path: editors/vscode/rite.vsix
+
+  skill:
+    name: Agent skill package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Package skill
+        run: bash scripts/package-skill.sh dist/skill
+      - name: Upload skill artifact
+        uses: actions/upload-artifact@v5
+        with:
+          name: rite-skill
+          path: dist/skill/*
+
   publish:
     name: Publish GitHub Release
-    needs: [build]
+    needs: [build, vscode, skill]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -150,21 +186,34 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p dist
-          # Flatten artifacts
+          # Flatten platform artifacts
           find artifacts -type f \( -name 'rite-*.tar.gz' -o -name 'rite-*.zip' -o -name 'SHA256SUMS-*' \) -exec cp -v {} dist/ \;
+          # Skill bundle
+          find artifacts -type f \( -name 'rite-agent-skill.tar.gz' -o -name 'rite-agent-skill.zip' \) -exec cp -v {} dist/ \;
+          # VSIX
+          find artifacts -type f -name '*.vsix' -exec cp -v {} dist/rite.vsix \;
           # Merge checksums
-          cat dist/SHA256SUMS-* | sort -k2 > dist/SHA256SUMS
+          cat dist/SHA256SUMS-* 2>/dev/null | sort -k2 > dist/SHA256SUMS || true
           rm -f dist/SHA256SUMS-*
+          if command -v sha256sum >/dev/null; then
+            (cd dist && for f in rite-agent-skill.tar.gz rite-agent-skill.zip rite.vsix; do
+              [[ -f "$f" ]] && sha256sum "$f" >> SHA256SUMS
+            done) || true
+          fi
           # Version manifest
           cat > dist/version-manifest.json <<EOF
           {
             "version": "${{ steps.ver.outputs.version }}",
             "commit": "${{ github.sha }}",
-            "repo": "${{ github.repository }}"
+            "repo": "${{ github.repository }}",
+            "assets": {
+              "skill": "rite-agent-skill.tar.gz",
+              "vscode": "rite.vsix"
+            }
           }
           EOF
           ls -la dist/
-          cat dist/SHA256SUMS
+          cat dist/SHA256SUMS || true
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3
@@ -177,6 +226,7 @@ jobs:
           files: |
             dist/*.tar.gz
             dist/*.zip
+            dist/*.vsix
             dist/SHA256SUMS
             dist/version-manifest.json
           body: |
@@ -193,6 +243,22 @@ jobs:
             ```
 
             Binaries install to `~/.local/bin` by default (`rite` + `rite-lsp`).
+
+            ### Agent skill
+
+            ```bash
+            rite skill install --target all
+            # or download: rite-agent-skill.tar.gz from assets / https://rite.undrc.dev/skill/
+            ```
+
+            ### VS Code / Cursor
+
+            ```bash
+            rite vscode install
+            # or Install from VSIX: rite.vsix
+            ```
+
+            See https://rite.undrc.dev/agents
 
             ### Manual download
 

@@ -127,13 +127,11 @@ jobs:
       - name: package vsix
         working-directory: editors/vscode
         run: npx --yes @vscode/vsce@3 package --no-dependencies -o rite.vsix
-        continue-on-error: true
       - name: upload vsix
         uses: actions/upload-artifact@v5
         with:
           name: rite-vsix
-          path: editors/vscode/*.vsix
-          if-no-files-found: warn
+          path: editors/vscode/rite.vsix
 
   deploy:
     name: Deploy Cloudflare

@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from "vue-router";
 import HomeView from "./views/HomeView.vue";
 import DocsView from "./views/DocsView.vue";
 import StudioView from "./views/StudioView.vue";
+import AgentsView from "./views/AgentsView.vue";
 
 export const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -18,6 +19,12 @@ export const router = createRouter({
       name: "docs",
       component: DocsView,
       meta: { title: "Docs · Rite" },
+    },
+    {
+      path: "/agents",
+      name: "agents",
+      component: AgentsView,
+      meta: { title: "Agents · Rite" },
     },
     {
       path: "/studio",

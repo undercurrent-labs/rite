@@ -1,5 +1,11 @@
 //! Rite CLI — run, build, check, fmt, repl, test, doc, and more.
 
+mod config;
+mod github;
+mod skill_cmd;
+mod update_cmd;
+mod vscode_cmd;
+
 use axum::extract::State;
 use axum::routing::{get, post};
 use axum::{Json, Router};
@@ -169,10 +175,103 @@ enum Commands {
         #[command(subcommand)]
         target: DescribeCmd,
     },
+    /// Install / update the agent skill bundle (Grok, Claude, Cursor, …)
+    Skill {
+        #[command(subcommand)]
+        cmd: SkillCmd,
+    },
+    /// Check for / install CLI and skill updates
+    Update {
+        /// Only report; exit 1 if an update is available
+        #[arg(long)]
+        check: bool,
+        /// Reinstall even if versions match
+        #[arg(long)]
+        force: bool,
+        /// Install a specific release tag (e.g. v0.1.7)
+        #[arg(long)]
+        version: Option<String>,
+    },
+    /// Alias for `update`
+    #[command(name = "self-update")]
+    SelfUpdate {
+        #[arg(long)]
+        check: bool,
+        #[arg(long)]
+        force: bool,
+        #[arg(long)]
+        version: Option<String>,
+    },
+    /// Download / install the VS Code (or Cursor) extension
+    Vscode {
+        #[command(subcommand)]
+        cmd: VscodeCmd,
+    },
     /// Print version
     Version {
         #[arg(long)]
         verbose: bool,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+enum SkillCmd {
+    /// Download the skill into the local cache and install into agent skill dirs
+    Install {
+        /// Targets: grok, claude, cursor, project, all, cache (comma-separated)
+        #[arg(long, default_value = "grok")]
+        target: String,
+        /// Install to a specific directory (overrides --target)
+        #[arg(long)]
+        dir: Option<PathBuf>,
+        /// Source: local path, archive, or URL
+        #[arg(long)]
+        from: Option<String>,
+        /// Release tag to fetch (default: latest)
+        #[arg(long)]
+        version: Option<String>,
+        /// Refresh even if cache looks current
+        #[arg(long)]
+        force: bool,
+    },
+    /// Re-fetch skill and reinstall to previously recorded paths
+    Update {
+        #[arg(long)]
+        force: bool,
+    },
+    /// Show install state, cache path, and last pull time
+    Status,
+    /// Print default skill install paths
+    Path,
+}
+
+#[derive(Subcommand, Debug)]
+enum VscodeCmd {
+    /// Download the .vsix and install via `code` / `cursor` if available
+    Install {
+        /// Editor CLI: code, cursor, codium (default: auto-detect)
+        #[arg(long)]
+        editor: Option<String>,
+        /// Only download; print path and metadata
+        #[arg(long)]
+        download_only: bool,
+        /// Output path for the .vsix
+        #[arg(long, short)]
+        out: Option<PathBuf>,
+        #[arg(long)]
+        version: Option<String>,
+    },
+    /// Download the .vsix without installing
+    Download {
+        #[arg(long, short)]
+        out: Option<PathBuf>,
+        #[arg(long)]
+        version: Option<String>,
+    },
+    /// Show release asset details and install instructions
+    Info {
+        #[arg(long)]
+        version: Option<String>,
     },
 }
 
@@ -266,6 +365,10 @@ fn is_known_subcommand(name: &str) -> bool {
             | "emit-rust"
             | "docs"
             | "describe"
+            | "skill"
+            | "update"
+            | "self-update"
+            | "vscode"
             | "version"
             | "help"
     )
@@ -742,6 +845,38 @@ async fn run(cli: Cli) -> anyhow::Result<ExitCode> {
             println!("documentation written to {}", out.display());
             Ok(ExitCode::SUCCESS)
         }
+        Commands::Skill { cmd } => match cmd {
+            SkillCmd::Install {
+                target,
+                dir,
+                from,
+                version,
+                force,
+            } => skill_cmd::install(&target, dir, from, version, force).await,
+            SkillCmd::Update { force } => skill_cmd::update(force).await,
+            SkillCmd::Status => skill_cmd::status(),
+            SkillCmd::Path => skill_cmd::print_paths(),
+        },
+        Commands::Update {
+            check,
+            force,
+            version,
+        }
+        | Commands::SelfUpdate {
+            check,
+            force,
+            version,
+        } => update_cmd::run(check, force, version).await,
+        Commands::Vscode { cmd } => match cmd {
+            VscodeCmd::Install {
+                editor,
+                download_only,
+                out,
+                version,
+            } => vscode_cmd::install(editor, download_only, out, version).await,
+            VscodeCmd::Download { out, version } => vscode_cmd::download(out, version).await,
+            VscodeCmd::Info { version } => vscode_cmd::info(version).await,
+        },
     }
 }
 

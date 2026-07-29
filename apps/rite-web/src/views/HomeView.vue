@@ -74,6 +74,12 @@ do host.console.println(str(square(12)))`;
           >
             Install →
           </RouterLink>
+          <RouterLink
+            to="/agents"
+            class="inline-flex items-center rounded-lg px-5 py-2.5 text-sm font-medium text-slate-400 hover:text-slate-100"
+          >
+            Agents &amp; skill
+          </RouterLink>
         </div>
       </div>
     </section>

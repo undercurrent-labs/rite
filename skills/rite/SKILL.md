@@ -1,3 +1,11 @@
+---
+name: rite
+description: >
+  Author and debug Rite scripts (glyph/ASCII dual syntax, explicit effects,
+  capabilities @fs/@json/@csv/@db/@http, CLI). Use when writing .rite files,
+  fixing Rite diagnostics, or using rite run/fmt/check/skill.
+---
+
 # Rite Agent Skill
 
 **Language version:** 1  
@@ -14,7 +22,7 @@ Rite is a Rust-backed scripting language with dual **glyphic** and **ASCII** syn
 3. Truthiness: only `false` and `none` are falsey. Empty lists/strings/zero are truthy.
 4. Bindings: `←`/`<-` immutable; `↢`/`<~` mutable with `:=` assignment.
 5. Pipelines pass the prior value as the first argument: `xs → map { |x| x * 2 }`.
-6. Capabilities: `@console`, `@fs`, `@json`, `@http`, `@clock`, `@env`, `@process`, `@random`, `@game`, `@store`.
+6. Capabilities: `@console`, `@fs`, `@json`, `@csv`, `@db`, `@http`, `@clock`, `@env`, `@process`, `@random`, `@game`, `@store`.
 7. Browser runtime forbids `@process` and unrestricted native FS/net; use virtual HTTP / memory FS in Studio.
 8. Prefer `rite check` / `rite fmt` / `rite run --allow-all` for local validation.
 

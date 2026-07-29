@@ -61,7 +61,9 @@ Edit `crates/rite-lsp`. Prefer putting analysis logic in `rite-analysis` so Stud
 
 - Fenced `rite` examples under `docs/` should stay parseable.  
 - Prefer running via `rite run` / conformance rather than untested snippets.  
-- Agent skill: `rite docs agent --output skills/rite`.
+- Agent skill: `rite docs agent --output skills/rite` (users install with `rite skill install`).  
+- Package skill for site/release: `bash scripts/package-skill.sh dist/skill`.  
+- Package VS Code VSIX: `cd editors/vscode && npm run compile && npx vsce package --no-dependencies -o rite.vsix`.
 
 ## Studio examples
 

@@ -18,6 +18,15 @@
     "in": { "ascii": "in", "glyph": "∈", "token": "In" },
     "not_in": { "ascii": "not in", "glyph": "∉", "token": "NotIn" },
     "coalesce": { "ascii": "??", "glyph": "??", "token": "Coalesce" },
-    "assign": { "ascii": ":=", "glyph": ":=", "token": "Assign" }
+    "assign": { "ascii": ":=", "glyph": ":=", "token": "Assign" },
+    "use": { "ascii": "use", "glyph": "⊏", "token": "Use" },
+    "and": { "ascii": "and", "glyph": "∧", "token": "And" },
+    "or": { "ascii": "or", "glyph": "∨", "token": "Or" },
+    "not": { "ascii": "not", "glyph": "¬", "token": "Not" },
+    "xor": { "ascii": "xor", "glyph": "⊻", "token": "Xor" },
+    "say": { "ascii": "say", "glyph": "¶", "token": "Say" },
+    "compose": { "ascii": "compose", "glyph": "∘", "token": "Compose" },
+    "forall": { "ascii": "for", "glyph": "∀", "token": "ForAll" },
+    "unless": { "ascii": "unless", "glyph": "¿", "token": "Unless" }
   }
 }

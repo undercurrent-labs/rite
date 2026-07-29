@@ -80,6 +80,115 @@
       "permission": "console"
     }
   ],
+  "csv": [
+    {
+      "arity": 1,
+      "docs": "Parse a CSV string into a list of records (ok/err). Options: headers (default true), delimiter, skip_empty.",
+      "effectful": false,
+      "name": "decode",
+      "permission": ""
+    },
+    {
+      "arity": 1,
+      "docs": "Serialize a list of records (or list of lists) to a CSV string.",
+      "effectful": false,
+      "name": "encode",
+      "permission": ""
+    },
+    {
+      "arity": 1,
+      "docs": "Read and parse a CSV file into a list of records.",
+      "effectful": false,
+      "name": "read",
+      "permission": "fs:read"
+    },
+    {
+      "arity": 2,
+      "docs": "Write a list of records as CSV to a file.",
+      "effectful": true,
+      "name": "write",
+      "permission": "fs:write"
+    }
+  ],
+  "db": [
+    {
+      "arity": 0,
+      "docs": "Open a DuckDB connection. Path omitted or \":memory:\" → in-memory. Needs --allow db or --allow db=path.",
+      "effectful": true,
+      "name": "open",
+      "permission": "db"
+    },
+    {
+      "arity": 1,
+      "docs": "Close a database connection handle.",
+      "effectful": true,
+      "name": "close",
+      "permission": "db"
+    },
+    {
+      "arity": 2,
+      "docs": "Execute SQL that does not return rows (DDL/DML). Optional params list.",
+      "effectful": true,
+      "name": "exec",
+      "permission": "db"
+    },
+    {
+      "arity": 2,
+      "docs": "Run a SQL query and return ok(list of records). Optional params list.",
+      "effectful": true,
+      "name": "query",
+      "permission": "db"
+    },
+    {
+      "arity": 2,
+      "docs": "Prepare a SQL statement; returns a statement handle.",
+      "effectful": true,
+      "name": "prepare",
+      "permission": "db"
+    },
+    {
+      "arity": 1,
+      "docs": "Execute a prepared statement as a query. Optional params list.",
+      "effectful": true,
+      "name": "query_prepared",
+      "permission": "db"
+    },
+    {
+      "arity": 1,
+      "docs": "Execute a prepared statement without returning rows. Optional params list.",
+      "effectful": true,
+      "name": "exec_prepared",
+      "permission": "db"
+    },
+    {
+      "arity": 1,
+      "docs": "Drop a prepared statement handle.",
+      "effectful": true,
+      "name": "close_stmt",
+      "permission": "db"
+    },
+    {
+      "arity": 1,
+      "docs": "BEGIN a transaction on the connection.",
+      "effectful": true,
+      "name": "begin",
+      "permission": "db"
+    },
+    {
+      "arity": 1,
+      "docs": "COMMIT the current transaction.",
+      "effectful": true,
+      "name": "commit",
+      "permission": "db"
+    },
+    {
+      "arity": 1,
+      "docs": "ROLLBACK the current transaction.",
+      "effectful": true,
+      "name": "rollback",
+      "permission": "db"
+    }
+  ],
   "env": [
     {
       "arity": 1,
@@ -316,6 +425,20 @@
       "docs": "Build an explicit HTTP response record.",
       "effectful": false,
       "name": "response",
+      "permission": ""
+    },
+    {
+      "arity": 0,
+      "docs": "Middleware: log each request as `rite: METHOD path status duration` to stderr. Enable with `use @http.log` or `⊏ @http.log`.",
+      "effectful": false,
+      "name": "log",
+      "permission": ""
+    },
+    {
+      "arity": 0,
+      "docs": "Middleware: convert handler panics/errors into JSON 500 responses. Enable with `use @http.recover` or `⊏ @http.recover`.",
+      "effectful": false,
+      "name": "recover",
       "permission": ""
     }
   ],

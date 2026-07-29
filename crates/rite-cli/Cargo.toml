@@ -30,3 +30,9 @@ serde_json = { workspace = true }
 tracing-subscriber = { workspace = true }
 axum = { workspace = true }
 uuid = { workspace = true }
+reqwest = { workspace = true }
+dirs = "5"
+flate2 = "1"
+tar = "0.4"
+sha2 = { workspace = true }
+hex = { workspace = true }

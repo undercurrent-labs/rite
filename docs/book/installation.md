@@ -51,12 +51,20 @@ source ~/.bashrc
 
 ```bash
 rite version --verbose
-rite run -e '! @console.println("ok")' 2>/dev/null || true
 echo '! @console.println("hello from work")' > /tmp/hi.rite
 rite run /tmp/hi.rite
+# or: rite /tmp/hi.rite
 ```
 
-(`rite run -e` may not exist on all versions — a tiny file always works.)
+### Agent skill, self-update, VS Code
+
+```bash
+rite skill install --target all   # Grok / Claude / Cursor skill dirs
+rite update --check               # CLI + skill freshness
+rite vscode install               # download .vsix + install via code/cursor
+```
+
+Details: [Agents & skill](agents.md) · [https://rite.undrc.dev/agents](https://rite.undrc.dev/agents)
 
 ### Security notes
 

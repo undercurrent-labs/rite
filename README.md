@@ -39,6 +39,12 @@ rite studio --port 4041           # local Studio API + UI
 rite docs build && rite docs agent
 rite describe language --json
 
+# Agent skill, self-update, VS Code extension
+rite skill install --target all
+rite update --check
+rite vscode install
+# Site: https://rite.undrc.dev/agents
+
 cargo test --workspace
 ```
 
