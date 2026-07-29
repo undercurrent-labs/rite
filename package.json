@@ -13,6 +13,9 @@
     "studio:build:full": "bash scripts/build-wasm.sh && pnpm --dir apps/rite-studio build",
     "vscode:compile": "pnpm --dir editors/vscode exec tsc -p .",
     "docs:build": "cargo run -p rite-cli -- docs build",
-    "docs:check": "cargo run -p rite-cli -- docs check"
+    "docs:check": "cargo run -p rite-cli -- docs check",
+    "test:packaging": "bash scripts/check-packaging.sh",
+    "package:skill": "bash scripts/package-skill.sh dist/skill",
+    "package:vsix": "bash scripts/package-vsix.sh dist/vscode/rite.vsix"
   }
 }

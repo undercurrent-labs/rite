@@ -63,7 +63,9 @@ Edit `crates/rite-lsp`. Prefer putting analysis logic in `rite-analysis` so Stud
 - Prefer running via `rite run` / conformance rather than untested snippets.  
 - Agent skill: `rite docs agent --output skills/rite` (users install with `rite skill install`).  
 - Package skill for site/release: `bash scripts/package-skill.sh dist/skill`.  
-- Package VS Code VSIX: `cd editors/vscode && npm run compile && npx vsce package --no-dependencies -o rite.vsix`.
+- Package VS Code VSIX: `bash scripts/package-vsix.sh dist/vscode/rite.vsix`.  
+- **Before push / release:** `bash scripts/check-packaging.sh` or  
+  `cargo test -p rite-cli --test packaging` (skill always; VSIX if node/npm present).
 
 ## Studio examples
 

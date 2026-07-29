@@ -131,31 +131,28 @@ jobs:
           node-version: 20
           package-manager-cache: false
       - name: Package VSIX
-        working-directory: editors/vscode
-        run: |
-          set -euo pipefail
-          npm install
-          npm run compile
-          npx --yes @vscode/vsce@3 package --no-dependencies -o rite.vsix
-          ls -la rite.vsix
+        run: bash scripts/package-vsix.sh dist/vscode/rite.vsix
       - name: Upload VSIX artifact
         uses: actions/upload-artifact@v5
         with:
           name: rite-vsix
-          path: editors/vscode/rite.vsix
+          path: dist/vscode/rite.vsix
 
   skill:
     name: Agent skill package
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      - name: Package skill
+      - name: Package skill (relative OUT — same as local gate)
         run: bash scripts/package-skill.sh dist/skill
       - name: Upload skill artifact
         uses: actions/upload-artifact@v5
         with:
           name: rite-skill
-          path: dist/skill/*
+          path: |
+            dist/skill/rite-agent-skill.tar.gz
+            dist/skill/rite-agent-skill.zip
+            dist/skill/SHA256SUMS
 
   publish:
     name: Publish GitHub Release

@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import * as path from "path";
+import * as os from "os";
 import { LanguageClient, LanguageClientOptions, ServerOptions, TransportKind } from "vscode-languageclient/node";
 import { spawn } from "child_process";
 
@@ -17,16 +18,16 @@ function findBinary(setting: string, fallbacks: string[]): string {
   return fallbacks[0] || "rite";
 }
 
-function runRite(args: string[], cwd?: string): Thenable<string> {
+function runRite(args: string[], cwd?: string): Promise<string> {
   const bin = findBinary("binaryPath", ["rite"]);
   return new Promise((resolve, reject) => {
     const child = spawn(bin, args, { cwd, shell: false });
     let out = "";
     let err = "";
-    child.stdout.on("data", (d) => (out += d.toString()));
-    child.stderr.on("data", (d) => (err += d.toString()));
+    child.stdout.on("data", (d: Buffer) => (out += d.toString()));
+    child.stderr.on("data", (d: Buffer) => (err += d.toString()));
     child.on("error", reject);
-    child.on("close", (code) => {
+    child.on("close", (code: number | null) => {
       if (code === 0) resolve(out);
       else reject(new Error(err || out || `exit ${code}`));
     });
@@ -75,8 +76,8 @@ export async function activate(context: vscode.ExtensionContext) {
       const ed = vscode.window.activeTextEditor;
       if (!ed) return;
       const sel = ed.document.getText(ed.selection);
-      const tmp = path.join(require("os").tmpdir(), "rite-selection.rite");
-      await vscode.workspace.fs.writeFile(vscode.Uri.file(tmp), Buffer.from(sel));
+      const tmp = path.join(os.tmpdir(), "rite-selection.rite");
+      await vscode.workspace.fs.writeFile(vscode.Uri.file(tmp), Buffer.from(sel, "utf8"));
       const out = await runRite(["run", tmp, "--allow-all"]);
       vscode.window.showInformationMessage(out.slice(0, 200));
     }],

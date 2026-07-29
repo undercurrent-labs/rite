@@ -67,3 +67,9 @@ tmp/
 # Private / internal specs (not published)
 /mvp.md
 /v1.md
+
+# Packaging test outputs
+/target/packaging-test/
+/dist/skill-check/
+/dist/vscode/
+*.vsix

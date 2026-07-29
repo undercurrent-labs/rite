@@ -4,6 +4,10 @@
   "description": "Rite language support — syntax, LSP, run/check/compile, dialect conversion",
   "version": "1.0.0",
   "publisher": "undercurrent-labs",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/undercurrent-labs/rite.git"
+  },
   "engines": { "vscode": "^1.85.0" },
   "categories": ["Programming Languages"],
   "activationEvents": ["onLanguage:rite"],

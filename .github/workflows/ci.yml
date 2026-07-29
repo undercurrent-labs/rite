@@ -36,6 +36,10 @@ jobs:
         run: cargo build -p rite-cli -p rite-lsp
       - name: test
         run: cargo test --workspace --all-features
+      - name: packaging gate (skill archives)
+        # VSIX skipped here (dedicated vscode job); skill packaging always runs.
+        run: |
+          RITE_SKIP_VSIX=1 cargo test -p rite-cli --test packaging -- --nocapture
       - name: build release tools
         run: cargo build -p rite-cli -p rite-lsp --release
       - name: doctests
@@ -119,19 +123,20 @@ jobs:
         with:
           node-version: 20
           package-manager-cache: false
-      - name: compile extension
-        working-directory: editors/vscode
-        run: |
-          npm install
-          npm run compile
-      - name: package vsix
-        working-directory: editors/vscode
-        run: npx --yes @vscode/vsce@3 package --no-dependencies -o rite.vsix
+      - name: package skill + vsix (same scripts as Release)
+        run: bash scripts/check-packaging.sh
       - name: upload vsix
         uses: actions/upload-artifact@v5
         with:
           name: rite-vsix
-          path: editors/vscode/rite.vsix
+          path: dist/vscode/rite.vsix
+      - name: upload skill
+        uses: actions/upload-artifact@v5
+        with:
+          name: rite-skill
+          path: |
+            dist/skill-check/rite-agent-skill.tar.gz
+            dist/skill-check/rite-agent-skill.zip
 
   deploy:
     name: Deploy Cloudflare
