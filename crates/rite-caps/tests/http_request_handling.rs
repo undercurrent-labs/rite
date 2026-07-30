@@ -146,7 +146,7 @@ async fn plain_handlers_serve_concurrently() {
 @http.listen "127.0.0.1:0" ⟦
   use @http.log
   GET "/slow" ⟦
-    ! @clock.sleep(400)
+    ! @clock.sleep(1000)
     ^ 200 ⟨ok: true⟩
   ⟧
 ⟧
@@ -165,9 +165,14 @@ async fn plain_handlers_serve_concurrently() {
     let elapsed = t0.elapsed();
     assert_eq!(a.expect("first").status().as_u16(), 200);
     assert_eq!(b.expect("second").status().as_u16(), 200);
+    // Serial is ~2s, concurrent ~1s, so 1.5s separates them with 500ms of slack either
+    // way. The handlers used to sleep 400ms against a 700ms ceiling — only 300ms of
+    // margin, which a loaded macOS runner ate: it measured 791ms and failed a property
+    // that holds. Raising the ceiling alone would not have worked, because 800ms of
+    // serial execution would then have passed too; the gap itself had to get wider.
     assert!(
-        elapsed < Duration::from_millis(700),
-        "two 400ms handlers took {elapsed:?}: requests without custom middleware \
+        elapsed < Duration::from_millis(1500),
+        "two 1s handlers took {elapsed:?}: requests without custom middleware \
          must not be serialized behind the handler mutex"
     );
 
