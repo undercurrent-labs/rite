@@ -40,6 +40,12 @@ pub struct ServerState {
     /// Middleware from `use @http.log` / `use { |req, next| … }`.
     pub middleware: Vec<HttpMiddleware>,
     pub lock: Arc<AsyncMutex<()>>,
+    /// Module scope captured when `@http.listen` ran, so handlers can see
+    /// top-level bindings (`config ← …`) and not just function names. Cloning an
+    /// `Environment` shares its frames, so this is a handful of `Arc` bumps —
+    /// and it means module state persists across requests, which is what a
+    /// server with a top-level cache or counter should do.
+    pub module_env: rite_runtime::Environment,
 }
 
 impl HttpCap {
@@ -160,6 +166,7 @@ impl HttpCap {
             perms: perms.clone(),
             middleware: vec![],
             lock: Arc::new(AsyncMutex::new(())),
+            module_env: ctx.env.clone(),
         };
         self.serve(addr_str, state, perms).await
     }
@@ -415,17 +422,7 @@ async fn dispatch_rite(state: ServerState, idx: usize, req: Request<Body>) -> Re
 
     let mut ctx = RuntimeContext::new();
     crate::install_defaults(&mut ctx, state.perms.clone());
-    for (name, f) in &state.functions {
-        ctx.functions.insert(name.clone(), f.clone());
-        let clos = Value::Function(rite_runtime::Closure {
-            id: 0,
-            name: Some(name.clone()),
-            params: f.params.clone(),
-            env: Arc::new(parking_lot::RwLock::new(rite_runtime::Environment::new())),
-            body: f.body.clone(),
-        });
-        ctx.env.define_name(name, clos, false);
-    }
+    install_module_scope(&mut ctx, &state.module_env, &state.functions);
 
     let param = route.param_name.clone().unwrap_or_else(|| "req".into());
     let result = run_middleware_chain(
@@ -520,6 +517,10 @@ fn run_middleware_chain<'a>(
                 handler_param: handler_param.to_string(),
                 perms: perms.clone(),
                 functions: ctx.functions.clone(),
+                // Already carries the module scope installed for this request, so a
+                // handler reached through `next()` resolves the same names as one
+                // reached directly.
+                module_env: ctx.env.clone(),
             };
             next_continuations().lock().insert(next_id, cont);
         }
@@ -554,6 +555,37 @@ struct NextContinuation {
     handler_param: String,
     perms: PermissionSet,
     functions: HashMap<String, FunctionEntry>,
+    module_env: rite_runtime::Environment,
+}
+
+/// Give a per-request context the module scope captured at listen time.
+///
+/// Handlers run in a fresh `RuntimeContext` (own console buffer, own capability
+/// handles), but they must still resolve the names the script defined at the top
+/// level. Installing the captured environment supplies both top-level bindings and
+/// the function closures the module already bound, so a handler body sees exactly
+/// what it saw lexically. `ctx.functions` is still populated because the call path
+/// consults it; a function only gets a synthetic closure here if the module scope
+/// somehow lacks one (a `legacy listen` route table has no module env at all).
+fn install_module_scope(
+    ctx: &mut RuntimeContext,
+    module_env: &rite_runtime::Environment,
+    functions: &HashMap<String, FunctionEntry>,
+) {
+    ctx.env = module_env.clone();
+    for (name, f) in functions {
+        ctx.functions.insert(name.clone(), f.clone());
+        if ctx.env.get(name).is_none() {
+            let clos = Value::Function(rite_runtime::Closure {
+                id: 0,
+                name: Some(name.clone()),
+                params: f.params.clone(),
+                env: Arc::new(parking_lot::RwLock::new(module_env.clone())),
+                body: f.body.clone(),
+            });
+            ctx.env.define_name(name, clos, false);
+        }
+    }
 }
 
 fn next_continuations() -> &'static Mutex<HashMap<u64, NextContinuation>> {
@@ -574,17 +606,7 @@ fn ensure_http_next_invoker() {
             let mut inner = RuntimeContext::new();
             crate::install_defaults(&mut inner, cont.perms.clone());
             inner.allow_all = cont.perms.allow_all;
-            for (name, f) in &cont.functions {
-                inner.functions.insert(name.clone(), f.clone());
-                let clos = Value::Function(rite_runtime::Closure {
-                    id: 0,
-                    name: Some(name.clone()),
-                    params: f.params.clone(),
-                    env: Arc::new(parking_lot::RwLock::new(rite_runtime::Environment::new())),
-                    body: f.body.clone(),
-                });
-                inner.env.define_name(name, clos, false);
-            }
+            install_module_scope(&mut inner, &cont.module_env, &cont.functions);
             let result = run_middleware_chain(
                 &mut inner,
                 &cont.customs,

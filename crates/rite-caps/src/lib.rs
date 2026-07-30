@@ -70,6 +70,9 @@ fn register_http_routes(
         perms,
         middleware: mw,
         lock: Arc::new(AsyncMutex::new(())),
+        // Module scope as it stood when `@http.listen` ran: top-level bindings plus
+        // the function closures, so handlers resolve what they see lexically.
+        module_env: ctx.env.clone(),
     };
     let _ = FunctionEntry {
         params: vec![],
