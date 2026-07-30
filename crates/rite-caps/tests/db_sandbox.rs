@@ -4,6 +4,16 @@
 
 use rite_caps::{install_defaults, Permission, PermissionSet};
 use rite_runtime::{run_source, RuntimeContext};
+use std::path::Path;
+
+/// A path spelled for embedding in Rite source and SQL.
+///
+/// A backslash starts an escape sequence in a Rite string, so a Windows path dropped in
+/// raw turns `C:\Users\…` into `\U`, `\A`, … and the script fails to compile before any
+/// sandbox check runs. DuckDB accepts forward slashes on every platform it supports.
+fn sql_path(path: &Path) -> String {
+    path.display().to_string().replace('\\', "/")
+}
 
 /// Run `src` under exactly `perms`, returning the script's value rendered the way
 /// `@console.println` would render it (`ok(…)` / `err(…)` included).
@@ -55,7 +65,7 @@ conn ← ! @db.open()?
 ! @db.exec(conn, "INSERT INTO t VALUES ('escaped-the-sandbox')")?
 ^ ! @db.exec(conn, "COPY t TO '{}' (HEADER, DELIMITER ',')")
 "#,
-        target.display()
+        sql_path(&target)
     );
     let out = run_with(db_memory_only(), &src)
         .await
@@ -80,7 +90,7 @@ async fn attach_outside_sandbox_is_denied() {
 conn ← ! @db.open()?
 ^ ! @db.exec(conn, "ATTACH '{}' AS other")
 "#,
-        target.display()
+        sql_path(&target)
     );
     let out = run_with(db_memory_only(), &src)
         .await
@@ -208,7 +218,12 @@ async fn file_backed_db_under_granted_root_works() {
     // Somewhere outside the granted root, portably: `/tmp` does not exist on Windows.
     let outside_path = std::env::temp_dir().join("rite-db-escape-root.csv");
     let _ = std::fs::remove_file(&outside_path);
-    let outside = outside_path.display().to_string().replace('\\', "/");
+    let outside = sql_path(&outside_path);
+    // Something outside the granted root that definitely exists, so a *successful* read
+    // would be visible. `/etc/passwd` is absent on Windows, which made the leak check
+    // pass there for the wrong reason.
+    let outside_readable = std::env::temp_dir().join("rite-db-outside-read.csv");
+    std::fs::write(&outside_readable, "secret\nleaked-row\n").expect("write probe file");
 
     let src = format!(
         r#"
@@ -218,13 +233,14 @@ conn ← ! @db.open("{db}")?
 ! @db.exec(conn, "CHECKPOINT")?
 inside ← ! @db.exec(conn, "COPY t TO '{csv}' (HEADER)")
 outside ← ! @db.exec(conn, "COPY t TO '{outside}' (HEADER)")
-leak ← ! @db.query(conn, "SELECT * FROM read_csv('/etc/passwd', header=false, sep=':') LIMIT 1")
+leak ← ! @db.query(conn, "SELECT * FROM read_csv('{leakable}', header=true) LIMIT 1")
 rows ← ! @db.query(conn, "SELECT name FROM t")?
 ! @db.close(conn)?
 ^ ⟨rows: rows, inside: inside, outside: outside, leak: leak⟩
 "#,
-        db = db_path.display(),
-        csv = inside_csv.display()
+        db = sql_path(&db_path),
+        csv = sql_path(&inside_csv),
+        leakable = sql_path(&outside_readable)
     );
     let out = run_with(perms, &src)
         .await
@@ -241,7 +257,7 @@ rows ← ! @db.query(conn, "SELECT name FROM t")?
         "COPY TO outside the granted root must fail: {out}"
     );
     assert!(
-        !out.contains("root:"),
+        !out.contains("leaked-row"),
         "read_csv outside the granted root leaked: {out}"
     );
     assert!(!outside_path.exists(), "wrote outside the granted root");
@@ -250,13 +266,20 @@ rows ← ! @db.query(conn, "SELECT name FROM t")?
 #[tokio::test]
 async fn allow_all_keeps_full_duckdb_access() {
     // `--allow-all` is the documented opt-out; it must not be broken by hardening.
+    // Reads a file this test creates rather than `/etc/passwd`, which does not exist on
+    // Windows — the assertion there was passing without the read ever succeeding.
+    let probe = std::env::temp_dir().join("rite-db-allow-all-probe.csv");
+    std::fs::write(&probe, "a\n1\n2\n").expect("write probe file");
     let out = run_with(
         PermissionSet::allow_all(),
-        r#"
+        &format!(
+            r#"
 conn ← ! @db.open()?
-rows ← ! @db.query(conn, "SELECT count(*) AS n FROM read_csv('/etc/passwd', header=false, sep=':')")?
+rows ← ! @db.query(conn, "SELECT count(*) AS n FROM read_csv('{}', header=true)")?
 ^ rows
 "#,
+            sql_path(&probe)
+        ),
     )
     .await
     .expect("allow_all should keep external access");
