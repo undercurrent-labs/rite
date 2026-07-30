@@ -126,6 +126,26 @@ rite run examples/05-capabilities/main.rite
 # usually works without --allow-all
 ```
 
+## Randomness and reproducibility
+
+`@random` is seeded from the operating system, so two runs of the same script differ.
+Call `@random.seed(n)` to pin a sequence:
+
+```rite
+! @random.seed(1)
+! @console.println(str(! @random.int(1, 6)))   // same value on every run
+```
+
+A seed covers the whole capability — `int`, `float`, `choose`, `shuffle` and `uuid` all
+draw from the one generator, so a seeded run reproduces its identifiers too. Seed at the
+top of the script, before anything draws from it.
+
+Studio pins a seed for you, so editing and re-running shows changes you made rather than
+noise you didn't.
+
+> `@random` is allowed by default and needs no `--allow`. It is not a cryptographic
+> generator — don't use it for keys, tokens, or anything an attacker gets to guess at.
+
 ## Example: files need FS
 
 ```rite

@@ -61,7 +61,7 @@ impl HostCapabilities {
             clock: ClockCap::new(),
             env: EnvCap,
             process: ProcessCap,
-            random: Arc::new(RwLock::new(RandomCap::new(42))),
+            random: Arc::new(RwLock::new(RandomCap::from_entropy())),
             http: HttpCap::new(),
             game: Arc::new(RwLock::new(GameCap::new())),
             store: Arc::new(RwLock::new(StoreCap::new())),

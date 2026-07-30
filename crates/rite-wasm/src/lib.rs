@@ -55,6 +55,12 @@ pub struct RunOptions {
     pub allow_all: bool,
     pub timeout_ms: Option<u64>,
     pub seed: Option<u64>,
+    /// Extra in-memory sources, keyed by name.
+    ///
+    /// **Not implemented.** The field is accepted so an existing payload still
+    /// deserialises, but supplying a non-empty map is an error rather than a silent
+    /// no-op: nothing here has ever read it, so a caller who sent files got a script
+    /// run without them and no indication why.
     pub files: HashMap<String, String>,
     #[serde(default)]
     pub browser_safe: bool,
@@ -203,6 +209,21 @@ pub fn hover(source: &str, line: u32, character: u32) -> serde_json::Value {
 pub async fn run(source: &str, options: RunOptions) -> ExecutionResult {
     let browser = options.browser_safe || cfg!(not(feature = "native"));
 
+    if !options.files.is_empty() {
+        return ExecutionResult {
+            ok: false,
+            value: serde_json::Value::Null,
+            stdout: String::new(),
+            stderr: String::new(),
+            error: Some(
+                "`files` is not implemented: this runtime resolves no imports, so the \
+                 supplied sources would be ignored rather than used"
+                    .into(),
+            ),
+            virtual_http: None,
+        };
+    }
+
     if browser && (source.contains("@process") || source.contains("host.process")) {
         return ExecutionResult {
             ok: false,
@@ -247,9 +268,7 @@ pub async fn run(source: &str, options: RunOptions) -> ExecutionResult {
 
         let mut ctx = RuntimeContext::new();
         ctx.allow_all = options.allow_all;
-        if let Some(seed) = options.seed {
-            ctx.rng_seed = seed;
-        }
+        ctx.rng_seed = options.seed;
         if let Some(ms) = options.timeout_ms {
             ctx.budget = ctx
                 .budget

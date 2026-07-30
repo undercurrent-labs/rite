@@ -9,9 +9,23 @@ pub struct RandomCap {
 }
 
 impl RandomCap {
+    /// A reproducible generator, as `@random.seed(n)` and a host-supplied seed produce.
     pub fn new(seed: u64) -> Self {
         Self {
             rng: StdRng::seed_from_u64(seed),
+        }
+    }
+
+    /// The default: seeded from the operating system, so two runs differ.
+    ///
+    /// This used to be `new(42)`, which meant every `rite run` on every machine drew
+    /// the identical sequence forever — a dice roll was a constant. The descriptor for
+    /// `seed` promises "deterministic sequences", which only means something if the
+    /// default is not one, and the book's own example calls `@random.seed(1)` first for
+    /// exactly that reason.
+    pub fn from_entropy() -> Self {
+        Self {
+            rng: StdRng::from_entropy(),
         }
     }
 
@@ -98,7 +112,18 @@ impl RandomCap {
                 }
                 Ok(Value::list(v))
             }
-            "uuid" => Ok(Value::string(uuid::Uuid::new_v4().to_string())),
+            // Drawn from this generator, not from system entropy: `@random.seed(n)`
+            // promises a reproducible run, and a UUID that ignored the seed made every
+            // "deterministic" run non-deterministic in the one place it is most visible.
+            "uuid" => {
+                let mut bytes = [0u8; 16];
+                self.rng.fill(&mut bytes);
+                Ok(Value::string(
+                    uuid::Builder::from_random_bytes(bytes)
+                        .into_uuid()
+                        .to_string(),
+                ))
+            }
             "seed" => {
                 let seed = args.first().and_then(|v| v.as_int()).unwrap_or(0) as u64;
                 self.rng = StdRng::seed_from_u64(seed);

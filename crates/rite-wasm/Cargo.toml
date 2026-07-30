@@ -32,3 +32,6 @@ getrandom = { version = "0.2", optional = true, features = ["js"] }
 default = ["native"]
 native = ["rite-compiler", "rite-caps", "tokio"]
 wasm = ["wasm-bindgen", "serde-wasm-bindgen", "console_error_panic_hook", "getrandom"]
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }

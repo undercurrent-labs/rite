@@ -28,6 +28,11 @@ pub fn install_defaults(ctx: &mut RuntimeContext, perms: PermissionSet) -> Arc<H
     // onto the context where the evaluator can see it.
     ctx.console_allowed = perms.allow_all || perms.console;
     let host = Arc::new(HostCapabilities::with_defaults(perms.clone()));
+    // Honour a host-pinned seed. Studio and the doctest runner want reproducible runs;
+    // everything else gets OS entropy from `with_defaults`.
+    if let Some(seed) = ctx.rng_seed {
+        *host.random.write() = crate::random::RandomCap::new(seed);
+    }
     ctx.capabilities = host.clone();
     host
 }

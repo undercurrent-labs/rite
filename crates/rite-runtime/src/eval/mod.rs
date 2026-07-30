@@ -182,7 +182,12 @@ pub struct RuntimeContext {
     pub capabilities: Arc<dyn CapabilityHost>,
     pub functions: HashMap<String, FunctionEntry>,
     pub call_depth: usize,
-    pub rng_seed: u64,
+    /// Pin `@random` to a reproducible sequence, or `None` to seed from the OS.
+    ///
+    /// Read by `rite_caps::install_defaults`. It was a `u64` defaulting to 42 that
+    /// nothing ever read, which is why a host setting it saw no effect — `Option`
+    /// distinguishes "the host asked for 42" from "the host said nothing".
+    pub rng_seed: Option<u64>,
     pub call_stack: Vec<StackFrame>,
     /// Module search roots for runtime import fallback.
     pub module_roots: Vec<std::path::PathBuf>,
@@ -249,7 +254,7 @@ impl RuntimeContext {
             capabilities: Arc::new(NopCapabilities),
             functions: HashMap::new(),
             call_depth: 0,
-            rng_seed: 42,
+            rng_seed: None,
             call_stack: Vec::new(),
             module_roots: Vec::new(),
             script_dir: None,
