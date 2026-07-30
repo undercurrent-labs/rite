@@ -109,3 +109,41 @@ async fn runtime_fs_denied_without_permission() {
         }
     }
 }
+
+/// `--deny console` must actually deny.
+///
+/// Console calls bypass `CapabilityHost` — they need `&mut RuntimeContext` to reach the
+/// output buffer or sink, which the trait cannot provide — so `ConsoleCap`'s
+/// `check_console()` was unreachable and a denied script printed anyway. The grant is
+/// mirrored onto the context, where the evaluator can see it.
+#[tokio::test]
+async fn console_denied_is_enforced() {
+    use rite_caps::install_defaults;
+    use rite_runtime::{run_source, RuntimeContext};
+
+    let mut denied = PermissionSet::default_secure();
+    denied.deny(Permission::Console);
+    let mut ctx = RuntimeContext::new();
+    install_defaults(&mut ctx, denied);
+    let err = run_source("d.rite", "! @console.println(\"nope\")\n", &mut ctx)
+        .await
+        .expect_err("console must be denied");
+    assert!(
+        err.to_string().to_lowercase().contains("console"),
+        "unexpected error: {err}"
+    );
+    assert!(ctx.stdout.is_empty(), "denied output still buffered");
+}
+
+#[tokio::test]
+async fn console_allowed_by_default() {
+    use rite_caps::install_defaults;
+    use rite_runtime::{run_source, RuntimeContext};
+
+    let mut ctx = RuntimeContext::new();
+    install_defaults(&mut ctx, PermissionSet::default_secure());
+    run_source("a.rite", "! @console.println(\"fine\")\n", &mut ctx)
+        .await
+        .expect("console is allowed under the default policy");
+    assert_eq!(ctx.stdout.join(""), "fine\n");
+}

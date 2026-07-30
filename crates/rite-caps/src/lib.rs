@@ -24,6 +24,9 @@ use std::sync::Arc;
 /// Install all default capabilities into a runtime context.
 pub fn install_defaults(ctx: &mut RuntimeContext, perms: PermissionSet) -> Arc<HostCapabilities> {
     ctx.allow_all = perms.allow_all;
+    // Console bypasses the capability host (it needs `&mut ctx`), so mirror the grant
+    // onto the context where the evaluator can see it.
+    ctx.console_allowed = perms.allow_all || perms.console;
     let host = Arc::new(HostCapabilities::with_defaults(perms.clone()));
     ctx.capabilities = host.clone();
     host

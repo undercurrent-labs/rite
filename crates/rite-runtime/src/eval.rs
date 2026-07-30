@@ -100,6 +100,22 @@ impl CapabilityHost for NopCapabilities {
     }
 }
 
+/// Which stream a write belongs to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OutputStream {
+    Stdout,
+    Stderr,
+}
+
+/// Receives script output as it is produced.
+///
+/// Without one, output accumulates in `ctx.stdout`/`ctx.stderr` for the host to drain
+/// afterwards — which means a long-running script prints nothing until it exits, and a
+/// chatty one holds every line in memory. A host that wants live output installs a sink.
+/// Buffering stays the default because the HTTP host deliberately collects a handler's
+/// output and emits it with the response, and most tests assert on the buffers.
+pub type OutputSink = Arc<dyn Fn(OutputStream, &str) + Send + Sync>;
+
 #[derive(Debug, Clone)]
 pub struct StackFrame {
     pub name: String,
@@ -124,12 +140,23 @@ pub struct RuntimeContext {
     pub script_dir: Option<std::path::PathBuf>,
     /// Opaque permission snapshot for host callbacks (JSON or flag blob).
     pub allow_all: bool,
+    /// May the script write to the terminal?
+    ///
+    /// Console calls do not go through `CapabilityHost` — they need `&mut` access to
+    /// this context to reach the output buffer or sink, which the trait cannot give
+    /// them. The consequence was that `perms.check_console()` in the host capability
+    /// was unreachable and `--deny console` printed anyway. The host mirrors the
+    /// decision here, the same way it already mirrors `allow_all`.
+    pub console_allowed: bool,
     /// Arguments the invoker passed to the script, after `--`. Read by
     /// `@process.args`. Set by the CLI and by compiled binaries; empty otherwise.
     pub script_args: Vec<String>,
     /// Set by the evaluator immediately before it invokes `@http.listen`, and read by
     /// the capability to build its server. See [`PendingHttpServer`].
     pub pending_http: Option<PendingHttpServer>,
+    /// Installed by a host that wants output as it happens; see [`OutputSink`]. When
+    /// set, `stdout`/`stderr` stay empty and every write goes straight to the sink.
+    pub sink: Option<OutputSink>,
     /// Resolves a `http.next` handle for custom middleware, installed by the HTTP host
     /// on the context it builds for one request.
     ///
@@ -177,9 +204,13 @@ impl RuntimeContext {
             module_roots: Vec::new(),
             script_dir: None,
             allow_all: false,
+            // Console is allowed by the default-secure policy; a host that denies it
+            // sets this to false when it installs capabilities.
+            console_allowed: true,
             script_args: Vec::new(),
             pending_http: None,
             http_next: None,
+            sink: None,
         }
     }
 
@@ -188,8 +219,23 @@ impl RuntimeContext {
         self
     }
 
+    /// Write to the script's stdout: straight to the sink if one is installed, else
+    /// buffered for the host to drain.
     pub fn print(&mut self, s: impl Into<String>) {
-        self.stdout.push(s.into());
+        let s = s.into();
+        match &self.sink {
+            Some(sink) => sink(OutputStream::Stdout, &s),
+            None => self.stdout.push(s),
+        }
+    }
+
+    /// As [`RuntimeContext::print`], for stderr.
+    pub fn print_err(&mut self, s: impl Into<String>) {
+        let s = s.into();
+        match &self.sink {
+            Some(sink) => sink(OutputStream::Stderr, &s),
+            None => self.stderr.push(s),
+        }
     }
 
     pub fn format_stack_trace(&self) -> String {
@@ -1196,6 +1242,9 @@ impl<'a> Evaluator<'a> {
         path: &[String],
         args: Vec<Value>,
     ) -> Result<Value, EvalError> {
+        if !self.ctx.console_allowed && !self.ctx.allow_all {
+            return Err(EvalError::Permission("console permission denied".into()));
+        }
         let method = path.get(1).map(|s| s.as_str()).unwrap_or("print");
         let msg = args
             .first()
@@ -1211,7 +1260,7 @@ impl<'a> Evaluator<'a> {
                 Ok(Value::None)
             }
             "warn" | "error" => {
-                self.ctx.stderr.push(format!("{}\n", msg));
+                self.ctx.print_err(format!("{}\n", msg));
                 Ok(Value::None)
             }
             "inspect" => {

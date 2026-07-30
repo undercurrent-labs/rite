@@ -11,8 +11,8 @@ pub use atom::AtomInterner;
 pub use budget::ExecutionBudget;
 pub use env::Environment;
 pub use eval::{
-    CapabilityHost, EvalError, Evaluator, FunctionEntry, HttpNextInvoker, PendingHttpServer,
-    RuntimeContext, StackFrame,
+    CapabilityHost, EvalError, Evaluator, FunctionEntry, HttpNextInvoker, OutputSink, OutputStream,
+    PendingHttpServer, RuntimeContext, StackFrame,
 };
 pub use value::*;
 

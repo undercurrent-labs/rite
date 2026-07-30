@@ -762,6 +762,27 @@ async fn run(cli: Cli) -> anyhow::Result<ExitCode> {
 
             let mut ctx = RuntimeContext::new();
             ctx.sources = sources.clone();
+            // Stream output instead of buffering it to the end of the run: a server or a
+            // long loop should print as it goes, and a chatty script should not hold
+            // every line in memory. `flush_script_output` still runs on every exit path
+            // and finds the buffers empty.
+            ctx.sink = Some(std::sync::Arc::new(|stream, text: &str| {
+                use std::io::Write;
+                match stream {
+                    rite_runtime::OutputStream::Stdout => {
+                        let mut out = std::io::stdout().lock();
+                        let _ = out.write_all(text.as_bytes());
+                        // Line-buffered by default when piped, so flush to keep the
+                        // ordering a reader sees the same as the script's.
+                        let _ = out.flush();
+                    }
+                    rite_runtime::OutputStream::Stderr => {
+                        let mut err = std::io::stderr().lock();
+                        let _ = err.write_all(text.as_bytes());
+                        let _ = err.flush();
+                    }
+                }
+            }));
             // Everything after `--`, readable with `! @process.args`.
             ctx.script_args = args;
             if let Some(parent) = file.parent() {
