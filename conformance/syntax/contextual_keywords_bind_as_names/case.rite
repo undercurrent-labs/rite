@@ -1,0 +1,10 @@
+// `item`, `room`, `world`, `test`, `ok`, `err` and `some` introduce declarations
+// or patterns in the positions that need them, and are ordinary names everywhere
+// else. Each of these used to parse as no expression at all, so the parameter
+// read back as `none` and the program answered with a wrong number in silence.
+◆ twice(item) ⟦ ^ item * 2 ⟧
+◆ pick(room, world) ⟦ ^ room + world ⟧
+
+sums ← [1, 2, 3] → map { |test| test + 10 }
+
+twice(21) + pick(1, 2) + (sums → sum)

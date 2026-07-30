@@ -48,12 +48,45 @@ The runtime resolves `use math` to `math.rite` next to the entry file (and confi
 
 ## Import rules
 
-1. **`use name`** loads the module and brings **public** exports into scope.  
-2. **`use path as alias`** — call exports as `alias.name(...)` (e.g. `use math as m` → `m.square(12)`).  
-3. **`use ./rel` / `use ../pkg/mod`** — path relative to the **importing file**.  
-4. **`pub use name`** — re-export that module’s public names from this file (facades).  
-5. **Circular imports** are errors (`E024`) and include the import chain in diagnostics.  
-6. Prefer **acyclic** graphs: leaves = pure helpers, root = main/server.
+1. **`use name`** loads the module, brings its **public** exports into scope, and
+   binds `name` as a qualifier — both `square(12)` and `math.square(12)` work.
+2. **`use path as alias`** binds the qualifier under another name, and *only* under
+   that name: `use math as m` gives `m.square(12)` and no bare `square`.
+3. **`use ./rel` / `use ../pkg/mod`** — path relative to the **importing file**.
+4. **`pub use name`** — re-export that module's public names from this file (facades).
+5. **Circular imports** are errors (`E024`) and include the import chain in diagnostics.
+6. **Modules may import modules.** A module's own imports are private to it and are
+   never re-exported; use `pub use` for that.
+7. Prefer **acyclic** graphs: leaves = pure helpers, root = main/server.
+
+## Two modules, one name
+
+Nothing stops two modules from exporting the same name. Importing both is fine —
+the clash is only reported if you then call the name **unqualified**, because only
+then is it ambiguous:
+
+```text
+error[E022]: `helper` is exported by both `alpha` and `beta`
+  help: call it as `alpha.helper` or `beta.helper`, or import one with `use … as …`
+```
+
+Qualify, and both stay usable:
+
+```rite
+use alpha
+use beta
+
+! @console.println(alpha.helper())
+! @console.println(beta.helper())
+```
+
+Qualified calls are checked when you compile, not when you run. Reaching for
+something a module does not export names the mistake up front:
+
+```text
+error[E020]: module `math` has no public `squre`
+  help: `math` exports: double, square
+```
 
 ### Relative imports
 

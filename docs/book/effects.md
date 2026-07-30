@@ -10,6 +10,26 @@ Statement-level host I/O uses `!` (glyph) or `do` (ASCII):
 ! @console.println("hi")
 ```
 
+### The marker is per call, not per call chain
+
+`!` marks the place a host function is called. It does **not** propagate to
+callers, so a function that performs I/O is called like any other:
+
+```rite browser
+◆ greet(name) ⟦
+  ! @console.println("hello, {name}")
+⟧
+
+greet("world")            // no marker here
+```
+
+That is worth knowing before you wrap host calls in helpers: reading a call site
+tells you whether *that line* touches the host, not whether the whole expression
+does. What stays true regardless is the permission set — a script that was never
+granted `fs:write` cannot write a file however deeply the call is buried, because
+permissions are enforced where the capability runs. Use the marker to find I/O in
+a file, and permissions to bound what a program can do.
+
 ```rite browser
 do host.console.println("hi")
 ```

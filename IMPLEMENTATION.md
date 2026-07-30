@@ -28,6 +28,16 @@ Tracks implementation status for the Rite language and V1 tooling. Detailed desi
 | Streaming output | **Done** — `RuntimeContext::sink`; `rite run` prints as the script runs |
 | Script arguments | **Done** — `@process.args`, also in compiled binaries |
 
+### Resolved since (this pass)
+
+| Was | Now |
+|---|---|
+| A module could not `use` another module — the graph was one level deep | Modules import modules; their imports stay private to them |
+| `use math` gave no qualifier, so two modules exporting one name could not both be used | Every import binds a qualifier: `math.square` as well as `square` |
+| A typo in a qualified call passed `rite check` and failed at runtime naming `m__squre` | Checked when compiling, reported as `module \`m\` has no public \`squre\`` |
+| Colliding exports reported a duplicate at the call site, naming neither module | Named, with the qualified forms offered as the fix |
+| `item`, `room`, `world`, `test`, `ok`, `err`, `some` as parameter names bound nothing and read back as `none` | They parse as expressions wherever they can be bound |
+
 ### Remaining gaps (after this pass)
 
 1. **WASM host I/O** — browser run evaluates pure scripts + `@console`; FS, HTTP listen,
@@ -42,7 +52,11 @@ Tracks implementation status for the Rite language and V1 tooling. Detailed desi
 
 #### P1 — Quality / polish
 
-5. **Aliased imports** — `use m as x` injects `x__f` names, not `x.f`.
+5. **Effects do not propagate** — `!` / `do` marks the site of a host call, not the
+   expression that contains one, so a function wrapping I/O is called with no marker
+   and `rite check` accepts it. Permissions still bound what a program can reach, and
+   that is the guarantee the docs now claim; inferring effect-ness through the call
+   graph would be a language change, not a fix.
 6. **Game free-form sugar** — still prefer `@game.register_*`. The declarative
    `def item :name ⟦ … ⟧` form does not exist; `examples/text-rpg/game.ascii.rite` used to
    be written against it and is now a real transliteration of its glyph twin.

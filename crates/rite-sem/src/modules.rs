@@ -2,8 +2,8 @@
 
 use crate::resolve::{resolve, FunctionMeta, ResolvedProgram};
 use rite_core::{
-    simple_error, Diagnostics, FileId, SourceFile, SourceMap, Span, E024_IMPORT_CYCLE,
-    E025_PRIVATE_IMPORT, E026_MODULE_NOT_FOUND,
+    simple_error, Diagnostics, FileId, SourceFile, SourceMap, Span, E022_DUPLICATE_BINDING,
+    E024_IMPORT_CYCLE, E025_PRIVATE_IMPORT, E026_MODULE_NOT_FOUND,
 };
 use rite_syntax::{parse_file, ImportDecl, Item, Program};
 use std::collections::{HashMap, HashSet};
@@ -214,6 +214,13 @@ impl<'a> ModuleLoader<'a> {
             if let Some(ref mut child) = child_ast {
                 let child_dir = path.parent().unwrap_or(from_dir);
                 self.load_imports_of(child, child_dir, id);
+                // A module is resolved here only to learn what it exports, but that
+                // resolution still reports undefined names — and its own imports were
+                // not in scope, so any call into another module was reported as
+                // undefined and the graph could never be more than one level deep.
+                // Loading above is depth-first, so this module's dependencies are in
+                // the graph already and can be brought into its scope first.
+                inject_dependencies(child, &self.graph);
                 let (resolved, rdiags) = resolve(child, &sf);
                 self.diagnostics.extend(rdiags.into_vec());
                 let mut exports = HashMap::new();
@@ -276,13 +283,70 @@ impl<'a> ModuleLoader<'a> {
     }
 }
 
-/// Merge loaded modules' public functions into the entry program AST (as non-pub copies for execution).
+/// Bring a module's own imports into its scope, as private names.
+///
+/// Mirrors what `merge_exports_into_entry` does for the entry, so a module that
+/// `use`s another resolves against the same names it will be evaluated with.
+/// Everything injected is private: a module's imports are its own business and
+/// must not leak into what it exports.
+fn inject_dependencies(program: &mut Program, graph: &ModuleGraph) {
+    let imports: Vec<(Option<String>, String)> = program
+        .items
+        .iter()
+        .filter_map(|item| match item {
+            Item::Import(imp) => Some((
+                imp.alias.as_ref().map(|a| a.name.clone()),
+                imp.path
+                    .segments
+                    .iter()
+                    .map(|s| s.name.as_str())
+                    .collect::<Vec<_>>()
+                    .join("."),
+            )),
+            _ => None,
+        })
+        .collect();
+
+    for (alias, key) in imports {
+        let Some(dep) = graph.modules.get(&key) else {
+            continue;
+        };
+        let qualifier = alias
+            .clone()
+            .unwrap_or_else(|| key.rsplit('.').next().unwrap_or(key.as_str()).to_string());
+        for item in &dep.program.items {
+            let Item::Function(f) = item else { continue };
+            if !f.is_pub {
+                continue;
+            }
+            let mut qualified = f.clone();
+            qualified.name.name = format!("{}__{}", qualifier, f.name.name);
+            qualified.is_pub = false;
+            program.items.insert(0, Item::Function(qualified));
+
+            if alias.is_none() {
+                let clash = program
+                    .items
+                    .iter()
+                    .any(|i| matches!(i, Item::Function(g) if g.name.name == f.name.name));
+                if !clash {
+                    let mut flat = f.clone();
+                    flat.is_pub = false;
+                    program.items.insert(0, Item::Function(flat));
+                }
+            }
+        }
+    }
+}
+
+/// Merge loaded modules' public functions into the entry program AST (as non-pub
+/// copies for execution), and bind a qualifier for each import.
 pub fn merge_exports_into_entry(
     entry: &mut Program,
     graph: &ModuleGraph,
     diagnostics: &mut Diagnostics,
 ) {
-    // Build import alias map from entry
+    // Build import alias map from the entry.
     let mut bindings: Vec<ImportBinding> = Vec::new();
     for item in &entry.items {
         if let Item::Import(imp) = item {
@@ -300,74 +364,124 @@ pub fn merge_exports_into_entry(
         }
     }
 
-    // Inject pub functions from modules that were imported without alias into entry scope
-    // by appending function decls from loaded modules (only pub ones).
-    // Also inject re-exported names from transitive `pub use` targets already in exports map.
-    for (alias, key, exports, is_pub_reexport) in &bindings {
-        if let Some(mod_ast) = graph.modules.get(key) {
-            for item in &mod_ast.program.items {
-                if let Item::Function(f) = item {
-                    if !f.is_pub {
-                        continue;
-                    }
-                    if alias.is_none() {
-                        let mut f2 = f.clone();
-                        // Re-exports keep pub so further importers can see them when this is a lib.
-                        if !*is_pub_reexport {
-                            f2.is_pub = false;
-                        }
-                        entry.items.insert(0, Item::Function(f2));
-                    }
+    // …and from every module's own imports, so a module can use another module.
+    //
+    // Merging copies each module's public functions into the entry's single flat
+    // scope. Only the entry's imports were collected before, so a function copied
+    // out of `mid.rite` referred to names from `mid`'s own `use` that had never
+    // been brought along — leaving the whole graph one level deep: an entry plus
+    // leaves that could not share anything. Collecting the modules' imports too
+    // brings those names into the same scope, which is where the copied bodies
+    // look for them.
+    for module in graph.modules.values() {
+        for item in &module.program.items {
+            if let Item::Import(imp) = item {
+                let key = imp
+                    .path
+                    .segments
+                    .iter()
+                    .map(|s| s.name.as_str())
+                    .collect::<Vec<_>>()
+                    .join(".");
+                let alias = imp.alias.as_ref().map(|a| a.name.clone());
+                if let Some(m) = graph.modules.get(&key) {
+                    // A module's import is private to it: never re-exported.
+                    bindings.push((alias, key, m.exports.clone(), false));
                 }
             }
-            // Inject re-exported functions that live only in exports map (from nested pub use)
+        }
+    }
+
+    // Two modules may bring in the same module, so inject each one once.
+    let mut seen_bindings: HashSet<(Option<String>, String)> = HashSet::new();
+    bindings.retain(|(alias, key, _, _)| seen_bindings.insert((alias.clone(), key.clone())));
+
+    // Which module put each unqualified name in scope, so a clash can name both.
+    let mut flat_origin: HashMap<String, String> = HashMap::new();
+
+    let inject = |entry: &mut Program, mut f: rite_syntax::FunctionDecl, keep_pub: bool| {
+        if !keep_pub {
+            f.is_pub = false;
+        }
+        entry.items.insert(0, Item::Function(f));
+    };
+
+    for (alias, key, exports, is_pub_reexport) in &bindings {
+        let Some(mod_ast) = graph.modules.get(key) else {
+            continue;
+        };
+
+        // Every import binds a qualifier — `use math` gives `math.square`, and
+        // `use math as m` gives `m.square`. Qualifying is how two modules that
+        // export the same name stay usable, so it cannot require an alias.
+        let qualifier = alias
+            .clone()
+            .unwrap_or_else(|| key.rsplit('.').next().unwrap_or(key.as_str()).to_string());
+
+        for item in &mod_ast.program.items {
+            let Item::Function(f) = item else { continue };
+            if !f.is_pub {
+                continue;
+            }
+
+            let mut qualified = f.clone();
+            qualified.name.name = format!("{}__{}", qualifier, f.name.name);
+            inject(entry, qualified, false);
+
+            // The unqualified name is only injected for a plain `use`; an alias
+            // deliberately keeps the module's names behind its qualifier.
             if alias.is_none() {
-                for name in exports.keys() {
-                    let already = entry
-                        .items
-                        .iter()
-                        .any(|i| matches!(i, Item::Function(f) if f.name.name == *name));
-                    if already {
-                        continue;
+                match flat_origin.get(&f.name.name) {
+                    Some(first) if first != key => {
+                        diagnostics.push(
+                            simple_error(
+                                E022_DUPLICATE_BINDING,
+                                format!(
+                                    "`{}` is exported by both `{}` and `{}`",
+                                    f.name.name, first, key
+                                ),
+                                entry.file,
+                                f.name.span,
+                                "an unqualified call here would be ambiguous",
+                            )
+                            .with_help(format!(
+                                "call it as `{}.{}` or `{}.{}`, or import one with `use … as …`",
+                                first, f.name.name, key, f.name.name
+                            )),
+                        );
                     }
-                    // Find definition in any loaded module
-                    if let Some(f) = find_pub_function(graph, name) {
-                        let mut f2 = f;
-                        if !*is_pub_reexport {
-                            f2.is_pub = false;
-                        }
-                        entry.items.insert(0, Item::Function(f2));
+                    Some(_) => {}
+                    None => {
+                        flat_origin.insert(f.name.name.clone(), key.clone());
+                        inject(entry, f.clone(), *is_pub_reexport);
                     }
                 }
             }
         }
-        // alias form: inject with prefixed names `alias__fn` so desugar can rewrite `m.fn`
-        if let Some(prefix) = alias {
-            if let Some(mod_ast) = graph.modules.get(key) {
-                for item in &mod_ast.program.items {
-                    if let Item::Function(f) = item {
-                        if f.is_pub {
-                            let mut f2 = f.clone();
-                            f2.name.name = format!("{}__{}", prefix, f.name.name);
-                            f2.is_pub = false;
-                            entry.items.insert(0, Item::Function(f2));
-                        }
-                    }
+
+        // Names that exist only in the exports map, from a nested `pub use`.
+        for name in exports.keys() {
+            let qualified_name = format!("{}__{}", qualifier, name);
+            let have_qualified = entry
+                .items
+                .iter()
+                .any(|i| matches!(i, Item::Function(f) if f.name.name == qualified_name));
+            if !have_qualified {
+                if let Some(f) = find_pub_function(graph, name) {
+                    let mut q = f;
+                    q.name.name = qualified_name;
+                    inject(entry, q, false);
                 }
-                for name in exports.keys() {
-                    let pref = format!("{}__{}", prefix, name);
-                    let already = entry
-                        .items
-                        .iter()
-                        .any(|i| matches!(i, Item::Function(f) if f.name.name == pref));
-                    if already {
-                        continue;
-                    }
+            }
+            if alias.is_none() && !flat_origin.contains_key(name) {
+                let already = entry
+                    .items
+                    .iter()
+                    .any(|i| matches!(i, Item::Function(f) if f.name.name == *name));
+                if !already {
                     if let Some(f) = find_pub_function(graph, name) {
-                        let mut f2 = f;
-                        f2.name.name = pref;
-                        f2.is_pub = false;
-                        entry.items.insert(0, Item::Function(f2));
+                        flat_origin.insert(name.clone(), key.clone());
+                        inject(entry, f, *is_pub_reexport);
                     }
                 }
             }

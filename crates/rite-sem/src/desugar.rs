@@ -20,9 +20,18 @@ pub fn desugar_program(resolved: &ResolvedProgram) -> ProgramIr {
     let mut import_aliases = HashMap::new();
     for item in &resolved.ast.items {
         if let Item::Import(i) = item {
-            if let Some(alias) = &i.alias {
-                import_aliases.insert(alias.name.clone(), alias.name.clone());
-            }
+            // Aliased or not, an import binds a name that can qualify its exports:
+            // `use math` gives `math.square`, `use math as m` gives `m.square`.
+            // Qualifying is the way to keep two modules that export the same name
+            // apart, so it must not require an alias.
+            let bound = match &i.alias {
+                Some(alias) => alias.name.clone(),
+                None => match i.path.segments.last() {
+                    Some(seg) => seg.name.clone(),
+                    None => continue,
+                },
+            };
+            import_aliases.insert(bound.clone(), bound);
         }
     }
     let mut d = Desugar {
@@ -541,11 +550,19 @@ impl Desugar {
                         span: m.span,
                     };
                 }
-                // `use math as m` → `m.square` rewrites to global `m__square`
+                // `use math` → `math.square` rewrites to the global `math__square`.
+                //
+                // Only when that global exists. A parameter can shadow the module
+                // name — `◆ f(math) ⟦ ^ math.x ⟧` reads a field of the argument —
+                // and rewriting on the import alone turned that into a lookup of
+                // `math__x`, which failed at runtime. Functions are all registered
+                // before any body is lowered, so this map is complete here.
                 if let Expr::Ident(obj) = m.object.as_ref() {
                     if self.import_aliases.contains_key(&obj.name) {
                         let mangled = format!("{}__{}", obj.name, m.field.name);
-                        return ExprIr::Global(mangled);
+                        if self.func_map.contains_key(&mangled) {
+                            return ExprIr::Global(mangled);
+                        }
                     }
                 }
                 ExprIr::Member {

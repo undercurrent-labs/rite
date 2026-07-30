@@ -427,3 +427,35 @@ fn a_bare_binary_input_groups_to_the_right() {
         );
     }
 }
+
+/// Contextual keywords are bindable names, so every read of one has to parse as
+/// an expression.
+///
+/// `is_keyword_as_ident` has always let `item`, `room`, `world`, `test`, `ok`,
+/// `err` and `some` be *bound*, but `at_expr_start` did not list them, so `^ item`
+/// saw no expression and produced `return none`. The parameter was bound and then
+/// read back as nothing: `◆ f(item) ⟦ ^ item ⟧` answered `none`, and
+/// `map { |item| item * 2 }` answered a constant — wrong numbers, no diagnostic.
+#[test]
+fn contextual_keywords_parse_as_expressions() {
+    for word in ["item", "room", "world", "test", "ok", "err", "some"] {
+        let src = format!("◆ f({word}) ⟦ ^ {word} ⟧");
+        let (program, diags, _) = parse_source("kw.rite", &src);
+        assert!(
+            !diags.has_errors(),
+            "`{word}` as a parameter should parse: {:?}",
+            diags.into_vec()
+        );
+        let program = program.expect("program");
+        let rendered = format!("{:?}", program);
+        assert!(
+            rendered.contains(&format!("\"{word}\"")),
+            "`{word}` should appear as a name in the tree, not vanish"
+        );
+        // The body must return something. A missing expression is the bug.
+        assert!(
+            !rendered.contains("Return(ReturnStmt { value: None"),
+            "`^ {word}` must return the binding, not `none`"
+        );
+    }
+}

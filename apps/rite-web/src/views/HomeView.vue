@@ -17,7 +17,7 @@ const pillars = [
   },
   {
     title: "Effects & capabilities",
-    body: "Host calls are explicit (! / do). Permissions gate FS, HTTP, and process so scripts stay honest about what they touch.",
+    body: "Host calls are marked where they happen (! / do), and permissions — not the marker — bound what a program can reach: FS, HTTP and process stay denied until granted.",
     accent: "text-rite-pink",
   },
   {

@@ -641,6 +641,24 @@ impl Parser {
                     })
                 }
             }
+            // Contextual keywords used as plain names. `item`, `room` and `world`
+            // introduce game declarations and `test` a test, but only after `◆`/`def`
+            // at item level — which is parsed before we ever get here. In expression
+            // position they are ordinary identifiers, and must resolve to whatever
+            // binding is in scope rather than quietly yielding `none`.
+            // `some` is pattern-only syntax (`~ v ⟦ some x → … ⟧`), so unlike `ok`
+            // and `err` it has no constructor form to preserve here.
+            TokenKind::Item
+            | TokenKind::Room
+            | TokenKind::World
+            | TokenKind::Test
+            | TokenKind::Some => {
+                let t = self.advance();
+                Expr::Ident(Ident {
+                    name: t.text.clone(),
+                    span: t.span,
+                })
+            }
             TokenKind::Ident => {
                 // HTTP method routes only inside blocks — treat as ident here
                 // But GET "/path" is route

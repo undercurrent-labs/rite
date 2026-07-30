@@ -106,6 +106,18 @@ impl Parser {
                 | TokenKind::Options
                 | TokenKind::OkMark
                 | TokenKind::ErrMark
+                // Contextual keywords. `is_keyword_as_ident` already lets these be
+                // *bound* — `◆ f(item)` names its parameter `item` — so leaving them
+                // out here meant `^ item` saw no expression, returned `none`, and the
+                // parameter silently read as nothing. Every read has to parse as an
+                // expression wherever the binding is allowed.
+                | TokenKind::Item
+                | TokenKind::Room
+                | TokenKind::World
+                | TokenKind::Test
+                | TokenKind::Ok
+                | TokenKind::Err
+                | TokenKind::Some
                 | TokenKind::Say
                 | TokenKind::Paragraph
                 | TokenKind::For

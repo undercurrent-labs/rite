@@ -9,7 +9,7 @@ use rite_syntax::{
     Block, EventDecl, Expr, FunctionDecl, Item, LitKind, Pattern, Program, ResultPatKind, Stmt,
     UnaryOp,
 };
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 /// The canonical effect table: every host capability function, and whether
 /// calling it requires an explicit `!` / `do` marker (diagnostic `E021`).
@@ -238,6 +238,10 @@ pub struct Resolver {
     next_local: u32,
     diagnostics: Diagnostics,
     functions: HashMap<String, FunctionMeta>,
+    /// Names bound by `use` — `math` for `use math`, `m` for `use math as m`.
+    /// A member access through one of these is a call into a module, and can be
+    /// checked here rather than failing at runtime.
+    import_qualifiers: HashSet<String>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -285,6 +289,7 @@ impl Resolver {
             next_local: 0,
             diagnostics: Diagnostics::new(),
             functions: HashMap::new(),
+            import_qualifiers: HashSet::new(),
         };
         // Predefine pure builtins
         for name in BUILTIN_NAMES {
@@ -328,10 +333,22 @@ impl Resolver {
                     },
                 );
             }
-            // `use mod as m` — bind alias name so `m.fn` resolves (desugar rewrites to m__fn)
+            // Bind the name an import qualifies with, so `m.fn` resolves (desugar
+            // rewrites it to `m__fn`). `use math` binds `math` just as `use math as m`
+            // binds `m`: qualifying is how two modules exporting the same name stay
+            // usable, and requiring an alias for that would be busywork.
             if let Item::Import(imp) = item {
-                if let Some(alias) = &imp.alias {
-                    self.define(&alias.name, false, alias.span, program.file);
+                match &imp.alias {
+                    Some(alias) => {
+                        self.define(&alias.name, false, alias.span, program.file);
+                        self.import_qualifiers.insert(alias.name.clone());
+                    }
+                    None => {
+                        if let Some(seg) = imp.path.segments.last() {
+                            self.define(&seg.name, false, seg.span, program.file);
+                            self.import_qualifiers.insert(seg.name.clone());
+                        }
+                    }
                 }
             }
         }
@@ -603,7 +620,46 @@ impl Resolver {
                 }
             }
             // `.field` projects from the object; the object stays the subject.
-            Expr::Member(m) => self.resolve_expr(&m.object, file, in_effect),
+            Expr::Member(m) => {
+                // `math.square` is a call into a module, not a field read. Desugar
+                // rewrites it to the global `math__square`; if that does not exist
+                // the program used to fail at runtime with the mangled name in the
+                // message. Check it here, and say it in the source's own terms.
+                if let Expr::Ident(obj) = m.object.as_ref() {
+                    if self.is_module_qualifier(&obj.name) {
+                        let mangled = format!("{}__{}", obj.name, m.field.name);
+                        if !self.functions.contains_key(&mangled) {
+                            let mut exports: Vec<&str> = self
+                                .functions
+                                .keys()
+                                .filter_map(|k| k.strip_prefix(&format!("{}__", obj.name)))
+                                .collect();
+                            exports.sort_unstable();
+                            let help = if exports.is_empty() {
+                                format!("`{}` exports nothing public", obj.name)
+                            } else {
+                                format!("`{}` exports: {}", obj.name, exports.join(", "))
+                            };
+                            self.diagnostics.push(
+                                rite_core::Diagnostic::error(
+                                    E020_UNDEFINED_NAME,
+                                    format!(
+                                        "module `{}` has no public `{}`",
+                                        obj.name, m.field.name
+                                    ),
+                                )
+                                .with_primary(
+                                    rite_core::SourceSpan::new(file, m.span),
+                                    "not exported by that module",
+                                )
+                                .with_help(help),
+                            );
+                        }
+                        return;
+                    }
+                }
+                self.resolve_expr(&m.object, file, in_effect)
+            }
             Expr::Index(i) => {
                 self.resolve_expr(&i.object, file, in_effect);
                 // The subscript is an independent computation.
@@ -690,6 +746,22 @@ impl Resolver {
                 span,
             },
         );
+    }
+
+    /// True when this name refers to an imported module rather than a value.
+    ///
+    /// The import binds its qualifier in the root scope, so a binding of the same
+    /// name in any inner scope shadows it — `◆ f(math) ⟦ ^ math.x ⟧` reads a field
+    /// of the parameter, whatever `use math` did at the top of the file.
+    fn is_module_qualifier(&self, name: &str) -> bool {
+        if !self.import_qualifiers.contains(name) {
+            return false;
+        }
+        !self
+            .scopes
+            .iter()
+            .skip(1)
+            .any(|scope| scope.bindings.contains_key(name))
     }
 
     fn lookup(&self, name: &str) -> Option<&BindingInfo> {

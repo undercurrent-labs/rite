@@ -73,6 +73,8 @@ The generated crate takes its `rite-*` deps from a local checkout when one is fo
 
 **Dialects are parse→print, not two grammars.** `grammar/aliases.json` is the single table mapping concept → ASCII spelling → glyph → token. `rite-fmt` formats/converts through it. When you touch it, keep `editors/vscode/syntaxes/rite.tmLanguage.json` in sync (TextMate is the only highlighter — semantic tokens are deliberately not advertised; see `IMPLEMENTATION.md`).
 
+**Modules merge into one flat scope.** `merge_exports_into_entry` copies every imported module's public functions into the entry AST, and `inject_dependencies` does the same for each module before it is resolved (which is what lets a module `use` another). Qualified access is name-mangling: `math.square` becomes the global `math__square`, rewritten in `desugar` and validated in `resolve` — so a qualifier must be bound in both places or you get either a false "undefined name" or a runtime failure naming the mangled symbol. A local binding shadows a module name, so both sites check that the mangled global exists rather than trusting the import alone.
+
 **Analysis is shared, not LSP-specific.** Put logic in `rite-analysis` (snapshots, `WorkspaceIndex`) so `rite-lsp`, Studio, and WASM all get it. `rite-lsp` should stay thin.
 
 **Crate map** (`crates/`): `rite-core` (spans, diagnostics, error codes) · `rite-syntax` (lexer, parser, AST) · `rite-sem` (resolve, modules, desugar, IR) · `rite-runtime` (values, evaluator, budget, ops) · `rite-caps` (host capabilities + permissions) · `rite-compiler` (IR → Rust → cargo) · `rite-fmt` · `rite-doc` · `rite-test` (conformance + differential harness) · `rite-repl` · `rite-analysis` · `rite-lsp` · `rite-wasm` · `rite` (embedding API, `RiteEngine`) · `rite-cli`.
