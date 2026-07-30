@@ -356,6 +356,6 @@ fn _span(_s: Span) {}
 /// Reads `rite_sem`'s list rather than repeating it: this was a second copy of the same
 /// 64 names, and the two had to be edited in lockstep for a new builtin to be both
 /// accepted by the resolver and callable at runtime.
-fn is_runtime_builtin(name: &str) -> bool {
+pub(crate) fn is_runtime_builtin(name: &str) -> bool {
     rite_sem::resolve::BUILTIN_NAMES.contains(&name)
 }

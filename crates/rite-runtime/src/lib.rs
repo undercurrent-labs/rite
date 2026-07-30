@@ -55,6 +55,31 @@ pub async fn run_file(file: &SourceFile, ctx: &mut RuntimeContext) -> Result<Val
 }
 
 /// Evaluate a pre-built ProgramIr (used by compiled binaries and differential tests).
+/// Resolve a bare name the way the interpreter does.
+///
+/// Three tiers, and the order is the semantics: an environment binding wins, then a
+/// registered function, then a builtin — as a dispatch token rather than a value, which is
+/// what makes builtins shadowable by a local of the same name.
+///
+/// Public because generated code has to agree. A backend that only checked the environment
+/// would report `undefined name \`str\`` for every builtin used as a value, which is
+/// exactly what the first version of the lowering did.
+pub fn lookup_global(ctx: &RuntimeContext, name: &str) -> Result<Value, EvalError> {
+    if let Some(v) = ctx.env.get(name) {
+        return Ok(v);
+    }
+    if ctx.functions.contains_key(name) {
+        return ctx
+            .env
+            .get(name)
+            .ok_or_else(|| EvalError::Message(format!("undefined function {}", name)));
+    }
+    if crate::eval::is_runtime_builtin(name) {
+        return Ok(Value::NativeName(name.to_string()));
+    }
+    Err(EvalError::Message(format!("undefined name `{}`", name)))
+}
+
 /// Make a program's top-level functions callable in `ctx`.
 ///
 /// Registers each one under its name and binds it as a closure value, so a body can reach

@@ -390,21 +390,7 @@ impl<'a> Evaluator<'a> {
 
     /// Resolve a bare global name: a binding, a registered function, or a builtin token.
     pub(super) fn lookup_global(&mut self, name: &str) -> Result<Value, EvalError> {
-        if let Some(v) = self.ctx.env.get(name) {
-            return Ok(v);
-        }
-        if self.ctx.functions.contains_key(name) {
-            return self
-                .ctx
-                .env
-                .get(name)
-                .ok_or_else(|| EvalError::Message(format!("undefined function {}", name)));
-        }
-        // Shadowable builtins: an env binding wins above; otherwise a dispatch token.
-        if is_runtime_builtin(name) {
-            return Ok(Value::NativeName(name.to_string()));
-        }
-        Err(EvalError::Message(format!("undefined name `{}`", name)))
+        crate::lookup_global(self.ctx, name)
     }
 
     /// Apply a unary operator to an already-evaluated value.

@@ -1,6 +1,7 @@
 //! Ahead-of-time compilation: IR → Rust → cargo build.
 
 mod codegen;
+pub mod lower;
 mod perms;
 
 use rite_caps::PermissionSet;
@@ -193,7 +194,10 @@ async fn main() {
     }
     match result {
         Ok(v) => {
-            if !matches!(v, Value::None) && ctx.stdout.is_empty() {
+            // `rite run` prints a non-none result whether or not the script also printed;
+            // this used to suppress it once anything reached stdout, so a compiled
+            // `! @console.println("hi")` followed by `1 + 2` lost the `3`.
+            if !matches!(v, Value::None) {
                 println!("{}", v.to_display(&ctx.atoms));
             }
         }
