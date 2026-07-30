@@ -50,8 +50,11 @@ async fn pattern_inside_root_matches() {
     assert!(flat.iter().any(|p| p.ends_with("a.txt")), "{flat:?}");
 
     let deep = glob_paths(&perms, &format!("{}/**/*.txt", dir.path().display())).await;
+    // Compare with `/` on every platform: results carry native separators, so on Windows
+    // this read `sub\c.txt` and the POSIX spelling failed for a correct result.
     assert!(
-        deep.iter().any(|p| p.ends_with("sub/c.txt")),
+        deep.iter()
+            .any(|p| p.replace('\\', "/").ends_with("sub/c.txt")),
         "recursive glob inside the root should still work: {deep:?}"
     );
 }
