@@ -37,8 +37,12 @@ jobs:
       # example_ladder integration tests spawn target/debug/rite
       - name: build debug CLI
         run: cargo build -p rite-cli -p rite-lsp
+      # `--no-fail-fast`: without it cargo stops at the first failing test binary, so a
+      # platform-specific break reports one failure per run. Three consecutive Windows
+      # runs each surfaced exactly one more problem — at 36 minutes a run, that is a
+      # whole afternoon spent discovering things one machine already knew.
       - name: test
-        run: cargo test --workspace --all-features
+        run: cargo test --workspace --all-features --no-fail-fast
       # Shells out to scripts/package-*.sh; the release archives are produced on Linux.
       - name: packaging gate (skill archives)
         if: runner.os == 'Linux'
