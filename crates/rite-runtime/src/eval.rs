@@ -125,6 +125,24 @@ pub struct RuntimeContext {
     /// Arguments the invoker passed to the script, after `--`. Read by
     /// `@process.args`. Set by the CLI and by compiled binaries; empty otherwise.
     pub script_args: Vec<String>,
+    /// Set by the evaluator immediately before it invokes `@http.listen`, and read by
+    /// the capability to build its server. See [`PendingHttpServer`].
+    pub pending_http: Option<PendingHttpServer>,
+}
+
+/// A server that `@http.listen` is about to start.
+///
+/// The route bodies are IR and the middleware are closures, so they cannot travel as
+/// `Value` arguments through `CapabilityHost::call`. They used to be handed over via a
+/// pair of process globals plus a registrar function pointer, which meant the capability
+/// read its real arguments out of static state — and two servers in one process would
+/// have overwritten each other. Riding on the context keeps the handoff scoped to the
+/// evaluation that made it.
+#[derive(Clone)]
+pub struct PendingHttpServer {
+    pub addr: String,
+    pub routes: Vec<rite_sem::RouteIr>,
+    pub middleware: Vec<crate::value::HttpMiddleware>,
 }
 
 #[derive(Clone)]
@@ -151,6 +169,7 @@ impl RuntimeContext {
             script_dir: None,
             allow_all: false,
             script_args: Vec::new(),
+            pending_http: None,
         }
     }
 
@@ -559,7 +578,11 @@ impl<'a> Evaluator<'a> {
                         ])
                     })
                     .collect();
-                http_register_pending(addr_str.clone(), routes, &mw_specs, self.ctx);
+                self.ctx.pending_http = Some(PendingHttpServer {
+                    addr: addr_str.clone(),
+                    routes: routes.to_vec(),
+                    middleware: mw_specs.clone(),
+                });
                 self.ctx
                     .capabilities
                     .call(
@@ -1318,32 +1341,6 @@ fn num_binop(
             "numeric operation on non-numbers".into(),
         )),
     }
-}
-
-/// Register HTTP routes for the capability layer (implemented via weak dep pattern).
-/// rite-runtime cannot depend on rite-caps; use a function pointer installed at startup.
-fn http_register_pending(
-    addr: String,
-    routes: &[rite_sem::RouteIr],
-    middleware: &[crate::value::HttpMiddleware],
-    ctx: &RuntimeContext,
-) {
-    if let Some(f) = HTTP_REGISTER.get() {
-        f(addr, routes, middleware, ctx);
-    }
-}
-
-/// Registrar installed by rite-caps to hand `@http.listen` its route table.
-type HttpRegistrar =
-    fn(String, &[rite_sem::RouteIr], &[crate::value::HttpMiddleware], &RuntimeContext);
-
-static HTTP_REGISTER: std::sync::OnceLock<HttpRegistrar> = std::sync::OnceLock::new();
-
-/// Called by rite-caps/install to wire HTTP route registration.
-pub fn set_http_route_registrar(
-    f: fn(String, &[rite_sem::RouteIr], &[crate::value::HttpMiddleware], &RuntimeContext),
-) {
-    let _ = HTTP_REGISTER.set(f);
 }
 
 /// Async invoker for `http.next` handles used by custom middleware (`next(req)`).

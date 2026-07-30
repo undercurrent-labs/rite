@@ -48,6 +48,49 @@ pub struct ServerState {
     pub module_env: rite_runtime::Environment,
 }
 
+/// Build a server from what the evaluator staged on the context.
+///
+/// This lived in `rite-caps::lib` behind a function-pointer registrar that
+/// `rite-runtime` called through a `OnceLock`, writing the result into two more
+/// globals for this capability to pick up. The capability can just read it.
+fn server_state_from(
+    pending: &rite_runtime::PendingHttpServer,
+    perms: &PermissionSet,
+    ctx: &RuntimeContext,
+) -> ServerState {
+    ServerState {
+        routes: pending
+            .routes
+            .iter()
+            .map(|r| RiteRoute {
+                method: r.method.clone(),
+                path: r.path.clone(),
+                param_name: Some("req".into()),
+                body: r.body.clone(),
+            })
+            .collect(),
+        functions: ctx.functions.clone(),
+        perms: perms.clone(),
+        middleware: pending
+            .middleware
+            .iter()
+            .map(|m| match m {
+                // `use @http.log` reaches here as the full path; the dispatcher
+                // matches on the bare name.
+                HttpMiddleware::Named(s) => {
+                    let s = s.trim_start_matches('@');
+                    HttpMiddleware::Named(s.strip_prefix("http.").unwrap_or(s).to_string())
+                }
+                other => other.clone(),
+            })
+            .collect(),
+        lock: Arc::new(AsyncMutex::new(())),
+        // Module scope as it stood when `@http.listen` ran, so handlers resolve the
+        // top-level bindings and functions they were written next to.
+        module_env: ctx.env.clone(),
+    }
+}
+
 impl HttpCap {
     pub fn new() -> Self {
         Self {
@@ -95,10 +138,24 @@ impl HttpCap {
     ) -> Result<Value, EvalError> {
         match method {
             "listen" => {
-                if let Some(state) = take_pending_server() {
-                    self.listen_with_state(state, perms).await
-                } else {
-                    self.listen_legacy(args, perms, ctx).await
+                // The route bodies and middleware closures arrive on the context, set by
+                // the evaluator just before this call — they are IR and closures, so they
+                // cannot be `Value` arguments. `listen_legacy` covers the older
+                // `listen(addr, routes)` form, which has no route bodies at all.
+                match ctx.pending_http.clone() {
+                    Some(pending) => {
+                        let state = server_state_from(&pending, perms, ctx);
+                        *LAST_MIDDLEWARE.lock() = state
+                            .middleware
+                            .iter()
+                            .map(|m| match m {
+                                HttpMiddleware::Named(n) => n.clone(),
+                                HttpMiddleware::Function(_) => "<custom>".into(),
+                            })
+                            .collect();
+                        self.serve(pending.addr.clone(), state, perms).await
+                    }
+                    None => self.listen_legacy(args, perms, ctx).await,
                 }
             }
             "response" => {
@@ -116,19 +173,6 @@ impl HttpCap {
             "log" | "recover" => Ok(Value::Atom(ctx.atoms.intern(&format!("http.{}", method)))),
             other => Err(EvalError::Capability(format!("unknown @http.{}", other))),
         }
-    }
-
-    async fn listen_with_state(
-        &self,
-        state: ServerState,
-        perms: &PermissionSet,
-    ) -> Result<Value, EvalError> {
-        let addr_str = PENDING_ADDR
-            .lock()
-            .clone()
-            .unwrap_or_else(|| "127.0.0.1:0".into());
-        *PENDING_ADDR.lock() = None;
-        self.serve(addr_str, state, perms).await
     }
 
     async fn listen_legacy(
@@ -906,8 +950,6 @@ fn match_path(pattern: &str, path: &str) -> Option<HashMap<String, String>> {
     Some(params)
 }
 
-static PENDING_SERVER: Mutex<Option<ServerState>> = Mutex::new(None);
-static PENDING_ADDR: Mutex<Option<String>> = Mutex::new(None);
 /// Most recent successfully bound listen address (for tests / tooling).
 static LAST_BOUND_ADDR: Mutex<Option<String>> = Mutex::new(None);
 
@@ -919,23 +961,6 @@ pub fn last_bound_addr() -> Option<String> {
 /// Clear the last-bound address (tests).
 pub fn clear_last_bound_addr() {
     *LAST_BOUND_ADDR.lock() = None;
-}
-
-pub fn set_pending_server(addr: String, state: ServerState) {
-    *LAST_MIDDLEWARE.lock() = state
-        .middleware
-        .iter()
-        .map(|m| match m {
-            HttpMiddleware::Named(n) => n.clone(),
-            HttpMiddleware::Function(_) => "<custom>".into(),
-        })
-        .collect();
-    *PENDING_ADDR.lock() = Some(addr);
-    *PENDING_SERVER.lock() = Some(state);
-}
-
-fn take_pending_server() -> Option<ServerState> {
-    PENDING_SERVER.lock().take()
 }
 
 impl Default for HttpCap {
