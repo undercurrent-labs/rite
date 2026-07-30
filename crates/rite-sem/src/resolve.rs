@@ -100,6 +100,10 @@ pub const HOST_EFFECTS: &[(&str, bool)] = &[
     // is a record constructor, `log`/`recover` are middleware markers named
     // in `use @http.log` rather than called for their effect.
     ("http.listen", true),
+    // Outbound requests reach the network.
+    ("http.get", true),
+    ("http.post", true),
+    ("http.request", true),
     ("http.response", false),
     ("http.log", false),
     ("http.recover", false),

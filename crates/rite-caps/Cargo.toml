@@ -34,6 +34,11 @@ hyper-util = { version = "0.1", features = ["tokio"] }
 http-body-util = { workspace = true }
 csv = "1"
 
+# Outbound HTTP (`@http.get`/`post`/`request`). Not built for wasm32 — the browser host
+# has no socket layer; those calls return a capability error there, as `@db` does.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+reqwest = { workspace = true }
+
 [features]
 default = ["duckdb"]
 # Native DuckDB host for @db (off on wasm / when linking is undesirable).

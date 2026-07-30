@@ -422,6 +422,27 @@
     },
     {
       "arity": 1,
+      "docs": "GET a URL. Returns ok(response) or err(record). Needs --allow net=<host>.",
+      "effectful": true,
+      "name": "get",
+      "permission": "net"
+    },
+    {
+      "arity": 2,
+      "docs": "POST a body to a URL. A record body is sent as JSON, a string as-is. Needs --allow net=<host>.",
+      "effectful": true,
+      "name": "post",
+      "permission": "net"
+    },
+    {
+      "arity": 1,
+      "docs": "Send a request described by a record: <<method, url, headers, body, timeout_ms>>. Needs --allow net=<host>.",
+      "effectful": true,
+      "name": "request",
+      "permission": "net"
+    },
+    {
+      "arity": 1,
       "docs": "Build an explicit HTTP response record.",
       "effectful": false,
       "name": "response",

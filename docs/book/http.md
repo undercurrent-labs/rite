@@ -215,13 +215,60 @@ rite run server.rite --allow net=0.0.0.0
 
 ## Client calls
 
-**Not implemented yet.** `@http` provides `listen`, `response`, `log` and `recover` — there
-is no outbound request function, so a script cannot currently call another service. Check
-the live surface with `rite describe capability http --json`.
+`@http.get`, `@http.post` and `@http.request` make outbound requests. Each needs
+**net** permission for the target host — this is what `--allow net=…` grants:
 
-Consequently `--allow net=api.example.com` grants nothing today: the only thing `net` gates
-is the **bind address** of `@http.listen` (see [Permissions](#permissions) above). Shell out
-via `@process.run` (needs `--allow process`) if you need to make a request now.
+```bash
+rite run fetch.rite --allow net=api.example.com
+```
+
+```rite
+resp ← ! @http.get("https://api.example.com/v1/status")?
+! @console.println(str(resp.status))
+
+body ← resp.json?
+! @console.println(body.message)
+```
+
+A record body is sent as JSON; a string is sent verbatim:
+
+```rite
+resp ← ! @http.post("https://api.example.com/items", ⟨name: "aura"⟩)?
+```
+
+`@http.request` takes the whole request as a record when you need a method or headers:
+
+```rite
+resp ← ! @http.request(⟨
+  method: "PUT",
+  url: "https://api.example.com/items/1",
+  headers: ⟨authorization: "Bearer …"⟩,
+  body: ⟨name: "renamed"⟩
+⟩)?
+```
+
+### The response
+
+Deliberately the same shape a handler receives, so both directions of HTTP read alike:
+
+| Field | Meaning |
+|-------|---------|
+| `resp.status` | Status code as an integer |
+| `resp.headers` | Response headers, lowercased names → string |
+| `resp.text` | Body as a **result** — unwrap with `?` |
+| `resp.json` | Parsed JSON as a **result** |
+| `resp.body` | Raw bytes |
+
+The call itself returns a result, like `@fs.read`: a refused connection, DNS failure or
+timeout comes back as `err(⟨kind: "net.error", …⟩)` rather than ending the script, so
+you can match on it. Requests time out after 30 seconds.
+
+Permission is checked **per host**, and the host is parsed from the URL — a grant for
+`example.com` does not open `evil.example`, and credentials or a port in the URL do not
+change which host is checked.
+
+Not available in the browser (hosted Studio): there is no socket layer there, so these
+return a capability error, the same as `@db`.
 
 ## Next
 

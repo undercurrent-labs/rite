@@ -106,6 +106,27 @@ impl HttpCap {
             permission: "net",
         },
         NativeFunctionDescriptor {
+            name: "get",
+            docs: "GET a URL. Returns ok(response) or err(record). Needs --allow net=<host>.",
+            arity: 1,
+            effectful: true,
+            permission: "net",
+        },
+        NativeFunctionDescriptor {
+            name: "post",
+            docs: "POST a body to a URL. A record body is sent as JSON, a string as-is. Needs --allow net=<host>.",
+            arity: 2,
+            effectful: true,
+            permission: "net",
+        },
+        NativeFunctionDescriptor {
+            name: "request",
+            docs: "Send a request described by a record: <<method, url, headers, body, timeout_ms>>. Needs --allow net=<host>.",
+            arity: 1,
+            effectful: true,
+            permission: "net",
+        },
+        NativeFunctionDescriptor {
             name: "response",
             docs: "Build an explicit HTTP response record.",
             arity: 1,
@@ -157,6 +178,40 @@ impl HttpCap {
                     None => self.listen_legacy(args, perms, ctx).await,
                 }
             }
+            "get" => {
+                let url = string_arg(&args, 0, "http.get expects a url string")?;
+                self.fetch("GET", &url, None, &Value::None, perms, ctx)
+                    .await
+            }
+            "post" => {
+                let url = string_arg(&args, 0, "http.post expects a url string")?;
+                let body = args.get(1).cloned().unwrap_or(Value::None);
+                self.fetch("POST", &url, None, &body, perms, ctx).await
+            }
+            "request" => {
+                let Some(Value::Record(spec)) = args.first() else {
+                    return Err(EvalError::Message(
+                        "http.request expects a record: ⟨method, url, headers?, body?⟩".into(),
+                    ));
+                };
+                let field = |k: &str| -> Option<Value> {
+                    spec.get(&Key::String(k.into()))
+                        .or_else(|| spec.get(&Key::Atom(k.into())))
+                        .cloned()
+                };
+                let url = field("url")
+                    .as_ref()
+                    .and_then(|v| v.as_str().map(str::to_string))
+                    .ok_or_else(|| EvalError::Message("http.request needs a `url` field".into()))?;
+                let method = field("method")
+                    .as_ref()
+                    .and_then(|v| v.as_str().map(str::to_uppercase))
+                    .unwrap_or_else(|| "GET".into());
+                let headers = field("headers");
+                let body = field("body").unwrap_or(Value::None);
+                self.fetch(&method, &url, headers.as_ref(), &body, perms, ctx)
+                    .await
+            }
             "response" => {
                 let status = args.first().and_then(|v| v.as_int()).unwrap_or(200);
                 Ok(Value::record(vec![
@@ -172,6 +227,108 @@ impl HttpCap {
             "log" | "recover" => Ok(Value::Atom(ctx.atoms.intern(&format!("http.{}", method)))),
             other => Err(EvalError::Capability(format!("unknown @http.{}", other))),
         }
+    }
+
+    /// Perform an outbound request.
+    ///
+    /// The response mirrors the shape a *handler* receives, so the two directions of
+    /// HTTP read the same way: `status`, `headers` (lowercased), `text` and `json` as
+    /// results, and `body` as bytes. The call itself returns `ok(response)` or
+    /// `err(⟨kind, message⟩)`, like `@fs.read`, so `? ` unwraps it.
+    #[cfg(not(target_arch = "wasm32"))]
+    async fn fetch(
+        &self,
+        method: &str,
+        url: &str,
+        headers: Option<&Value>,
+        body: &Value,
+        perms: &PermissionSet,
+        ctx: &RuntimeContext,
+    ) -> Result<Value, EvalError> {
+        // Permission is per *host*, matching `--allow net=api.example.com`.
+        let host = host_of(url)
+            .ok_or_else(|| EvalError::Message(format!("http: cannot parse url `{url}`")))?;
+        perms.check_net(&host).map_err(EvalError::Permission)?;
+
+        let verb = reqwest::Method::from_bytes(method.as_bytes())
+            .map_err(|_| EvalError::Message(format!("http: bad method `{method}`")))?;
+        let client = match reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(30))
+            .build()
+        {
+            Ok(c) => c,
+            Err(e) => return Ok(net_err("http.client", url, &e.to_string())),
+        };
+        let mut req = client.request(verb, url);
+
+        if let Some(Value::Record(hs)) = headers {
+            for (k, v) in hs {
+                let name = match k {
+                    Key::String(s) => s.clone(),
+                    Key::Atom(a) => a.clone(),
+                    other => format!("{other:?}"),
+                };
+                if let Some(val) = v.as_str() {
+                    req = req.header(name, val);
+                }
+            }
+        }
+        // A record body is JSON; a string is sent verbatim. Anything else is displayed.
+        req = match body {
+            Value::None => req,
+            Value::String(s) => req.body(s.to_string()),
+            Value::Record(_) | Value::List(_) => req
+                .header("content-type", "application/json")
+                .body(serde_json::to_string(&body.to_json(&ctx.atoms)).unwrap_or_default()),
+            other => req.body(format!("{other}")),
+        };
+
+        let resp = match req.send().await {
+            Ok(r) => r,
+            Err(e) => return Ok(net_err("http.request", url, &e.to_string())),
+        };
+        let status = resp.status().as_u16() as i64;
+        let mut header_rec = IndexMap::new();
+        for (name, value) in resp.headers().iter() {
+            if let Ok(v) = value.to_str() {
+                // First value wins for repeated headers, as on the server side.
+                header_rec
+                    .entry(Key::String(name.as_str().to_ascii_lowercase()))
+                    .or_insert_with(|| Value::string(v));
+            }
+        }
+        let bytes = match resp.bytes().await {
+            Ok(b) => b.to_vec(),
+            Err(e) => return Ok(net_err("http.body", url, &e.to_string())),
+        };
+        let text = String::from_utf8_lossy(&bytes).to_string();
+        let json = match serde_json::from_str::<serde_json::Value>(&text) {
+            Ok(j) => Value::ok(Value::from_json(&j)),
+            Err(e) => Value::err(Value::string(e.to_string())),
+        };
+        Ok(Value::ok(Value::record(vec![
+            (Key::String("status".into()), Value::Int(status)),
+            (Key::String("headers".into()), Value::Record(header_rec)),
+            (Key::String("text".into()), Value::ok(Value::string(text))),
+            (Key::String("json".into()), json),
+            (Key::String("body".into()), Value::Bytes(bytes.into())),
+        ])))
+    }
+
+    /// No socket layer in the browser host — the same answer `@db` gives.
+    #[cfg(target_arch = "wasm32")]
+    async fn fetch(
+        &self,
+        _method: &str,
+        _url: &str,
+        _headers: Option<&Value>,
+        _body: &Value,
+        _perms: &PermissionSet,
+        _ctx: &RuntimeContext,
+    ) -> Result<Value, EvalError> {
+        Err(EvalError::Capability(
+            "outbound @http requires the native host (not available in WASM)".into(),
+        ))
     }
 
     async fn listen_legacy(
@@ -948,6 +1105,39 @@ fn hex_nibble(b: u8) -> Option<u8> {
     }
 }
 
+/// Host portion of a URL, without scheme, credentials, port or path.
+fn host_of(url: &str) -> Option<String> {
+    let rest = url.split_once("://").map(|(_, r)| r).unwrap_or(url);
+    let authority = rest.split(['/', '?', '#']).next()?;
+    let authority = authority
+        .rsplit_once('@')
+        .map(|(_, h)| h)
+        .unwrap_or(authority);
+    // Keep IPv6 literals intact; strip a trailing :port otherwise.
+    let host = if authority.starts_with('[') {
+        authority.split_once(']').map(|(h, _)| format!("{h}]"))?
+    } else {
+        authority.split(':').next()?.to_string()
+    };
+    (!host.is_empty()).then_some(host)
+}
+
+fn string_arg(args: &[Value], i: usize, msg: &str) -> Result<String, EvalError> {
+    args.get(i)
+        .and_then(|v| v.as_str().map(str::to_string))
+        .ok_or_else(|| EvalError::Message(msg.into()))
+}
+
+/// Transport failures are values, not aborts — same shape as `@fs` io errors.
+fn net_err(op: &str, url: &str, message: &str) -> Value {
+    Value::err(Value::record(vec![
+        (Key::String("kind".into()), Value::string("net.error")),
+        (Key::String("operation".into()), Value::string(op)),
+        (Key::String("url".into()), Value::string(url)),
+        (Key::String("message".into()), Value::string(message)),
+    ]))
+}
+
 fn normalize_path(path: &str) -> String {
     let mut out = String::new();
     let mut chars = path.chars().peekable();
@@ -1009,5 +1199,54 @@ pub fn clear_last_bound_addr() {
 impl Default for HttpCap {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod url_tests {
+    use super::host_of;
+
+    /// The permission check keys on this, so a wrong answer either blocks a legitimate
+    /// call or — worse — grants one. Credentials and ports must not become part of it.
+    #[test]
+    fn host_is_extracted_without_scheme_port_path_or_credentials() {
+        assert_eq!(
+            host_of("http://example.com/path"),
+            Some("example.com".into())
+        );
+        assert_eq!(host_of("https://example.com"), Some("example.com".into()));
+        assert_eq!(
+            host_of("https://api.example.com:8443/v1?q=1"),
+            Some("api.example.com".into())
+        );
+        assert_eq!(
+            host_of("http://127.0.0.1:18200/hello"),
+            Some("127.0.0.1".into())
+        );
+        // `user:pass@` must not be mistaken for the host.
+        assert_eq!(
+            host_of("http://user:pw@internal.example/x"),
+            Some("internal.example".into())
+        );
+        // A fragment or query directly after the authority still terminates it.
+        assert_eq!(
+            host_of("http://example.com#frag"),
+            Some("example.com".into())
+        );
+        assert_eq!(
+            host_of("http://example.com?q=1"),
+            Some("example.com".into())
+        );
+        // Scheme-relative and bare hosts.
+        assert_eq!(host_of("example.com/x"), Some("example.com".into()));
+        // IPv6 literals keep their brackets so the port strip does not eat them.
+        assert_eq!(host_of("http://[::1]:8080/x"), Some("[::1]".into()));
+    }
+
+    #[test]
+    fn unparseable_urls_yield_no_host() {
+        assert_eq!(host_of(""), None);
+        assert_eq!(host_of("http://"), None);
+        assert_eq!(host_of("http:///just-a-path"), None);
     }
 }

@@ -94,7 +94,7 @@ Lists registered host modules and related metadata.
 | `@random` | seed, int, … |
 | `@env` | get/set environment (permissioned) |
 | `@process` | `args` (this script's own arguments, no grant needed); `run`/`which` spawn or probe, and need `process` |
-| `@http` | listen and middleware helpers (no outbound client yet) |
+| `@http` | `listen` + middleware helpers; `get`/`post`/`request` for outbound calls (all need `net`) |
 | `@game` | text adventure helpers |
 
 Details and signatures: `rite docs build` → `docs/generated/`.
