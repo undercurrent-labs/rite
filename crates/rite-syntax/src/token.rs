@@ -177,6 +177,13 @@ pub struct Token {
     pub file: rite_core::FileId,
     /// Lexeme text (for idents, literals, atoms, comments).
     pub text: String,
+    /// Is this the first token on its source line?
+    ///
+    /// Rite has no statement terminator, so a line break is the only thing separating
+    /// `xs ← f` from a following `[0]`. Without this the parser read the `[` as a
+    /// postfix index into the previous statement and silently changed the program's
+    /// meaning. Set by the lexer, which is the only place that still sees whitespace.
+    pub starts_line: bool,
 }
 
 impl Token {

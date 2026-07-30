@@ -1,0 +1,5 @@
+s ← "\{x}"
+~ s ⟦
+  "\{x}" → #matched
+  _ → #missed
+⟧

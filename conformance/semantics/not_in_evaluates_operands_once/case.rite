@@ -1,0 +1,7 @@
+hits ↢ 0
+◆ bump() ⟦
+  hits := hits + 1
+  ^ 9
+⟧
+seen ← bump() ∉ [1, 2]
+[seen, hits]

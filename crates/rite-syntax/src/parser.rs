@@ -1028,6 +1028,21 @@ impl Parser {
     fn parse_postfix(&mut self) -> Expr {
         let mut expr = self.parse_primary();
         loop {
+            // A `(` or `[` that opens a line starts a new statement; it is not a call or
+            // index applied to the previous one. Rite has no statement terminator, so the
+            // line break is the only separator. Without this,
+            //
+            //     a ← 1
+            //     [9]
+            //
+            // parsed as `a ← 1[9]` — indexing an int, which yields `none`, so `a` was
+            // silently bound to nothing at all. `.field`, `?` and the operators keep
+            // crossing lines, which is what makes multi-line pipelines and chains work.
+            if self.peek().starts_line
+                && (self.check(TokenKind::LParen) || self.check(TokenKind::LBracket))
+            {
+                break;
+            }
             // Only treat `(` as call on callable forms — not after record/list
             // literals, so a newline + `(x + y).z` does not glue onto `⟨…⟩`.
             if self.check(TokenKind::LParen) && is_callable_expr(&expr) {
@@ -1987,6 +2002,7 @@ impl Parser {
             span: Span::DUMMY,
             file: self.file,
             text: String::new(),
+            starts_line: false,
         })
     }
 
@@ -2012,6 +2028,7 @@ impl Parser {
                 span: Span::DUMMY,
                 file: self.file,
                 text: String::new(),
+                starts_line: false,
             })
         }
     }
@@ -2036,6 +2053,7 @@ impl Parser {
                     span: Span::DUMMY,
                     file: self.file,
                     text: String::new(),
+                    starts_line: false,
                 })
         }
     }

@@ -65,12 +65,15 @@ pub fn call_builtin(name: &str, args: Vec<Value>) -> Result<Value, EvalError> {
                 .and_then(|v| v.as_str().map(|s| s.to_string()))
                 .unwrap_or_else(|| "test failed".into()),
         )),
-        // Higher-order functions handled in evaluator with closures
+        // Handled by the evaluator, not here: these need to call back into it — either
+        // to invoke a closure argument, or (print/println) to reach the context's output
+        // buffer. `Evaluator::call_native` dispatches them. They are listed so the error
+        // says what is actually true; `while_loop`, `compose`, `print` and `println` used
+        // to fall through to "unknown builtin", which was simply wrong.
         "map" | "keep" | "reject" | "reduce" | "each" | "find" | "any" | "all" | "group"
-        | "parallel" => Err(EvalError::Message(format!(
-            "builtin `{}` requires evaluator dispatch",
-            name
-        ))),
+        | "parallel" | "while_loop" | "compose" | "print" | "println" => Err(EvalError::Message(
+            format!("builtin `{}` requires evaluator dispatch", name),
+        )),
         other => Err(EvalError::Message(format!("unknown builtin `{}`", other))),
     }
 }

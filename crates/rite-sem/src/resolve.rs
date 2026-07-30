@@ -142,7 +142,9 @@ pub const HOST_EFFECTS: &[(&str, bool)] = &[
 /// Every entry must lex as one identifier, or the name can never be looked up:
 /// `number?` used to be listed here and was unreachable, because the lexer
 /// splits it into `number` and `?`.
-const BUILTIN_NAMES: &[&str] = &[
+/// The one list of builtin names. `rite-runtime` reads it too, so the resolver and
+/// the interpreter cannot disagree about which bare names resolve to a builtin.
+pub const BUILTIN_NAMES: &[&str] = &[
     "map",
     "keep",
     "reject",

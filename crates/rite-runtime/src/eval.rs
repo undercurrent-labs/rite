@@ -1371,72 +1371,11 @@ async fn invoke_http_next(id: u64, args: Vec<Value>) -> Result<Value, EvalError>
 #[allow(dead_code)]
 fn _span(_s: Span) {}
 
+/// Does a bare name refer to a builtin the interpreter can dispatch?
+///
+/// Reads `rite_sem`'s list rather than repeating it: this was a second copy of the same
+/// 64 names, and the two had to be edited in lockstep for a new builtin to be both
+/// accepted by the resolver and callable at runtime.
 fn is_runtime_builtin(name: &str) -> bool {
-    matches!(
-        name,
-        "map"
-            | "keep"
-            | "reject"
-            | "reduce"
-            | "each"
-            | "flatten"
-            | "count"
-            | "first"
-            | "last"
-            | "rest"
-            | "tail"
-            | "init"
-            | "butlast"
-            | "take"
-            | "drop"
-            | "reverse"
-            | "concat"
-            | "find"
-            | "any"
-            | "all"
-            | "sum"
-            | "min"
-            | "max"
-            | "sort"
-            | "unique"
-            | "zip"
-            | "chunk"
-            | "parallel"
-            | "ok"
-            | "err"
-            | "panic"
-            | "expect"
-            | "fail"
-            | "str"
-            | "len"
-            | "type_of"
-            | "require"
-            | "collect_results"
-            | "group"
-            | "lines"
-            | "words"
-            | "join"
-            | "range"
-            | "range_incl"
-            | "keys"
-            | "values"
-            | "abs"
-            | "clamp"
-            | "pow"
-            | "idiv"
-            | "xor"
-            | "and_then"
-            | "or_else"
-            | "is_ok"
-            | "is_err"
-            | "unwrap_or"
-            | "repeat"
-            | "contains"
-            | "enumerate"
-            | "with_index"
-            | "compose"
-            | "while_loop"
-            | "print"
-            | "println"
-    )
+    rite_sem::resolve::BUILTIN_NAMES.contains(&name)
 }

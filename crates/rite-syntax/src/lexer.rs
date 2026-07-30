@@ -10,6 +10,8 @@ pub struct Lexer<'a> {
     bytes: &'a [u8],
     pos: usize,
     diagnostics: Diagnostics,
+    /// Set when the whitespace just skipped contained a line break.
+    at_line_start: bool,
 }
 
 pub fn lex(file: &SourceFile) -> (Vec<Token>, Diagnostics) {
@@ -26,6 +28,8 @@ impl<'a> Lexer<'a> {
             bytes: file.as_str().as_bytes(),
             pos: 0,
             diagnostics: Diagnostics::new(),
+            // The first token of a file begins a line.
+            at_line_start: true,
         }
     }
 
@@ -759,6 +763,9 @@ impl<'a> Lexer<'a> {
         while self.pos < self.bytes.len() {
             let c = self.bytes[self.pos];
             if c == b' ' || c == b'\t' || c == b'\r' || c == b'\n' {
+                if c == b'\n' {
+                    self.at_line_start = true;
+                }
                 self.pos += 1;
             } else {
                 break;
@@ -806,12 +813,16 @@ impl<'a> Lexer<'a> {
         self.src.get(start..end).unwrap_or("")
     }
 
-    fn make(&self, kind: TokenKind, start: usize, end: usize) -> Token {
+    fn make(&mut self, kind: TokenKind, start: usize, end: usize) -> Token {
+        // Consume the pending line-break flag: only the first token after a newline
+        // reports `starts_line`.
+        let starts_line = std::mem::take(&mut self.at_line_start);
         Token {
             kind,
             span: Span::from_range(start, end),
             file: self.file,
             text: self.slice(start, end).to_string(),
+            starts_line,
         }
     }
 }

@@ -1,0 +1,2 @@
+base ← ⟨host: "h", port: 80, tls: false⟩
+⟨..base, port: 443, tls: true⟩

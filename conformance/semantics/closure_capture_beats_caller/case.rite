@@ -1,0 +1,6 @@
+◆ make_adder(n) ⟦ ^ { |x| x + n } ⟧
+◆ apply_with_shadow(f) ⟦
+  n ← 1000
+  ^ f(5)
+⟧
+apply_with_shadow(make_adder(10))

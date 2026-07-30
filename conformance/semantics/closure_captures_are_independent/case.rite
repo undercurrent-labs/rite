@@ -1,0 +1,4 @@
+◆ adder(n) ⟦ ^ { |x| x + n } ⟧
+a ← adder(1)
+b ← adder(2)
+[a(10), b(10)]
