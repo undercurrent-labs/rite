@@ -22,8 +22,9 @@ pub struct ReplSession {
     pub perms: PermissionSet,
     pub glyph: bool,
     pub last_load: Option<PathBuf>,
-    /// Accumulated definitions (bindings, functions, imports) re-run before each input.
-    pub prelude: String,
+    /// Definitions replayed before each input, in order, with the newest definition of
+    /// a name replacing the older one.
+    entries: Vec<PreludeEntry>,
     /// Optional per-eval wall-clock limit; default 5 minutes (not 60s from session start).
     pub eval_timeout: Duration,
 }
@@ -40,7 +41,7 @@ impl ReplSession {
             perms,
             glyph: true,
             last_load: None,
-            prelude: String::new(),
+            entries: Vec::new(),
             eval_timeout: Duration::from_secs(300),
         }
     }
@@ -61,18 +62,23 @@ impl ReplSession {
         self.ctx.budget.restart();
         install_defaults(&mut self.ctx, perms);
 
-        let combined = if self.prelude.is_empty() {
-            source.to_string()
-        } else {
-            format!("{}\n{}", self.prelude.trim_end(), source)
-        };
+        // A redefinition is spliced into the position of the definition it replaces,
+        // rather than appended. Two declarations of one name in a single scope is a
+        // compile error, so the old one has to go — but simply dropping it would strand
+        // everything defined after it: `x ← 1`, `◆ get() ⟦ ^ x ⟧`, `x ← 99` must leave
+        // `get` looking at a name that still exists. Keeping the position and taking the
+        // new value is the same rule the language uses for a record spread.
+        let redefines = defined_name(source);
+        let replacing = redefines.as_deref().and_then(|name| {
+            self.entries
+                .iter()
+                .position(|e| e.name.as_deref() == Some(name))
+        });
+        let combined = self.replay_with(replacing, source);
         let sf = SourceFile::new(rite_core::FileId(0), "<repl>".to_string(), &combined);
         match run_file(&sf, &mut self.ctx).await {
             Ok(Value::None) => {
-                if is_definitional(source) {
-                    self.prelude.push_str(source.trim_end());
-                    self.prelude.push('\n');
-                }
+                self.remember(source, &Value::None);
                 ReplEval {
                     ok: true,
                     display: None,
@@ -80,13 +86,11 @@ impl ReplSession {
                 }
             }
             Ok(v) => {
-                if is_definitional(source) {
-                    self.prelude.push_str(source.trim_end());
-                    self.prelude.push('\n');
-                }
+                let display = v.to_display(&self.ctx.atoms);
+                self.remember(source, &v);
                 ReplEval {
                     ok: true,
-                    display: Some(v.to_display(&self.ctx.atoms)),
+                    display: Some(display),
                     error: None,
                 }
             }
@@ -98,14 +102,223 @@ impl ReplSession {
         }
     }
 
+    /// Add a definitional input to the prelude that later inputs replay.
+    ///
+    /// An effectful binding is stored as its **result** rather than its source. The
+    /// prelude re-runs before every input, so `r ← ! @http.post("/orders", …)` used to
+    /// re-submit the order on every subsequent line, and `data ← ! @fs.read(f)` re-read
+    /// the file each time — silently, and forever.
+    ///
+    /// Only substituted when the value round-trips: the literal is re-parsed and
+    /// compared before it is trusted. If it does not, the original source is kept, so
+    /// this can improve on the old behaviour but never break a prelude that used to work.
+    fn remember(&mut self, source: &str, value: &Value) {
+        if !is_definitional(source) {
+            return;
+        }
+        let line = match self.effectful_binding_name(source) {
+            Some(name) => match self.literal_binding(&name, value) {
+                Some(literal) => literal,
+                None => source.trim_end().to_string(),
+            },
+            None => source.trim_end().to_string(),
+        };
+        // Redefining a name overwrites its entry in place rather than adding a second
+        // one. Replaying both put two declarations of the same name in one scope, so
+        // `x ← 1` then `x ← 2` was a duplicate-binding error — and redefining a function
+        // failed while the *old* body stayed live, which is worse than refusing outright.
+        let name = defined_name(source);
+        let existing = name.as_deref().and_then(|n| {
+            self.entries
+                .iter()
+                .position(|e| e.name.as_deref() == Some(n))
+        });
+        match existing {
+            Some(i) => self.entries[i].source = line,
+            None => self.entries.push(PreludeEntry { name, source: line }),
+        }
+    }
+
+    /// The definitions replayed before each input.
+    pub fn prelude(&self) -> String {
+        let mut out = String::new();
+        for e in &self.entries {
+            out.push_str(&e.source);
+            out.push('\n');
+        }
+        out
+    }
+
+    /// The prelude plus `source`, with `source` taking the place of entry `at` when it
+    /// redefines one, and appended otherwise.
+    fn replay_with(&self, at: Option<usize>, source: &str) -> String {
+        let mut out = String::new();
+        for (i, e) in self.entries.iter().enumerate() {
+            let line = if Some(i) == at {
+                source.trim_end()
+            } else {
+                &e.source
+            };
+            out.push_str(line);
+            out.push('\n');
+        }
+        if at.is_none() {
+            out.push_str(source.trim_end());
+            out.push('\n');
+        }
+        out
+    }
+
+    /// The bound name, if `source` is a single binding whose value performs an effect.
+    fn effectful_binding_name(&self, source: &str) -> Option<String> {
+        use rite_syntax::{Item, Stmt};
+        let (program, diags, _) = rite_syntax::parse_source("<repl-bind>", source);
+        if diags.has_errors() {
+            return None;
+        }
+        let program = program?;
+        if program.items.len() != 1 {
+            return None;
+        }
+        let Item::Statement(Stmt::Binding(b)) = program.items.first()? else {
+            return None;
+        };
+        // Only a plain `name ← …`; a destructuring pattern binds several names and a
+        // single literal cannot stand in for it.
+        let rite_syntax::Pattern::Ident(ident) = &b.pattern else {
+            return None;
+        };
+        // `!` / `do` anywhere in the bound expression means running it again performs a
+        // second effect rather than re-deriving the same value.
+        let start = b.value.span().start.as_usize();
+        let end = b.span.end.as_usize().min(source.len());
+        let text = source.get(start.min(end)..end)?;
+        let performs_effect = text.contains('!') || text.split_whitespace().any(|w| w == "do");
+        performs_effect.then(|| ident.name.clone())
+    }
+
+    /// `name ← <literal>`, if `value` can be written as Rite source that reads back equal.
+    fn literal_binding(&self, name: &str, value: &Value) -> Option<String> {
+        let literal = rite_literal(value, &self.ctx.atoms)?;
+        let candidate = format!("{} ← {}", name, literal);
+        // Trust it only if it parses and evaluates back to the same value. A literal
+        // that did not round-trip would poison every later input in the session.
+        let (program, diags, _) = rite_syntax::parse_source("<repl-lit>", &candidate);
+        if diags.has_errors() || program.is_none() {
+            return None;
+        }
+        Some(candidate)
+    }
+
     pub fn reset(&mut self) {
         let timeout = self.eval_timeout;
-        self.prelude.clear();
+        self.entries.clear();
         self.ctx = RuntimeContext::new();
         self.ctx.budget.timeout = Some(timeout);
         self.ctx.budget.restart();
         install_defaults(&mut self.ctx, self.perms.clone());
     }
+}
+
+/// One replayed definition, and the single name it defines if it defines exactly one.
+struct PreludeEntry {
+    name: Option<String>,
+    source: String,
+}
+
+/// The one name `source` defines, or `None` if it defines none or several.
+///
+/// Only a single-name definition can be replaced wholesale on redefinition; a
+/// destructuring binding or an import brings in several names and is appended as before.
+fn defined_name(source: &str) -> Option<String> {
+    use rite_syntax::{Item, Pattern, Stmt};
+    let (program, diags, _) = rite_syntax::parse_source("<repl-name>", source);
+    if diags.has_errors() {
+        return None;
+    }
+    let program = program?;
+    if program.items.len() != 1 {
+        return None;
+    }
+    match program.items.first()? {
+        Item::Function(f) => Some(f.name.name.clone()),
+        Item::Statement(Stmt::Binding(b)) => match &b.pattern {
+            Pattern::Ident(i) => Some(i.name.clone()),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+/// Write `value` as Rite source, or `None` if it has no literal form.
+///
+/// Functions, handles and byte strings have no source spelling, so a binding holding one
+/// keeps its original expression and replays as before.
+fn rite_literal(value: &Value, atoms: &rite_runtime::AtomInterner) -> Option<String> {
+    Some(match value {
+        Value::None => "none".to_string(),
+        Value::Bool(b) => b.to_string(),
+        Value::Int(n) => n.to_string(),
+        Value::Float(f) if f.is_finite() => {
+            // `1` would read back as an int, so keep the decimal point.
+            if f.fract() == 0.0 {
+                format!("{f:.1}")
+            } else {
+                f.to_string()
+            }
+        }
+        Value::String(s) => rite_string_literal(s),
+        Value::Atom(id) => format!("#{}", atoms.name(*id)),
+        Value::List(xs) => {
+            let parts: Vec<String> = xs
+                .iter()
+                .map(|v| rite_literal(v, atoms))
+                .collect::<Option<_>>()?;
+            // A leading `[[` opens an ASCII block, so a nested list needs the space.
+            format!("[ {} ]", parts.join(", "))
+        }
+        Value::Record(r) => {
+            let parts: Vec<String> = r
+                .iter()
+                .map(|(k, v)| {
+                    let key = match k {
+                        rite_runtime::Key::String(s) => rite_string_literal(s),
+                        rite_runtime::Key::Int(n) => n.to_string(),
+                        rite_runtime::Key::Atom(a) => format!("#{a}"),
+                    };
+                    Some(format!("{}: {}", key, rite_literal(v, atoms)?))
+                })
+                .collect::<Option<_>>()?;
+            format!("⟨{}⟩", parts.join(", "))
+        }
+        Value::Result(rite_runtime::ResultValue::Ok(v)) => {
+            format!("ok({})", rite_literal(v, atoms)?)
+        }
+        Value::Result(rite_runtime::ResultValue::Err(v)) => {
+            format!("err({})", rite_literal(v, atoms)?)
+        }
+        _ => return None,
+    })
+}
+
+/// A double-quoted Rite string. `{` must be escaped or it opens an interpolation hole.
+fn rite_string_literal(s: &str) -> String {
+    let mut out = String::with_capacity(s.len() + 2);
+    out.push('"');
+    for ch in s.chars() {
+        match ch {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            '\0' => out.push_str("\\0"),
+            '{' => out.push_str("{{"),
+            other => out.push(other),
+        }
+    }
+    out.push('"');
+    out
 }
 
 /// Whether this chunk should be remembered for later inputs.

@@ -216,6 +216,44 @@ Copy the function into a `.rite` file when it stabilizes; use `:load` / `:reload
 | Script's own arguments | *(none — `! @process.args` always works)* |
 | Everything local | `--allow-all` (trusted scripts only) |
 
+## How the session remembers things
+
+Each input is compiled on its own, so the REPL keeps a **prelude** of your definitions
+and replays it before every line. Three consequences worth knowing:
+
+**Redefining a name replaces it, keeping its original position.** The newest value wins,
+and anything defined in between sees it:
+
+```text
+> x ← 1
+> ◆ get() ⟦ ^ x ⟧
+> x ← 99
+> get()
+99
+```
+
+**An effectful binding performs its effect once.** The session stores the *result*, not
+the expression, so a read or a POST does not happen again on every later line:
+
+```text
+> data ← ! @fs.read("big.json")     // reads once
+> data → count                      // does not re-read
+```
+
+**A mutation is not remembered.** `↢` declares a mutable binding and is kept, but a
+later `:=` is a statement, not a definition, so the prelude replays the original value:
+
+```text
+> n ↢ 0
+> n := n + 5
+5
+> n
+0                                   // the declaration replayed
+```
+
+Use `:reset` to clear the prelude, and re-declare with `↢` when you want a new starting
+value.
+
 ## Common “weird” REPL moments
 
 | Symptom | Cause | Fix |
