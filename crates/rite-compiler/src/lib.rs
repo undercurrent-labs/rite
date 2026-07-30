@@ -81,7 +81,7 @@ pub fn build_script(
 
     std::fs::write(
         build_dir.join("Cargo.toml"),
-        generate_cargo_toml(&hash, &dep_source),
+        generate_cargo_toml(&hash, &dep_source, uses_db(&ir)),
     )
     .map_err(|e| e.to_string())?;
 
@@ -236,20 +236,44 @@ fn exit_code(e: &EvalError) -> i32 {
     )
 }
 
+/// Whether the program reaches `@db`, and so needs DuckDB linked into the binary.
+///
+/// DuckDB is a `bundled` dependency: including it compiles the whole database from source,
+/// which is most of the multi-minute cold build of a one-line script. A program that never
+/// touches `@db` should not pay for it.
+///
+/// Decided from the serialized IR rather than the source text, so a `@db` reached through
+/// an import still counts. Errs toward *including* it: a false positive costs build time,
+/// a false negative would leave a capability missing at runtime.
+fn uses_db(ir: &rite_sem::ProgramIr) -> bool {
+    serde_json::to_string(ir)
+        .map(|json| json.contains(r#""path":["db""#))
+        .unwrap_or(true)
+}
+
 /// `Cargo.toml` of the generated wrapper crate.
-fn generate_cargo_toml(hash: &str, dep_source: &DepSource) -> String {
+fn generate_cargo_toml(hash: &str, dep_source: &DepSource, needs_db: bool) -> String {
     let dep = |crate_name: &str| -> String {
+        // Only `rite-caps` has an optional feature worth turning off, and only when the
+        // program never reaches `@db`.
+        let extra = if crate_name == "rite-caps" && !needs_db {
+            ", default-features = false"
+        } else {
+            ""
+        };
         match dep_source {
             DepSource::Workspace(root) => format!(
-                "{} = {{ path = {:?} }}",
+                "{} = {{ path = {:?}{} }}",
                 crate_name,
-                root.join("crates").join(crate_name).display().to_string()
+                root.join("crates").join(crate_name).display().to_string(),
+                extra
             ),
             DepSource::Git { url, git_ref } => format!(
-                "{} = {{ git = {:?}, {} }}",
+                "{} = {{ git = {:?}, {}{} }}",
                 crate_name,
                 url,
-                git_ref_field(git_ref)
+                git_ref_field(git_ref),
+                extra
             ),
         }
     };
@@ -524,7 +548,7 @@ mod tests {
     #[test]
     fn workspace_dep_source_emits_path_deps() {
         let root = PathBuf::from("/src/rite");
-        let toml = generate_cargo_toml("abc", &DepSource::Workspace(root.clone()));
+        let toml = generate_cargo_toml("abc", &DepSource::Workspace(root.clone()), true);
         // Build the expectation the way the emitter does. A hardcoded POSIX spelling
         // failed on Windows for correct output: `join` produces `\` there, and the
         // emitter's `{:?}` escapes it to `\\`, which is what TOML needs for a literal
@@ -548,6 +572,7 @@ mod tests {
                 url: RITE_REPO_URL.to_string(),
                 git_ref: "v0.1.9".to_string(),
             },
+            true,
         );
         assert!(
             toml.contains(

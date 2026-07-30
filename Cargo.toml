@@ -72,6 +72,9 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 unicode-width = "0.2"
 similar = "2"
 tempfile = "3"
+# Parses generated Rust in the codegen gate: a syntax check that costs milliseconds
+# instead of the minutes a real build of the generated crate takes.
+syn = { version = "2", features = ["full", "parsing"] }
 proptest = "1"
 insta = "1"
 criterion = { version = "0.5", default-features = false, features = ["cargo_bench_support"] }

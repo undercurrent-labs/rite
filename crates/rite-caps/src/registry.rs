@@ -126,7 +126,7 @@ impl CapabilityHost for HostCapabilities {
         let method = path.get(1).map(|s| s.as_str()).unwrap_or("");
         match cap {
             "console" => self.console.call(method, args, &self.perms, ctx).await,
-            "fs" => self.fs.call(method, args, &self.perms).await,
+            "fs" => self.fs.call(method, args, &self.perms, &ctx.atoms).await,
             "json" => self.json.call(method, args, &self.perms).await,
             "csv" => self.csv.call(method, args, &self.perms).await,
             "clock" => self.clock.call(method, args, effect, &self.perms).await,
@@ -140,7 +140,7 @@ impl CapabilityHost for HostCapabilities {
             "game" => {
                 let args = resolve_atom_args(args, ctx);
                 let mut game = self.game.write();
-                game.call(method, args)
+                game.call(method, args, &ctx.atoms)
             }
             "store" => {
                 let mut store = self.store.write();

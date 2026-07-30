@@ -11,21 +11,47 @@
   become direct calls into `rite_runtime::ops`, and a call to a compiled function is a
   direct Rust call.
 
-  Measured on `fib(24)`, release build, best of five: **782 ms interpreted → 153 ms
-  compiled, 5.1×**. Worth recording how that number was reached — the first version
-  compiled only top-level statements and measured **778 ms against 778 ms**, no
-  improvement whatsoever, because `fib` is a *function* and function bodies were still
-  interpreted. Compiling the bodies is the whole difference.
+  Two measurements, release build, best of five, because one would misrepresent it:
 
-  Not everything lowers yet. `Match`, `Pipeline`, `Closure` and `@console` fall back to the
-  interpreter per function, and pipelines are idiomatic Rite, so real programs will still
-  meet the tree-walker often. The generated file names what fell back rather than leaving
-  it to be inferred from a benchmark. Locals also stay in `ctx.env` rather than becoming
-  Rust `let` bindings: a Rite closure captures the environment, and promoting them without
-  escape analysis would silently break capture.
+  | program | interpreted | compiled | |
+  |---------|------------|----------|---|
+  | `fib(24)` — all calls, fully lowered | 782 ms | 153 ms | **5.1×** |
+  | pipelines over `map`/`keep`/`each` | 72 ms | 72 ms | **1.0×** |
+
+  The second number is the honest one for most Rite. `Match`, `Pipeline`, `Closure` and
+  `@console` still fall back to the interpreter, pipelines are idiomatic, and a program
+  built from them gets no improvement at all today. The generated file names what fell
+  back, so this is visible without benchmarking.
+
+  Worth recording how the first number was reached, too: the initial version compiled only
+  top-level statements and measured **778 ms against 778 ms** — nothing, because `fib` is a
+  *function* and function bodies were still interpreted. Compiling the bodies is the whole
+  difference.
+
+  Locals stay in `ctx.env` rather than becoming Rust `let` bindings: a Rite closure
+  captures the environment, and promoting them without escape analysis would silently break
+  capture.
+
+- **`rite build` skips DuckDB when the program never uses `@db`.** It is a `bundled`
+  dependency, so including it compiles the whole database from source. Cold builds of a
+  one-line script, measured with an empty target directory: **425 s → 265 s** and 12 GB →
+  9.4 GB. Still slow — the rest is compiling the Rite runtime itself, which a prebuilt
+  support crate would address and this does not.
 
 ### Fixed
 
+- **An atom written through a capability lost its name.** `@fs.write(p, #ok)` put the bytes
+  `#0` on disk — the interner index — and `@fs.append`, `@console` and `@game.say` did the
+  same. The builtins were fixed in 0.2.0; the capabilities had their own copies of the
+  identical mistake, and writing wrong content to a user's file is the worst place for it.
+- **Nothing in CI compiled the generated Rust.** Every test that builds a generated crate
+  is `#[ignore]`d because it takes minutes, and the backend's own tests assert on emitted
+  *text* — `code.contains("Box::pin")` passes on source that does not compile. A code
+  generator therefore landed with its output never once compiled by the suite. The
+  generated file is now parsed with `syn` on every run, which catches a stray brace or a
+  malformed literal in milliseconds, and the end-to-end builds run in the release workflow
+  where minutes are affordable. Verified by planting a dropped brace: the new gate fails,
+  the fifteen text-based tests all pass.
 - **A compiled binary dropped its result once it had printed.** `! @console.println("hi")`
   followed by `1 + 2` printed `hi` and swallowed the `3`, where `rite run` prints both — a
   standing parity break between the two commands, not a new one.

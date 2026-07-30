@@ -93,11 +93,16 @@ impl FsCap {
         },
     ];
 
+    /// `atoms` is needed to write a value out: `Display` cannot resolve an atom and
+    /// renders it as its interner index, so `@fs.write(p, #ok)` wrote the bytes `#0` to
+    /// the file. Writing the wrong content to a user's disk is the worst place for that
+    /// bug to live, and it is the same one `str` and `join` had.
     pub async fn call(
         &self,
         method: &str,
         args: Vec<Value>,
         perms: &PermissionSet,
+        atoms: &rite_runtime::AtomInterner,
     ) -> Result<Value, EvalError> {
         match method {
             "read" => {
@@ -119,7 +124,7 @@ impl FsCap {
             "write" => {
                 let path = path_arg(&args, 0)?;
                 let path = perms.check_fs_write(&path).map_err(EvalError::Permission)?;
-                let content = args.get(1).map(|v| format!("{}", v)).unwrap_or_default();
+                let content = args.get(1).map(|v| v.to_display(atoms)).unwrap_or_default();
                 match std::fs::write(&path, content) {
                     Ok(()) => Ok(Value::ok(Value::None)),
                     Err(e) => Ok(io_err("fs.write", &path, e)),
@@ -128,7 +133,7 @@ impl FsCap {
             "append" => {
                 let path = path_arg(&args, 0)?;
                 let path = perms.check_fs_write(&path).map_err(EvalError::Permission)?;
-                let content = args.get(1).map(|v| format!("{}", v)).unwrap_or_default();
+                let content = args.get(1).map(|v| v.to_display(atoms)).unwrap_or_default();
                 use std::io::Write;
                 match std::fs::OpenOptions::new()
                     .create(true)

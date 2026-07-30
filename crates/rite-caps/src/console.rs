@@ -55,10 +55,14 @@ impl ConsoleCap {
         method: &str,
         args: Vec<Value>,
         perms: &PermissionSet,
-        _ctx: &RuntimeContext,
+        ctx: &RuntimeContext,
     ) -> Result<Value, EvalError> {
         perms.check_console().map_err(EvalError::Permission)?;
-        let msg = args.first().map(|v| format!("{}", v)).unwrap_or_default();
+        // `to_display`, not `Display`: the latter renders an atom as its interner index.
+        let msg = args
+            .first()
+            .map(|v| v.to_display(&ctx.atoms))
+            .unwrap_or_default();
         match method {
             "print" => {
                 print!("{}", msg);

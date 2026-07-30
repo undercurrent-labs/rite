@@ -166,7 +166,14 @@ impl GameCap {
         },
     ];
 
-    pub fn call(&mut self, method: &str, args: Vec<Value>) -> Result<Value, EvalError> {
+    /// `atoms` resolves an atom's name; `Display` cannot, and `@game.say(#greeting)`
+    /// pushed the interner index into the transcript instead of the word.
+    pub fn call(
+        &mut self,
+        method: &str,
+        args: Vec<Value>,
+        atoms: &rite_runtime::AtomInterner,
+    ) -> Result<Value, EvalError> {
         match method {
             "register_item" => {
                 let id = atom_or_str(args.first())?;
@@ -238,7 +245,10 @@ impl GameCap {
             }
             "register_world" => Ok(Value::None),
             "say" => {
-                let msg = args.first().map(|v| format!("{}", v)).unwrap_or_default();
+                let msg = args
+                    .first()
+                    .map(|v| v.to_display(atoms))
+                    .unwrap_or_default();
                 self.state.messages.push(msg);
                 Ok(Value::None)
             }
@@ -335,7 +345,7 @@ impl GameCap {
                 let parts: Vec<&str> = cmd.split_whitespace().collect();
                 match parts.as_slice() {
                     ["look"] | ["l"] => {
-                        let desc = self.call("look", vec![])?;
+                        let desc = self.call("look", vec![], atoms)?;
                         if let Value::String(s) = desc {
                             self.state.messages.push(s.to_string());
                         }
@@ -349,25 +359,25 @@ impl GameCap {
                         });
                     }
                     ["go", dir] | ["move", dir] => {
-                        let _ = self.call("go", vec![Value::string(*dir)])?;
+                        let _ = self.call("go", vec![Value::string(*dir)], atoms)?;
                     }
                     ["north"] | ["n"] => {
-                        let _ = self.call("go", vec![Value::string("north")])?;
+                        let _ = self.call("go", vec![Value::string("north")], atoms)?;
                     }
                     ["south"] | ["s"] => {
-                        let _ = self.call("go", vec![Value::string("south")])?;
+                        let _ = self.call("go", vec![Value::string("south")], atoms)?;
                     }
                     ["east"] | ["e"] => {
-                        let _ = self.call("go", vec![Value::string("east")])?;
+                        let _ = self.call("go", vec![Value::string("east")], atoms)?;
                     }
                     ["west"] | ["w"] => {
-                        let _ = self.call("go", vec![Value::string("west")])?;
+                        let _ = self.call("go", vec![Value::string("west")], atoms)?;
                     }
                     ["take", item] | ["get", item] => {
-                        let _ = self.call("take", vec![Value::string(*item)])?;
+                        let _ = self.call("take", vec![Value::string(*item)], atoms)?;
                     }
                     ["drop", item] => {
-                        let _ = self.call("drop", vec![Value::string(*item)])?;
+                        let _ = self.call("drop", vec![Value::string(*item)], atoms)?;
                     }
                     ["quit"] | ["exit"] => {
                         self.state.messages.push("Farewell.".into());

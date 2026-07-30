@@ -230,10 +230,13 @@ impl<'a> Evaluator<'a> {
                 ..
             } => {
                 let a = self.eval_operand(addr).await?;
+                // `to_display`, not `Display`: the latter cannot resolve an atom and
+                // renders it as its interner index, so a non-string address reported a
+                // bind failure for `#0` instead of naming what was written.
                 let addr_str = a
                     .as_str()
                     .map(|s| s.to_string())
-                    .unwrap_or_else(|| format!("{}", a));
+                    .unwrap_or_else(|| a.to_display(&self.ctx.atoms));
                 // Middleware: `use @http.log` → Named, `use { |req, next| … }` → Function
                 let mut mw_specs: Vec<crate::value::HttpMiddleware> = Vec::new();
                 for m in middleware {

@@ -12,7 +12,12 @@ use std::path::Path;
 /// Raw `@fs.glob` call: `Ok(paths)` on success, `Err(message)` on a capability error.
 async fn glob(perms: &PermissionSet, pattern: &str) -> Result<Vec<String>, String> {
     match FsCap
-        .call("glob", vec![Value::string(pattern)], perms)
+        .call(
+            "glob",
+            vec![Value::string(pattern)],
+            perms,
+            &rite_runtime::AtomInterner::new(),
+        )
         .await
     {
         Ok(Value::Result(ResultValue::Ok(inner))) => match *inner {

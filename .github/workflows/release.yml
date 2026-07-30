@@ -154,9 +154,24 @@ jobs:
             dist/skill/rite-agent-skill.zip
             dist/skill/SHA256SUMS
 
+  # The generated crate is only ever *compiled* here. CI parses it with `syn`, which
+  # catches a stray brace or a bad literal in milliseconds but does not type-check — so a
+  # lowering that emits well-formed Rust referring to something that does not exist would
+  # pass there and break `rite build` for everyone. This is minutes, which is affordable
+  # once per tag and was not affordable on every push.
+  backend:
+    name: Compiled backend end-to-end
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: build + run generated binaries, and diff against the interpreter
+        run: cargo test -p rite-compiler -- --ignored --nocapture --test-threads=1
+
   publish:
     name: Publish GitHub Release
-    needs: [build, vscode, skill]
+    needs: [build, vscode, skill, backend]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
