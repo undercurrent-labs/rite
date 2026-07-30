@@ -30,6 +30,31 @@ fn scratch(name: &str) -> PathBuf {
     dir
 }
 
+/// HEAD's sha, if the remote already has it — cargo fetches from the remote, not from
+/// this working copy, so an unpushed commit cannot be resolved.
+fn pushed_head() -> Option<String> {
+    let root = repo_root();
+    let sha = Command::new("git")
+        .args(["rev-parse", "HEAD"])
+        .current_dir(&root)
+        .output()
+        .ok()?;
+    let sha = String::from_utf8_lossy(&sha.stdout).trim().to_string();
+    if sha.is_empty() {
+        return None;
+    }
+    let on_remote = Command::new("git")
+        .args(["branch", "-r", "--contains", &sha])
+        .current_dir(&root)
+        .output()
+        .ok()?;
+    let listed = String::from_utf8_lossy(&on_remote.stdout);
+    if listed.trim().is_empty() {
+        return None;
+    }
+    Some(sha)
+}
+
 fn run_in(bin: &Path, cwd: &Path) -> Output {
     Command::new(bin)
         .current_dir(cwd)
@@ -148,14 +173,42 @@ fn compiled_binary_enforces_build_time_permissions() {
 
 /// Outside a Rite checkout the generated crate must resolve `rite-*` from git
 /// instead of emitting path deps that point at nothing. Needs network.
+///
+/// Resolved against the **current commit**, not a tag.
+///
+/// Defaulting to `v{CARGO_PKG_VERSION}` made this untestable until that tag was pushed.
+/// The obvious repair — point it at the newest existing tag — is worse than it looks:
+/// generated code is version-coupled to the runtime it links against, so today's backend
+/// emits calls (`rite_runtime::lookup_global`) that last release's runtime does not have.
+/// Against an old tag this only passes when the test program is trivial enough to compile
+/// to nothing new, which is confidence in the wrong thing.
+///
+/// A pushed commit exists before its tag does and carries a matching runtime, so `rev = `
+/// tests the real pairing at any point in the cycle. What remains untestable before a
+/// release — that the published binary resolves *its own* tag — is covered by the
+/// post-publish smoke test, against the artifact that was actually released.
 #[test]
 #[ignore = "needs network + a cold cargo build; run with --ignored"]
 fn builds_outside_a_checkout_via_git_deps() {
     let dir = scratch("gitdeps");
     let script = dir.join("hello.rite");
-    std::fs::write(&script, "! @console.println(\"hello from git deps\")\n").unwrap();
+    // Deliberately not a bare `println`: that falls back to the interpreter, so it would
+    // link successfully against a runtime missing everything the backend emits. A compiled
+    // function and a compiled call are what make this test the pairing check it claims.
+    std::fs::write(
+        &script,
+        "◆ double(n) ⟦ ^ n * 2 ⟧\n! @console.println(str(double(21)))\n",
+    )
+    .unwrap();
+
+    // The current commit, which the remote must already have for cargo to fetch it.
+    let Some(git_ref) = pushed_head() else {
+        eprintln!("skipping git-dep build (HEAD is not on the remote)");
+        return;
+    };
 
     std::env::remove_var("RITE_SOURCE_DIR");
+    std::env::set_var("RITE_BUILD_GIT_REF", &git_ref);
     std::env::set_var("RITE_BUILD_DIR", dir.join("build"));
     std::env::remove_var("CARGO_TARGET_DIR");
     let prev_cwd = std::env::current_dir().unwrap();
@@ -172,7 +225,8 @@ fn builds_outside_a_checkout_via_git_deps() {
 
     std::env::set_current_dir(&prev_cwd).unwrap();
     std::env::remove_var("RITE_BUILD_DIR");
-    built.expect("git-dep build outside a checkout");
+    std::env::remove_var("RITE_BUILD_GIT_REF");
+    built.unwrap_or_else(|e| panic!("git-dep build against {git_ref} failed: {e}"));
 
     let manifest: serde_json::Value = serde_json::from_str(
         &std::fs::read_to_string(
@@ -191,7 +245,7 @@ fn builds_outside_a_checkout_via_git_deps() {
 
     let out = run_in(&out_bin, &dir);
     assert!(
-        String::from_utf8_lossy(&out.stdout).contains("hello from git deps"),
+        String::from_utf8_lossy(&out.stdout).contains("42"),
         "stdout: {}\nstderr: {}",
         String::from_utf8_lossy(&out.stdout),
         String::from_utf8_lossy(&out.stderr)

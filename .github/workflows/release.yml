@@ -279,3 +279,72 @@ jobs:
             Docs: https://rite.undrc.dev/docs/installation
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Runs *after* publish, against the binary that was actually released.
+  #
+  # It cannot block anything — the release is already out — so its job is to tell you to
+  # yank or patch. That is still the only way to check the things a pre-publish job
+  # structurally cannot: that the archive is not corrupt, that the version baked into the
+  # binary matches its tag, and that `rite build` outside a checkout resolves the git
+  # dependencies for *this* release rather than a previous one.
+  #
+  # The pre-publish `backend` job covers the same mechanism against the newest existing
+  # tag, which is what makes it runnable before a release. This covers the half that only
+  # exists afterwards.
+  smoke:
+    name: Smoke-test the released binary
+    needs: [publish]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Resolve version
+        id: ver
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            V="${{ inputs.version }}"
+          else
+            V="${GITHUB_REF_NAME}"
+          fi
+          case "$V" in v*) ;; *) V="v${V}" ;; esac
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+
+      - name: Download the published Linux binary
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release download "${{ steps.ver.outputs.version }}" \
+            -R "${{ github.repository }}" \
+            -p 'rite-x86_64-unknown-linux-gnu.tar.gz' -D dl
+          tar -C dl -xzf dl/rite-x86_64-unknown-linux-gnu.tar.gz
+          find dl -type f -name rite -perm -u+x -exec cp {} ./rite \;
+          chmod +x ./rite
+
+      - name: The version it reports is the version that was tagged
+        run: |
+          set -euo pipefail
+          REPORTED="v$(./rite version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)"
+          echo "tag=${{ steps.ver.outputs.version }} binary=$REPORTED"
+          [ "$REPORTED" = "${{ steps.ver.outputs.version }}" ]
+
+      - name: It runs a script
+        run: |
+          set -euo pipefail
+          printf '◆ double(n) ⟦ ^ n * 2 ⟧\n! @console.println(str(double(21)))\n' > smoke.rite
+          OUT="$(./rite run smoke.rite)"
+          echo "$OUT"
+          [ "$OUT" = "42" ]
+
+      # Outside any checkout, so the generated crate must resolve rite-* from git at this
+      # release's tag — the path a user who installed a binary actually takes, and the one
+      # that cannot be exercised until the tag exists.
+      - name: It compiles a script outside a checkout
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/smoke && cp smoke.rite /tmp/smoke/ && cd /tmp/smoke
+          "$GITHUB_WORKSPACE/rite" build smoke.rite --output ./smoke-bin
+          OUT="$(./smoke-bin)"
+          echo "$OUT"
+          [ "$OUT" = "42" ]
