@@ -156,7 +156,7 @@ impl<'a> Evaluator<'a> {
                 }
                 Ok(Value::None)
             }
-            other => call_builtin(other, args),
+            other => call_builtin(other, args, &self.ctx.atoms),
         }
     }
 }

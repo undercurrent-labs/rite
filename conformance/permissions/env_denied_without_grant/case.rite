@@ -1,0 +1,4 @@
+// `env` is denied unless granted, so this must fail rather than return a value.
+// Guards the fixture loader too: when `permissions.toml` was ignored and every case
+// silently ran with `allow_all`, this case succeeded and the suite went green.
+! @env.get("PATH")?

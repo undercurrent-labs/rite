@@ -22,19 +22,24 @@ use std::time::Instant;
 ///
 /// # Budget the stack, not just the depth
 ///
-/// The limit is only safe relative to the stack the evaluator is running on. Rough debug
-/// figures, measured with `spin(n)` tail recursion:
+/// The limit is only safe relative to the stack the evaluator is running on. Debug
+/// figures, measured by bisecting `ulimit -s` against `spin(n)` tail recursion:
 ///
 /// | Stack | Deepest clean recursion (debug) |
 /// |-------|-------------------------------|
-/// | 512 KB | under 32 |
-/// | 2 MiB (Rust's default for a spawned thread) | under 32 |
-/// | 8 MiB (a process main thread) | 32 comfortable, 128 aborts |
+/// | 2 MiB (Rust's default for a spawned thread) | 8 |
+/// | 4 MiB | 16 |
+/// | 8 MiB (a process main thread) | 32 — the default below, with nothing to spare |
+/// | 16 MiB | under 32 for the IR path |
 ///
-/// `rite run` evaluates on the main thread, so the debug default below is comfortable
-/// there. An embedder that evaluates on a spawned thread, or wants deeper recursion,
-/// must size the thread to match — budget roughly 64 KB of debug stack per Rite call
-/// level:
+/// That is roughly **256 KB of debug stack per Rite call level**, four times the figure
+/// this note used to quote; an embedder sizing a thread by the old number got aborts.
+/// Release frames are far smaller, which is why the release default is 256.
+///
+/// `rite run` evaluates on the main thread, so the debug default below fits — but only
+/// just. An embedder that evaluates on a spawned thread (a tokio worker included, at
+/// 2 MiB) will abort well before the budget triggers, and must size the thread to
+/// match:
 ///
 /// ```ignore
 /// std::thread::Builder::new().stack_size(32 * 1024 * 1024).spawn(|| {

@@ -7,6 +7,7 @@
 //! test, and this is the same drift that let `@db.*` skip its effect marker for a while.
 
 use rite_runtime::builtins::call_builtin;
+use rite_runtime::AtomInterner;
 use rite_runtime::EvalError;
 use rite_sem::resolve::BUILTIN_NAMES;
 
@@ -24,7 +25,7 @@ fn every_declared_builtin_is_dispatchable() {
         // Call with no arguments: a missing arg is an arity/type error, which still
         // proves the name reached an implementation. Only "unknown builtin" means the
         // resolver promised a name the runtime cannot honour.
-        if let Err(e) = call_builtin(name, vec![]) {
+        if let Err(e) = call_builtin(name, vec![], &AtomInterner::new()) {
             if is_unknown(&e) {
                 unknown.push(*name);
             }
@@ -41,7 +42,8 @@ fn every_declared_builtin_is_dispatchable() {
 fn an_undeclared_name_is_reported_as_unknown() {
     // Guards the test above: if `call_builtin` ever stopped saying "unknown builtin",
     // `every_declared_builtin_is_dispatchable` would silently pass for everything.
-    let err = call_builtin("definitely_not_a_builtin", vec![]).expect_err("should not resolve");
+    let err = call_builtin("definitely_not_a_builtin", vec![], &AtomInterner::new())
+        .expect_err("should not resolve");
     assert!(is_unknown(&err), "unexpected error text: {err}");
 }
 

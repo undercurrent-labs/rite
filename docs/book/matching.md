@@ -30,6 +30,24 @@ msg <- match status [[
 - `_` matches anything (wildcard)
 - The match expression **returns** the arm’s result (here a string)
 
+### One arm per line
+
+Arms are separated by **newlines**, not commas. A comma between arms is a syntax
+error, not a style choice:
+
+```text
+~ status ⟦ #ok → 1, _ → 2 ⟧      // error[E013]: expected pattern
+```
+
+Write it across lines instead:
+
+```rite
+~ #ok ⟦
+  #ok → 1
+  _ → 2
+⟧
+```
+
 ## Atoms and literals
 
 ```rite
@@ -87,16 +105,25 @@ event ← ⟨kind: #click, x: 10⟩
 
 ## Results (`ok` / `err`)
 
-Host and fallible ops often return results. Match them:
+Host and fallible ops return results. The patterns are **juxtaposed, not called** —
+`ok value`, never `ok(value)`, even though `ok(value)` is how you *construct* one:
 
 ```rite
-// Host ops often return results; match on atoms/tags or use ?
-// See the Results chapter for `?` unwrap and ok/err patterns.
-status ← #ok
-text ← ~ status ⟦
-  #ok → "value ready"
-  #error → "failed"
-  _ → "other"
+outcome ← ok(⟨n: 7⟩)
+
+text ← ~ outcome ⟦
+  ok data → "n=" + str(data.n)
+  err e   → "failed"
+⟧
+```
+
+The bound name is ordinary — `ok data` binds the success value to `data`, `err e` binds
+the error to `e` — and either arm may be `_` if you do not need the payload:
+
+```rite
+~ outcome ⟦
+  ok _  → #worked
+  err _ → #failed
 ⟧
 ```
 

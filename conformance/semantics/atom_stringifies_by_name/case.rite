@@ -1,0 +1,5 @@
+// An atom that reaches a string carries its name. `str` and interpolation once
+// rendered the interner index instead, so `#ok` printed as `#0` while
+// `@console.println` — which took a different path — printed `#ok`.
+s ← #ok
+str(s) + " " + ([#a, #b] → join("-"))

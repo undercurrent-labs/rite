@@ -1,17 +1,28 @@
 //! Pure standard-library builtins.
 
+use crate::atom::AtomInterner;
 use crate::value::{Key, ResultValue, Value};
 use crate::EvalError;
 use indexmap::IndexMap;
 
-pub fn call_builtin(name: &str, args: Vec<Value>) -> Result<Value, EvalError> {
+/// Dispatch a pure builtin.
+///
+/// `atoms` is needed because `Display for Value` cannot resolve an atom's name and
+/// renders it as its interner index: `str(#ok)` produced `"#0"`, and so did `"{status}"`
+/// and `[#a, #b] → join(", ")`. Anything user-visible must go through
+/// [`Value::to_display`], which takes the interner — that is why it is threaded here
+/// rather than left for each builtin to do without.
+pub fn call_builtin(
+    name: &str,
+    args: Vec<Value>,
+    atoms: &AtomInterner,
+) -> Result<Value, EvalError> {
     match name {
         "ok" => Ok(Value::ok(args.into_iter().next().unwrap_or(Value::None))),
         "err" => Ok(Value::err(args.into_iter().next().unwrap_or(Value::None))),
-        "str" => Ok(Value::string(format!(
-            "{}",
-            args.first().unwrap_or(&Value::None)
-        ))),
+        "str" => Ok(Value::string(
+            args.first().unwrap_or(&Value::None).to_display(atoms),
+        )),
         "len" | "count" => builtin_count(args),
         "type_of" => Ok(Value::string(
             args.first().map(|v| v.type_name()).unwrap_or("none"),
@@ -34,7 +45,7 @@ pub fn call_builtin(name: &str, args: Vec<Value>) -> Result<Value, EvalError> {
         "range_incl" => builtin_range_incl(args),
         "lines" => builtin_lines(args),
         "words" => builtin_words(args),
-        "join" => builtin_join(args),
+        "join" => builtin_join(args, atoms),
         "zip" => builtin_zip(args),
         "chunk" => builtin_chunk(args),
         "keys" => builtin_keys(args),
@@ -56,7 +67,7 @@ pub fn call_builtin(name: &str, args: Vec<Value>) -> Result<Value, EvalError> {
         "enumerate" | "with_index" => builtin_enumerate(args),
         "panic" => Err(EvalError::Panic(
             args.first()
-                .map(|v| format!("{}", v))
+                .map(|v| v.to_display(atoms))
                 .unwrap_or_else(|| "panic".into()),
         )),
         "expect" => builtin_expect(args),
@@ -310,7 +321,7 @@ fn builtin_words(args: Vec<Value>) -> Result<Value, EvalError> {
     Ok(Value::list(words))
 }
 
-fn builtin_join(args: Vec<Value>) -> Result<Value, EvalError> {
+fn builtin_join(args: Vec<Value>, atoms: &AtomInterner) -> Result<Value, EvalError> {
     let mut it = args.into_iter();
     let list = match it.next() {
         Some(Value::List(xs)) => xs,
@@ -321,7 +332,7 @@ fn builtin_join(args: Vec<Value>) -> Result<Value, EvalError> {
         .next()
         .and_then(|v| v.as_str().map(|s| s.to_string()))
         .unwrap_or_else(|| "".into());
-    let parts: Vec<String> = list.iter().map(|v| format!("{}", v)).collect();
+    let parts: Vec<String> = list.iter().map(|v| v.to_display(atoms)).collect();
     Ok(Value::string(parts.join(&sep)))
 }
 

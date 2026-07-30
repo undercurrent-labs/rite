@@ -1,0 +1,4 @@
+// The same call, with the grant its fixture declares. `PATH` is set on every platform
+// CI runs on; only its presence is asserted, never its contents.
+v ← ! @env.get("PATH")
+v != none
