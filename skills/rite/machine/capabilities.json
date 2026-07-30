@@ -98,7 +98,7 @@
     {
       "arity": 1,
       "docs": "Read and parse a CSV file into a list of records.",
-      "effectful": false,
+      "effectful": true,
       "name": "read",
       "permission": "fs:read"
     },
@@ -113,7 +113,7 @@
   "db": [
     {
       "arity": 0,
-      "docs": "Open a DuckDB connection. Path omitted or \":memory:\" → in-memory. Needs --allow db or --allow db=path.",
+      "docs": "Open a DuckDB connection. Path omitted or \":memory:\" → in-memory. Needs --allow db or --allow db=path. DuckDB's own file/network access (read_csv, COPY TO, ATTACH, extensions) is sandboxed to the granted db= / fs:write roots.",
       "effectful": true,
       "name": "open",
       "permission": "db"
@@ -193,21 +193,21 @@
     {
       "arity": 1,
       "docs": "Get an environment variable or none.",
-      "effectful": false,
+      "effectful": true,
       "name": "get",
       "permission": "env"
     },
     {
       "arity": 1,
       "docs": "Get a required environment variable as result.",
-      "effectful": false,
+      "effectful": true,
       "name": "require",
       "permission": "env"
     },
     {
       "arity": 0,
       "docs": "Return allowed environment variables as a record.",
-      "effectful": false,
+      "effectful": true,
       "name": "all",
       "permission": "env"
     }
@@ -216,14 +216,14 @@
     {
       "arity": 1,
       "docs": "Read a UTF-8 text file.",
-      "effectful": false,
+      "effectful": true,
       "name": "read",
       "permission": "fs:read"
     },
     {
       "arity": 1,
       "docs": "Read a file as bytes.",
-      "effectful": false,
+      "effectful": true,
       "name": "read_bytes",
       "permission": "fs:read"
     },
@@ -244,28 +244,28 @@
     {
       "arity": 1,
       "docs": "Read file lines as a list of strings.",
-      "effectful": false,
+      "effectful": true,
       "name": "lines",
       "permission": "fs:read"
     },
     {
       "arity": 1,
       "docs": "Check whether a path exists.",
-      "effectful": false,
+      "effectful": true,
       "name": "exists",
       "permission": "fs:read"
     },
     {
       "arity": 1,
       "docs": "Return file metadata record.",
-      "effectful": false,
+      "effectful": true,
       "name": "metadata",
       "permission": "fs:read"
     },
     {
       "arity": 1,
-      "docs": "Expand a glob pattern to matching paths.",
-      "effectful": false,
+      "docs": "Expand a glob pattern to matching paths. The pattern must point inside a granted read root; matches outside every granted root are dropped.",
+      "effectful": true,
       "name": "glob",
       "permission": "fs:read"
     },
@@ -415,7 +415,7 @@
   "http": [
     {
       "arity": 2,
-      "docs": "Start an HTTP server and block until shutdown.",
+      "docs": "Start an HTTP server and block until shutdown. Loopback (127.0.0.0/8, ::1, localhost) binds by default; any other interface — including the wildcards 0.0.0.0 and [::] — needs --allow net=<host>.",
       "effectful": true,
       "name": "listen",
       "permission": "net"
@@ -467,7 +467,7 @@
     {
       "arity": 1,
       "docs": "Read and parse a JSON file.",
-      "effectful": false,
+      "effectful": true,
       "name": "read",
       "permission": "fs:read"
     },
@@ -489,8 +489,8 @@
     },
     {
       "arity": 1,
-      "docs": "Locate an executable on PATH.",
-      "effectful": false,
+      "docs": "Locate an executable on PATH. Reads the PATH environment variable and probes the filesystem, so it is effectful (`!`) and needs process *and* env access to PATH (--allow process --allow env=PATH).",
+      "effectful": true,
       "name": "which",
       "permission": "process"
     }

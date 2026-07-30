@@ -48,6 +48,16 @@ jobs:
         run: ./target/release/rite docs check
       - name: agent bundle
         run: ./target/release/rite docs agent --output skills/rite
+      # Regenerating must not rewrite tracked sources. This caught SKILL.md being
+      # truncated to zero bytes by an in-place bundle regeneration.
+      - name: tracked files unchanged by generation
+        run: |
+          if ! git diff --quiet -- skills/ docs/ examples/ apps/; then
+            echo "::error::generation modified tracked files:"
+            git --no-pager diff --stat -- skills/ docs/ examples/ apps/
+            exit 1
+          fi
+          test -s skills/rite/SKILL.md
       - name: upload binaries
         uses: actions/upload-artifact@v5
         with:

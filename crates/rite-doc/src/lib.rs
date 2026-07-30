@@ -392,7 +392,23 @@ pub fn generate_agent_bundle(output: &Path) -> anyhow::Result<()> {
     std::fs::create_dir_all(output.join("examples/scripts"))?;
     std::fs::create_dir_all(output.join("machine"))?;
 
-    let skill = std::fs::read_to_string("skills/rite/SKILL.md").unwrap_or_else(|_| {
+    // `SKILL.md` is hand-written and only copied here. The source path is relative to
+    // the cwd, so when `output` IS `skills/rite` (what CI and `rite docs agent` do) this
+    // reads and writes the same file. Skip that case entirely rather than round-tripping
+    // it: a failed read falls back to the stub below, which would otherwise silently
+    // replace the real file with a placeholder — that is how it once got clobbered.
+    let source_skill = Path::new("skills/rite/SKILL.md");
+    let dest_skill = output.join("SKILL.md");
+    let same_file = match (source_skill.canonicalize(), dest_skill.canonicalize()) {
+        (Ok(a), Ok(b)) => a == b,
+        _ => false,
+    };
+    if same_file {
+        // Already in place and authoritative; nothing to copy.
+        return finish_agent_bundle(output);
+    }
+
+    let skill = std::fs::read_to_string(source_skill).unwrap_or_else(|_| {
         r#"# Rite Agent Skill
 
 Rite is an expression-oriented scripting language with glyphic and ASCII syntax.
@@ -407,8 +423,13 @@ Rite is an expression-oriented scripting language with glyphic and ASCII syntax.
 "#
         .into()
     });
-    std::fs::write(output.join("SKILL.md"), skill)?;
+    std::fs::write(&dest_skill, skill)?;
 
+    finish_agent_bundle(output)
+}
+
+/// Everything in the bundle except `SKILL.md`, which is hand-written and only copied.
+fn finish_agent_bundle(output: &Path) -> anyhow::Result<()> {
     let aliases = std::fs::read_to_string("grammar/aliases.json").unwrap_or_else(|_| "{}".into());
     std::fs::write(output.join("machine/aliases.json"), &aliases)?;
     std::fs::write(
