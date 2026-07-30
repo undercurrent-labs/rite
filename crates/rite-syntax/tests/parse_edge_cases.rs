@@ -347,3 +347,83 @@ fn statement_position_record_pattern_still_destructures() {
         program.items.first()
     );
 }
+
+/// `→` binds tighter than the binary operators, so a pipeline can be an operand.
+///
+/// It used to sit at the top of the precedence chain with stages parsed as full
+/// expressions, so the stage swallowed whatever followed: `xs → count > 2` meant
+/// `xs → (count > 2)` and died at runtime with "cannot call value of type bool". Every
+/// binary operator after a stage was affected, not just comparison.
+#[test]
+fn a_pipeline_is_an_operand_of_binary_operators() {
+    for src in [
+        "xs ← [1, 2]\nxs → count > 1\n",
+        "xs ← [1, 2]\nxs → count + 1\n",
+        "xs ← [1, 2]\nxs → sum = 3\n",
+        "xs ← [1, 2]\nxs → count * 2 - 1\n",
+        "xs ← [1, 2]\nxs → count > 1 ∧ xs → count < 5\n",
+    ] {
+        let (program, diags, _) = rite_syntax::parse_source("t.rite", src);
+        assert!(
+            !diags.has_errors(),
+            "`{}` should parse: {:#?}",
+            src.trim(),
+            diags.into_vec()
+        );
+        // The top-level statement must be the *binary* operation, with the pipeline
+        // inside it — not a pipeline whose last stage ate the operator.
+        let program = program.expect("parse");
+        let last = program.items.last().expect("an item");
+        if let rite_syntax::Item::Statement(rite_syntax::Stmt::Expr(e)) = last {
+            assert!(
+                matches!(e, rite_syntax::Expr::Binary(_)),
+                "`{}` parsed as {:?}, expected a Binary at the top",
+                src.trim(),
+                std::mem::discriminant(e)
+            );
+        }
+    }
+}
+
+#[test]
+fn pipeline_stages_still_take_calls_and_trailing_blocks() {
+    for src in [
+        "[1, 2] → map { |x| x * 2 } → sum\n",
+        "[1, 2] → keep(is_ok) → count\n",
+        "[⟨a: 1⟩] → .a\n",
+        "xs ← [1, 2]\nxs\n  → map { |x| x }\n  → sum\n",
+    ] {
+        let (_, diags, _) = rite_syntax::parse_source("t.rite", src);
+        assert!(
+            !diags.has_errors(),
+            "`{}` should parse: {:#?}",
+            src.trim(),
+            diags.into_vec()
+        );
+    }
+}
+
+/// The documented trade-off: a bare binary expression as pipeline *input* now groups the
+/// other way, so `a + b → f` is `a + (b → f)`. Parenthesise to pipe the sum.
+#[test]
+fn a_bare_binary_input_groups_to_the_right() {
+    let (program, diags, _) = rite_syntax::parse_source("t.rite", "a ← 1\nb ← 2\na + b → str\n");
+    assert!(!diags.has_errors(), "{:#?}", diags.into_vec());
+    let program = program.expect("parse");
+    if let Some(rite_syntax::Item::Statement(rite_syntax::Stmt::Expr(e))) = program.items.last() {
+        assert!(
+            matches!(e, rite_syntax::Expr::Binary(_)),
+            "expected `a + (b → str)`"
+        );
+    }
+    // Parenthesised, the whole sum is the input.
+    let (program, diags, _) = rite_syntax::parse_source("t.rite", "a ← 1\nb ← 2\n(a + b) → str\n");
+    assert!(!diags.has_errors(), "{:#?}", diags.into_vec());
+    let program = program.expect("parse");
+    if let Some(rite_syntax::Item::Statement(rite_syntax::Stmt::Expr(e))) = program.items.last() {
+        assert!(
+            matches!(e, rite_syntax::Expr::Pipeline(_)),
+            "expected a pipeline"
+        );
+    }
+}

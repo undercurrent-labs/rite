@@ -113,6 +113,28 @@ rite run examples/02-pipelines/main.rite --allow-all
 
 Pipelines work offline in [Studio](/studio) for pure data (no FS). Paste the even-square-sum example and **Run**.
 
+## Precedence
+
+`→` binds **tighter than the operators**, so a pipeline's result is an ordinary operand:
+
+```rite
+xs ← [1, 2, 3]
+xs → count > 2        // (xs → count) > 2   → true
+xs → sum + 1          // (xs → sum) + 1     → 7
+xs → sum = 6          // (xs → sum) = 6     → true
+```
+
+Each stage is a name, a call, or a trailing-block call — never a bare operator
+expression. That is what lets the operator after a pipeline attach to the *result*.
+
+The trade-off is on the input side: a bare binary expression before `→` groups to the
+right, so parenthesise when you mean to pipe the whole thing.
+
+```rite
+a + b → str           // a + (b → str)
+(a + b) → str         // the sum, piped
+```
+
 ## Next
 
 [Collections](collections.md) — list/record operations and merge semantics in more detail.

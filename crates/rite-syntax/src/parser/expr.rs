@@ -10,11 +10,30 @@ use rite_core::{simple_error, E010_UNEXPECTED_TOKEN, E012_UNCLOSED_DELIMITER};
 
 impl Parser {
     pub fn parse_expression(&mut self) -> Expr {
-        self.parse_pipeline()
+        self.parse_conditional()
     }
 
+    /// `input → stage → stage`.
+    ///
+    /// Binds **tighter than the binary operators** and each stage is parsed at postfix
+    /// level, so a pipeline can be an operand:
+    ///
+    /// ```text
+    /// xs → count > 2   is   (xs → count) > 2
+    /// xs → sum + 1     is   (xs → sum) + 1
+    /// ```
+    ///
+    /// Previously the pipeline sat at the very top of the precedence chain and stages
+    /// were parsed as full expressions, so the stage swallowed the operator: the first
+    /// line meant `xs → (count > 2)` and failed at runtime with "cannot call value of
+    /// type bool". Every binary operator after a stage was affected.
+    ///
+    /// The trade: `a + b → f` groups as `a + (b → f)`. A pipeline cannot both be an
+    /// operand and contain a bare binary expression as its input, and reading a
+    /// reduction's result (`→ sum > 0`) is far more common than piping a sum — write
+    /// `(a + b) → f` for the other case.
     pub(super) fn parse_pipeline(&mut self) -> Expr {
-        let expr = self.parse_conditional();
+        let expr = self.parse_unary();
         let mut stages = Vec::new();
         let start = expr.span();
         while self.check(TokenKind::Arrow) {
@@ -49,7 +68,10 @@ impl Parser {
                 span: start.merge(field_span),
             });
         }
-        self.parse_conditional()
+        // Postfix level: an identifier, a call, a trailing-block call (`map { … }`), a
+        // closure, a field access. Deliberately not a full expression — that is what let
+        // a stage absorb the operator that followed the pipeline.
+        self.parse_postfix()
     }
 
     pub(super) fn parse_conditional(&mut self) -> Expr {
@@ -351,10 +373,10 @@ impl Parser {
     }
 
     pub(super) fn parse_compose(&mut self) -> Expr {
-        let mut left = self.parse_unary();
+        let mut left = self.parse_pipeline();
         while self.check(TokenKind::Compose) {
             self.advance();
-            let right = self.parse_unary();
+            let right = self.parse_pipeline();
             let span = left.span().merge(right.span());
             // f ∘ g  →  { |x| f(g(x)) }  represented as call compose(f, g)
             left = Expr::Call(CallExpr {
