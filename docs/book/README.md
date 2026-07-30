@@ -27,7 +27,8 @@ This book is a linear path. You can stop after any chapter and experiment in [St
 19. [Embedding](embedding.md) — `RiteEngine` from Rust
 20. [Browser & Studio](browser.md) — hosted site, WASM limits
 21. [Agents & the skill bundle](agents.md) — skill install, self-update, VS Code extension
-22. [Testing](testing.md) — suite map, HTTP I/O capture, PR checklist
+22. [Testing](testing.md) — `◆ test`, `expect`, `rite test`
+23. [Contributing tests](contributing-tests.md) — suite map, HTTP I/O capture, PR checklist
 
 ## Glyph ↔ ASCII at a glance
 
@@ -55,7 +56,14 @@ rite convert script.rite --to ascii --stdout
 
 ## API reference
 
-Machine-generated capability and CLI docs:
+Generated from the implementation itself, so it cannot describe a function or a
+flag that is not there:
+
+- [Capability reference](reference/capabilities.md) — every `@host` function, its
+  arity, whether it is effectful, and the permission it needs
+- [CLI reference](reference/cli.md) — every subcommand, argument and flag
+
+Rebuild them, plus the agent bundle, with:
 
 ```bash
 rite docs build    # → docs/generated/

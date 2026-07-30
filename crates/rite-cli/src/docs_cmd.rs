@@ -16,6 +16,105 @@ use std::sync::Arc;
 
 use crate::util;
 
+/// The CLI reference, written from clap's own command tree.
+///
+/// The hand-written stub this replaces listed twelve of twenty-five
+/// subcommands and had drifted: four places in the book documented a
+/// `rite fmt --stdout` flag that has never existed. Deriving the page from the
+/// definitions means a new subcommand or flag documents itself, and a removed
+/// one cannot linger.
+pub fn cli_reference_markdown() -> String {
+    use clap::CommandFactory;
+    let root = <crate::Cli as CommandFactory>::command();
+    let mut out = String::from("# CLI reference\n\n");
+    out.push_str(
+        "Every subcommand, argument and flag, generated from the command \
+         definitions themselves — so this page cannot describe a flag that is \
+         not there.\n\n",
+    );
+    if let Some(about) = root.get_about() {
+        out.push_str(&format!("> {about}\n\n"));
+    }
+    let mut names: Vec<_> = root.get_subcommands().collect();
+    names.sort_by_key(|c| c.get_name());
+    for sub in names {
+        render_command(sub, "rite", &mut out);
+    }
+    out
+}
+
+/// `rite_doc::generate` plus the CLI reference.
+///
+/// Only this crate can write that page — it needs clap's command tree — so
+/// every path that regenerates documentation has to come through here. When
+/// `docs check` regenerated directly it quietly replaced the published CLI
+/// reference with rite-doc's one-line placeholder.
+fn generate_reference(scripts: Option<&Path>, out: &Path) -> anyhow::Result<()> {
+    rite_doc::generate(scripts, out)?;
+    std::fs::write(out.join("cli.md"), cli_reference_markdown())?;
+    Ok(())
+}
+
+fn render_command(cmd: &clap::Command, prefix: &str, out: &mut String) {
+    // clap synthesises `help`; it documents itself and adds only noise here.
+    if cmd.get_name() == "help" {
+        return;
+    }
+    let path = format!("{prefix} {}", cmd.get_name());
+    out.push_str(&format!("## `{path}`\n\n"));
+    if let Some(about) = cmd.get_long_about().or_else(|| cmd.get_about()) {
+        out.push_str(&format!("{about}\n\n"));
+    }
+
+    let mut positionals = Vec::new();
+    let mut flags = Vec::new();
+    for arg in cmd.get_arguments() {
+        if arg.is_hide_set() {
+            continue;
+        }
+        let help = arg
+            .get_help()
+            .map(|h| h.to_string().replace('\n', " "))
+            .unwrap_or_default();
+        if arg.is_positional() {
+            positionals.push((format!("`<{}>`", arg.get_id()), help));
+        } else {
+            let mut spelling = String::new();
+            if let Some(short) = arg.get_short() {
+                spelling.push_str(&format!("`-{short}`, "));
+            }
+            if let Some(long) = arg.get_long() {
+                spelling.push_str(&format!("`--{long}`"));
+            }
+            if spelling.is_empty() {
+                continue;
+            }
+            flags.push((spelling, help));
+        }
+    }
+
+    if !positionals.is_empty() {
+        out.push_str("| Argument | Meaning |\n|---|---|\n");
+        for (name, help) in positionals {
+            out.push_str(&format!("| {name} | {help} |\n"));
+        }
+        out.push('\n');
+    }
+    if !flags.is_empty() {
+        out.push_str("| Flag | Meaning |\n|---|---|\n");
+        for (name, help) in flags {
+            out.push_str(&format!("| {name} | {help} |\n"));
+        }
+        out.push('\n');
+    }
+
+    let mut subs: Vec<_> = cmd.get_subcommands().collect();
+    subs.sort_by_key(|c| c.get_name());
+    for sub in subs {
+        render_command(sub, &path, out);
+    }
+}
+
 #[derive(Subcommand, Debug)]
 pub enum DocsCmd {
     /// Generate reference docs (+ agent bundle) from a Rite checkout
@@ -35,11 +134,13 @@ pub enum DocsCmd {
     },
     /// Serve generated docs over loopback HTTP
     Serve {
+        /// Port to serve the generated documentation on
         #[arg(long, default_value = "4042")]
         port: u16,
         /// Directory to serve (default: <checkout>/docs/generated)
         #[arg(long)]
         root: Option<PathBuf>,
+        /// Do not open a browser window on start
         #[arg(long = "no-open")]
         no_open: bool,
     },
@@ -75,6 +176,7 @@ pub enum DocsCmd {
     },
     /// Open generated documentation for a symbol (or the index)
     Open {
+        /// Symbol to open, e.g. `fs.read`; omit for the index
         symbol: Option<String>,
         /// Documentation root (default: <checkout>/docs/generated)
         #[arg(long)]
@@ -94,7 +196,7 @@ pub async fn run(cmd: DocsCmd) -> anyhow::Result<ExitCode> {
             scripts,
         } => {
             let out = resolve_out(out, "docs/generated", "--out")?;
-            rite_doc::generate(scripts.as_deref(), &out)?;
+            generate_reference(scripts.as_deref(), &out)?;
             println!("docs written to {}", out.display());
             if !no_skill {
                 let skill = resolve_out(skill_out, "skills/rite", "--skill-out")?;
@@ -105,7 +207,7 @@ pub async fn run(cmd: DocsCmd) -> anyhow::Result<ExitCode> {
         }
         DocsCmd::Json { out, scripts } => {
             let out = resolve_out(out, "docs/generated", "--out")?;
-            rite_doc::generate(scripts.as_deref(), &out)?;
+            generate_reference(scripts.as_deref(), &out)?;
             println!("docs written to {}", out.display());
             Ok(ExitCode::SUCCESS)
         }
@@ -171,7 +273,7 @@ async fn check(
     let diagnostics = resolve_input(diagnostics, "docs/diagnostics", "--diagnostics")?;
     let skill = resolve_input(skill, "skills/rite", "--skill")?;
 
-    rite_doc::generate(None, &out)?;
+    generate_reference(None, &out)?;
     let dirs: Vec<&Path> = vec![&book, &diagnostics, &skill];
     let report = rite_doc::run_doctests(&dirs).await;
     println!(

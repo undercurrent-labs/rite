@@ -33,14 +33,34 @@ export const DOC_CHAPTERS: DocChapter[] = [
   { slug: "browser", title: "Browser & Studio", file: "browser.md" },
   { slug: "agents", title: "Agents & the skill bundle", file: "agents.md" },
   { slug: "testing", title: "Testing", file: "testing.md" },
+  { slug: "contributing-tests", title: "Contributing tests", file: "contributing-tests.md" },
 ];
 
 /**
- * Lazy on purpose. Eager loading inlined all 22 chapters (~91 KB of markdown)
- * into the entry chunk, so every visitor to the homepage downloaded the whole
- * book. Each chapter is now its own chunk, fetched when it is opened.
+ * Generated reference pages, published alongside the book.
+ *
+ * Listed explicitly rather than globbed: `rite docs build` also writes a dozen
+ * one-paragraph placeholders, and only these two are real documents. They are
+ * regenerated from the capability registry and from clap's command tree, so
+ * they cannot drift from the implementation — CI regenerates and fails if
+ * either changed.
+ */
+export const REFERENCE_PAGES: DocChapter[] = [
+  { slug: "capabilities", title: "Capability reference", file: "capabilities.md" },
+  { slug: "cli", title: "CLI reference", file: "cli.md" },
+];
+
+/**
+ * Lazy on purpose. Eager loading inlined every chapter (~91 KB of markdown) into
+ * the entry chunk, so a visitor to the homepage downloaded the whole book. Each
+ * page is now its own chunk, fetched when it is opened.
  */
 const rawModules = import.meta.glob("../../../../docs/book/*.md", {
+  query: "?raw",
+  import: "default",
+}) as Record<string, () => Promise<string>>;
+
+const referenceModules = import.meta.glob("../../../../docs/generated/{capabilities,cli}.md", {
   query: "?raw",
   import: "default",
 }) as Record<string, () => Promise<string>>;
@@ -51,7 +71,7 @@ function fileFromPath(p: string): string {
 }
 
 const byFile = new Map<string, () => Promise<string>>();
-for (const [path, load] of Object.entries(rawModules)) {
+for (const [path, load] of Object.entries({ ...rawModules, ...referenceModules })) {
   byFile.set(fileFromPath(path), load);
 }
 
@@ -71,6 +91,16 @@ export async function getDocMarkdown(slug: string): Promise<string | null> {
   const ch = DOC_CHAPTERS.find((c) => c.slug === slug);
   if (!ch) return null;
   return loadFile(ch.file);
+}
+
+export async function getReferenceMarkdown(slug: string): Promise<string | null> {
+  const page = REFERENCE_PAGES.find((p) => p.slug === slug);
+  if (!page) return null;
+  return loadFile(page.file);
+}
+
+export function referenceBySlug(slug: string): DocChapter | undefined {
+  return REFERENCE_PAGES.find((p) => p.slug === slug);
 }
 
 export function chapterBySlug(slug: string): DocChapter | undefined {
@@ -103,7 +133,8 @@ export async function docsIndexMarkdown(): Promise<string> {
     "",
     ...DOC_CHAPTERS.map((c, i) => `${i + 1}. [${c.title}](/docs/${c.slug})`),
     "",
-    "API reference: `rite docs build` → `docs/generated/`.",
+    "",
+    ...REFERENCE_PAGES.map((p) => `- [${p.title}](/docs/reference/${p.slug})`),
   ];
   return lines.join("\n");
 }

@@ -8,6 +8,11 @@ marked.setOptions({
 /** Rewrite in-book relative links (foo.md, ./foo.md) to /docs/foo. */
 function rewriteDocLinks(html: string): string {
   return html
+    // Must precede the bare-slug rule below, which matches no path separator.
+    .replace(
+      /href="(?:\.\/)?reference\/([a-z0-9-]+)\.md(#[^"]*)?"/gi,
+      (_m, slug: string, hash: string = "") => `href="/docs/reference/${slug}${hash || ""}"`
+    )
     .replace(
       /href="(?:\.\/)?([a-z0-9-]+)\.md(#[^"]*)?"/gi,
       (_m, slug: string, hash: string = "") => `href="/docs/${slug}${hash || ""}"`

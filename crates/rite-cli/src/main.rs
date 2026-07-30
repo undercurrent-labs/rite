@@ -45,20 +45,27 @@ enum Commands {
     ///
     /// Arguments after `--` are readable with `! @process.args`.
     Run {
+        /// Script to interpret
         file: PathBuf,
+        /// Grant a permission, e.g. `fs:read=./data` or `net=api.example.com`
         #[arg(long = "allow", value_name = "PERM")]
         allow: Vec<String>,
+        /// Grant every permission — trusted scripts only
         #[arg(long = "allow-all")]
         allow_all: bool,
+        /// Revoke a permission that is allowed by default (console, clock, random)
         #[arg(long = "deny", value_name = "PERM")]
         deny: Vec<String>,
+        /// Wall-clock limit for the run, e.g. `30s` or `5m`
         #[arg(long)]
         timeout: Option<String>,
+        /// Stop after this many evaluation steps
         #[arg(long = "max-steps")]
         max_steps: Option<u64>,
         /// Print an execution summary (steps, elapsed) and stack traces to stderr
         #[arg(long)]
         trace: bool,
+        /// Report diagnostics as JSON on stderr instead of rendered text
         #[arg(long = "json-errors")]
         json_errors: bool,
         /// Script arguments (after `--`), readable with `! @process.args`
@@ -67,21 +74,29 @@ enum Commands {
     },
     /// Compile a Rite script to a native binary
     Build {
+        /// Script to compile
         file: PathBuf,
+        /// Build with optimisations (slower to build, faster to run)
         #[arg(long)]
         release: bool,
+        /// Write the generated Rust instead of linking a binary
         #[arg(long = "emit-rust")]
         emit_rust: bool,
+        /// Path for the compiled binary
         #[arg(long, short)]
         output: Option<PathBuf>,
+        /// Bake in every permission — trusted scripts only
         #[arg(long = "allow-all")]
         allow_all: bool,
+        /// Bake a permission into the binary, e.g. `fs:read=./data`
         #[arg(long = "allow", value_name = "PERM")]
         allow: Vec<String>,
     },
     /// Lex, parse, resolve, and effect-check without executing
     Check {
+        /// Script to check
         file: PathBuf,
+        /// Report diagnostics as JSON on stderr instead of rendered text
         #[arg(long = "json-errors")]
         json_errors: bool,
     },
@@ -92,8 +107,10 @@ enum Commands {
         /// Format every .rite file under the current directory
         #[arg(long)]
         all: bool,
+        /// Shorthand for --dialect ascii
         #[arg(long)]
         ascii: bool,
+        /// Dialect to format to: `glyph` or `ascii`
         #[arg(long, default_value = "glyph")]
         dialect: String,
         /// Exit 1 if any file would change (does not write)
@@ -105,20 +122,27 @@ enum Commands {
     },
     /// Interactive REPL
     Repl {
+        /// Grant every permission for the session — local exploration only
         #[arg(long = "allow-all")]
         allow_all: bool,
     },
     /// Run Rite tests
     Test {
+        /// Files or directories to search (default: `tests` and `examples`)
         paths: Vec<PathBuf>,
+        /// Only run tests whose name contains this substring
         #[arg(long)]
         filter: Option<String>,
+        /// Run through the interpreter (the default)
         #[arg(long)]
         interpreted: bool,
+        /// Run through the compiled path instead of the interpreter
         #[arg(long)]
         compiled: bool,
+        /// Run both ways and require the results to agree
         #[arg(long)]
         both: bool,
+        /// Emit results as JSON
         #[arg(long)]
         json: bool,
     },
@@ -127,20 +151,28 @@ enum Commands {
         /// Rite file or directory whose `///` doc comments to include (optional;
         /// without it only the language reference is generated)
         path: Option<PathBuf>,
+        /// Directory to write the generated documentation into
         #[arg(long, default_value = "docs/generated")]
         out: PathBuf,
     },
     /// Show desugared forms
-    Explain { file: PathBuf },
+    Explain {
+        /// Script whose desugared form to print
+        file: PathBuf,
+    },
     /// Dump AST
     Ast {
+        /// Script to parse
         file: PathBuf,
+        /// Print the tree as JSON
         #[arg(long)]
         json: bool,
     },
     /// Dump semantic IR
     Ir {
+        /// Script to lower
         file: PathBuf,
+        /// Print the IR as JSON
         #[arg(long)]
         json: bool,
     },
@@ -148,11 +180,15 @@ enum Commands {
     Capabilities,
     /// Convert dialect (ascii/glyph/mixed)
     Convert {
+        /// Script to convert
         file: PathBuf,
+        /// Target dialect: `glyph`, `ascii` or `mixed`
         #[arg(long = "to", default_value = "glyph")]
         to: String,
+        /// Print the result instead of rewriting the file
         #[arg(long)]
         stdout: bool,
+        /// Exit 1 if the file is not already in the target dialect
         #[arg(long)]
         check: bool,
     },
@@ -160,8 +196,10 @@ enum Commands {
     Lsp,
     /// Launch Rite Studio local service (loopback, token-authenticated)
     Studio {
+        /// Port for the loopback API
         #[arg(long, default_value = "4041")]
         port: u16,
+        /// Do not open a browser window on start
         #[arg(long = "no-open")]
         no_open: bool,
         /// Project root: relative paths in executed scripts resolve here
@@ -174,20 +212,27 @@ enum Commands {
     /// Dump syntax tree (alias of ast)
     #[command(name = "syntax-tree")]
     SyntaxTree {
+        /// Script to parse
         file: PathBuf,
+        /// Print the tree as JSON
         #[arg(long)]
         json: bool,
     },
     /// Dump semantic IR (alias of ir)
     #[command(name = "semantic-ir")]
     SemanticIr {
+        /// Script to lower
         file: PathBuf,
+        /// Print the IR as JSON
         #[arg(long)]
         json: bool,
     },
     /// Emit generated Rust without full native link
     #[command(name = "emit-rust")]
-    EmitRust { file: PathBuf },
+    EmitRust {
+        /// Script to lower into Rust
+        file: PathBuf,
+    },
     /// Documentation commands
     Docs {
         #[command(subcommand)]
@@ -212,16 +257,21 @@ enum Commands {
         #[arg(long)]
         force: bool,
         /// Install a specific release tag (e.g. v0.1.7)
+        /// Release tag to fetch (default: latest)
         #[arg(long)]
         version: Option<String>,
     },
     /// Alias for `update`
     #[command(name = "self-update")]
     SelfUpdate {
+        /// Only report; exit 1 if an update is available
         #[arg(long)]
         check: bool,
+        /// Reinstall even if versions match
         #[arg(long)]
         force: bool,
+        /// Install a specific release tag
+        /// Release tag to fetch (default: latest)
         #[arg(long)]
         version: Option<String>,
     },
@@ -232,6 +282,7 @@ enum Commands {
     },
     /// Print version
     Version {
+        /// Include build details and the paths the CLI resolved
         #[arg(long)]
         verbose: bool,
     },
@@ -251,6 +302,7 @@ enum SkillCmd {
         #[arg(long)]
         from: Option<String>,
         /// Release tag to fetch (default: latest)
+        /// Release tag to fetch (default: latest)
         #[arg(long)]
         version: Option<String>,
         /// Refresh even if cache looks current
@@ -259,6 +311,7 @@ enum SkillCmd {
     },
     /// Re-fetch skill and reinstall to previously recorded paths
     Update {
+        /// Refresh even if the cache looks current
         #[arg(long)]
         force: bool,
     },
@@ -281,18 +334,22 @@ enum VscodeCmd {
         /// Output path for the .vsix
         #[arg(long, short)]
         out: Option<PathBuf>,
+        /// Release tag to fetch (default: latest)
         #[arg(long)]
         version: Option<String>,
     },
     /// Download the .vsix without installing
     Download {
+        /// Output path for the .vsix
         #[arg(long, short)]
         out: Option<PathBuf>,
+        /// Release tag to fetch (default: latest)
         #[arg(long)]
         version: Option<String>,
     },
     /// Show release asset details and install instructions
     Info {
+        /// Release tag to fetch (default: latest)
         #[arg(long)]
         version: Option<String>,
     },
@@ -300,21 +357,31 @@ enum VscodeCmd {
 
 #[derive(Subcommand, Debug)]
 enum DescribeCmd {
+    /// Sigils, keywords, capabilities and diagnostics in one payload
     Language {
+        /// Emit JSON instead of text
         #[arg(long)]
         json: bool,
     },
+    /// Glyph and ASCII spellings for every construct
     Syntax {
+        /// Emit JSON instead of text
         #[arg(long)]
         json: bool,
     },
+    /// One host capability and its functions
     Capability {
+        /// Capability name, e.g. `fs` or `http`
         name: String,
+        /// Emit JSON instead of text
         #[arg(long)]
         json: bool,
     },
+    /// One diagnostic code and what triggers it
     Diagnostic {
+        /// Diagnostic code, e.g. `E021`
         code: String,
+        /// Emit JSON instead of text
         #[arg(long)]
         json: bool,
     },

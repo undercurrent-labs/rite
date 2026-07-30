@@ -6,7 +6,12 @@
 
 # Local / generated
 /.rite
-/docs/generated
+# Generated reference. Most of what `rite docs build` writes is scaffolding,
+# but these two are real, complete and published on the site, so they are
+# tracked and CI checks they are current.
+/docs/generated/*
+!/docs/generated/capabilities.md
+!/docs/generated/cli.md
 /dist
 
 # JS / package managers

@@ -72,9 +72,13 @@ jobs:
       - name: doctests (windows)
         if: runner.os == 'Windows'
         run: .\target\release\rite.exe docs check
-      - name: agent bundle
+      # `docs build` writes the agent bundle *and* the generated reference. The
+      # site publishes docs/generated/{capabilities,cli}.md, so those are tracked
+      # and the guard below fails if a capability or a CLI flag changed without
+      # the published page being regenerated.
+      - name: agent bundle + generated reference
         if: runner.os == 'Linux'
-        run: ./target/release/rite docs agent --output skills/rite
+        run: ./target/release/rite docs build
       # Regenerating must not rewrite tracked sources. This caught SKILL.md being
       # truncated to zero bytes by an in-place bundle regeneration.
       - name: tracked files unchanged by generation

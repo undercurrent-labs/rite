@@ -7,6 +7,9 @@ import {
   DOC_CHAPTERS,
   docsIndexMarkdown,
   getDocMarkdown,
+  getReferenceMarkdown,
+  REFERENCE_PAGES,
+  referenceBySlug,
 } from "../lib/docs";
 import { segmentMarkdown } from "../lib/markdown";
 import CodeBlock from "../components/CodeBlock.vue";
@@ -42,18 +45,29 @@ const slug = computed(() => {
   return "";
 });
 
-const chapter = computed(() => (slug.value ? chapterBySlug(slug.value) : undefined));
+/** The generated reference lives under /docs/reference/ so its slugs cannot
+ *  collide with the book's — both have an `http` page, for instance. */
+const isReference = computed(() => route.name === "reference");
+
+const chapter = computed(() => {
+  if (!slug.value) return undefined;
+  return isReference.value ? referenceBySlug(slug.value) : chapterBySlug(slug.value);
+});
 
 /** null = no such chapter, undefined = still loading this chapter's chunk. */
 const markdown = ref<string | null | undefined>(undefined);
 
 watch(
-  slug,
-  async (current) => {
+  [slug, isReference],
+  async ([current, reference]) => {
     markdown.value = undefined;
-    const text = current ? await getDocMarkdown(current) : await docsIndexMarkdown();
+    const text = !current
+      ? await docsIndexMarkdown()
+      : reference
+        ? await getReferenceMarkdown(current)
+        : await getDocMarkdown(current);
     // A fast second navigation must not be overwritten by the slower first load.
-    if (slug.value === current) markdown.value = text;
+    if (slug.value === current && isReference.value === reference) markdown.value = text;
   },
   { immediate: true }
 );
@@ -61,7 +75,10 @@ watch(
 /** Code blocks render as components; prose stays a single v-html run per gap. */
 const segments = computed(() => (markdown.value ? segmentMarkdown(markdown.value) : []));
 
-const neighbors = computed(() => (slug.value ? adjacentChapters(slug.value) : {}));
+// Prev/next walks the book only; the reference is a lookup, not a reading order.
+const neighbors = computed(() =>
+  slug.value && !isReference.value ? adjacentChapters(slug.value) : {}
+);
 
 watch(
   chapter,
@@ -106,6 +123,25 @@ watch(
             {{ ch.title }}
           </RouterLink>
         </nav>
+
+        <p class="mb-2 mt-6 text-xs font-mono uppercase tracking-wider text-rite-muted">
+          Reference
+        </p>
+        <nav class="space-y-0.5 text-sm">
+          <RouterLink
+            v-for="page in REFERENCE_PAGES"
+            :key="page.slug"
+            :to="`/docs/reference/${page.slug}`"
+            class="block rounded-md px-2 py-1.5"
+            :class="
+              isReference && slug === page.slug
+                ? 'bg-slate-800/80 text-rite-accent'
+                : 'text-slate-400 hover:bg-slate-800/40 hover:text-slate-100'
+            "
+          >
+            {{ page.title }}
+          </RouterLink>
+        </nav>
         <div class="mt-6 border-t border-rite-border pt-4">
           <RouterLink
             to="/studio"
@@ -126,9 +162,20 @@ watch(
         @change="onChapterSelect"
       >
         <option value="">Overview</option>
-        <option v-for="ch in DOC_CHAPTERS" :key="ch.slug" :value="ch.slug">
-          {{ ch.title }}
-        </option>
+        <optgroup label="Book">
+          <option v-for="ch in DOC_CHAPTERS" :key="ch.slug" :value="ch.slug">
+            {{ ch.title }}
+          </option>
+        </optgroup>
+        <optgroup label="Reference">
+          <option
+            v-for="page in REFERENCE_PAGES"
+            :key="page.slug"
+            :value="`reference/${page.slug}`"
+          >
+            {{ page.title }}
+          </option>
+        </optgroup>
       </select>
     </div>
 
@@ -137,7 +184,7 @@ watch(
       <div v-if="markdown === null" class="prose-rite">
         <h1>Not found</h1>
         <p>
-          No chapter named <code>{{ slug }}</code>.
+          No {{ isReference ? "reference page" : "chapter" }} named <code>{{ slug }}</code>.
           <RouterLink to="/docs">Back to overview</RouterLink>.
         </p>
       </div>

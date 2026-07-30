@@ -1,66 +1,161 @@
-# Testing Rite (contributors)
+# Testing
 
-This page is the process guard so **observable host behavior** does not regress while unit tests stay green.
+Rite has a test runner built in. Tests live beside the code they cover, in
+ordinary `.rite` files, and run with `rite test`.
 
-## Philosophy
+> Looking for how the Rite project itself is tested? That is
+> [Contributing tests](contributing-tests.md).
 
-Prefer **contracts** over line coverage:
+## A first test
 
-| Contract type | Example assertion |
-|---------------|-------------------|
-| Value | `eval("1+2") == 3` |
-| Stream | access log contains `rite: GET /health 200` |
-| Registration | middleware list is `["log","recover"]` after `use` |
-| Process | CLI `rite run` exit code + stdout |
-| Docs | book claims map to named tests |
+A test is a declaration, so it starts with `◆` (`def` in ASCII) like a function
+does — the name is a string rather than an identifier:
 
-Deleting `flush_handler_io` or turning `@http.log` into a no-op **must** fail a test.
+```rite
+◆ double(n) ⟦ ^ n * 2 ⟧
 
-## Suite map
-
-| Area | Location |
-|------|----------|
-| Eval / sugar | `crates/rite-caps/tests/eval_edge_cases.rs`, `sugar_pack.rs`, `sugar_dual_dialect.rs` |
-| HTTP e2e | `crates/rite-caps/tests/http_handlers.rs` |
-| HTTP observability | `crates/rite-caps/tests/http_observability.rs` |
-| Permissions | `crates/rite-caps/tests/permissions.rs` |
-| Parse | `crates/rite-syntax/tests/*` |
-| CLI / examples / docs contract | `crates/rite-cli/tests/*` |
-| Conformance | `conformance/semantics/*` + `rite-test` |
-| REPL | `crates/rite-repl` unit tests |
-
-## HTTP I/O capture (in-process)
-
-```rust
-use rite_caps::http::{begin_test_io_capture, take_test_io_capture, last_registered_middleware};
-
-begin_test_io_capture();
-// spawn server + request …
-let cap = take_test_io_capture();
-assert!(cap.stdout.contains("handler-marker"));
-assert!(cap.stderr.contains("rite: GET "));
-assert!(last_registered_middleware().contains(&"log".into()));
+◆ test "doubles a number" ⟦
+  expect(double(4), 8)
+⟧
 ```
 
-Tests that touch HTTP **must** take `http_test_lock` / the shared mutex so servers do not race.
+ASCII form:
 
-## PR checklist (caps / HTTP / CLI)
+```rite
+def double(n) [[ return n * 2 ]]
 
-- [ ] Side effects asserted (stdout/stderr/files), not only return values  
-- [ ] Glyph **and** ASCII form for new dual-dialect surface  
-- [ ] Book/example claim linked to a test name  
-- [ ] `cargo fmt --check` and `RUSTFLAGS=-Dwarnings` clean  
+def test "doubles a number" [[
+  expect(double(4), 8)
+]]
+```
 
-## Local commands
+Run it:
 
 ```bash
-cargo test --workspace --all-features
-cargo test -p rite-caps --test http_observability
-cargo test -p rite-cli --test docs_contract --test example_gates
-cargo fmt --all -- --check
-RUSTFLAGS=-Dwarnings cargo check --workspace
+rite test math.rite
+# tests: 1 passed, 0 failed, 1 total
 ```
 
-## Release
+With no paths, `rite test` looks in `tests` and `examples`:
 
-Tag `vX.Y.Z` after CI is green. Installer pins via `RITE_VERSION=vX.Y.Z`.
+```bash
+rite test
+rite test src tests            # or name the directories yourself
+rite test --filter doubles     # only tests whose name contains this
+```
+
+## `expect`
+
+`expect` takes either one value or two.
+
+| Form | Passes when |
+|------|-------------|
+| `expect(value)` | `value` is truthy |
+| `expect(actual, expected)` | the two are **structurally equal** |
+
+```rite
+◆ test "both forms" ⟦
+  expect(2 + 2 = 4)
+  expect(2 + 2, 4)
+⟧
+```
+
+Two values is usually the better choice, because the failure message prints both
+sides. `expect(double(4), 9)` reports
+
+```text
+expectation failed: 8 != 9
+```
+
+where the single-argument form can only say `expectation failed`.
+
+Structural equality goes all the way down, so whole records and lists compare in
+one step:
+
+```rite
+◆ test "a record round-trips" ⟦
+  expect(⟨ok: true, items: [1, 2]⟩, ⟨ok: true, items: [1, 2]⟩)
+⟧
+```
+
+**`expect` is not "assert with a message".** A second argument is the *expected
+value*, never a description — `expect(x = 1, "x should be one")` compares `true`
+against a string and fails.
+
+## `fail`
+
+`fail` ends a test immediately with a message of your choosing. It is the right
+tool when the condition is not a simple comparison:
+
+```rite
+◆ test "rejects an unknown status" ⟦
+  result ← classify(#unknown)
+  ~ result ⟦
+    #error → expect(true)
+    _ → fail("unknown status should not classify")
+  ⟧
+⟧
+```
+
+## Interpreted and compiled
+
+By default tests run through the interpreter. `rite build` claims the compiled
+path behaves identically, and `--both` is how you hold it to that: every test
+runs twice, once each way, and both must pass.
+
+```bash
+rite test --interpreted    # the default
+rite test --compiled       # the path a built binary takes
+rite test --both           # both, and the totals count each run
+```
+
+`--both` doubles the reported total: three tests become `6 total`. See
+[Compiling to Rust](compiling.md) for what the two paths share.
+
+## In a script or a pipeline
+
+`rite test` exits `0` when everything passes and `7` when anything fails, so it
+drops straight into CI:
+
+```bash
+rite test || echo "suite failed with $?"
+```
+
+`--json` prints a machine-readable summary instead of the rendered report:
+
+```bash
+rite test --json
+```
+
+```text
+{
+  "passed": 2,
+  "failed": 1,
+  "total": 3,
+  "failures": [ … ]
+}
+```
+
+## Tests run with full host access
+
+This is the one surprise worth knowing. `rite run` starts locked down and makes
+you grant permissions; **`rite test` grants everything**. A test can read and
+write files, open sockets and start processes with no `--allow` flag — and there
+is no flag to restrict it.
+
+```rite
+◆ test "writes a real file" ⟦
+  ! @fs.write("out.txt", "written by a test")
+  expect(! @fs.read("out.txt")?, "written by a test")
+⟧
+```
+
+That makes fixtures easy, and it means **a test file is as trusted as the CLI
+itself**. Read tests before you run them, the same way you would a script you
+were about to `--allow-all`. Prefer a temporary directory for anything a test
+writes, and clean up after yourself — nothing does it for you.
+
+## Next
+
+- [Compiling to Rust](compiling.md) — the compiled path `--both` checks against
+- [Effects and capabilities](effects.md) — the permission model tests bypass

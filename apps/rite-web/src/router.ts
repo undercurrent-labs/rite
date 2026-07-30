@@ -21,6 +21,13 @@ export const router = createRouter({
       component: DocsView,
       meta: { title: "Docs · Rite" },
     },
+    // Before /docs/:slug, or "reference" would match as a chapter slug.
+    {
+      path: "/docs/reference/:slug",
+      name: "reference",
+      component: DocsView,
+      meta: { title: "Reference · Rite" },
+    },
     {
       path: "/docs/:slug",
       name: "docs",
