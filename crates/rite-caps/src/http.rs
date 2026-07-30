@@ -9,8 +9,7 @@ use axum::Json;
 use indexmap::IndexMap;
 use parking_lot::Mutex;
 use rite_runtime::{
-    set_http_next_invoker, EvalError, Evaluator, FunctionEntry, HostHandle, HttpMiddleware, Key,
-    RuntimeContext, Value,
+    EvalError, Evaluator, FunctionEntry, HostHandle, HttpMiddleware, Key, RuntimeContext, Value,
 };
 use rite_sem::BlockIr;
 use serde_json::json;
@@ -471,12 +470,15 @@ async fn dispatch_rite(state: ServerState, idx: usize, req: Request<Body>) -> Re
     let param = route.param_name.clone().unwrap_or_else(|| "req".into());
     let result = run_middleware_chain(
         &mut ctx,
-        &customs,
+        Chain {
+            customs: &customs,
+            handler_body: &route.body,
+            handler_param: &param,
+            perms: state.perms.clone(),
+            conts: new_continuations(),
+        },
         0,
         req_value,
-        &route.body,
-        &param,
-        state.perms.clone(),
     )
     .await;
 
@@ -529,20 +531,38 @@ async fn dispatch_rite(state: ServerState, idx: usize, req: Request<Body>) -> Re
     response
 }
 
+/// Monotonic ids for `http.next` handles. Global on purpose: uniqueness is the whole
+/// requirement, and a per-request counter would hand out colliding ids.
 static NEXT_ID: AtomicU64 = AtomicU64::new(1);
 
 /// Run custom middleware outer→inner, then the route handler.
 /// Each layer receives `(req, next)` where `next` is a callable `http.next` handle.
-fn run_middleware_chain<'a>(
-    ctx: &'a mut RuntimeContext,
+/// Everything about one request's middleware chain that does not change as it is
+/// walked. Grouped so the recursive step takes the context, the position and the
+/// request, rather than eight separate parameters.
+struct Chain<'a> {
     customs: &'a [rite_runtime::Closure],
-    index: usize,
-    req_value: Value,
     handler_body: &'a BlockIr,
     handler_param: &'a str,
     perms: PermissionSet,
+    /// This request's `next` continuations — see [`Continuations`].
+    conts: Continuations,
+}
+
+fn run_middleware_chain<'a>(
+    ctx: &'a mut RuntimeContext,
+    chain: Chain<'a>,
+    index: usize,
+    req_value: Value,
 ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Value, EvalError>> + Send + 'a>> {
     Box::pin(async move {
+        let Chain {
+            customs,
+            handler_body,
+            handler_param,
+            perms,
+            conts,
+        } = chain;
         if index >= customs.len() {
             let mut eval = Evaluator::new(ctx);
             return eval
@@ -566,11 +586,11 @@ fn run_middleware_chain<'a>(
                 // reached directly.
                 module_env: ctx.env.clone(),
             };
-            next_continuations().lock().insert(next_id, cont);
+            conts.lock().insert(next_id, cont);
         }
 
-        // Ensure global next() invoker is installed (idempotent).
-        ensure_http_next_invoker();
+        // Resolve `next` handles against *this* request's continuations.
+        ctx.http_next = Some(next_invoker(conts.clone()));
 
         let next_val = Value::Handle(HostHandle {
             kind: "http.next".into(),
@@ -583,8 +603,10 @@ fn run_middleware_chain<'a>(
             .await;
 
         if index == 0 {
-            set_http_next_invoker(None);
-            next_continuations().lock().clear();
+            // The outermost layer owns the chain: once it returns, no `next` handle from
+            // this request is callable again.
+            ctx.http_next = None;
+            conts.lock().clear();
         }
 
         result
@@ -632,17 +654,25 @@ fn install_module_scope(
     }
 }
 
-fn next_continuations() -> &'static Mutex<HashMap<u64, NextContinuation>> {
-    static MAP: std::sync::OnceLock<Mutex<HashMap<u64, NextContinuation>>> =
-        std::sync::OnceLock::new();
-    MAP.get_or_init(|| Mutex::new(HashMap::new()))
+/// One request's outstanding `next` continuations, owned by the invoker installed on
+/// that request's context.
+///
+/// This was a process-global `OnceLock<Mutex<HashMap<..>>>` paired with a global
+/// invoker slot, so every concurrent request shared one map and one hook: the last
+/// chain to start overwrote the invoker, and clearing the map at the end of one chain
+/// invalidated handles belonging to another.
+type Continuations = Arc<Mutex<HashMap<u64, NextContinuation>>>;
+
+fn new_continuations() -> Continuations {
+    Arc::new(Mutex::new(HashMap::new()))
 }
 
-fn ensure_http_next_invoker() {
-    // Always refresh so a prior clear doesn't leave us without a hook.
-    set_http_next_invoker(Some(Arc::new(|id, args| {
+/// Build the `next(req)` callback for one request over its own continuation map.
+fn next_invoker(conts: Continuations) -> rite_runtime::HttpNextInvoker {
+    Arc::new(move |id, args| {
+        let conts = conts.clone();
         Box::pin(async move {
-            let cont = next_continuations()
+            let cont = conts
                 .lock()
                 .remove(&id)
                 .ok_or_else(|| EvalError::Message("middleware next() already used".into()))?;
@@ -653,18 +683,21 @@ fn ensure_http_next_invoker() {
             install_module_scope(&mut inner, &cont.module_env, &cont.functions);
             let result = run_middleware_chain(
                 &mut inner,
-                &cont.customs,
+                Chain {
+                    customs: &cont.customs,
+                    handler_body: &cont.handler_body,
+                    handler_param: &cont.handler_param,
+                    perms: cont.perms.clone(),
+                    conts: conts.clone(),
+                },
                 cont.index,
                 req,
-                &cont.handler_body,
-                &cont.handler_param,
-                cont.perms.clone(),
             )
             .await;
             flush_handler_io(&inner);
             result
         })
-    })));
+    })
 }
 
 /// Emit buffered handler stdout/stderr to the real process streams (and optional test sink).
@@ -704,6 +737,16 @@ pub struct TestIoCapture {
     pub stderr: String,
 }
 
+// The three statics below are deliberately global, and are the reason the `http_*`
+// test files serialize on their own lock. `@http.listen` *blocks until shutdown*, so a
+// test cannot read anything back from its return value — the only way to observe which
+// port it bound, what middleware it registered, or what its handlers printed is a side
+// channel the test can read while the server runs. They are observation only: nothing in
+// a request path reads them, so two servers sharing them cannot affect each other's
+// behaviour, only each other's test observations.
+//
+// Removing them means giving `listen` a non-blocking form that returns a handle. That is
+// a language-surface change, not a refactor.
 static TEST_IO: Mutex<Option<TestIoCapture>> = Mutex::new(None);
 static LAST_MIDDLEWARE: Mutex<Vec<String>> = Mutex::new(Vec::new());
 

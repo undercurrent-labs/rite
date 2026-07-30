@@ -18,6 +18,8 @@ use std::pin::Pin;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
+/// Monotonic closure ids. Global on purpose — same reasoning as `NEXT_ID` in the HTTP
+/// host: ids only have to be unique, and nothing reads this to make a decision.
 static CLOSURE_ID: AtomicU64 = AtomicU64::new(1);
 
 #[derive(Debug)]
@@ -128,6 +130,13 @@ pub struct RuntimeContext {
     /// Set by the evaluator immediately before it invokes `@http.listen`, and read by
     /// the capability to build its server. See [`PendingHttpServer`].
     pub pending_http: Option<PendingHttpServer>,
+    /// Resolves a `http.next` handle for custom middleware, installed by the HTTP host
+    /// on the context it builds for one request.
+    ///
+    /// Per-context rather than global: the callback owns that request's continuations,
+    /// so two requests — or two servers — cannot see each other's `next`, and a stale
+    /// one cannot outlive the chain that made it.
+    pub http_next: Option<HttpNextInvoker>,
 }
 
 /// A server that `@http.listen` is about to start.
@@ -170,6 +179,7 @@ impl RuntimeContext {
             allow_all: false,
             script_args: Vec::new(),
             pending_http: None,
+            http_next: None,
         }
     }
 
@@ -852,7 +862,14 @@ impl<'a> Evaluator<'a> {
                 "native function id call not wired".into(),
             )),
             Value::Handle(h) if h.kind == "http.next" => {
-                Box::pin(invoke_http_next(h.id, args)).await
+                let invoker = self.ctx.http_next.clone();
+                match invoker {
+                    Some(f) => Box::pin(f(h.id, args)).await,
+                    None => Err(EvalError::Message(
+                        "http middleware next() is only valid inside a request handler chain"
+                            .into(),
+                    )),
+                }
             }
             other => Err(EvalError::Message(format!(
                 "cannot call value of type {}",
@@ -1349,24 +1366,6 @@ pub type HttpNextInvoker = Arc<
         + Send
         + Sync,
 >;
-
-static HTTP_NEXT_INVOKER: parking_lot::RwLock<Option<HttpNextInvoker>> =
-    parking_lot::RwLock::new(None);
-
-/// Install (or clear with `None`) the host callback for middleware `next(req)`.
-pub fn set_http_next_invoker(invoker: Option<HttpNextInvoker>) {
-    *HTTP_NEXT_INVOKER.write() = invoker;
-}
-
-async fn invoke_http_next(id: u64, args: Vec<Value>) -> Result<Value, EvalError> {
-    let invoker = HTTP_NEXT_INVOKER.read().clone();
-    match invoker {
-        Some(f) => f(id, args).await,
-        None => Err(EvalError::Message(
-            "http middleware next() is only valid inside a request handler chain".into(),
-        )),
-    }
-}
 
 // silence
 #[allow(dead_code)]
