@@ -50,9 +50,12 @@ Tracks implementation status for the Rite language and V1 tooling. Detailed desi
    is withdrawn until they do something.
 8. **Formatter sugar fidelity** — comments, layout, route params, `use` middleware and
    juxtaposed returns all survive, but a call with a single block argument still prints as
-   `keep(⟦ … ⟧)` rather than `keep ⟦ … ⟧`, and `1..=5` prints as `range_incl(1, 5)`.
-   Both need the sugar retained in the AST; the second is indistinguishable from a real
-   call to that builtin.
+   `keep(⟦ … ⟧)` rather than `keep ⟦ … ⟧`, `1..=5` prints as `range_incl(1, 5)`, and
+   `f ∘ g` prints as `compose(f, g)` — in the **glyph** dialect too, since the parser
+   builds the call directly (`parse_compose`) and no `∘` survives into the AST.
+   All three need the sugar retained in the AST; the last two are indistinguishable
+   from a real call to that builtin. `BinOp::Compose` exists and the formatter has a
+   branch for it, but nothing constructs it from source, so that branch is unreachable.
 9. **Incremental relexing / CST** — no rowan green tree; recovery is best-effort parse.  
 12. **Performance benchmarks** — `cargo bench -p rite-runtime` (criterion). Front end
     and interpreter are measured separately, so a parser regression and an eval

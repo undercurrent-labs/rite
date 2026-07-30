@@ -10,6 +10,10 @@
 //! The sources of truth here are the live capability registry and the lexer's
 //! own `keyword_or_ident`, not another hand-written list — a check against a
 //! copy would only prove the copies agree.
+//!
+//! This is what caught `compose`: the alias table advertised it as the ASCII
+//! spelling of `∘`, but no such keyword exists, so `f compose g` evaluated to
+//! `f` and returned a wrong number instead of failing.
 
 use rite_caps::{HostCapabilities, PermissionSet};
 use rite_syntax::{keyword_or_ident, TokenKind};
@@ -64,15 +68,6 @@ fn alternatives_in(pattern: &str, after: &str) -> BTreeSet<String> {
     group.split('|').map(|s| s.to_string()).collect()
 }
 
-/// `grammar/aliases.json` claims `compose` as the ASCII spelling of `∘`, but no
-/// such keyword exists: `f compose g` lexes as three identifiers and evaluates
-/// to `f` alone, so it answers with a wrong number rather than an error. The
-/// working ASCII form is the builtin call `compose(f, g)`, which is what the
-/// book documents and what `rite fmt --ascii` emits — and making `compose` a
-/// keyword would break that call. `grammar/sigils.toml` never claimed the
-/// alias; aliases.json is the outlier and the entry should go.
-const BROKEN_ASCII_ALIASES: &[&str] = &["compose"];
-
 fn ascii_aliases() -> BTreeSet<String> {
     let text = std::fs::read_to_string(repo_root().join("grammar/aliases.json")).unwrap();
     let json: serde_json::Value = serde_json::from_str(&text).unwrap();
@@ -81,8 +76,9 @@ fn ascii_aliases() -> BTreeSet<String> {
         .expect("aliases object")
         .values()
         .filter_map(|entry| entry["ascii"].as_str())
+        // Keyword spellings only. `∘` records its ASCII form as the call
+        // `compose(a, b)`, which is not a word and never lexes as one.
         .filter(|ascii| ascii.chars().all(|c| c.is_ascii_lowercase()))
-        .filter(|ascii| !BROKEN_ASCII_ALIASES.contains(ascii))
         .map(|s| s.to_string())
         .collect()
 }
