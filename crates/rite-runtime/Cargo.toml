@@ -5,6 +5,11 @@ edition.workspace = true
 license.workspace = true
 description = "Rite value model, async evaluator, and pure builtins"
 
+[lib]
+# The default test harness does not understand criterion's flags, so `cargo bench`
+# would fail parsing them before reaching benches/eval.rs.
+bench = false
+
 [dependencies]
 rite-core = { workspace = true }
 rite-sem = { workspace = true }
@@ -21,9 +26,16 @@ uuid = { workspace = true }
 # Tokio is only needed for #[tokio::test] — keep it out of the library graph so
 # the pure evaluator can compile for wasm32-unknown-unknown (no mio/net).
 [dev-dependencies]
+criterion = { workspace = true }
+rite-core = { workspace = true }
+rite-sem = { workspace = true }
 tokio = { workspace = true }
 
 # uuid v4 needs an RNG source on wasm32
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 uuid = { version = "1", features = ["v4", "serde", "js"] }
 getrandom = { version = "0.2", features = ["js"] }
+
+[[bench]]
+name = "eval"
+harness = false

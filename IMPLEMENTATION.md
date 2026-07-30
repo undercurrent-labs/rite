@@ -40,7 +40,25 @@ Tracks implementation status for the Rite language and V1 tooling. Detailed desi
 9. **Game free-form sugar** — still prefer `@game.register_*`.  
 10. **CI matrix** — no GitHub Actions workflow for multi-OS, VSIX, Studio e2e, Cloudflare preview.  
 11. **Incremental relexing / CST** — no rowan green tree; recovery is best-effort parse.  
-12. **Performance benchmarks** — not automated against v1 targets (100–300 ms LSP).  
+12. **Performance benchmarks** — `cargo bench -p rite-runtime` (criterion). Front end
+    and interpreter are measured separately, so a parser regression and an eval
+    regression cannot be mistaken for each other. Baseline, one dev machine, release:
+
+    | Case | Time |
+    |------|------|
+    | `frontend/compile` small script | ~38 us |
+    | `frontend/compile` 200 functions | ~1.6 ms |
+    | `values/record_build` 5 fields | ~3.7 us |
+    | `values/record_spread` | ~4.3 us |
+    | `closures/closure_creation` x2000 | ~12.6 ms |
+    | `pipelines/pipeline_map_keep` x5000 | ~16.8 ms |
+    | `calls/fib_recursive` fib(20) | ~95 ms (~7 us/call) |
+    | `floor/arithmetic_loop` x20000 | ~45 ms (~2.3 us/iteration) |
+
+    The v1 LSP target (100-300 ms) has plenty of headroom: compiling 200 functions is
+    ~1.6 ms, so analysis is nowhere near the budget. The interpreter is the slow part —
+    2.3 us to evaluate `total := total + i * 2` once is the boxed-future-per-AST-node
+    floor, and that is the number a bytecode VM would move.
 13. **VS Code VSIX in CI** — package.json ready; not produced by a release job.  
 14. **Example 07/08 HTTP** — blocks until shutdown (correct for servers); e2e ladder skips them.
 

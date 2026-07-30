@@ -74,6 +74,7 @@ similar = "2"
 tempfile = "3"
 proptest = "1"
 insta = "1"
+criterion = { version = "0.5", default-features = false, features = ["cargo_bench_support"] }
 sha2 = "0.10"
 hex = "0.4"
 walkdir = "2"
