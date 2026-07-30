@@ -10,8 +10,14 @@
   Cache-Control: public, max-age=300, must-revalidate
   X-Content-Type-Options: nosniff
 
+# The engine is fetched by a fixed name — `rite_wasm_bg.wasm`, not a hashed one
+# like the JS bundles — so a long TTL cannot be busted by a deploy. With
+# max-age=3600 the edge kept serving the previous engine for up to an hour while
+# the freshly hashed JS updated immediately, which means Studio ran an older
+# language than the site it sits in. Revalidate instead: the ETag still makes a
+# repeat visit a 304, so this costs a round trip, not a re-download.
 /wasm/*
-  Cache-Control: public, max-age=3600, must-revalidate
+  Cache-Control: public, max-age=0, must-revalidate
 
 # Agent skill bundles (must not fall through as text/html SPA)
 /skill/*
