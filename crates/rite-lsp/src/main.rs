@@ -49,38 +49,16 @@ impl LanguageServer for Backend {
                 document_range_formatting_provider: None,
                 rename_provider: Some(OneOf::Left(true)),
                 code_action_provider: Some(CodeActionProviderCapability::Simple(true)),
-                semantic_tokens_provider: Some(
-                    SemanticTokensServerCapabilities::SemanticTokensOptions(
-                        SemanticTokensOptions {
-                            legend: SemanticTokensLegend {
-                                token_types: vec![
-                                    SemanticTokenType::KEYWORD,
-                                    SemanticTokenType::FUNCTION,
-                                    SemanticTokenType::VARIABLE,
-                                    SemanticTokenType::STRING,
-                                    SemanticTokenType::NUMBER,
-                                    SemanticTokenType::COMMENT,
-                                    SemanticTokenType::TYPE,
-                                    SemanticTokenType::NAMESPACE,
-                                ],
-                                token_modifiers: vec![],
-                            },
-                            full: Some(SemanticTokensFullOptions::Bool(true)),
-                            range: Some(false),
-                            ..Default::default()
-                        },
-                    ),
-                ),
+                // Not advertised: the handler returned an empty token list, and a client
+                // that sees this capability may stop applying its TextMate grammar —
+                // so declaring it made Rite source *less* highlighted, not more.
+                // TextMate stays the highlighter until this is really implemented.
+                semantic_tokens_provider: None,
                 folding_range_provider: Some(FoldingRangeProviderCapability::Simple(true)),
                 inlay_hint_provider: Some(OneOf::Left(true)),
-                execute_command_provider: Some(ExecuteCommandOptions {
-                    commands: vec![
-                        "rite.convertGlyph".into(),
-                        "rite.convertAscii".into(),
-                        "rite.addEffectMarker".into(),
-                    ],
-                    ..Default::default()
-                }),
+                // Not advertised: these three commands were listed but the handler
+                // applied no edit — invoking one reported success and changed nothing.
+                execute_command_provider: None,
                 ..Default::default()
             },
         })
@@ -443,69 +421,121 @@ impl LanguageServer for Backend {
         }))
     }
 
-    async fn semantic_tokens_full(
-        &self,
-        params: SemanticTokensParams,
-    ) -> Result<Option<SemanticTokensResult>> {
-        let _ = params;
-        // Minimal empty tokens; clients fall back to TextMate
-        Ok(Some(SemanticTokensResult::Tokens(SemanticTokens {
-            result_id: None,
-            data: vec![],
-        })))
-    }
+    // `semantic_tokens_full` is intentionally not implemented — the capability is not
+    // advertised (see `initialize`), so a conforming client never asks.
 
     async fn folding_range(&self, params: FoldingRangeParams) -> Result<Option<Vec<FoldingRange>>> {
         let uri = params.text_document.uri;
         let text = self.docs.get(&uri).map(|e| e.1.clone()).unwrap_or_default();
-        let mut ranges = Vec::new();
-        let mut stack = Vec::new();
-        for (i, line) in text.lines().enumerate() {
-            if line.contains("⟦") || line.contains("[[") || line.contains('{') {
-                stack.push(i as u32);
-            }
-            if line.contains("⟧") || line.contains("]]") || line.contains('}') {
-                if let Some(start) = stack.pop() {
-                    ranges.push(FoldingRange {
-                        start_line: start,
-                        end_line: i as u32,
-                        ..Default::default()
-                    });
-                }
-            }
-        }
-        Ok(Some(ranges))
+        // Token-driven, not substring-driven: the old version counted braces inside
+        // string literals and comments (`"a { b"`, `// ⟦`), so folds landed on the
+        // wrong lines or nested inside out. It also could not tell `{` in a record
+        // literal from a block open.
+        Ok(Some(folding_ranges(&text)))
     }
 
     async fn inlay_hint(&self, params: InlayHintParams) -> Result<Option<Vec<InlayHint>>> {
         let uri = params.text_document.uri;
         let text = self.docs.get(&uri).map(|e| e.1.clone()).unwrap_or_default();
-        let mut hints = Vec::new();
-        for (i, line) in text.lines().enumerate() {
-            if line.contains('!') || line.contains(" do ") {
-                hints.push(InlayHint {
-                    position: Position {
-                        line: i as u32,
-                        character: line.len() as u32,
-                    },
-                    label: InlayHintLabel::String(" effect".into()),
-                    kind: Some(InlayHintKind::TYPE),
-                    text_edits: None,
-                    tooltip: None,
-                    padding_left: Some(true),
-                    padding_right: None,
-                    data: None,
-                });
-            }
-        }
-        Ok(Some(hints))
+        // One hint per real effect marker. The old version tested the raw line for
+        // `!`, so it labelled `a != b`, `"hi!"` and `// note!` as effects, missed a
+        // marker written as `do` outside the ` do ` spacing it looked for, and emitted
+        // more than one hint per line as a single hint. Its column was also
+        // `line.len()` — a byte count used as a UTF-16 offset, so hints on any line
+        // containing a glyph (i.e. most Rite) landed past the end of the line.
+        Ok(Some(effect_hints(&text)))
     }
 
-    async fn execute_command(&self, params: ExecuteCommandParams) -> Result<Option<Value>> {
-        Ok(Some(serde_json::json!({
-            "command": params.command,
-            "ok": true
-        })))
+    // `execute_command` is intentionally not implemented — the capability is not
+    // advertised (see `initialize`), so a conforming client never asks.
+}
+
+/// Fold every balanced block, using the lexer so braces inside strings and comments
+/// do not count. One range per block that spans more than a single line.
+fn folding_ranges(text: &str) -> Vec<FoldingRange> {
+    let line_index = LineIndex::new(text);
+    let mut ranges = Vec::new();
+    let mut stack: Vec<u32> = Vec::new();
+    for tok in lex_document(text) {
+        match tok.kind {
+            TokenKind::BlockOpen | TokenKind::RecordOpen | TokenKind::LBrace => {
+                stack.push(line_index.line_of(tok.span.start.as_usize()));
+            }
+            TokenKind::BlockClose | TokenKind::RecordClose | TokenKind::RBrace => {
+                if let Some(start) = stack.pop() {
+                    let end = line_index.line_of(tok.span.start.as_usize());
+                    if end > start {
+                        ranges.push(FoldingRange {
+                            start_line: start,
+                            end_line: end,
+                            ..Default::default()
+                        });
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    ranges
+}
+
+/// An " effect" hint at each `!` / `do` marker, located from the token stream so
+/// `!=`, `"hi!"` and comments are not mistaken for markers.
+fn effect_hints(text: &str) -> Vec<InlayHint> {
+    let line_index = LineIndex::new(text);
+    lex_document(text)
+        .into_iter()
+        .filter(|t| t.kind == TokenKind::Effect)
+        .map(|t| {
+            let (line, character) = line_index.position_utf16(text, t.span.end.as_usize());
+            InlayHint {
+                position: Position { line, character },
+                label: InlayHintLabel::String(" effect".into()),
+                kind: Some(InlayHintKind::TYPE),
+                text_edits: None,
+                tooltip: None,
+                padding_left: Some(true),
+                padding_right: None,
+                data: None,
+            }
+        })
+        .collect()
+}
+
+/// Byte offset → line, and → UTF-16 column, computed once per request.
+struct LineIndex {
+    /// Byte offset at which each line starts.
+    starts: Vec<usize>,
+}
+
+impl LineIndex {
+    fn new(text: &str) -> Self {
+        let mut starts = vec![0];
+        for (i, b) in text.bytes().enumerate() {
+            if b == b'\n' {
+                starts.push(i + 1);
+            }
+        }
+        Self { starts }
+    }
+
+    fn line_of(&self, offset: usize) -> u32 {
+        match self.starts.binary_search(&offset) {
+            Ok(line) => line as u32,
+            Err(next) => next.saturating_sub(1) as u32,
+        }
+    }
+
+    /// LSP positions are UTF-16 code units, so count the encoded width of the
+    /// characters before `offset` rather than their bytes.
+    fn position_utf16(&self, text: &str, offset: usize) -> (u32, u32) {
+        let line = self.line_of(offset);
+        let start = self.starts[line as usize];
+        let column = text
+            .get(start..offset)
+            .map(|s| s.chars().map(char::len_utf16).sum::<usize>())
+            .unwrap_or(0);
+        (line, column as u32)
     }
 }
 
@@ -969,5 +999,65 @@ mod tests {
         let broken = "def f( [[\n";
         let r = format_with_dialect(broken, Dialect::Preserve).unwrap();
         assert_eq!(r.text, broken);
+    }
+
+    // ---- inlay hints -------------------------------------------------------
+
+    #[test]
+    fn effect_hints_only_mark_real_markers() {
+        // The old line-substring test fired on every one of these.
+        let src = "a ← 1 != 2\n! @console.println(\"hi!\")\n// note!\n";
+        let hints = effect_hints(src);
+        assert_eq!(hints.len(), 1, "expected one hint, got {hints:#?}");
+        assert_eq!(hints[0].position.line, 1, "hint on the wrong line");
+    }
+
+    #[test]
+    fn effect_hint_column_is_utf16_not_bytes() {
+        // `◆`/`⟦` are 3 bytes each: a byte offset would put the hint past the line.
+        let src = "◆ f() ⟦ ^ 1 ⟧\n! @console.println(\"x\")\n";
+        let hints = effect_hints(src);
+        assert_eq!(hints.len(), 1);
+        let line = src.lines().nth(1).unwrap();
+        let utf16_len: usize = line.chars().map(char::len_utf16).sum();
+        assert!(
+            (hints[0].position.character as usize) <= utf16_len,
+            "column {} exceeds the line's {utf16_len} UTF-16 units",
+            hints[0].position.character
+        );
+    }
+
+    #[test]
+    fn effect_hints_handle_two_markers_on_one_line() {
+        let src = "! @console.print(\"a\") ! @console.print(\"b\")\n";
+        assert_eq!(effect_hints(src).len(), 2);
+    }
+
+    // ---- folding -----------------------------------------------------------
+
+    #[test]
+    fn folding_ignores_braces_in_strings_and_comments() {
+        // Only the real block spans lines; the brace-looking text must not open one.
+        let src = "◆ f() ⟦\n  s ← \"a { b ⟦ c\"\n  // ⟧ }\n  ^ s\n⟧\n";
+        let ranges = folding_ranges(src);
+        assert_eq!(ranges.len(), 1, "expected one fold, got {ranges:#?}");
+        assert_eq!(ranges[0].start_line, 0);
+        assert_eq!(ranges[0].end_line, 4);
+    }
+
+    #[test]
+    fn folding_skips_single_line_blocks() {
+        assert!(folding_ranges("◆ f() ⟦ ^ 1 ⟧\n").is_empty());
+    }
+
+    #[test]
+    fn folding_nests_inner_blocks() {
+        let src = "◆ f() ⟦\n  ? true ⟦\n    ^ 1\n  ⟧\n⟧\n";
+        let ranges = folding_ranges(src);
+        assert_eq!(ranges.len(), 2, "{ranges:#?}");
+        // Inner closes first, so it is emitted first and sits inside the outer range.
+        assert!(ranges[0].start_line >= 1 && ranges[0].end_line <= 3);
+        assert_eq!(ranges[1].start_line, 0);
+        assert_eq!(ranges[1].end_line, 4);
     }
 }
