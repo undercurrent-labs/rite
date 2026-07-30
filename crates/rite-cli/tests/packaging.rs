@@ -3,14 +3,30 @@
 //! These catch CI-only failures (relative OUT paths, broken npm lockfiles)
 //! before a slow Release matrix.
 //!
-//! Skill packaging always runs. VSIX packaging runs when `node`/`npm` are
-//! available (set `RITE_SKIP_VSIX=1` to skip).
+//! The scripts are POSIX shell, so the tests that invoke them need a working `bash` and
+//! skip without one. VSIX packaging additionally needs `node`/`npm` (set
+//! `RITE_SKIP_VSIX=1` to skip). The two that only read the script text always run.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
 fn workspace() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")
+}
+
+/// Whether `bash` on this machine can actually run a script.
+///
+/// Not the same question as whether `bash` is on PATH. Windows ships
+/// `System32\bash.exe`, a launcher for WSL: with no distribution installed it spawns
+/// fine, prints "Windows Subsystem for Linux has no installed distributions" and exits
+/// non-zero — so a spawn check passes while every script fails.
+fn usable_bash() -> bool {
+    Command::new("bash")
+        .arg("-c")
+        .arg("exit 0")
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
 }
 
 fn run_ok(cmd: &mut Command) {
@@ -27,6 +43,10 @@ fn run_ok(cmd: &mut Command) {
 
 #[test]
 fn package_skill_with_relative_out_path() {
+    if !usable_bash() {
+        eprintln!("skipping skill packaging (no usable POSIX shell)");
+        return;
+    }
     // Relative OUT is what broke Release: zip ran after cd into stage/.
     let root = workspace();
     let out = root.join("target/packaging-test/skill-rel");
@@ -70,6 +90,10 @@ fn package_skill_with_relative_out_path() {
 
 #[test]
 fn package_vsix_clean() {
+    if !usable_bash() {
+        eprintln!("skipping vsix packaging (no usable POSIX shell)");
+        return;
+    }
     if std::env::var_os("RITE_SKIP_VSIX").is_some() {
         eprintln!("skipping vsix packaging (RITE_SKIP_VSIX set)");
         return;
@@ -140,6 +164,10 @@ fn site_public_skill_assets_exist_after_package() {
     // working tree (the archives embed timestamps, so every run produced a diff in three
     // committed binaries). What this test actually checks — that the script emits a real
     // zip/tar and not HTML — is independent of the destination.
+    if !usable_bash() {
+        eprintln!("skipping skill packaging (no usable POSIX shell)");
+        return;
+    }
     let root = workspace();
     let out = std::env::temp_dir().join(format!("rite-skill-package-test-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&out);
