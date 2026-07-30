@@ -176,7 +176,7 @@ impl LanguageServer for Backend {
                     },
                     end: Position {
                         line: sym.line.saturating_sub(1),
-                        character: sym.character + sym.name.len() as u32,
+                        character: sym.character + rite_analysis::utf16_width(&sym.name),
                     },
                 },
             })));
@@ -243,7 +243,7 @@ impl LanguageServer for Backend {
                             },
                             end: Position {
                                 line: s.line.saturating_sub(1),
-                                character: s.character + s.name.len() as u32,
+                                character: s.character + rite_analysis::utf16_width(&s.name),
                             },
                         },
                     },

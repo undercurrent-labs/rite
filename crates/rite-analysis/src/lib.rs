@@ -62,7 +62,7 @@ impl AnalysisEngine {
         }
         let diagnostics: Vec<_> = all
             .iter()
-            .map(|d| enrich_diagnostic_json(d, source))
+            .map(|d| enrich_diagnostic_json(d, &file))
             .collect();
         let has_errors = all.has_errors();
         AnalysisSnapshot {
@@ -245,10 +245,14 @@ pub fn declared_symbols(program: &Program) -> Vec<DeclaredSymbol> {
 fn collect_symbols(program: &Program, sources: &SourceMap, out: &mut Vec<SymbolInfo>) {
     let file = sources.files().first();
     for d in declared_symbols(program) {
+        // UTF-16 columns, matching `references`. These two used to disagree: symbols
+        // reported character columns and references reported UTF-16 units, so an astral
+        // character earlier on the line put "go to definition" and "find references" on
+        // different columns of the same identifier.
         let (line, character) = file
             .map(|sf| {
-                let lc = sf.line_col(d.span.start);
-                (lc.line, lc.column.saturating_sub(1))
+                let (l, c) = sf.line_utf16_col(d.span.start);
+                (l + 1, c)
             })
             .unwrap_or((1, 0));
         out.push(SymbolInfo {
@@ -325,41 +329,34 @@ fn capability_hover(word: &str) -> Option<HoverInfo> {
 }
 
 /// Attach start_line/start_character/end_* for LSP consumers.
-fn enrich_diagnostic_json(d: &rite_core::Diagnostic, source: &str) -> serde_json::Value {
+///
+/// Positions are UTF-16 columns with 1-based lines, from the one implementation in
+/// `rite-core`. This crate previously carried two more of its own — an editor jumping
+/// to a diagnostic and an editor jumping to that same symbol had no reason to land in
+/// the same place.
+fn enrich_diagnostic_json(d: &rite_core::Diagnostic, file: &SourceFile) -> serde_json::Value {
     let mut v = d.to_json();
     if let Some(obj) = v.as_object_mut() {
         obj.insert("code_str".into(), serde_json::json!(format!("{}", d.code)));
         if let Some(span) = d.primary_span() {
-            let start = byte_to_line_col(source, span.span.start.as_usize());
-            let end = byte_to_line_col(source, span.span.end.as_usize());
-            obj.insert("start_line".into(), serde_json::json!(start.0));
-            obj.insert("start_character".into(), serde_json::json!(start.1));
-            obj.insert("end_line".into(), serde_json::json!(end.0));
-            obj.insert("end_character".into(), serde_json::json!(end.1));
+            let (sl, sc) = file.line_utf16_col(span.span.start);
+            let (el, ec) = file.line_utf16_col(span.span.end);
+            obj.insert("start_line".into(), serde_json::json!(sl + 1));
+            obj.insert("start_character".into(), serde_json::json!(sc));
+            obj.insert("end_line".into(), serde_json::json!(el + 1));
+            obj.insert("end_character".into(), serde_json::json!(ec));
         }
     }
     v
 }
 
-fn byte_to_line_col(text: &str, byte: usize) -> (u32, u32) {
-    let byte = byte.min(text.len());
-    let mut line = 1u32;
-    let mut col = 0u32;
-    let mut i = 0usize;
-    for ch in text.chars() {
-        let bl = ch.len_utf8();
-        if i + bl > byte {
-            break;
-        }
-        i += bl;
-        if ch == '\n' {
-            line += 1;
-            col = 0;
-        } else {
-            col += ch.len_utf16() as u32;
-        }
-    }
-    (line, col)
+/// Width of `text` in UTF-16 code units — the unit an LSP `Position` counts in.
+///
+/// Rite identifiers may hold any non-ASCII byte, so `café` is five bytes but four
+/// UTF-16 units. Deriving a range end from `str::len` overshot it by one per non-ASCII
+/// character, which put the closing edge of a rename or highlight inside the next token.
+pub fn utf16_width(text: &str) -> u32 {
+    text.chars().map(|c| c.len_utf16() as u32).sum()
 }
 
 fn builtin_completions() -> Vec<CompletionItem> {

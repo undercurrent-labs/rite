@@ -79,6 +79,31 @@ impl SourceFile {
         }
     }
 
+    /// Zero-based line and **UTF-16 code unit** column, which is what the Language
+    /// Server Protocol means by `Position`.
+    ///
+    /// Three conventions meet at this type and none of them is interchangeable: bytes
+    /// (what a `Span` holds), characters (what [`line_col`](Self::line_col) reports, and
+    /// what a human counting columns means), and UTF-16 units (what an editor wants).
+    /// They agree on ASCII, so a test written in ASCII cannot tell them apart; `◆` is
+    /// three bytes, one character and one UTF-16 unit, while `😀` is four bytes, one
+    /// character and *two* UTF-16 units. Editor features that mixed two of these put
+    /// "find references" and "go to definition" on different columns of the same line.
+    pub fn line_utf16_col(&self, pos: BytePos) -> (u32, u32) {
+        let offset = pos.as_usize().min(self.text.len()) as u32;
+        let line_idx = match self.line_starts.binary_search(&offset) {
+            Ok(i) => i,
+            Err(i) => i.saturating_sub(1),
+        };
+        let line_start = self.line_starts[line_idx];
+        let column = self
+            .text
+            .get(line_start as usize..offset as usize)
+            .map(|prefix| prefix.chars().map(char::len_utf16).sum::<usize>())
+            .unwrap_or(0) as u32;
+        (line_idx as u32, column)
+    }
+
     pub fn line_span(&self, line: u32) -> Option<Span> {
         let idx = (line as usize).checked_sub(1)?;
         if idx >= self.line_starts.len() {

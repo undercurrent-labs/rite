@@ -89,3 +89,33 @@ fn workspace_symbols_include_non_functions() {
         "{names:?}"
     );
 }
+
+/// An LSP range end is a UTF-16 column, so a name's width must be counted the same way.
+/// Rite identifiers accept any non-ASCII byte, so `str::len` is not that width.
+#[test]
+fn utf16_width_counts_code_units_not_bytes() {
+    use rite_analysis::utf16_width;
+    assert_eq!(utf16_width("plain"), 5, "ASCII: bytes and units agree");
+    assert_eq!(utf16_width("café"), 4, "5 bytes, 4 UTF-16 units");
+    assert_eq!(utf16_width(""), 0);
+    // One character, two units — the case that separates every convention.
+    assert_eq!(utf16_width("\u{1F600}"), 2);
+    assert!(
+        utf16_width("café") < "café".len() as u32,
+        "the byte length is the overshoot this replaces"
+    );
+}
+
+/// A Unicode identifier is legal Rite, so the editor has to place it correctly.
+#[test]
+fn a_unicode_identifier_is_indexed_at_a_utf16_column() {
+    let mut eng = AnalysisEngine::new();
+    let snap = eng.analyze("t.rite", "◆ café(x) ⟦ ^ x ⟧\n");
+    let sym = snap
+        .symbols
+        .iter()
+        .find(|s| s.name == "café")
+        .expect("unicode identifier indexed");
+    assert_eq!(sym.line, 1);
+    assert_eq!(sym.character, 2, "after `◆ `, one UTF-16 unit per glyph");
+}

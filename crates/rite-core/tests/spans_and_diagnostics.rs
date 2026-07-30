@@ -341,3 +341,73 @@ fn diagnostics_extend_and_convert_to_a_vec() {
     assert_eq!(all[0].severity, Severity::Error);
     assert_eq!(all[1].severity, Severity::Warning);
 }
+
+// ------------------------------------------------------- the three column conventions
+
+/// Bytes, characters and UTF-16 units are three different numbers, and they agree only
+/// on ASCII — which is exactly why a suite written in ASCII cannot tell them apart.
+#[test]
+fn the_column_conventions_agree_on_ascii_and_diverge_elsewhere() {
+    let f = SourceFile::new(FileId(0), "t.rite", "abc|def\n");
+    let at = BytePos::new(4); // the `d`
+    assert_eq!(f.line_col(at).column, 5, "1-based characters");
+    assert_eq!(f.line_utf16_col(at), (0, 4), "0-based UTF-16 units");
+}
+
+#[test]
+fn a_bmp_glyph_is_one_character_and_one_utf16_unit() {
+    // `◆` is three bytes but a single unit in both other conventions: this is the case
+    // idiomatic Rite hits on nearly every line.
+    let text = "◆ f\n";
+    let f = SourceFile::new(FileId(0), "t.rite", text);
+    let at = BytePos::new(text.find('f').expect("f"));
+    assert_eq!(
+        at.as_usize(),
+        4,
+        "the byte offset really is past a 3-byte glyph"
+    );
+    assert_eq!(f.line_col(at).column, 3, "characters: glyph, space, then f");
+    assert_eq!(
+        f.line_utf16_col(at),
+        (0, 2),
+        "UTF-16 agrees with characters here"
+    );
+}
+
+#[test]
+fn an_astral_character_is_one_character_but_two_utf16_units() {
+    // The one case where characters and UTF-16 part company, and the reason an editor
+    // cannot be handed a character column.
+    let text = "\u{1F600} f\n";
+    let f = SourceFile::new(FileId(0), "t.rite", text);
+    let at = BytePos::new(text.find('f').expect("f"));
+    assert_eq!(at.as_usize(), 5, "four bytes of emoji plus a space");
+    assert_eq!(f.line_col(at).column, 3, "one character for the emoji");
+    assert_eq!(
+        f.line_utf16_col(at),
+        (0, 3),
+        "two UTF-16 units for the emoji, so the editor column is one further right"
+    );
+}
+
+#[test]
+fn utf16_columns_are_relative_to_their_own_line() {
+    let text = "◆ first\n\u{1F600} second\nplain\n";
+    let f = SourceFile::new(FileId(0), "t.rite", text);
+    let second = BytePos::new(text.find("second").expect("second"));
+    assert_eq!(
+        f.line_utf16_col(second),
+        (1, 3),
+        "line 1 (0-based), after an emoji and a space"
+    );
+    let plain = BytePos::new(text.find("plain").expect("plain"));
+    assert_eq!(f.line_utf16_col(plain), (2, 0), "start of the third line");
+}
+
+#[test]
+fn a_position_past_the_end_is_clamped_rather_than_panicking() {
+    let f = SourceFile::new(FileId(0), "t.rite", "◆ f\n");
+    let (line, col) = f.line_utf16_col(BytePos::new(9_999));
+    assert!(line <= 1, "clamped to a real line, got {line}");
+    let _ = col;
+}

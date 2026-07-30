@@ -78,10 +78,11 @@ impl WorkspaceIndex {
             let file = sources.files().first();
             // Every declaration kind, via the shared collector.
             for d in crate::declared_symbols(&program) {
+                // UTF-16, matching `references` — see the note in `collect_symbols`.
                 let (line, character) = file
                     .map(|sf| {
-                        let lc = sf.line_col(d.span.start);
-                        (lc.line, lc.column.saturating_sub(1))
+                        let (l, c) = sf.line_utf16_col(d.span.start);
+                        (l + 1, c)
                     })
                     .unwrap_or((1, 0));
                 self.symbols.push(WorkspaceSymbol {
@@ -154,9 +155,8 @@ impl WorkspaceIndex {
                 if tok.kind != rite_syntax::TokenKind::Ident || tok.text != name {
                     continue;
                 }
-                let offset = tok.span.start.as_usize();
-                let (line, character) = line_and_utf16_column(text, offset);
-                let width: u32 = name.chars().map(|c| c.len_utf16() as u32).sum();
+                let (line, character) = file.line_utf16_col(tok.span.start);
+                let width = crate::utf16_width(name);
                 out.push(ReferenceLoc {
                     uri: uri.clone(),
                     // Callers expect 1-based lines, as the old scan produced.
@@ -203,10 +203,11 @@ fn index_file_symbols(uri: &str, text: &str, module: &str, symbols: &mut Vec<Wor
     let Some(program) = program else { return };
     let file = sources.files().first();
     for d in crate::declared_symbols(&program) {
+        // UTF-16, matching `references` — see the note in `collect_symbols`.
         let (line, character) = file
             .map(|sf| {
-                let lc = sf.line_col(d.span.start);
-                (lc.line, lc.column.saturating_sub(1))
+                let (l, c) = sf.line_utf16_col(d.span.start);
+                (l + 1, c)
             })
             .unwrap_or((1, 0));
         symbols.push(WorkspaceSymbol {
@@ -237,25 +238,6 @@ fn resolve_on_disk(segs: &[String], from_uri: &str, roots: &[PathBuf]) -> Option
 }
 
 /// Byte offset → (0-based line, UTF-16 column).
-fn line_and_utf16_column(text: &str, offset: usize) -> (u32, u32) {
-    let mut line = 0u32;
-    let mut line_start = 0usize;
-    for (i, b) in text.bytes().enumerate() {
-        if i >= offset {
-            break;
-        }
-        if b == b'\n' {
-            line += 1;
-            line_start = i + 1;
-        }
-    }
-    let column = text
-        .get(line_start..offset)
-        .map(|s| s.chars().map(|c| c.len_utf16()).sum::<usize>())
-        .unwrap_or(0);
-    (line, column as u32)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -290,6 +272,62 @@ mod tests {
             .map(|c| c.len_utf16() as u32)
             .sum();
         assert_eq!(refs[0].character, expected);
+    }
+
+    #[test]
+    fn symbol_and_reference_columns_use_the_same_convention() {
+        // The defect: symbols reported character columns while references reported
+        // UTF-16 units. They agree on every ASCII line and on every BMP glyph, so only
+        // an astral character — one character, two UTF-16 units — separates them. An
+        // editor asked to jump to `target` landed in two different places depending on
+        // which feature it asked.
+        let mut ws = WorkspaceIndex::new(vec![]);
+        let src = "s ← \"\u{1F600}\"\n◆ target() ⟦ ^ target ⟧\n";
+        ws.upsert_document("file:///tmp/e.rite", src);
+
+        let decl = ws
+            .symbols
+            .iter()
+            .find(|s| s.name == "target")
+            .expect("declaration indexed");
+        let call = ws
+            .find_references("target")
+            .into_iter()
+            .find(|r| r.line == decl.line && r.character != decl.character)
+            .or_else(|| ws.find_references("target").into_iter().next())
+            .expect("reference found");
+
+        // Both are 1-based lines and 0-based UTF-16 columns.
+        assert_eq!(decl.line, 2, "the declaration is on the second line");
+        assert_eq!(call.line, 2);
+        let decl_ref = ws
+            .find_references("target")
+            .into_iter()
+            .find(|r| r.character == decl.character);
+        assert!(
+            decl_ref.is_some(),
+            "no reference agreed with the symbol column {}; references were {:?}",
+            decl.character,
+            ws.find_references("target")
+        );
+    }
+
+    #[test]
+    fn an_astral_character_shifts_utf16_columns_on_its_line() {
+        let mut ws = WorkspaceIndex::new(vec![]);
+        // One emoji, then a declaration on the same line: two UTF-16 units for the
+        // emoji, so `target` sits one column further right than its character index.
+        ws.upsert_document("file:///tmp/a.rite", "// \u{1F600}\n◆ target() ⟦ ^ 1 ⟧\n");
+        let decl = ws
+            .symbols
+            .iter()
+            .find(|s| s.name == "target")
+            .expect("symbol");
+        assert_eq!(
+            (decl.line, decl.character),
+            (2, 2),
+            "after `◆ ` on the second line"
+        );
     }
 
     #[test]
