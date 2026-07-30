@@ -205,6 +205,11 @@ async fn file_backed_db_under_granted_root_works() {
     let db_path = dir.path().join("app.duckdb");
     let inside_csv = dir.path().join("out.csv");
 
+    // Somewhere outside the granted root, portably: `/tmp` does not exist on Windows.
+    let outside_path = std::env::temp_dir().join("rite-db-escape-root.csv");
+    let _ = std::fs::remove_file(&outside_path);
+    let outside = outside_path.display().to_string().replace('\\', "/");
+
     let src = format!(
         r#"
 conn ← ! @db.open("{db}")?
@@ -212,7 +217,7 @@ conn ← ! @db.open("{db}")?
 ! @db.exec(conn, "INSERT INTO t VALUES (1, 'kept')")?
 ! @db.exec(conn, "CHECKPOINT")?
 inside ← ! @db.exec(conn, "COPY t TO '{csv}' (HEADER)")
-outside ← ! @db.exec(conn, "COPY t TO '/tmp/rite-db-escape-root.csv' (HEADER)")
+outside ← ! @db.exec(conn, "COPY t TO '{outside}' (HEADER)")
 leak ← ! @db.query(conn, "SELECT * FROM read_csv('/etc/passwd', header=false, sep=':') LIMIT 1")
 rows ← ! @db.query(conn, "SELECT name FROM t")?
 ! @db.close(conn)?
@@ -239,10 +244,7 @@ rows ← ! @db.query(conn, "SELECT name FROM t")?
         !out.contains("root:"),
         "read_csv outside the granted root leaked: {out}"
     );
-    assert!(
-        !std::path::Path::new("/tmp/rite-db-escape-root.csv").exists(),
-        "wrote outside the granted root"
-    );
+    assert!(!outside_path.exists(), "wrote outside the granted root");
 }
 
 #[tokio::test]

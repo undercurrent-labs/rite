@@ -167,24 +167,97 @@ pub struct HoverInfo {
     pub markdown: String,
 }
 
+/// One declaration a document exposes.
+///
+/// The single source for "what symbols does this file declare". There were three
+/// separate walks (here and twice in `workspace.rs`), all of which handled only
+/// `Item::Function` — which is why every symbol in an editor outline was labelled
+/// `FUNCTION`, and why nothing but functions appeared at all.
+#[derive(Debug, Clone)]
+pub struct DeclaredSymbol {
+    pub name: String,
+    /// `function`, `constant`, `variable`, `event`, or `test`. Callers map this onto
+    /// their own vocabulary (`SymbolKind` for LSP).
+    pub kind: &'static str,
+    pub detail: String,
+    /// Span of the *name*, so a jump lands on the identifier rather than the keyword.
+    pub span: rite_core::Span,
+    pub is_pub: bool,
+}
+
+/// Every top-level declaration in `program`, in source order.
+pub fn declared_symbols(program: &Program) -> Vec<DeclaredSymbol> {
+    let mut out = Vec::new();
+    for item in &program.items {
+        match item {
+            rite_syntax::Item::Function(f) => out.push(DeclaredSymbol {
+                name: f.name.name.clone(),
+                kind: "function",
+                detail: format!("{}/{}", f.name.name, f.params.len()),
+                span: f.name.span,
+                is_pub: f.is_pub,
+            }),
+            // `◆ Cfg ⟨…⟩` — an immutable record binding, so a constant.
+            rite_syntax::Item::Data(d) => out.push(DeclaredSymbol {
+                name: d.name.name.clone(),
+                kind: "constant",
+                detail: format!("record, {} field(s)", d.fields.len()),
+                span: d.name.span,
+                is_pub: false,
+            }),
+            // Top-level bindings. `↢`/`<~` is a variable; `←`/`<-` cannot be reassigned,
+            // so it reads as a constant.
+            rite_syntax::Item::Statement(rite_syntax::Stmt::Binding(b)) => {
+                if let rite_syntax::Pattern::Ident(id) = &b.pattern {
+                    out.push(DeclaredSymbol {
+                        name: id.name.clone(),
+                        kind: if b.mutable { "variable" } else { "constant" },
+                        detail: if b.mutable {
+                            "mutable binding".into()
+                        } else {
+                            "binding".into()
+                        },
+                        span: id.span,
+                        is_pub: false,
+                    });
+                }
+            }
+            rite_syntax::Item::Event(e) => out.push(DeclaredSymbol {
+                name: e.atom.parts.join("."),
+                kind: "event",
+                detail: format!("{:?} event", e.kind).to_lowercase(),
+                span: e.atom.span,
+                is_pub: false,
+            }),
+            rite_syntax::Item::Test(t) => out.push(DeclaredSymbol {
+                name: t.name.clone(),
+                kind: "test",
+                detail: "test".into(),
+                span: t.span,
+                is_pub: false,
+            }),
+            rite_syntax::Item::Import(_) | rite_syntax::Item::Statement(_) => {}
+        }
+    }
+    out
+}
+
 fn collect_symbols(program: &Program, sources: &SourceMap, out: &mut Vec<SymbolInfo>) {
     let file = sources.files().first();
-    for item in &program.items {
-        if let rite_syntax::Item::Function(f) = item {
-            let (line, character) = file
-                .map(|sf| {
-                    let lc = sf.line_col(f.name.span.start);
-                    (lc.line, lc.column.saturating_sub(1))
-                })
-                .unwrap_or((1, 0));
-            out.push(SymbolInfo {
-                name: f.name.name.clone(),
-                kind: "function".into(),
-                detail: format!("{}/{}", f.name.name, f.params.len()),
-                line,
-                character,
-            });
-        }
+    for d in declared_symbols(program) {
+        let (line, character) = file
+            .map(|sf| {
+                let lc = sf.line_col(d.span.start);
+                (lc.line, lc.column.saturating_sub(1))
+            })
+            .unwrap_or((1, 0));
+        out.push(SymbolInfo {
+            name: d.name,
+            kind: d.kind.to_string(),
+            detail: d.detail,
+            line,
+            character,
+        });
     }
 }
 

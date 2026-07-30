@@ -17,10 +17,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest]
-        # macOS/windows can be enabled when runners are available
-        # os: [ubuntu-latest, macos-latest, windows-latest]
+        os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
+      # Line endings are pinned by .gitattributes, so the Windows runner does not
+      # rewrite every file on checkout and make the generation guard below see the
+      # whole tree as modified.
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -38,19 +39,28 @@ jobs:
         run: cargo build -p rite-cli -p rite-lsp
       - name: test
         run: cargo test --workspace --all-features
+      # Shells out to scripts/package-*.sh; the release archives are produced on Linux.
       - name: packaging gate (skill archives)
-        # VSIX skipped here (dedicated vscode job); skill packaging always runs.
+        if: runner.os == 'Linux'
         run: |
           RITE_SKIP_VSIX=1 cargo test -p rite-cli --test packaging -- --nocapture
       - name: build release tools
         run: cargo build -p rite-cli -p rite-lsp --release
       - name: doctests
+        if: runner.os != 'Windows'
         run: ./target/release/rite docs check
+      # Windows binary lives at a different path and the guard below compares a git
+      # diff, so keep the generation check on the platforms that produce releases.
+      - name: doctests (windows)
+        if: runner.os == 'Windows'
+        run: .\target\release\rite.exe docs check
       - name: agent bundle
+        if: runner.os == 'Linux'
         run: ./target/release/rite docs agent --output skills/rite
       # Regenerating must not rewrite tracked sources. This caught SKILL.md being
       # truncated to zero bytes by an in-place bundle regeneration.
       - name: tracked files unchanged by generation
+        if: runner.os == 'Linux'
         run: |
           if ! git diff --quiet -- skills/ docs/ examples/ apps/; then
             echo "::error::generation modified tracked files:"
@@ -59,6 +69,7 @@ jobs:
           fi
           test -s skills/rite/SKILL.md
       - name: upload binaries
+        if: runner.os == 'Linux'
         uses: actions/upload-artifact@v5
         with:
           name: rite-binaries-${{ matrix.os }}

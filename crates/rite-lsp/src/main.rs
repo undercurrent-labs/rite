@@ -231,7 +231,7 @@ impl LanguageServer for Backend {
                 #[allow(deprecated)]
                 Some(SymbolInformation {
                     name: s.name.clone(),
-                    kind: SymbolKind::FUNCTION,
+                    kind: symbol_kind(&s.kind),
                     tags: None,
                     deprecated: None,
                     location: Location {
@@ -269,7 +269,7 @@ impl LanguageServer for Backend {
                 #[allow(deprecated)]
                 SymbolInformation {
                     name: s.name,
-                    kind: SymbolKind::FUNCTION,
+                    kind: symbol_kind(&s.kind),
                     tags: None,
                     deprecated: None,
                     location: Location {
@@ -748,6 +748,23 @@ enum IdentClass {
     Field,
     /// Segment of an `@…` / `host.…` capability path.
     Capability,
+}
+
+/// Map an analysis symbol kind onto LSP's vocabulary.
+///
+/// Everything used to be reported as `FUNCTION`, because the analysis layer only ever
+/// collected functions. It now distinguishes bindings, records, events and tests, so an
+/// editor outline can too.
+fn symbol_kind(kind: &str) -> SymbolKind {
+    match kind {
+        "function" => SymbolKind::FUNCTION,
+        // `←` bindings and `◆ Name ⟨…⟩` records cannot be reassigned.
+        "constant" => SymbolKind::CONSTANT,
+        "variable" => SymbolKind::VARIABLE,
+        "event" => SymbolKind::EVENT,
+        "test" => SymbolKind::METHOD,
+        _ => SymbolKind::VARIABLE,
+    }
 }
 
 fn lex_document(text: &str) -> Vec<Token> {

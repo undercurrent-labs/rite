@@ -1,0 +1,14 @@
+# Rite sources are UTF-8 with LF endings, on every platform.
+#
+# Without this, a Windows checkout converts to CRLF and then:
+#   * `rite fmt --check` and the formatter's own round-trip comparison see a diff on
+#     every file, and
+#   * CI's "generation changed nothing" guard reports the entire tree as modified.
+* text=auto eol=lf
+
+# Binary assets must never be touched.
+*.png  binary
+*.zip  binary
+*.gz   binary
+*.vsix binary
+*.wasm binary

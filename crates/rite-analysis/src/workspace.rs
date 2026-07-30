@@ -76,24 +76,25 @@ impl WorkspaceIndex {
             let module_name = uri_to_module_name(uri);
             self.modules.insert(module_name.clone(), uri.clone());
             let file = sources.files().first();
+            // Every declaration kind, via the shared collector.
+            for d in crate::declared_symbols(&program) {
+                let (line, character) = file
+                    .map(|sf| {
+                        let lc = sf.line_col(d.span.start);
+                        (lc.line, lc.column.saturating_sub(1))
+                    })
+                    .unwrap_or((1, 0));
+                self.symbols.push(WorkspaceSymbol {
+                    name: d.name,
+                    kind: d.kind.into(),
+                    uri: uri.clone(),
+                    line,
+                    character,
+                    is_pub: d.is_pub,
+                    module: module_name.clone(),
+                });
+            }
             for item in &program.items {
-                if let Item::Function(f) = item {
-                    let (line, character) = file
-                        .map(|sf| {
-                            let lc = sf.line_col(f.name.span.start);
-                            (lc.line, lc.column.saturating_sub(1))
-                        })
-                        .unwrap_or((1, 0));
-                    self.symbols.push(WorkspaceSymbol {
-                        name: f.name.name.clone(),
-                        kind: "function".into(),
-                        uri: uri.clone(),
-                        line,
-                        character,
-                        is_pub: f.is_pub,
-                        module: module_name.clone(),
-                    });
-                }
                 if let Item::Import(imp) = item {
                     let segs: Vec<String> =
                         imp.path.segments.iter().map(|s| s.name.clone()).collect();
@@ -201,24 +202,22 @@ fn index_file_symbols(uri: &str, text: &str, module: &str, symbols: &mut Vec<Wor
     }
     let Some(program) = program else { return };
     let file = sources.files().first();
-    for item in &program.items {
-        if let Item::Function(f) = item {
-            let (line, character) = file
-                .map(|sf| {
-                    let lc = sf.line_col(f.name.span.start);
-                    (lc.line, lc.column.saturating_sub(1))
-                })
-                .unwrap_or((1, 0));
-            symbols.push(WorkspaceSymbol {
-                name: f.name.name.clone(),
-                kind: "function".into(),
-                uri: uri.to_string(),
-                line,
-                character,
-                is_pub: f.is_pub,
-                module: module.to_string(),
-            });
-        }
+    for d in crate::declared_symbols(&program) {
+        let (line, character) = file
+            .map(|sf| {
+                let lc = sf.line_col(d.span.start);
+                (lc.line, lc.column.saturating_sub(1))
+            })
+            .unwrap_or((1, 0));
+        symbols.push(WorkspaceSymbol {
+            name: d.name,
+            kind: d.kind.into(),
+            uri: uri.to_string(),
+            line,
+            character,
+            is_pub: d.is_pub,
+            module: module.to_string(),
+        });
     }
 }
 
