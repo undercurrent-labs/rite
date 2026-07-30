@@ -63,9 +63,19 @@ impl SourceFile {
             Err(i) => i.saturating_sub(1),
         };
         let line_start = self.line_starts[line_idx];
+        // Characters, not bytes. A byte column is wrong on any line containing a glyph,
+        // which in Rite is most of them: `◆ f() ⟦ ^ undefined_name ⟧` reported column 15
+        // for a name starting at character 11, so every caret sat four columns right of
+        // the thing it pointed at and every reported position was unusable for jumping.
+        let column = self
+            .text
+            .get(line_start as usize..offset as usize)
+            .map(|prefix| prefix.chars().count())
+            .unwrap_or(0) as u32
+            + 1;
         LineCol {
             line: (line_idx + 1) as u32,
-            column: offset - line_start + 1,
+            column,
         }
     }
 

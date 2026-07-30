@@ -3,6 +3,7 @@ use crate::source::SourceMap;
 use crate::span::{SourceSpan, Span};
 use serde::{Deserialize, Serialize};
 use std::fmt;
+use unicode_width::UnicodeWidthStr;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -138,22 +139,34 @@ impl Diagnostic {
                 out.push_str("   |\n");
                 out.push_str(&format!("{:4} | {}\n", lc.line, line_text));
 
-                let col = lc.column as usize;
-                let span_len = label.span.span.len().max(1);
-                let marker_start = col.saturating_sub(1);
+                // Pad by the *display width* of the text before the span, so the caret
+                // lines up under a proportional-width glyph as well as under ASCII.
+                // `lc.column` counts characters; a wide character (CJK, some symbols)
+                // occupies two terminal cells, which only `unicode-width` knows.
+                let chars_before = (lc.column as usize).saturating_sub(1);
+                let prefix: String = line_text.chars().take(chars_before).collect();
+                let marker_start = UnicodeWidthStr::width(prefix.as_str());
+                // The span is a byte range; the caret length is how many characters of
+                // this line it actually covers.
+                let span_chars = line_text
+                    .get(prefix.len()..)
+                    .map(|rest| {
+                        rest.char_indices()
+                            .take_while(|(i, _)| *i < label.span.span.len().max(1))
+                            .count()
+                    })
+                    .unwrap_or(1)
+                    .max(1);
+                let line_chars = line_text.chars().count();
                 let mut underline = String::new();
                 underline.push_str(&" ".repeat(marker_start));
                 if label.primary {
                     underline.push_str(
-                        &"^".repeat(
-                            span_len.min(line_text.len().saturating_sub(marker_start).max(1)),
-                        ),
+                        &"^".repeat(span_chars.min(line_chars.saturating_sub(chars_before).max(1))),
                     );
                 } else {
                     underline.push_str(
-                        &"-".repeat(
-                            span_len.min(line_text.len().saturating_sub(marker_start).max(1)),
-                        ),
+                        &"-".repeat(span_chars.min(line_chars.saturating_sub(chars_before).max(1))),
                     );
                 }
                 out.push_str(&format!("   | {}\n", underline));
