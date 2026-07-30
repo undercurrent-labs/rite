@@ -52,6 +52,25 @@ rite build script.rite --allow-all
 rite describe language --json
 rite describe capability http --json    # exact signatures + effect flags
 rite docs agent
+rite doc src/                           # render `///` comments from your own scripts
+```
+
+## Documentation comments
+
+`///` above a declaration documents it; `//!` at the top of a file documents the file.
+Plain `//` is a comment and is never rendered. Tags: `@param <name> <text>`,
+`@returns <text>`, `@effects <perm>`, `@permission <grant>`; a fenced block becomes an
+example. `rite doc <path>` renders them; undocumented declarations are omitted.
+
+```rite
+//! Geometry helpers.
+
+/// Area of a circle.
+/// @param radius Distance from the centre to the edge.
+/// @returns The area, as a float.
+pub ◆ circle_area(radius) ⟦
+  ^ 3.14159 * radius * radius
+⟧
 ```
 
 ## Permissions

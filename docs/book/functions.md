@@ -167,6 +167,60 @@ pub ◆ square(value) ⟦
 
 Only `pub` items are imported by `use` — see [Modules](modules.md).
 
+## Documenting a function
+
+A `///` comment directly above a declaration is its documentation. A `//!` comment at the
+top of the file documents the file itself.
+
+```rite
+//! Geometry helpers.
+
+/// Area of a circle.
+/// @param radius Distance from the centre to the edge.
+/// @returns The area, as a float.
+pub ◆ circle_area(radius) ⟦
+  ^ 3.14159 * radius * radius
+⟧
+```
+
+An ordinary `//` comment is *not* documentation — it stays in the source and never
+reaches the generated page.
+
+### Tags
+
+| Tag | Means |
+|-----|-------|
+| `@param <name> <text>` | Describes one parameter — repeat per parameter |
+| `@returns <text>` | Describes the return value |
+| `@effects <perm>` | Notes an effect the function performs, e.g. `fs:read` |
+| `@permission <grant>` | Notes the grant it needs, e.g. `fs:read=./data` |
+
+Anything untagged is prose. A fenced block inside the comment becomes a rendered example:
+
+````rite
+/// Loads configuration.
+/// ```
+/// load_config("app.toml")
+/// ```
+◆ load_config(path) ⟦
+  ^ ! @fs.read(path)?
+⟧
+````
+
+### Generating the pages
+
+Point `rite doc` at a file or a directory:
+
+```bash
+rite doc src/                 # → docs/generated/scripts.md, index.json, html/
+rite doc src/geo.rite --out build/docs
+rite docs build --scripts src/    # language reference *and* your scripts
+```
+
+With no path you get the language reference alone. Undocumented declarations are left
+out entirely, so the page lists what you chose to describe rather than every name in the
+file. One unparseable script does not fail the build — the rest are still documented.
+
 ## Try it
 
 ```bash

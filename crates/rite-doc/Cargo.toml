@@ -15,3 +15,6 @@ anyhow = { workspace = true }
 rite-sem = { workspace = true }
 rite-wasm = { workspace = true }
 tokio = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }

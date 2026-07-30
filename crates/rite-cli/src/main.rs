@@ -124,6 +124,8 @@ enum Commands {
     },
     /// Generate documentation
     Doc {
+        /// Rite file or directory whose `///` doc comments to include (optional;
+        /// without it only the language reference is generated)
         path: Option<PathBuf>,
         #[arg(long, default_value = "docs/generated")]
         out: PathBuf,

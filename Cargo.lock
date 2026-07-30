@@ -2401,6 +2401,7 @@ dependencies = [
  "rite-wasm",
  "serde",
  "serde_json",
+ "tempfile",
  "tokio",
 ]
 

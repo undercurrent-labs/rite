@@ -147,6 +147,7 @@ rite fmt --stdout examples/hello/hello.rite
 | `rite repl` | Interactive |
 | `rite studio` | Local Studio API host |
 | `rite docs build` | Generate reference docs |
+| `rite doc [path]` | Document your own scripts' `///` comments |
 | `rite capabilities` | List host capabilities |
 
 ```bash

@@ -29,6 +29,9 @@ pub enum DocsCmd {
         /// Only generate reference docs, not the agent bundle
         #[arg(long = "no-skill")]
         no_skill: bool,
+        /// Also document the `///` comments in this Rite file or directory
+        #[arg(long)]
+        scripts: Option<PathBuf>,
     },
     /// Serve generated docs over loopback HTTP
     Serve {
@@ -60,6 +63,9 @@ pub enum DocsCmd {
         /// Output directory (default: <checkout>/docs/generated)
         #[arg(long)]
         out: Option<PathBuf>,
+        /// Also document the `///` comments in this Rite file or directory
+        #[arg(long)]
+        scripts: Option<PathBuf>,
     },
     /// Generate the agent skill bundle
     Agent {
@@ -85,9 +91,10 @@ pub async fn run(cmd: DocsCmd) -> anyhow::Result<ExitCode> {
             out,
             skill_out,
             no_skill,
+            scripts,
         } => {
             let out = resolve_out(out, "docs/generated", "--out")?;
-            rite_doc::generate(None, &out)?;
+            rite_doc::generate(scripts.as_deref(), &out)?;
             println!("docs written to {}", out.display());
             if !no_skill {
                 let skill = resolve_out(skill_out, "skills/rite", "--skill-out")?;
@@ -96,9 +103,9 @@ pub async fn run(cmd: DocsCmd) -> anyhow::Result<ExitCode> {
             }
             Ok(ExitCode::SUCCESS)
         }
-        DocsCmd::Json { out } => {
+        DocsCmd::Json { out, scripts } => {
             let out = resolve_out(out, "docs/generated", "--out")?;
-            rite_doc::generate(None, &out)?;
+            rite_doc::generate(scripts.as_deref(), &out)?;
             println!("docs written to {}", out.display());
             Ok(ExitCode::SUCCESS)
         }

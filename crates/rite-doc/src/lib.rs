@@ -14,7 +14,33 @@ pub struct DocIndex {
     pub version: String,
     pub sections: Vec<DocSection>,
     pub capabilities: Vec<CapDoc>,
+    /// Documentation extracted from user `.rite` sources, when `generate` was given a
+    /// path. Empty for the plain language reference.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub scripts: Vec<ScriptDoc>,
     pub search: Vec<SearchEntry>,
+}
+
+/// Every documented function in one `.rite` file.
+#[derive(Debug, Clone, Serialize)]
+pub struct ScriptDoc {
+    pub path: String,
+    pub module_doc: Option<String>,
+    pub functions: Vec<ScriptFnDoc>,
+}
+
+/// One `◆`/`def` declaration and the `///` block above it.
+#[derive(Debug, Clone, Serialize)]
+pub struct ScriptFnDoc {
+    pub name: String,
+    pub is_pub: bool,
+    pub params: Vec<String>,
+    pub signature: String,
+    pub docs: String,
+    pub param_docs: Vec<(String, String)>,
+    pub returns: Option<String>,
+    pub effects: Vec<String>,
+    pub examples: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -66,7 +92,14 @@ pub fn parse_doc_comment(lines: &[&str]) -> DocComment {
     let mut example_buf = String::new();
 
     for line in lines {
-        let line = line.trim_start_matches("///").trim_start();
+        // Accept a raw source line or one the parser already stripped, and both doc
+        // sigils: `//!` is a documented Rite comment form, and leaving it attached
+        // dumped a literal `//!` into the rendered text.
+        let line = line
+            .trim_start()
+            .trim_start_matches("///")
+            .trim_start_matches("//!")
+            .trim_start();
         if line.starts_with("```") {
             if in_example {
                 examples.push(example_buf.clone());
@@ -100,12 +133,102 @@ pub fn parse_doc_comment(lines: &[&str]) -> DocComment {
             text.push_str(line);
         }
     }
+    // An example block whose closing fence is missing would otherwise be dropped whole:
+    // the buffer just falls off the end of the loop. Keep what was written.
+    if in_example && !example_buf.trim().is_empty() {
+        examples.push(example_buf);
+    }
+
     DocComment {
         text,
         params,
         returns,
         effects,
         examples,
+    }
+}
+
+/// Pull the documented declarations out of one `.rite` source.
+///
+/// Parse errors are not fatal — a file that fails to parse contributes whatever
+/// declarations the parser did recover, because a doc build should not go dark on one
+/// broken script.
+pub fn document_script(path: &str, source: &str) -> ScriptDoc {
+    use rite_syntax::ast::Item;
+
+    let (program, _diags, _sources) = rite_syntax::parse_source(path, source);
+    let mut functions = Vec::new();
+    if let Some(program) = &program {
+        for item in &program.items {
+            let Item::Function(f) = item else { continue };
+            let Some(doc) = &f.doc else { continue };
+            let lines: Vec<&str> = doc.lines().collect();
+            let parsed = parse_doc_comment(&lines);
+            let params: Vec<String> = f.params.iter().map(|p| p.name.name.clone()).collect();
+            functions.push(ScriptFnDoc {
+                signature: format!("{}({})", f.name.name, params.join(", ")),
+                name: f.name.name.clone(),
+                is_pub: f.is_pub,
+                params,
+                docs: parsed.text,
+                param_docs: parsed.params,
+                returns: parsed.returns,
+                effects: parsed.effects,
+                examples: parsed.examples,
+            });
+        }
+    }
+
+    ScriptDoc {
+        path: path.to_string(),
+        module_doc: module_doc(source),
+        functions,
+    }
+}
+
+/// Leading `//!` lines, which describe the file rather than any one declaration.
+fn module_doc(source: &str) -> Option<String> {
+    let mut out = String::new();
+    for line in source.lines() {
+        let t = line.trim_start();
+        if t.is_empty() || t.starts_with("#!") {
+            continue;
+        }
+        let Some(rest) = t.strip_prefix("//!") else {
+            break;
+        };
+        if !out.is_empty() {
+            out.push('\n');
+        }
+        out.push_str(rest.trim());
+    }
+    (!out.trim().is_empty()).then_some(out)
+}
+
+/// Collect `.rite` files under a file or directory, skipping hidden and build dirs.
+fn collect_rite(root: &Path, out: &mut Vec<std::path::PathBuf>) {
+    if root.is_file() {
+        if root.extension().and_then(|s| s.to_str()) == Some("rite") {
+            out.push(root.to_path_buf());
+        }
+        return;
+    }
+    let Ok(rd) = std::fs::read_dir(root) else {
+        return;
+    };
+    let mut entries: Vec<_> = rd.flatten().map(|e| e.path()).collect();
+    // Directory order is filesystem-dependent; sort so generated docs are reproducible.
+    entries.sort();
+    for path in entries {
+        let name = path
+            .file_name()
+            .and_then(|s| s.to_str())
+            .unwrap_or_default()
+            .to_string();
+        if name.starts_with('.') || name == "target" || name == "node_modules" {
+            continue;
+        }
+        collect_rite(&path, out);
     }
 }
 
@@ -148,11 +271,37 @@ pub fn generate(path: Option<&Path>, out: &Path) -> anyhow::Result<()> {
         });
     }
 
+    // A path argument means "document these scripts too". Without it the output is the
+    // language reference alone.
+    let mut scripts = Vec::new();
+    if let Some(root) = path {
+        let mut files = Vec::new();
+        collect_rite(root, &mut files);
+        for file in files {
+            let Ok(text) = std::fs::read_to_string(&file) else {
+                continue;
+            };
+            let doc = document_script(&file.display().to_string(), &text);
+            if doc.functions.is_empty() && doc.module_doc.is_none() {
+                continue;
+            }
+            for f in &doc.functions {
+                search.push(SearchEntry {
+                    title: f.signature.clone(),
+                    path: format!("scripts.md#{}", f.name),
+                    snippet: f.docs.chars().take(120).collect(),
+                });
+            }
+            scripts.push(doc);
+        }
+    }
+
     let index = DocIndex {
         title: "Rite Language Documentation".into(),
         version: env!("CARGO_PKG_VERSION").into(),
         sections: sections.clone(),
         capabilities: capabilities.clone(),
+        scripts: scripts.clone(),
         search,
     };
 
@@ -184,6 +333,38 @@ pub fn generate(path: Option<&Path>, out: &Path) -> anyhow::Result<()> {
             md.push_str(&format!("- `{}{}` — {}\n", f.name, eff, f.docs));
         }
         md.push('\n');
+    }
+    if !scripts.is_empty() {
+        md.push_str("## Script reference\n\n");
+        let mut s = String::from("# Script reference\n\n");
+        for script in &scripts {
+            s.push_str(&format!("## {}\n\n", script.path));
+            if let Some(doc) = &script.module_doc {
+                s.push_str(&format!("{}\n\n", doc));
+            }
+            for f in &script.functions {
+                let vis = if f.is_pub { "pub " } else { "" };
+                s.push_str(&format!("### {}{}\n\n{}\n\n", vis, f.signature, f.docs));
+                for (name, desc) in &f.param_docs {
+                    s.push_str(&format!("- `{}` — {}\n", name, desc));
+                }
+                if !f.param_docs.is_empty() {
+                    s.push('\n');
+                }
+                if let Some(r) = &f.returns {
+                    s.push_str(&format!("Returns: {}\n\n", r));
+                }
+                for e in &f.effects {
+                    s.push_str(&format!("Effects: {}\n\n", e));
+                }
+                for ex in &f.examples {
+                    s.push_str(&format!("```rite\n{}```\n\n", ex));
+                }
+                md.push_str(&format!("- `{}{}` — {}\n", vis, f.signature, f.docs));
+            }
+        }
+        md.push('\n');
+        std::fs::write(out.join("scripts.md"), s)?;
     }
     std::fs::write(out.join("reference.md"), &md)?;
     std::fs::write(out.join("capabilities.md"), {
@@ -247,7 +428,29 @@ nav a { margin-right: 1rem; }
         }
         html.push_str("</ul>\n");
     }
-    html.push_str("</section></body></html>\n");
+    html.push_str("</section>\n");
+    if !scripts.is_empty() {
+        html.push_str("<section id=\"scripts\"><h2>Script reference</h2>\n");
+        for script in &scripts {
+            html.push_str(&format!("<h3>{}</h3>\n", escape_html(&script.path)));
+            if let Some(doc) = &script.module_doc {
+                html.push_str(&format!("<p>{}</p>\n", escape_html(doc)));
+            }
+            html.push_str("<ul>\n");
+            for f in &script.functions {
+                html.push_str(&format!(
+                    "<li id=\"fn-{}\"><code>{}{}</code> — {}</li>\n",
+                    escape_html(&f.name),
+                    if f.is_pub { "pub " } else { "" },
+                    escape_html(&f.signature),
+                    escape_html(&f.docs)
+                ));
+            }
+            html.push_str("</ul>\n");
+        }
+        html.push_str("</section>\n");
+    }
+    html.push_str("</body></html>\n");
     std::fs::write(out.join("html/index.html"), html)?;
 
     // Copy / note path argument for extra sources
@@ -255,10 +458,17 @@ nav a { margin-right: 1rem; }
     Ok(())
 }
 
+/// Escape for both element text and quoted attribute values.
+///
+/// Quotes matter now that this renders names and prose out of user `.rite` files: a
+/// function documented with a `"` used to be able to close an attribute and start one of
+/// its own. `&` must be replaced first or it would double-escape the others.
 fn escape_html(s: &str) -> String {
     s.replace('&', "&amp;")
         .replace('<', "&lt;")
         .replace('>', "&gt;")
+        .replace('"', "&quot;")
+        .replace('\'', "&#39;")
 }
 
 fn book_sections() -> Vec<DocSection> {
