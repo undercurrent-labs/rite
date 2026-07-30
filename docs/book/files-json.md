@@ -26,7 +26,7 @@ rite run examples/03-files-and-json/main.rite --allow-all
 ## Reading files
 
 ```rite
-text ← @fs.read("data/config.json")?
+text ← ! @fs.read("data/config.json")?
 cfg ← @json.decode(text)?
 host ← cfg.host ?? "localhost"
 ! @console.println(host)
@@ -57,7 +57,7 @@ rite run app.rite --allow fs:write=./output
 
 ```rite
 // 1. read
-raw ← @fs.read("input.json")?
+raw ← ! @fs.read("input.json")?
 
 // 2. decode
 doc ← @json.decode(raw)?
@@ -124,7 +124,7 @@ rite run examples/csv/main.rite --allow-all
 ## Errors
 
 ```rite
-outcome ← @fs.read("missing.txt")
+outcome ← ! @fs.read("missing.txt")
 
 ~ outcome ⟦
   ok text → ! @console.println(text)
@@ -135,7 +135,7 @@ outcome ← @fs.read("missing.txt")
 Or linear style:
 
 ```rite
-text ← @fs.read("missing.txt")?   // propagates err
+text ← ! @fs.read("missing.txt")?   // propagates err
 ```
 
 ## Listing and other FS ops

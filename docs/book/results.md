@@ -29,7 +29,7 @@ Error payloads from the host are often **records** with machine-readable fields 
 ```rite
 // If left is ok(v), the expression yields v
 // If left is err(e), the current function/script returns that err
-text ← @fs.read("config.json")?
+text ← ! @fs.read("config.json")?
 data ← @json.decode(text)?
 ```
 
@@ -40,7 +40,7 @@ Parser note: postfix `?` on a value is **not** the same as the conditional `?` (
 label ← ? x = none ⟦ "empty" ⟧ : ⟦ "full" ⟧
 
 // unwrap result
-text ← @fs.read("f.txt")?
+text ← ! @fs.read("f.txt")?
 ```
 
 ## Match on results

@@ -2,7 +2,9 @@
 
 use dashmap::DashMap;
 use rite_analysis::{AnalysisEngine, WorkspaceIndex};
+use rite_core::SourceMap;
 use rite_fmt::{convert_source, format_with_dialect, Dialect};
+use rite_syntax::{keyword_or_ident, lex, Token, TokenKind};
 use serde_json::Value;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -41,7 +43,10 @@ impl LanguageServer for Backend {
                 document_symbol_provider: Some(OneOf::Left(true)),
                 workspace_symbol_provider: Some(OneOf::Left(true)),
                 document_formatting_provider: Some(OneOf::Left(true)),
-                document_range_formatting_provider: Some(OneOf::Left(true)),
+                // Range formatting is deliberately not advertised: the only thing
+                // we could do is reformat the whole document, which is not what
+                // "format selection" means. See `range_formatting` below.
+                document_range_formatting_provider: None,
                 rename_provider: Some(OneOf::Left(true)),
                 code_action_provider: Some(CodeActionProviderCapability::Simple(true)),
                 semantic_tokens_provider: Some(
@@ -282,9 +287,9 @@ impl LanguageServer for Backend {
         let symbols: Vec<SymbolInformation> = snap
             .symbols
             .into_iter()
-            .filter_map(|s| {
+            .map(|s| {
                 #[allow(deprecated)]
-                Some(SymbolInformation {
+                SymbolInformation {
                     name: s.name,
                     kind: SymbolKind::FUNCTION,
                     tags: None,
@@ -303,7 +308,7 @@ impl LanguageServer for Backend {
                         },
                     },
                     container_name: None,
-                })
+                }
             })
             .collect();
         Ok(Some(DocumentSymbolResponse::Flat(symbols)))
@@ -312,12 +317,18 @@ impl LanguageServer for Backend {
     async fn formatting(&self, params: DocumentFormattingParams) -> Result<Option<Vec<TextEdit>>> {
         let uri = params.text_document.uri;
         let text = self.docs.get(&uri).map(|e| e.1.clone()).unwrap_or_default();
-        match format_with_dialect(&text, Dialect::Glyph) {
-            Ok(r) => Ok(Some(vec![TextEdit {
+        if text.is_empty() {
+            return Ok(None);
+        }
+        // `Preserve` keeps the dialect the file is written in — formatting on save
+        // must not force an ASCII-dialect file into glyphs. It also leaves files
+        // with parse errors (and anything the formatter refuses) untouched.
+        match format_with_dialect(&text, Dialect::Preserve) {
+            Ok(r) if r.text != text => Ok(Some(vec![TextEdit {
                 range: full_range(&text),
                 new_text: r.text,
             }])),
-            Err(_) => Ok(None),
+            _ => Ok(None),
         }
     }
 
@@ -325,13 +336,12 @@ impl LanguageServer for Backend {
         &self,
         params: DocumentRangeFormattingParams,
     ) -> Result<Option<Vec<TextEdit>>> {
-        // V1: format whole document
-        self.formatting(DocumentFormattingParams {
-            text_document: params.text_document,
-            options: params.options,
-            work_done_progress_params: Default::default(),
-        })
-        .await
+        // The formatter only works on whole programs, so a range request could
+        // only be served by rewriting the entire document — a nasty surprise for
+        // "format selection". Do nothing instead (and see `initialize`, which no
+        // longer advertises the capability).
+        let _ = params;
+        Ok(None)
     }
 
     async fn code_action(&self, params: CodeActionParams) -> Result<Option<CodeActionResponse>> {
@@ -415,30 +425,20 @@ impl LanguageServer for Backend {
         let uri = params.text_document_position.text_document.uri;
         let text = self.docs.get(&uri).map(|e| e.1.clone()).unwrap_or_default();
         let pos = params.text_document_position.position;
-        let engine = self.engine.lock().await;
-        let old = match engine.hover(&text, pos.line + 1, pos.character) {
-            Some(h) => h.title,
-            None => return Ok(None),
-        };
         let new_name = params.new_name;
         if !is_valid_ident(&new_name) {
             return Err(tower_lsp::jsonrpc::Error::invalid_params(
                 "invalid identifier",
             ));
         }
-        let replaced = text.replace(&old, &new_name);
+        let Some(edits) = rename_edits(&text, pos, &new_name) else {
+            return Ok(None);
+        };
+        if edits.is_empty() {
+            return Ok(None);
+        }
         Ok(Some(WorkspaceEdit {
-            changes: Some(
-                [(
-                    uri,
-                    vec![TextEdit {
-                        range: full_range(&text),
-                        new_text: replaced,
-                    }],
-                )]
-                .into_iter()
-                .collect(),
-            ),
+            changes: Some([(uri, edits)].into_iter().collect()),
             ..Default::default()
         }))
     }
@@ -656,27 +656,146 @@ fn byte_to_position(text: &str, byte: usize) -> Position {
     }
 }
 
+/// The exact end-of-document position (utf16 columns, trailing newline included).
 fn full_range(text: &str) -> Range {
-    let lines = text.lines().count().max(1) as u32;
-    let last_len = text.lines().last().map(|l| l.len()).unwrap_or(0) as u32;
+    let mut line = 0u32;
+    let mut character = 0u32;
+    for ch in text.chars() {
+        if ch == '\n' {
+            line += 1;
+            character = 0;
+        } else {
+            character += ch.len_utf16() as u32;
+        }
+    }
     Range {
         start: Position {
             line: 0,
             character: 0,
         },
-        end: Position {
-            line: lines.saturating_sub(1),
-            character: last_len,
-        },
+        end: Position { line, character },
     }
+}
+
+fn position_to_byte(text: &str, pos: Position) -> usize {
+    let mut line = 0u32;
+    let mut character = 0u32;
+    for (i, ch) in text.char_indices() {
+        if line == pos.line && character >= pos.character {
+            return i;
+        }
+        if ch == '\n' {
+            if line == pos.line {
+                return i; // position points past the end of its line
+            }
+            line += 1;
+            character = 0;
+        } else {
+            character += ch.len_utf16() as u32;
+        }
+    }
+    text.len()
 }
 
 fn is_valid_ident(s: &str) -> bool {
     let mut chars = s.chars();
-    match chars.next() {
+    let shape_ok = match chars.next() {
         Some(c) if c.is_alphabetic() || c == '_' => chars.all(|c| c.is_alphanumeric() || c == '_'),
         _ => false,
+    };
+    // A keyword would change the meaning of every site we rewrite.
+    shape_ok && keyword_or_ident(s) == TokenKind::Ident
+}
+
+/// What kind of name an identifier token is. A rename never crosses classes:
+/// renaming the local `id` must not touch `rec.id`, and nothing may rewrite the
+/// segments of a capability path such as `@fs.read`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum IdentClass {
+    /// Plain name: binding, parameter, function, import alias, record key.
+    Binding,
+    /// Name after a `.`: member access or module path segment.
+    Field,
+    /// Segment of an `@…` / `host.…` capability path.
+    Capability,
+}
+
+fn lex_document(text: &str) -> Vec<Token> {
+    let mut sources = SourceMap::new();
+    let id = sources.add_file("rename.rite", text);
+    match sources.get(id) {
+        Some(file) => lex(file).0,
+        None => Vec::new(),
     }
+}
+
+/// Classify every token; `None` for tokens that are not identifiers.
+///
+/// Comments, strings and keywords lex to their own token kinds, so they are
+/// simply not identifiers and can never be rewritten by a rename.
+fn ident_classes(tokens: &[Token]) -> Vec<Option<IdentClass>> {
+    let mut out = Vec::with_capacity(tokens.len());
+    let mut prev_kind: Option<TokenKind> = None;
+    let mut in_capability = false;
+    for t in tokens {
+        if t.kind.is_trivia() {
+            out.push(None);
+            continue;
+        }
+        let class = match t.kind {
+            TokenKind::Ident if in_capability => Some(IdentClass::Capability),
+            TokenKind::Ident if prev_kind == Some(TokenKind::Dot) => Some(IdentClass::Field),
+            TokenKind::Ident => Some(IdentClass::Binding),
+            _ => None,
+        };
+        match t.kind {
+            // `@` / `host.` opens a capability path; `.` and its idents continue it.
+            TokenKind::Host => in_capability = true,
+            TokenKind::Dot | TokenKind::Ident => {}
+            _ => in_capability = false,
+        }
+        prev_kind = Some(t.kind);
+        out.push(class);
+    }
+    out
+}
+
+/// Single-document, token-boundary rename.
+///
+/// Returns one edit per identifier *token* that names the same thing as the token
+/// under the cursor, so occurrences inside strings, comments and longer
+/// identifiers are impossible to hit. Scope is not modelled (a known gap): every
+/// same-class occurrence of the name in this document is renamed, and references
+/// in other files are left to the user.
+fn rename_edits(text: &str, pos: Position, new_name: &str) -> Option<Vec<TextEdit>> {
+    let tokens = lex_document(text);
+    let classes = ident_classes(&tokens);
+    let offset = position_to_byte(text, pos);
+    let idx = tokens.iter().position(|t| {
+        t.kind == TokenKind::Ident
+            && t.span.start.as_usize() <= offset
+            && offset <= t.span.end.as_usize()
+    })?;
+    let class = classes[idx]?;
+    if class == IdentClass::Capability {
+        // Renaming `@fs`/`@fs.read` would silently retarget a capability.
+        return None;
+    }
+    let old = tokens[idx].text.as_str();
+    if old == new_name {
+        return Some(Vec::new());
+    }
+    Some(
+        tokens
+            .iter()
+            .zip(&classes)
+            .filter(|(t, c)| t.kind == TokenKind::Ident && t.text == old && **c == Some(class))
+            .map(|(t, _)| TextEdit {
+                range: byte_range_to_lsp(text, t.span.start.as_usize(), t.span.end.as_usize()),
+                new_text: new_name.to_string(),
+            })
+            .collect(),
+    )
 }
 
 #[tokio::main]
@@ -698,4 +817,157 @@ async fn main() {
     });
     Server::new(stdin, stdout, socket).serve(service).await;
     let _ = PathBuf::new();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn pos_of(text: &str, needle: &str) -> Position {
+        let byte = text.find(needle).expect("needle in text");
+        byte_to_position(text, byte)
+    }
+
+    /// Apply non-overlapping edits the way a client would.
+    fn apply(text: &str, edits: &[TextEdit]) -> String {
+        let mut spans: Vec<(usize, usize, &str)> = edits
+            .iter()
+            .map(|e| {
+                (
+                    position_to_byte(text, e.range.start),
+                    position_to_byte(text, e.range.end),
+                    e.new_text.as_str(),
+                )
+            })
+            .collect();
+        spans.sort_by_key(|(s, _, _)| *s);
+        let mut out = String::new();
+        let mut cursor = 0usize;
+        for (start, end, new_text) in spans {
+            assert!(start >= cursor, "overlapping edits");
+            out.push_str(&text[cursor..start]);
+            out.push_str(new_text);
+            cursor = end;
+        }
+        out.push_str(&text[cursor..]);
+        out
+    }
+
+    fn rename(text: &str, at: &str, new_name: &str) -> String {
+        let edits = rename_edits(text, pos_of(text, at), new_name).expect("renameable");
+        apply(text, &edits)
+    }
+
+    #[test]
+    fn rename_does_not_touch_substrings_strings_or_comments() {
+        let src =
+            "x ← 1\nmax ← x + 1\ns ← \"x marks x\"\n// x in a comment\n! @console.println(x)\n";
+        let out = rename(src, "x ← 1", "y");
+        assert_eq!(
+            out,
+            "y ← 1\nmax ← y + 1\ns ← \"x marks x\"\n// x in a comment\n! @console.println(y)\n"
+        );
+    }
+
+    #[test]
+    fn rename_from_a_use_site_renames_the_binding_too() {
+        let src = "count ← 1\n! @console.println(count)\n";
+        let out = rename(src, "count)", "total");
+        assert_eq!(out, "total ← 1\n! @console.println(total)\n");
+    }
+
+    #[test]
+    fn rename_leaves_capability_paths_alone() {
+        let src = "db ← 1\nconn ← @db.open()\n";
+        let out = rename(src, "db ←", "handle");
+        assert_eq!(out, "handle ← 1\nconn ← @db.open()\n");
+    }
+
+    #[test]
+    fn cursor_inside_a_capability_path_is_not_renameable() {
+        let src = "conn ← @db.open()\n";
+        assert!(rename_edits(src, pos_of(src, "db.open"), "x").is_none());
+        assert!(rename_edits(src, pos_of(src, "open()"), "x").is_none());
+    }
+
+    #[test]
+    fn rename_separates_locals_from_fields() {
+        let src = "id ← 1\nrec ← ⟨id: id⟩\nv ← rec.id\n";
+        // `⟨id: …⟩` is a record key (a plain name), `rec.id` is a field.
+        let out = rename(src, "id ← 1", "key");
+        assert_eq!(out, "key ← 1\nrec ← ⟨key: key⟩\nv ← rec.id\n");
+        let out = rename(src, "id\n", "field");
+        assert_eq!(out, "id ← 1\nrec ← ⟨id: id⟩\nv ← rec.field\n");
+    }
+
+    #[test]
+    fn rename_handles_glyph_columns() {
+        // `←` and `⟨⟩` are multi-byte: edit ranges must be utf16 columns.
+        let src = "α ← 1\nβ ← α + α\n";
+        let out = rename(src, "α ←", "gamma");
+        assert_eq!(out, "gamma ← 1\nβ ← gamma + gamma\n");
+    }
+
+    #[test]
+    fn rename_on_a_keyword_or_literal_is_declined() {
+        let src = "x ← 1\n";
+        assert!(rename_edits(src, pos_of(src, "←"), "y").is_none());
+        assert!(rename_edits(src, pos_of(src, "1"), "y").is_none());
+    }
+
+    #[test]
+    fn new_name_must_be_an_identifier() {
+        assert!(is_valid_ident("total"));
+        assert!(is_valid_ident("_x1"));
+        assert!(!is_valid_ident("1x"));
+        assert!(!is_valid_ident("has space"));
+        // Rite keywords would change the meaning of every rewritten site.
+        assert!(!is_valid_ident("def"));
+        assert!(!is_valid_ident("match"));
+    }
+
+    #[test]
+    fn full_range_covers_the_trailing_newline() {
+        let r = full_range("x ← 1\n");
+        assert_eq!(
+            r.end,
+            Position {
+                line: 1,
+                character: 0
+            }
+        );
+        // utf16 columns, not bytes: `⟧` is three bytes and one unit.
+        let r = full_range("◆ f() ⟦ ⟧");
+        assert_eq!(
+            r.end,
+            Position {
+                line: 0,
+                character: 9
+            }
+        );
+    }
+
+    /// What "format on save" does: keep the dialect, keep the comments.
+    #[test]
+    fn formatting_preserves_dialect_and_comments() {
+        let ascii = "// keep me\ndef f(n) [[\n  return n * 2 // and me\n]]\n";
+        let out = format_with_dialect(ascii, Dialect::Preserve).unwrap().text;
+        assert!(out.contains("def f(n) [["), "forced glyphs: {out}");
+        assert!(!out.contains('◆'), "forced glyphs: {out}");
+        assert!(out.contains("// keep me"), "{out}");
+        assert!(out.contains("// and me"), "{out}");
+
+        let glyph = "// keep me\n◆ f(n) ⟦\n  ^ n * 2\n⟧\n";
+        let out = format_with_dialect(glyph, Dialect::Preserve).unwrap().text;
+        assert!(out.contains("◆ f(n) ⟦"), "lost glyphs: {out}");
+        assert!(out.contains("// keep me"), "{out}");
+    }
+
+    /// A document the parser rejects must never be rewritten on save.
+    #[test]
+    fn formatting_declines_broken_documents() {
+        let broken = "def f( [[\n";
+        let r = format_with_dialect(broken, Dialect::Preserve).unwrap();
+        assert_eq!(r.text, broken);
+    }
 }

@@ -6,10 +6,208 @@ use rite_core::{
     E022_DUPLICATE_BINDING, E023_IMMUTABLE_ASSIGN, E029_NON_EXHAUSTIVE_MATCH,
 };
 use rite_syntax::{
-    BinOp, Binding, Block, EventDecl, Expr, FunctionDecl, Item, LitKind, Pattern, Program, Stmt,
+    Block, EventDecl, Expr, FunctionDecl, Item, LitKind, Pattern, Program, ResultPatKind, Stmt,
     UnaryOp,
 };
 use std::collections::HashMap;
+
+/// The canonical effect table: every host capability function, and whether
+/// calling it requires an explicit `!` / `do` marker (diagnostic `E021`).
+///
+/// # This is the single source of truth
+///
+/// `rite-caps` depends on `rite-sem`, so this crate cannot read the
+/// `NativeFunctionDescriptor`s that carry the same information for
+/// `rite capabilities` and the generated docs. The dependency is inverted
+/// instead: this table is authoritative, and
+/// `crates/rite-caps/tests/effect_parity.rs` fails if any descriptor's
+/// `effectful:` flag disagrees with it, in either direction. A new host
+/// function must be added here in the same change that adds its descriptor.
+///
+/// # Classification rule
+///
+/// A host function is effectful iff calling it observes or changes state
+/// **outside the program**: the filesystem, the process environment,
+/// subprocesses, network sockets, the terminal, the wall clock, or the
+/// entropy source. Pure host helpers (`@json.encode`, `@clock.format`) are
+/// deterministic functions of their arguments and need no marker.
+///
+/// Reading is an effect, not just writing: `@fs.read` and `@env.get` are as
+/// unpredictable across runs as `@clock.now`, which this table has always
+/// treated as effectful.
+///
+/// State that a capability owns *in process* (`@game`'s world, `@store`'s
+/// map) is the one exception: writes to it are effectful because another
+/// read can observe them, but reading it is like reading a mutable binding,
+/// which needs no marker. Hence `@game.look` and `@store.get` are pure here
+/// while `@game.go` and `@store.set` are not.
+pub const HOST_EFFECTS: &[(&str, bool)] = &[
+    // @console — the terminal.
+    ("console.print", true),
+    ("console.println", true),
+    ("console.warn", true),
+    ("console.error", true),
+    ("console.inspect", true),
+    ("console.read_line", true),
+    // @fs — the filesystem. Reads observe it; writes change it.
+    ("fs.read", true),
+    ("fs.read_bytes", true),
+    ("fs.write", true),
+    ("fs.append", true),
+    ("fs.lines", true),
+    ("fs.exists", true),
+    ("fs.metadata", true),
+    ("fs.glob", true),
+    ("fs.mkdir", true),
+    ("fs.remove", true),
+    ("fs.copy", true),
+    ("fs.move", true),
+    // @json — encode/decode are pure string transforms; read/write touch disk.
+    ("json.decode", false),
+    ("json.encode", false),
+    ("json.encode_pretty", false),
+    ("json.read", true),
+    ("json.write", true),
+    // @csv — as @json.
+    ("csv.decode", false),
+    ("csv.encode", false),
+    ("csv.read", true),
+    ("csv.write", true),
+    // @clock — `now`/`sleep` consult the wall clock; the rest are value math.
+    ("clock.now", true),
+    ("clock.parse", false),
+    ("clock.format", false),
+    ("clock.sleep", true),
+    ("clock.duration", false),
+    // @env — the process environment.
+    ("env.get", true),
+    ("env.require", true),
+    ("env.all", true),
+    // @process — subprocesses. `which` probes PATH and the filesystem.
+    ("process.run", true),
+    ("process.which", true),
+    // @random — the entropy source (`seed` mutates it).
+    ("random.int", true),
+    ("random.float", true),
+    ("random.choose", true),
+    ("random.shuffle", true),
+    ("random.uuid", true),
+    ("random.seed", true),
+    // @http — `listen` binds a socket. The others build values: `response`
+    // is a record constructor, `log`/`recover` are middleware markers named
+    // in `use @http.log` rather than called for their effect.
+    ("http.listen", true),
+    ("http.response", false),
+    ("http.log", false),
+    ("http.recover", false),
+    // @game — in-process world state: writes marked, reads not.
+    ("game.register_item", true),
+    ("game.register_room", true),
+    ("game.register_world", true),
+    ("game.say", true),
+    ("game.reveal", true),
+    ("game.go", true),
+    ("game.take", true),
+    ("game.drop", true),
+    ("game.look", false),
+    ("game.inventory", false),
+    ("game.save", false),
+    ("game.load", true),
+    ("game.start", true),
+    ("game.command", true),
+    ("game.messages", false),
+    ("game.state", false),
+    // @store — in-process key/value state: writes marked, reads not.
+    ("store.get", false),
+    ("store.set", true),
+    ("store.delete", true),
+    // @db — an external database, including `query`.
+    ("db.open", true),
+    ("db.close", true),
+    ("db.exec", true),
+    ("db.query", true),
+    ("db.prepare", true),
+    ("db.query_prepared", true),
+    ("db.exec_prepared", true),
+    ("db.close_stmt", true),
+    ("db.begin", true),
+    ("db.commit", true),
+    ("db.rollback", true),
+];
+
+/// Pure builtins predefined in every scope. Single list — `Resolver::new`
+/// inserts all of these into `functions`, which is what the undefined-name
+/// check consults, so there is no second copy to drift from.
+///
+/// Every entry must lex as one identifier, or the name can never be looked up:
+/// `number?` used to be listed here and was unreachable, because the lexer
+/// splits it into `number` and `?`.
+const BUILTIN_NAMES: &[&str] = &[
+    "map",
+    "keep",
+    "reject",
+    "reduce",
+    "each",
+    "flatten",
+    "count",
+    "first",
+    "last",
+    "rest",
+    "tail",
+    "init",
+    "butlast",
+    "take",
+    "drop",
+    "reverse",
+    "concat",
+    "find",
+    "any",
+    "all",
+    "sum",
+    "min",
+    "max",
+    "sort",
+    "unique",
+    "zip",
+    "chunk",
+    "parallel",
+    "ok",
+    "err",
+    "panic",
+    "expect",
+    "fail",
+    "str",
+    "len",
+    "type_of",
+    "require",
+    "collect_results",
+    "group",
+    "lines",
+    "words",
+    "join",
+    "range",
+    "range_incl",
+    "keys",
+    "values",
+    "abs",
+    "clamp",
+    "pow",
+    "idiv",
+    "xor",
+    "and_then",
+    "or_else",
+    "is_ok",
+    "is_err",
+    "unwrap_or",
+    "repeat",
+    "contains",
+    "enumerate",
+    "with_index",
+    "compose",
+    "while_loop",
+    "print",
+    "println",
+];
 
 #[derive(Debug, Clone)]
 pub struct ResolvedProgram {
@@ -31,8 +229,6 @@ pub struct Resolver {
     next_local: u32,
     diagnostics: Diagnostics,
     functions: HashMap<String, FunctionMeta>,
-    /// Names known as effectful when called without !
-    effectful_caps: Vec<String>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -49,7 +245,14 @@ struct BindingInfo {
     span: Span,
 }
 
-pub fn resolve(program: &Program, _file: &SourceFile) -> (ResolvedProgram, Diagnostics) {
+pub fn resolve(program: &Program, file: &SourceFile) -> (ResolvedProgram, Diagnostics) {
+    // Diagnostics are attributed to `program.file`, which the parser stamped from
+    // the same `SourceFile` the caller passes here. Catch a mismatched pair in
+    // debug builds rather than reporting spans against the wrong file.
+    debug_assert_eq!(
+        program.file, file.id,
+        "resolve() called with a SourceFile that did not produce this Program"
+    );
     let mut r = Resolver::new();
     r.resolve_program(program);
     let resolved = ResolvedProgram {
@@ -60,6 +263,12 @@ pub fn resolve(program: &Program, _file: &SourceFile) -> (ResolvedProgram, Diagn
     (resolved, r.diagnostics)
 }
 
+impl Default for Resolver {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Resolver {
     pub fn new() -> Self {
         let mut r = Self {
@@ -67,106 +276,13 @@ impl Resolver {
             next_local: 0,
             diagnostics: Diagnostics::new(),
             functions: HashMap::new(),
-            effectful_caps: vec![
-                "console.print".into(),
-                "console.println".into(),
-                "console.warn".into(),
-                "console.error".into(),
-                "console.inspect".into(),
-                "console.read_line".into(),
-                "fs.write".into(),
-                "fs.append".into(),
-                "fs.remove".into(),
-                "fs.mkdir".into(),
-                "fs.copy".into(),
-                "fs.move".into(),
-                "json.write".into(),
-                // clock.now / random.* may appear in pure contexts in demos; still effectful when called.
-                // Listed so missing `!` is diagnosed (E021).
-                "clock.now".into(),
-                "clock.sleep".into(),
-                "process.run".into(),
-                "http.listen".into(),
-                "random.int".into(),
-                "random.float".into(),
-                "random.choose".into(),
-                "random.shuffle".into(),
-                "random.uuid".into(),
-                "random.seed".into(),
-            ],
         };
         // Predefine pure builtins
-        for name in [
-            "map",
-            "keep",
-            "reject",
-            "reduce",
-            "each",
-            "flatten",
-            "count",
-            "first",
-            "last",
-            "rest",
-            "tail",
-            "init",
-            "butlast",
-            "take",
-            "drop",
-            "reverse",
-            "concat",
-            "find",
-            "any",
-            "all",
-            "sum",
-            "min",
-            "max",
-            "sort",
-            "unique",
-            "zip",
-            "chunk",
-            "parallel",
-            "ok",
-            "err",
-            "panic",
-            "expect",
-            "fail",
-            "str",
-            "len",
-            "type_of",
-            "require",
-            "collect_results",
-            "group",
-            "lines",
-            "words",
-            "join",
-            "number?",
-            "range",
-            "range_incl",
-            "keys",
-            "values",
-            "abs",
-            "clamp",
-            "pow",
-            "idiv",
-            "xor",
-            "and_then",
-            "or_else",
-            "is_ok",
-            "is_err",
-            "unwrap_or",
-            "repeat",
-            "contains",
-            "enumerate",
-            "with_index",
-            "compose",
-            "while_loop",
-            "print",
-            "println",
-        ] {
+        for name in BUILTIN_NAMES {
             r.functions.insert(
-                name.into(),
+                (*name).into(),
                 FunctionMeta {
-                    name: name.into(),
+                    name: (*name).into(),
                     arity: 0,
                     is_pub: true,
                     span: Span::DUMMY,
@@ -303,14 +419,43 @@ impl Resolver {
         }
     }
 
+    /// Walk an expression, reporting undefined names and missing `!` markers.
+    ///
+    /// # Effect-marker propagation rule
+    ///
+    /// `in_effect` is true when an enclosing `!` / `do` licenses an effectful
+    /// host call here. One `!` marks **one** call, so the flag propagates only
+    /// through *transparent* syntax — forms that yield the value of a single
+    /// inner expression without introducing a second computation:
+    ///
+    /// - `Group` — `! (@fs.write(p, s))`; parentheses change nothing.
+    /// - `Try` — `! @fs.write(p, s)?`; `?` unwraps the result of that same call.
+    /// - `Unary` / the `Call` callee — how `! @fs.write(…)` works at all.
+    /// - The *primary operand* of a form whose other operand is a fallback or a
+    ///   projection: `Coalesce.left`, `Pipeline.input`, `Member.object`,
+    ///   `Index.object`. In `! @db.query(c, q)?.rows` the call is still the
+    ///   subject of the expression; `.rows` only reads from its value.
+    ///
+    /// Everywhere else the flag resets to false, because a `!` on an outer
+    /// expression must not silently license an effectful call buried in an
+    /// unrelated subexpression. That means call **arguments**
+    /// (`! @console.println(@fs.read(p))` needs its own `!` on the read), both
+    /// `Binary` operands (`! a + b` names no single call), `Coalesce.right`,
+    /// `Index.index`, pipeline stages, and every block or branch body.
+    ///
+    /// `!` binds tighter than `??`, `→` and the binary operators (it is parsed
+    /// in `parse_unary`), so `! f() ?? d` already parses as
+    /// `Coalesce(Unary(Effect, …), d)` and does not depend on propagation. The
+    /// `Coalesce.left` / `Pipeline.input` cases exist for the parenthesised
+    /// form, `! (@fs.read(p)? ?? "")`.
     fn resolve_expr(&mut self, expr: &Expr, file: rite_core::FileId, in_effect: bool) {
         match expr {
             Expr::Ident(i) => {
                 if i.name != "_"
                     && !i.name.starts_with("__") // internal desugar symbols
                     && self.lookup(&i.name).is_none()
+                    // `functions` already holds every BUILTIN_NAMES entry (see `new`).
                     && !self.functions.contains_key(&i.name)
-                    && !is_builtin_name(&i.name)
                 {
                     // Strict undefined-name check when statically knowable
                     self.diagnostics.push(simple_error(
@@ -322,28 +467,17 @@ impl Resolver {
                     ));
                 }
             }
-            Expr::Capability(c) => {
-                let path = c.path.join(".");
-                if self
-                    .effectful_caps
-                    .iter()
-                    .any(|e| e == &path || path.starts_with(e))
-                    && !in_effect
-                {
-                    // Will be checked on call site
-                }
-            }
+            // A bare capability reference performs no effect — it names a host
+            // function without invoking it (`use @http.log`, `f ← @fs.write`).
+            // E021 belongs on the call site, in `Expr::Call` below.
+            Expr::Capability(_) => {}
             Expr::Call(c) => {
-                let mut effect = in_effect;
-                if let Expr::Unary(u) = c.callee.as_ref() {
-                    if u.op == UnaryOp::Effect {
-                        effect = true;
-                    }
-                }
-                // effectful capability call without !
+                // `! @fs.write(…)` can attach the marker to the callee rather
+                // than to the whole call, depending on how it was written.
+                let effect = in_effect || has_effect_marker(c.callee.as_ref());
                 if let Expr::Capability(cap) = strip_effect(c.callee.as_ref()) {
                     let path = cap.path.join(".");
-                    if is_effectful(&path) && !effect && !has_effect_marker(c.callee.as_ref()) {
+                    if is_effectful(&path) && !effect {
                         self.diagnostics.push(
                             simple_error(
                                 E021_EFFECT_REQUIRED,
@@ -360,29 +494,25 @@ impl Resolver {
                     }
                 }
                 self.resolve_expr(&c.callee, file, effect);
+                // Arguments are independent computations: reset.
                 for a in &c.args {
                     self.resolve_expr(a, file, false);
                 }
             }
             Expr::Unary(u) => {
+                // `!` licenses the operand; `-`/`not` carry the ambient context
+                // into their single operand unchanged.
                 let eff = u.op == UnaryOp::Effect || in_effect;
-                if u.op == UnaryOp::Effect {
-                    if let Expr::Call(c) = u.expr.as_ref() {
-                        self.resolve_expr(&Expr::Call(c.clone()), file, true);
-                        return;
-                    }
-                    if let Expr::Capability(_) = u.expr.as_ref() {
-                        // bare capability ref with ! is ok
-                    }
-                }
                 self.resolve_expr(&u.expr, file, eff);
             }
+            // Neither operand is *the* subject of `a + b`: both reset.
             Expr::Binary(b) => {
                 self.resolve_expr(&b.left, file, false);
                 self.resolve_expr(&b.right, file, false);
             }
             Expr::Pipeline(p) => {
-                self.resolve_expr(&p.input, file, false);
+                // The input is the head computation; each stage is its own.
+                self.resolve_expr(&p.input, file, in_effect);
                 for s in &p.stages {
                     self.resolve_expr(s, file, false);
                 }
@@ -396,31 +526,24 @@ impl Resolver {
             }
             Expr::Match(m) => {
                 self.resolve_expr(&m.scrutinee, file, false);
-                let mut has_wild = false;
                 for arm in &m.arms {
-                    if matches!(arm.pattern, Pattern::Wildcard(_)) {
-                        has_wild = true;
-                    }
                     self.push_scope();
                     self.define_pattern(&arm.pattern, false, file);
                     self.resolve_expr(&arm.body, file, false);
                     self.pop_scope();
                 }
-                if !has_wild && !m.arms.is_empty() {
-                    // soft warning for atom-only matches
-                    let all_atoms = m.arms.iter().all(|a| matches!(a.pattern, Pattern::Atom(_)));
-                    if all_atoms {
-                        self.diagnostics.push(
-                            rite_core::Diagnostic::warning(
-                                E029_NON_EXHAUSTIVE_MATCH,
-                                "match has no wildcard arm",
-                            )
-                            .with_primary(
-                                rite_core::SourceSpan::new(file, m.span),
-                                "consider adding `_ → ...`",
-                            ),
-                        );
-                    }
+                if !m.arms.is_empty() && !covers_all_inputs(&m.arms) {
+                    self.diagnostics.push(
+                        rite_core::Diagnostic::warning(
+                            E029_NON_EXHAUSTIVE_MATCH,
+                            "match may not cover every input",
+                        )
+                        .with_primary(
+                            rite_core::SourceSpan::new(file, m.span),
+                            "no arm matches unconditionally; an unmatched value fails at runtime",
+                        )
+                        .with_help("add `_ → …` (or a binding arm) to handle the rest"),
+                    );
                 }
             }
             Expr::Block(b) => self.resolve_block(b, file),
@@ -434,14 +557,18 @@ impl Resolver {
                     self.resolve_expr(&e.value, file, false);
                 }
             }
-            Expr::Member(m) => self.resolve_expr(&m.object, file, false),
+            // `.field` projects from the object; the object stays the subject.
+            Expr::Member(m) => self.resolve_expr(&m.object, file, in_effect),
             Expr::Index(i) => {
-                self.resolve_expr(&i.object, file, false);
+                self.resolve_expr(&i.object, file, in_effect);
+                // The subscript is an independent computation.
                 self.resolve_expr(&i.index, file, false);
             }
-            Expr::Try(t) => self.resolve_expr(&t.expr, file, false),
+            // `?` unwraps the result of the very call the `!` marks.
+            Expr::Try(t) => self.resolve_expr(&t.expr, file, in_effect),
             Expr::Coalesce(c) => {
-                self.resolve_expr(&c.left, file, false);
+                // `x ?? fallback`: `x` is the subject, the fallback is not.
+                self.resolve_expr(&c.left, file, in_effect);
                 self.resolve_expr(&c.right, file, false);
             }
             Expr::HttpListen(h) => {
@@ -456,7 +583,8 @@ impl Resolver {
                 self.resolve_block(&r.body, file);
                 self.pop_scope();
             }
-            Expr::Group(g) => self.resolve_expr(&g.expr, file, false),
+            // Parentheses are transparent.
+            Expr::Group(g) => self.resolve_expr(&g.expr, file, in_effect),
             Expr::Literal(_) | Expr::Atom(_) | Expr::Placeholder(_) => {}
         }
     }
@@ -537,42 +665,66 @@ impl Resolver {
     }
 }
 
-fn is_effectful(path: &str) -> bool {
-    let effectful = [
-        "console.print",
-        "console.println",
-        "console.warn",
-        "console.error",
-        "console.inspect",
-        "console.read_line",
-        "fs.write",
-        "fs.append",
-        "fs.remove",
-        "fs.mkdir",
-        "fs.copy",
-        "fs.move",
-        "json.write",
-        "clock.now",
-        "clock.sleep",
-        "process.run",
-        "http.listen",
-        "env.get",
-        "env.require",
-        "env.all",
-        "random.int",
-        "random.float",
-        "random.choose",
-        "random.shuffle",
-        "random.uuid",
-        "random.seed",
-        "game.say",
-        "store.set",
-    ];
-    effectful
+/// Does calling the host function at `path` (e.g. `"fs.read"`) require `!`?
+///
+/// Looks the path up in [`HOST_EFFECTS`], the single source of truth. Paths
+/// that are not in the table — a typo, or a capability an embedder registered
+/// at runtime — are not diagnosed here; an unknown capability is reported as
+/// `E042` when it is called.
+pub fn is_effectful(path: &str) -> bool {
+    HOST_EFFECTS
         .iter()
-        .any(|e| path == *e || path.starts_with(&format!("{}.", e)))
-        || path.starts_with("console.")
-        || path == "http.listen"
+        .find(|(name, _)| *name == path)
+        .map(|(_, effectful)| *effectful)
+        .unwrap_or(false)
+}
+
+/// Can this arm set match every possible scrutinee?
+///
+/// Rite is dynamically typed, so exhaustiveness is only provable in two ways:
+/// an arm that matches unconditionally, or an arm set that saturates one of
+/// the finite value domains. Anything else can fall through to
+/// `match failure: no arm matched` at runtime, which is what E029 warns about.
+fn covers_all_inputs(arms: &[rite_syntax::MatchArm]) -> bool {
+    if arms.iter().any(|a| is_irrefutable(&a.pattern)) {
+        return true;
+    }
+    // `true` / `false` — the whole boolean domain.
+    let mut saw_true = false;
+    let mut saw_false = false;
+    // `ok` / `err` and `some` / `none` — the whole result and option domains.
+    let mut saw_ok = false;
+    let mut saw_err = false;
+    let mut saw_some = false;
+    let mut saw_none = false;
+    let mut saw_lit_none = false;
+    for arm in arms {
+        match &arm.pattern {
+            Pattern::Literal(l) => match l.kind {
+                LitKind::Bool(true) => saw_true = true,
+                LitKind::Bool(false) => saw_false = true,
+                LitKind::None => saw_lit_none = true,
+                _ => {}
+            },
+            Pattern::Result(r) => match r.kind {
+                ResultPatKind::Ok => saw_ok = true,
+                ResultPatKind::Err => saw_err = true,
+                ResultPatKind::Some => saw_some = true,
+                ResultPatKind::None => saw_none = true,
+            },
+            _ => {}
+        }
+    }
+    (saw_true && saw_false) || (saw_ok && saw_err) || (saw_some && (saw_none || saw_lit_none))
+}
+
+/// A pattern that matches any value, binding nothing (`_`) or everything (`x`).
+///
+/// Every other pattern is refutable: literals and atoms compare, lists check
+/// length, records check fields, `ok`/`err` check the result tag, and a typed
+/// pattern checks the type.
+fn is_irrefutable(pat: &Pattern) -> bool {
+    matches!(pat, Pattern::Wildcard(_) | Pattern::Ident(_))
 }
 
 fn strip_effect(expr: &Expr) -> &Expr {
@@ -586,77 +738,266 @@ fn has_effect_marker(expr: &Expr) -> bool {
     matches!(expr, Expr::Unary(u) if u.op == UnaryOp::Effect)
 }
 
-fn is_builtin_name(name: &str) -> bool {
-    matches!(
-        name,
-        "map"
-            | "keep"
-            | "reject"
-            | "reduce"
-            | "each"
-            | "flatten"
-            | "count"
-            | "first"
-            | "last"
-            | "rest"
-            | "tail"
-            | "init"
-            | "butlast"
-            | "take"
-            | "drop"
-            | "reverse"
-            | "concat"
-            | "find"
-            | "any"
-            | "all"
-            | "sum"
-            | "min"
-            | "max"
-            | "sort"
-            | "unique"
-            | "zip"
-            | "chunk"
-            | "parallel"
-            | "ok"
-            | "err"
-            | "panic"
-            | "expect"
-            | "fail"
-            | "str"
-            | "len"
-            | "type_of"
-            | "require"
-            | "words"
-            | "join"
-            | "range_incl"
-            | "keys"
-            | "values"
-            | "abs"
-            | "clamp"
-            | "pow"
-            | "idiv"
-            | "xor"
-            | "and_then"
-            | "or_else"
-            | "is_ok"
-            | "is_err"
-            | "unwrap_or"
-            | "repeat"
-            | "contains"
-            | "enumerate"
-            | "with_index"
-            | "compose"
-            | "while_loop"
-            | "print"
-            | "println"
-            | "collect_results"
-            | "group"
-            | "lines"
-            | "range"
-            | "none"
-    )
-}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rite_core::{FileId, Severity};
+    use rite_syntax::parse_file;
 
-// silence unused imports
-#[allow(dead_code)]
-fn _unused(_b: &Binding, _o: BinOp, _l: &LitKind) {}
+    /// Parse and resolve `src`, returning only the resolver's diagnostics.
+    fn check(src: &str) -> Diagnostics {
+        let file = SourceFile::new(FileId(0), "test.rite", src);
+        let (program, pdiags) = parse_file(&file);
+        let program = program.expect("parse failed");
+        assert!(
+            !pdiags.has_errors(),
+            "test source does not parse:\n{:#?}",
+            pdiags.into_vec()
+        );
+        resolve(&program, &file).1
+    }
+
+    fn codes(src: &str) -> Vec<String> {
+        check(src)
+            .iter()
+            .map(|d| d.code.as_str())
+            .collect::<Vec<_>>()
+    }
+
+    #[track_caller]
+    fn assert_ok(src: &str) {
+        let diags = check(src);
+        assert!(
+            !diags.has_errors(),
+            "expected `{}` to check cleanly, got {:#?}",
+            src.trim(),
+            diags.into_vec()
+        );
+    }
+
+    #[track_caller]
+    fn assert_effect_error(src: &str) {
+        let diags = check(src);
+        assert!(
+            diags
+                .iter()
+                .any(|d| d.code == E021_EFFECT_REQUIRED && d.severity == Severity::Error),
+            "expected E021 for `{}`, got {:#?}",
+            src.trim(),
+            diags.into_vec()
+        );
+    }
+
+    // ---- the effect table --------------------------------------------------
+
+    #[test]
+    fn effect_table_is_exact_lookup_not_prefix_match() {
+        assert!(is_effectful("console.println"));
+        assert!(is_effectful("fs.write"));
+        // The old catch-all `path.starts_with("console.")` classified names
+        // that no capability registers.
+        assert!(!is_effectful("console.printlnx"));
+        assert!(!is_effectful("fs.write.extra"));
+        assert!(!is_effectful("unknown.thing"));
+    }
+
+    #[test]
+    fn effect_table_has_no_duplicate_entries() {
+        let mut seen = std::collections::HashSet::new();
+        for (path, _) in HOST_EFFECTS {
+            assert!(seen.insert(*path), "duplicate HOST_EFFECTS entry {}", path);
+        }
+    }
+
+    #[test]
+    fn effect_table_paths_are_cap_dot_function() {
+        for (path, _) in HOST_EFFECTS {
+            assert_eq!(
+                path.split('.').count(),
+                2,
+                "HOST_EFFECTS path `{}` is not `cap.function`",
+                path
+            );
+        }
+    }
+
+    #[test]
+    fn db_calls_now_require_a_marker() {
+        // Regression: `@db.*` was absent from the resolver's list entirely, so
+        // this checked clean despite `effectful: true` on every db descriptor.
+        assert_effect_error("conn ← @db.open()?\n");
+        assert_effect_error("r ← @db.exec(conn, \"CREATE TABLE t(a INT)\")?\n");
+        assert_ok("conn ← ! @db.open()?\n");
+    }
+
+    #[test]
+    fn reads_are_effects_too() {
+        assert_effect_error("s ← @fs.read(\"./x.txt\")?\n");
+        assert_effect_error("rows ← @csv.read(\"./x.csv\")?\n");
+        assert_effect_error("v ← @env.get(\"HOME\")\n");
+        assert_ok("s ← ! @fs.read(\"./x.txt\")?\n");
+    }
+
+    #[test]
+    fn pure_host_helpers_need_no_marker() {
+        assert_ok("t ← @json.encode(⟨a: 1⟩)\n");
+        assert_ok("r ← @csv.decode(\"a,b\")?\n");
+        // In-process capability state: reads are unmarked, writes are not.
+        assert_ok("v ← @store.get(\"k\")\n");
+        assert_effect_error("v ← @store.set(\"k\", 1)\n");
+    }
+
+    #[test]
+    fn a_bare_capability_reference_is_not_a_call() {
+        // Naming a host function performs no effect; only calling it does.
+        assert_ok("f ← @fs.write\n");
+    }
+
+    // ---- effect-marker propagation (one test per arm) -----------------------
+
+    #[test]
+    fn marker_survives_try() {
+        // The bug: `Try` hardcoded `false`, so the `!` right there was lost.
+        assert_ok("! @fs.write(\"./o.txt\", \"hi\")?\n");
+        assert_ok("conn ← ! @db.open()?\nn ← ! @db.query(conn, \"SELECT 1\")?\n");
+    }
+
+    #[test]
+    fn marker_survives_parentheses() {
+        assert_ok("! (@fs.write(\"./o.txt\", \"hi\"))\n");
+        assert_ok("! (@fs.write(\"./o.txt\", \"hi\")?)\n");
+    }
+
+    #[test]
+    fn try_outside_the_marker_still_works() {
+        // Proves the marker itself was never the problem.
+        assert_ok("(! @fs.write(\"./o.txt\", \"hi\"))?\n");
+    }
+
+    #[test]
+    fn marker_reaches_the_primary_operand_of_coalesce() {
+        // `!` binds tighter than `??`, so this parses as Coalesce(Unary, d) …
+        assert_ok("s ← ! @fs.read(\"./x.txt\") ?? \"default\"\n");
+        // … and the parenthesised form relies on Coalesce.left propagating.
+        assert_ok("s ← ! (@fs.read(\"./x.txt\") ?? \"default\")\n");
+    }
+
+    #[test]
+    fn marker_does_not_leak_into_a_coalesce_fallback() {
+        assert_effect_error("s ← ! (\"x\" ?? @fs.read(\"./x.txt\"))\n");
+    }
+
+    #[test]
+    fn marker_reaches_a_pipeline_input_but_not_its_stages() {
+        assert_ok("n ← ! (@fs.read(\"./x.txt\")? → lines)\n");
+        assert_effect_error("n ← ! ([1] → map { |x| @fs.read(\"./x.txt\") })\n");
+    }
+
+    #[test]
+    fn marker_reaches_a_member_or_index_object_only() {
+        assert_ok("n ← ! @fs.metadata(\"./x.txt\")?.size\n");
+        assert_ok("n ← ! @fs.glob(\"*.txt\")?[0]\n");
+        // The subscript is its own computation.
+        assert_effect_error("n ← ! ([1][@env.get(\"I\")])\n");
+    }
+
+    #[test]
+    fn marker_does_not_leak_across_a_binary_operator() {
+        // Neither operand is *the* marked call, so both need their own marker.
+        assert_effect_error("n ← ! (1 + @clock.now())\n");
+        assert_ok("n ← 1 + ! @clock.now()\n");
+    }
+
+    #[test]
+    fn marker_does_not_leak_into_call_arguments() {
+        // A `!` on the outer call must not license an unrelated inner effect.
+        assert_effect_error("! @console.println(@fs.read(\"./x.txt\"))\n");
+        assert_ok("! @console.println(! @fs.read(\"./x.txt\"))\n");
+    }
+
+    #[test]
+    fn marker_does_not_leak_into_a_block_or_branch() {
+        assert_effect_error("n ← ! (if true ⟦ @clock.now() ⟧ else ⟦ 0 ⟧)\n");
+        assert_ok("n ← ! (if true ⟦ ! @clock.now() ⟧ else ⟦ 0 ⟧)\n");
+    }
+
+    #[test]
+    fn an_unmarked_effectful_call_is_still_an_error() {
+        // The control case: no `!` anywhere.
+        assert_effect_error("@fs.write(\"./o.txt\", \"hi\")?\n");
+        assert_effect_error("@console.println(\"x\")\n");
+    }
+
+    // ---- E029 exhaustiveness ----------------------------------------------
+
+    #[test]
+    fn e029_fires_when_no_arm_matches_unconditionally() {
+        // Previously silent: the check only ran when *every* arm was an atom,
+        // so a mixed literal/atom match warned about nothing.
+        assert!(codes("m ← ~ x ⟦\n  1 → \"a\"\n  #b → \"b\"\n⟧\n").contains(&"E029".to_string()));
+        assert!(codes("m ← ~ x ⟦\n  #a → 1\n  #b → 2\n⟧\n").contains(&"E029".to_string()));
+    }
+
+    #[test]
+    fn e029_is_silent_when_an_arm_matches_unconditionally() {
+        assert!(!codes("m ← ~ x ⟦\n  #a → 1\n  _ → 0\n⟧\n").contains(&"E029".to_string()));
+        // A bare binding arm is just as total as `_`.
+        assert!(!codes("m ← ~ x ⟦\n  #a → 1\n  other → other\n⟧\n").contains(&"E029".to_string()));
+    }
+
+    #[test]
+    fn e029_is_silent_for_a_saturated_finite_domain() {
+        // Exhaustive without a wildcard — warning here would be noise.
+        assert!(!codes("m ← ~ b ⟦\n  true → 1\n  false → 0\n⟧\n").contains(&"E029".to_string()));
+        assert!(
+            !codes("m ← ~ r ⟦\n  ok v → v\n  err e → 0\n⟧\n").contains(&"E029".to_string()),
+            "ok/err covers the result domain"
+        );
+    }
+
+    #[test]
+    fn e029_is_a_warning_not_an_error() {
+        let diags = check("m ← ~ x ⟦\n  #a → 1\n⟧\n");
+        let e029: Vec<_> = diags
+            .iter()
+            .filter(|d| d.code == E029_NON_EXHAUSTIVE_MATCH)
+            .collect();
+        assert_eq!(e029.len(), 1, "{:#?}", diags.iter().collect::<Vec<_>>());
+        assert_eq!(e029[0].severity, Severity::Warning);
+    }
+
+    // ---- builtin names ----------------------------------------------------
+
+    #[test]
+    fn builtins_resolve_without_a_second_list() {
+        // `is_builtin_name` used to duplicate this list and disagree with it.
+        let r = Resolver::new();
+        for name in BUILTIN_NAMES {
+            assert!(
+                r.functions.contains_key(*name),
+                "builtin `{}` is not predefined",
+                name
+            );
+        }
+        assert_ok("n ← [1, 2] → count\n");
+    }
+
+    #[test]
+    fn every_builtin_name_lexes_as_one_identifier() {
+        // `number?` was listed and unreachable: the lexer splits the `?` off,
+        // so the resolver looked up `number` and reported it undefined.
+        for name in BUILTIN_NAMES {
+            assert!(
+                name.chars()
+                    .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_'),
+                "builtin `{}` cannot lex as a single identifier, so it can never resolve",
+                name
+            );
+        }
+    }
+
+    #[test]
+    fn resolver_default_matches_new() {
+        assert_eq!(Resolver::default().functions.len(), BUILTIN_NAMES.len());
+    }
+}

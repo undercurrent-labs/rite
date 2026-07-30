@@ -279,6 +279,19 @@ async fn fetch_skill_to_cache(
         let dest = tmp.join(&name);
         match github::download_to(&url, &dest).await {
             Ok(()) => {
+                // A checksum mismatch against the release SHA256SUMS is fatal,
+                // not something to retry with the next candidate URL.
+                match github::verify_against_release(release.as_ref(), &name, &dest).await {
+                    Ok(true) => println!("  checksum ok ({name})"),
+                    Ok(false) => eprintln!(
+                        "  warning: no published checksum for {name}; installing unverified \
+                         content from {url}"
+                    ),
+                    Err(e) => {
+                        let _ = fs::remove_dir_all(&tmp);
+                        return Err(e);
+                    }
+                }
                 let fp = github::sha256_file(&dest)?;
                 match extract_skill_archive(&dest, &cache) {
                     Ok(()) => {
@@ -337,11 +350,6 @@ fn copy_dir_all(src: &Path, dest: &Path) -> anyhow::Result<()> {
 }
 
 fn extract_skill_archive(archive: &Path, dest: &Path) -> anyhow::Result<()> {
-    let name = archive
-        .file_name()
-        .and_then(|s| s.to_str())
-        .unwrap_or("")
-        .to_lowercase();
     let staging = archive
         .parent()
         .unwrap_or(Path::new("."))
@@ -351,26 +359,9 @@ fn extract_skill_archive(archive: &Path, dest: &Path) -> anyhow::Result<()> {
     }
     fs::create_dir_all(&staging)?;
 
-    if name.ends_with(".tar.gz") || name.ends_with(".tgz") {
-        let file = fs::File::open(archive)?;
-        let dec = flate2::read::GzDecoder::new(file);
-        let mut archive = tar::Archive::new(dec);
-        archive.unpack(&staging)?;
-    } else if name.ends_with(".zip") {
-        // Minimal zip: shell out to unzip if available
-        let status = std::process::Command::new("unzip")
-            .args(["-q", "-o"])
-            .arg(archive)
-            .arg("-d")
-            .arg(&staging)
-            .status();
-        match status {
-            Ok(s) if s.success() => {}
-            _ => bail!("need `unzip` to extract skill zip, or use .tar.gz"),
-        }
-    } else {
-        bail!("unknown archive format: {}", archive.display());
-    }
+    // Dispatch on content: the file name lies when a URL served an SPA page,
+    // and `.zip` needs more than `unzip` on Windows.
+    crate::archive::extract_any(archive, &staging)?;
 
     // Find SKILL.md in staging
     let root = find_skill_root(&staging)?;

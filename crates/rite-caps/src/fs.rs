@@ -11,14 +11,14 @@ impl FsCap {
             name: "read",
             docs: "Read a UTF-8 text file.",
             arity: 1,
-            effectful: false,
+            effectful: true,
             permission: "fs:read",
         },
         NativeFunctionDescriptor {
             name: "read_bytes",
             docs: "Read a file as bytes.",
             arity: 1,
-            effectful: false,
+            effectful: true,
             permission: "fs:read",
         },
         NativeFunctionDescriptor {
@@ -39,28 +39,28 @@ impl FsCap {
             name: "lines",
             docs: "Read file lines as a list of strings.",
             arity: 1,
-            effectful: false,
+            effectful: true,
             permission: "fs:read",
         },
         NativeFunctionDescriptor {
             name: "exists",
             docs: "Check whether a path exists.",
             arity: 1,
-            effectful: false,
+            effectful: true,
             permission: "fs:read",
         },
         NativeFunctionDescriptor {
             name: "metadata",
             docs: "Return file metadata record.",
             arity: 1,
-            effectful: false,
+            effectful: true,
             permission: "fs:read",
         },
         NativeFunctionDescriptor {
             name: "glob",
-            docs: "Expand a glob pattern to matching paths.",
+            docs: "Expand a glob pattern to matching paths. The pattern must point inside a granted read root; matches outside every granted root are dropped.",
             arity: 1,
-            effectful: false,
+            effectful: true,
             permission: "fs:read",
         },
         NativeFunctionDescriptor {
@@ -173,15 +173,23 @@ impl FsCap {
                     .first()
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| EvalError::Message("glob expects pattern string".into()))?;
-                // Permission: require read on cwd
-                let _ = perms
-                    .check_fs_read(std::path::Path::new("."))
-                    .map_err(EvalError::Permission)?;
+                // A glob is a read of everything it expands to, so it is checked twice.
+                // 1. The pattern's fixed prefix (everything before the first wildcard)
+                //    must itself be readable. A pattern aimed outside the granted roots
+                //    (`/etc/ssh/*`, `../*`) is an outright permission error, not an
+                //    empty result — the script asked for something it may not have.
+                let root = glob_prefix(pattern);
+                perms.check_fs_read(&root).map_err(EvalError::Permission)?;
                 let mut matches = Vec::new();
-                for entry in
-                    glob::glob(pattern).map_err(|e| EvalError::Capability(e.to_string()))?
+                for p in glob::glob(pattern)
+                    .map_err(|e| EvalError::Capability(e.to_string()))?
+                    .flatten()
                 {
-                    if let Ok(p) = entry {
+                    // 2. Each match is re-checked and non-permitted paths are dropped
+                    //    silently: `**` legitimately walks into directories that a
+                    //    symlink or a narrower root puts out of bounds, and erroring
+                    //    on a stray match would make recursive globs unusable.
+                    if perms.check_fs_read(&p).is_ok() {
                         matches.push(Value::string(p.display().to_string()));
                     }
                 }
@@ -230,6 +238,27 @@ impl FsCap {
             }
             other => Err(EvalError::Capability(format!("unknown @fs.{}", other))),
         }
+    }
+}
+
+/// The fixed directory prefix of a glob pattern: every leading `/`-separated
+/// component before the first one containing a wildcard (`*`, `?`, `[`, `{`).
+/// `"data/**/*.csv"` → `data`, `"/etc/ssh/*"` → `/etc/ssh`, `"*.rite"` → `.`.
+fn glob_prefix(pattern: &str) -> PathBuf {
+    let has_meta = |s: &str| s.contains(['*', '?', '[', '{']);
+    let mut kept: Vec<&str> = Vec::new();
+    for part in pattern.split('/') {
+        if has_meta(part) {
+            break;
+        }
+        kept.push(part);
+    }
+    match kept.as_slice() {
+        // No fixed prefix (`*.rite`) — relative to the working directory.
+        [] => PathBuf::from("."),
+        // Rooted pattern with nothing else fixed (`/*`).
+        [""] => PathBuf::from("/"),
+        parts => PathBuf::from(parts.join("/")),
     }
 }
 

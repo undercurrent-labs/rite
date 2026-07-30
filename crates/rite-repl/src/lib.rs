@@ -355,11 +355,9 @@ pub fn is_complete(src: &str) -> bool {
                     depth += 1; // <<
                 }
             }
-            '>' => {
-                if chars.peek() == Some(&'>') {
-                    let _ = chars.next();
-                    depth -= 1; // >>
-                }
+            '>' if chars.peek() == Some(&'>') => {
+                let _ = chars.next();
+                depth -= 1; // >>
             }
             _ => {}
         }

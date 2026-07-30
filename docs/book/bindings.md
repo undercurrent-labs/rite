@@ -64,7 +64,7 @@ For list processing, prefer [pipelines](pipelines.md) (`→ sum`, `→ map`) ove
 
 - Bindings are **block-scoped** (`⟦ ⟧` / `[[ ]]`, function bodies, match arms).
 - Function parameters are immutable bindings for the body.
-- Host results are often bound immutably: `text ← @fs.read(path)?`
+- Host results are often bound immutably: `text ← ! @fs.read(path)?`
 
 ## Shadowing vs assign
 

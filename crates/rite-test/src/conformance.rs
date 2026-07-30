@@ -58,7 +58,7 @@ pub async fn run_conformance_suite(root: &Path) -> anyhow::Result<ConformanceRep
                     // compare loosely via display or JSON
                     let exp_clean = exp.trim();
                     let matches = got == exp_clean
-                        || v_i.to_json(&rite_runtime::AtomInterner::new()).to_string() == exp_clean;
+                        || v_i.to_json(&rite_runtime::AtomInterner::new()) == exp_clean;
                     if !matches && exp_clean.parse::<i64>().ok() != v_i.as_int() {
                         // try int equality
                         if v_i.as_int().map(|n| n.to_string()) != Some(exp_clean.to_string()) {

@@ -1,3 +1,10 @@
+// These tests share process-global state (the RITE_HTTP_TEST env vars and the
+// PENDING_SERVER / LAST_BOUND_ADDR statics in rite-caps::http), so each test holds
+// `http_test_lock()` for its whole body to run them one at a time. Holding the guard
+// across `.await` is the point — dropping it early would let tests interleave and
+// clobber each other's server registration.
+#![allow(clippy::await_holding_lock)]
+
 //! Thorough integration tests: real Rite HTTP handlers on loopback.
 //!
 //! These tests share process-global listen-address state in `rite-caps::http`,

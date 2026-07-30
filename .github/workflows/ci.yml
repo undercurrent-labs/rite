@@ -28,9 +28,11 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: fmt
         run: cargo fmt --all -- --check
+      # Gate, not advisory: the tree is clippy-clean, so a new warning must fail CI.
+      # (The old form combined `--workspace` with `-p rite-wasm --features native`,
+      # which cargo rejects, and `continue-on-error` hid that it never ran.)
       - name: clippy
-        run: cargo clippy --workspace --all-targets --features native -p rite-wasm -- -D warnings
-        continue-on-error: true
+        run: cargo clippy --workspace --all-targets -- -D warnings
       # example_ladder integration tests spawn target/debug/rite
       - name: build debug CLI
         run: cargo build -p rite-cli -p rite-lsp
@@ -152,7 +154,8 @@ jobs:
   deploy:
     name: Deploy Cloudflare
     runs-on: ubuntu-latest
-    needs: [studio]
+    # `rust` too: never publish the site from a commit whose tests fail.
+    needs: [rust, studio]
     # Production site: main pushes + manual runs (not PRs / forks)
     if: >
       github.event_name == 'workflow_dispatch' ||

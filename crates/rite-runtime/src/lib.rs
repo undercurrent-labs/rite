@@ -37,7 +37,7 @@ pub async fn run_file(file: &SourceFile, ctx: &mut RuntimeContext) -> Result<Val
     let (ir, diags) = if let Some(ref p) = path {
         rite_sem::compile_to_ir_with_roots(file, Some(p), &roots)
     } else if let Some(ref dir) = ctx.script_dir {
-        rite_sem::compile_to_ir_with_roots(file, None, &[dir.clone()])
+        rite_sem::compile_to_ir_with_roots(file, None, std::slice::from_ref(dir))
     } else {
         compile_to_ir(file)
     };

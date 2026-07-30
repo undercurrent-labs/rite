@@ -109,6 +109,8 @@ pub async fn run(
     }
 
     if cli_newer || force || version.is_some() {
+        // Refuse before announcing a download we will not perform.
+        reject_build_tree_install(&install_dir()?)?;
         println!();
         println!("Downloading CLI {latest_tag}…");
         install_cli_from_release(&release).await?;
@@ -134,27 +136,47 @@ async fn install_cli_from_release(release: &github::Release) -> anyhow::Result<(
         )
     })?;
 
+    // Resolve (and vet) the destination before downloading anything.
+    let dest_dir = install_dir()?;
+    reject_build_tree_install(&dest_dir)?;
+
     let tmp = github::tmp_download_dir()?;
     let archive_path = tmp.join(&asset.name);
     github::download_to(&asset.browser_download_url, &archive_path).await?;
 
-    // Optional checksum verification
-    if let Some(sums) = github::find_asset(release, "SHA256SUMS") {
-        let sums_path = tmp.join("SHA256SUMS");
-        if github::download_to(&sums.browser_download_url, &sums_path)
-            .await
-            .is_ok()
-        {
-            verify_sha256sums(&sums_path, &archive_path, &asset.name)?;
-        }
-    }
+    // Checksum verification is mandatory: this replaces the `rite` binary.
+    // Every branch below used to fall through to "installed anyway" — a missing
+    // SHA256SUMS asset, a failed SHA256SUMS download, or an unlisted archive
+    // name all skipped verification silently. scripts/install.sh refuses in the
+    // same situations ("Refuse to install without checksums").
+    let sums = github::find_asset(release, "SHA256SUMS").with_context(|| {
+        format!(
+            "release {} publishes no SHA256SUMS asset — refusing to install an \
+             unverified binary. Download it manually from {} if you trust it.",
+            release.tag_name,
+            release
+                .html_url
+                .clone()
+                .unwrap_or_else(|| "the release page".into())
+        )
+    })?;
+    let sums_path = tmp.join("SHA256SUMS");
+    github::download_to(&sums.browser_download_url, &sums_path)
+        .await
+        .with_context(|| {
+            format!(
+                "could not download SHA256SUMS for {} — refusing to install an \
+                 unverified binary",
+                release.tag_name
+            )
+        })?;
+    verify_sha256sums(&sums_path, &archive_path, &asset.name)?;
 
     let extract_dir = tmp.join("extract");
     fs::create_dir_all(&extract_dir)?;
     extract_cli_archive(&archive_path, &extract_dir)?;
 
     let (rite_bin, lsp_bin) = find_bins(&extract_dir)?;
-    let dest_dir = install_dir()?;
     fs::create_dir_all(&dest_dir)?;
 
     let dest_rite = dest_dir.join(if cfg!(windows) { "rite.exe" } else { "rite" });
@@ -193,52 +215,79 @@ async fn install_cli_from_release(release: &github::Release) -> anyhow::Result<(
     Ok(())
 }
 
+/// Look up `name` in a SHA256SUMS file and compare hashes. Fails closed: an
+/// unlisted file is an error, not a warning.
 fn verify_sha256sums(sums: &Path, archive: &Path, name: &str) -> anyhow::Result<()> {
     let text = fs::read_to_string(sums)?;
     let actual = github::sha256_file(archive)?;
     for line in text.lines() {
         let line = line.trim();
-        if line.is_empty() {
+        if line.is_empty() || line.starts_with('#') {
             continue;
         }
         let mut parts = line.split_whitespace();
         let hash = parts.next().unwrap_or("");
         let file = parts.next().unwrap_or("").trim_start_matches('*');
-        if file.ends_with(name) || file == name {
-            if hash.to_lowercase() != actual.to_lowercase() {
+        // Exact file name only. `ends_with` would let `evil-rite-x86_64.tar.gz`
+        // satisfy the entry for `rite-x86_64.tar.gz`.
+        if file == name {
+            if !hash.eq_ignore_ascii_case(&actual) {
                 bail!("checksum mismatch for {name}: expected {hash}, got {actual}");
             }
             println!("  checksum ok ({name})");
             return Ok(());
         }
     }
-    eprintln!("  warning: {name} not listed in SHA256SUMS; skipped verify");
-    Ok(())
+    bail!("{name} is not listed in SHA256SUMS — refusing to install an unverified binary")
 }
 
 fn extract_cli_archive(archive: &Path, dest: &Path) -> anyhow::Result<()> {
-    let name = archive.file_name().and_then(|s| s.to_str()).unwrap_or("");
-    if name.ends_with(".tar.gz") {
-        let file = fs::File::open(archive)?;
-        let dec = flate2::read::GzDecoder::new(file);
-        let mut ar = tar::Archive::new(dec);
-        ar.unpack(dest)?;
-        Ok(())
-    } else if name.ends_with(".zip") {
-        let status = std::process::Command::new("unzip")
-            .args(["-q", "-o"])
-            .arg(archive)
-            .arg("-d")
-            .arg(dest)
-            .status()
-            .context("unzip")?;
-        if !status.success() {
-            bail!("unzip failed");
-        }
-        Ok(())
-    } else {
-        bail!("unknown archive {}", archive.display());
+    // Dispatch on content, not on the asset name: a download that returned an
+    // HTML error page must be reported as such.
+    crate::archive::extract_any(archive, dest)
+}
+
+/// Refuse to overwrite a cargo build artifact.
+///
+/// `install_dir()` prefers "the directory of the running executable if it
+/// already holds a `rite` binary", so `./target/debug/rite update` replaced the
+/// local build output with a downloaded release (and left `rite.old` behind).
+fn reject_build_tree_install(dest: &Path) -> anyhow::Result<()> {
+    if env::var_os("RITE_INSTALL_DIR").is_some() {
+        // Explicit destination: the operator asked for it.
+        return Ok(());
     }
+    if looks_like_build_tree(dest) {
+        bail!(
+            "refusing to overwrite cargo build output in {}\n  \
+             `rite update` installs release binaries; to update a checkout run \
+             `git pull && cargo build`\n  \
+             to install elsewhere: RITE_INSTALL_DIR=<dir> rite update",
+            dest.display()
+        );
+    }
+    Ok(())
+}
+
+/// True for paths inside `target/debug`, `target/release`, or a cargo `deps` dir.
+fn looks_like_build_tree(path: &Path) -> bool {
+    let mut comps: Vec<String> = path
+        .components()
+        .map(|c| c.as_os_str().to_string_lossy().to_string())
+        .collect();
+    if comps.last().map(|c| c == "deps").unwrap_or(false) {
+        comps.pop();
+    }
+    for pair in comps.windows(2) {
+        if pair[0] == "target" && (pair[1] == "debug" || pair[1] == "release") {
+            return true;
+        }
+        // Custom CARGO_TARGET_DIR keeps the profile dir name.
+        if pair[1] == "debug" && pair[0].ends_with("target") {
+            return true;
+        }
+    }
+    false
 }
 
 fn find_bins(root: &Path) -> anyhow::Result<(PathBuf, PathBuf)> {
@@ -293,16 +342,25 @@ fn replace_binary(src: &Path, dest: &Path) -> anyhow::Result<()> {
     // On Windows, cannot overwrite running exe easily; write .new then best-effort
     let tmp = dest.with_extension("new");
     fs::copy(src, &tmp).with_context(|| format!("copy to {}", tmp.display()))?;
+    let mut backup = None;
     if dest.exists() {
         let bak = dest.with_extension("old");
         let _ = fs::remove_file(&bak);
-        let _ = fs::rename(dest, &bak);
+        if fs::rename(dest, &bak).is_ok() {
+            backup = Some(bak);
+        }
     }
     fs::rename(&tmp, dest).or_else(|_| {
         fs::copy(&tmp, dest)?;
         fs::remove_file(&tmp)?;
         Ok::<(), anyhow::Error>(())
     })?;
+    // Don't leave `rite.old` next to the binary forever. On Windows the old
+    // image can still be mapped by the running process, so this is best-effort;
+    // it succeeds on the next update if not now.
+    if let Some(bak) = backup {
+        let _ = fs::remove_file(&bak);
+    }
     Ok(())
 }
 
@@ -324,7 +382,7 @@ fn current_exe_display() -> String {
 fn version_is_newer(latest: &str, current: &str) -> bool {
     let parse = |s: &str| -> Vec<u64> {
         s.trim_start_matches('v')
-            .split(|c| c == '.' || c == '-')
+            .split(['.', '-'])
             .filter_map(|p| p.parse().ok())
             .collect()
     };
@@ -345,7 +403,7 @@ fn version_is_newer(latest: &str, current: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::version_is_newer;
+    use super::*;
 
     #[test]
     fn semver_compare() {
@@ -353,5 +411,123 @@ mod tests {
         assert!(!version_is_newer("0.1.7", "0.1.7"));
         assert!(!version_is_newer("0.1.6", "0.1.7"));
         assert!(version_is_newer("v0.2.0", "0.1.9"));
+    }
+
+    fn scratch(tag: &str) -> PathBuf {
+        let p = std::env::temp_dir().join(format!("rite_update_{}_{}", tag, std::process::id()));
+        let _ = fs::remove_dir_all(&p);
+        fs::create_dir_all(&p).unwrap();
+        p
+    }
+
+    #[test]
+    fn checksum_verifies_exact_name() {
+        let dir = scratch("sums_ok");
+        let archive = dir.join("rite-x86_64-unknown-linux-gnu.tar.gz");
+        fs::write(&archive, b"payload").unwrap();
+        let hash = github::sha256_file(&archive).unwrap();
+        let sums = dir.join("SHA256SUMS");
+        fs::write(
+            &sums,
+            format!("{hash}  rite-x86_64-unknown-linux-gnu.tar.gz\n"),
+        )
+        .unwrap();
+
+        verify_sha256sums(&sums, &archive, "rite-x86_64-unknown-linux-gnu.tar.gz").unwrap();
+    }
+
+    #[test]
+    fn checksum_mismatch_fails() {
+        let dir = scratch("sums_bad");
+        let archive = dir.join("rite.tar.gz");
+        fs::write(&archive, b"payload").unwrap();
+        let sums = dir.join("SHA256SUMS");
+        fs::write(&sums, format!("{}  rite.tar.gz\n", "0".repeat(64))).unwrap();
+
+        let err = verify_sha256sums(&sums, &archive, "rite.tar.gz")
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("checksum mismatch"), "{err}");
+    }
+
+    #[test]
+    fn unlisted_archive_fails_closed() {
+        let dir = scratch("sums_missing");
+        let archive = dir.join("rite-aarch64-apple-darwin.tar.gz");
+        fs::write(&archive, b"payload").unwrap();
+        let sums = dir.join("SHA256SUMS");
+        fs::write(&sums, format!("{}  other.tar.gz\n", "0".repeat(64))).unwrap();
+
+        let err = verify_sha256sums(&sums, &archive, "rite-aarch64-apple-darwin.tar.gz")
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("not listed"), "{err}");
+    }
+
+    #[test]
+    fn suffix_match_no_longer_satisfies_an_entry() {
+        // `evil-rite.tar.gz` used to match the `rite.tar.gz` entry via ends_with.
+        let dir = scratch("sums_suffix");
+        let archive = dir.join("evil-rite.tar.gz");
+        fs::write(&archive, b"payload").unwrap();
+        let hash = github::sha256_file(&archive).unwrap();
+        let sums = dir.join("SHA256SUMS");
+        fs::write(&sums, format!("{hash}  rite.tar.gz\n")).unwrap();
+
+        let err = verify_sha256sums(&sums, &archive, "evil-rite.tar.gz")
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("not listed"), "{err}");
+    }
+
+    #[test]
+    fn build_tree_destinations_are_rejected() {
+        assert!(looks_like_build_tree(Path::new(
+            "/home/u/rite/target/debug"
+        )));
+        assert!(looks_like_build_tree(Path::new(
+            "/home/u/rite/target/release"
+        )));
+        assert!(looks_like_build_tree(Path::new(
+            "/home/u/rite/target/debug/deps"
+        )));
+        assert!(!looks_like_build_tree(Path::new("/home/u/.local/bin")));
+        assert!(!looks_like_build_tree(Path::new("/usr/local/bin")));
+        // A directory literally named "target" without a profile dir is fine.
+        assert!(!looks_like_build_tree(Path::new("/home/u/target")));
+    }
+
+    #[test]
+    fn reject_build_tree_install_explains_itself() {
+        // RITE_INSTALL_DIR is an explicit opt-in and must keep working; the test
+        // process may not have it set, so only check the refusing branch here.
+        if std::env::var_os("RITE_INSTALL_DIR").is_some() {
+            return;
+        }
+        let err = reject_build_tree_install(Path::new("/tmp/rite/target/debug"))
+            .unwrap_err()
+            .to_string();
+        assert!(
+            err.contains("refusing to overwrite cargo build output"),
+            "{err}"
+        );
+        assert!(reject_build_tree_install(Path::new("/tmp/somewhere/bin")).is_ok());
+    }
+
+    #[test]
+    fn old_backup_is_cleaned_up() {
+        let dir = scratch("replace");
+        let src = dir.join("new-rite");
+        fs::write(&src, b"new").unwrap();
+        let dest = dir.join("rite");
+        fs::write(&dest, b"old").unwrap();
+
+        replace_binary(&src, &dest).unwrap();
+        assert_eq!(fs::read(&dest).unwrap(), b"new");
+        assert!(
+            !dir.join("rite.old").exists(),
+            "rite.old should not be left behind"
+        );
+        assert!(!dir.join("rite.new").exists());
     }
 }

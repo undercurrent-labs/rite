@@ -153,7 +153,7 @@ short ← words → keep { |w| (w → count) <= 5 }
 ### 3. Read JSON file (needs FS)
 
 ```rite
-raw ← @fs.read("data/input.json")?
+raw ← ! @fs.read("data/input.json")?
 doc ← @json.decode(raw)?
 ! @console.println(doc)
 ```

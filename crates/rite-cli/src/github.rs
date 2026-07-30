@@ -175,3 +175,101 @@ pub fn sha256_file(path: &Path) -> anyhow::Result<String> {
     let hash = Sha256::digest(&data);
     Ok(hex::encode(hash))
 }
+
+/// Look up the expected hash for an exact file name in a `SHA256SUMS` body.
+///
+/// Exact name comparison only: a suffix match would let `evil-rite.tar.gz`
+/// satisfy the entry published for `rite.tar.gz`.
+pub fn expected_hash_for(sums_text: &str, name: &str) -> Option<String> {
+    for line in sums_text.lines() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        let mut parts = line.split_whitespace();
+        let hash = parts.next().unwrap_or("");
+        let file = parts.next().unwrap_or("").trim_start_matches('*');
+        if file == name {
+            return Some(hash.to_ascii_lowercase());
+        }
+    }
+    None
+}
+
+/// Fetch the release `SHA256SUMS` body, if the release publishes one.
+pub async fn release_sums(release: Option<&Release>) -> Option<String> {
+    let asset = find_asset(release?, "SHA256SUMS")?;
+    let client = http_client().ok()?;
+    let res = client
+        .get(&asset.browser_download_url)
+        .header(
+            "User-Agent",
+            format!("rite-cli/{}", env!("CARGO_PKG_VERSION")),
+        )
+        .send()
+        .await
+        .ok()?;
+    if !res.status().is_success() {
+        return None;
+    }
+    res.text().await.ok()
+}
+
+/// Verify a downloaded asset against the release checksums.
+///
+/// `Ok(true)` verified, `Ok(false)` the release publishes no checksum for this
+/// asset (caller decides whether that is acceptable), `Err` mismatch.
+pub async fn verify_against_release(
+    release: Option<&Release>,
+    name: &str,
+    path: &Path,
+) -> anyhow::Result<bool> {
+    let Some(sums) = release_sums(release).await else {
+        return Ok(false);
+    };
+    let Some(expected) = expected_hash_for(&sums, name) else {
+        return Ok(false);
+    };
+    let actual = sha256_file(path)?;
+    if !expected.eq_ignore_ascii_case(&actual) {
+        bail!("checksum mismatch for {name}: expected {expected}, got {actual}");
+    }
+    Ok(true)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::expected_hash_for;
+
+    const SUMS: &str = "\
+aaaa1111  rite-x86_64-unknown-linux-gnu.tar.gz
+bbbb2222 *rite-agent-skill.tar.gz
+# comment line
+
+cccc3333  rite.vsix
+";
+
+    #[test]
+    fn finds_exact_entries() {
+        assert_eq!(
+            expected_hash_for(SUMS, "rite-x86_64-unknown-linux-gnu.tar.gz").as_deref(),
+            Some("aaaa1111")
+        );
+        // Leading '*' (binary mode marker) is stripped from the file name.
+        assert_eq!(
+            expected_hash_for(SUMS, "rite-agent-skill.tar.gz").as_deref(),
+            Some("bbbb2222")
+        );
+        assert_eq!(
+            expected_hash_for(SUMS, "rite.vsix").as_deref(),
+            Some("cccc3333")
+        );
+    }
+
+    #[test]
+    fn rejects_partial_names() {
+        assert_eq!(expected_hash_for(SUMS, "rite.tar.gz"), None);
+        assert_eq!(expected_hash_for(SUMS, "evil-rite.vsix"), None);
+        assert_eq!(expected_hash_for(SUMS, ""), None);
+    }
+}

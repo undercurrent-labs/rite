@@ -215,11 +215,13 @@ rite run server.rite --allow net=0.0.0.0
 
 ## Client calls
 
-Outbound HTTP (if used) needs **net** permission to the target host:
+**Not implemented yet.** `@http` provides `listen`, `response`, `log` and `recover` — there
+is no outbound request function, so a script cannot currently call another service. Check
+the live surface with `rite describe capability http --json`.
 
-```bash
-rite run fetch.rite --allow net=api.example.com
-```
+Consequently `--allow net=api.example.com` grants nothing today: the only thing `net` gates
+is the **bind address** of `@http.listen` (see [Permissions](#permissions) above). Shell out
+via `@process.run` (needs `--allow process`) if you need to make a request now.
 
 ## Next
 

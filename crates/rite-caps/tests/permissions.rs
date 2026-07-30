@@ -91,7 +91,7 @@ async fn runtime_fs_denied_without_permission() {
 
     let mut ctx = RuntimeContext::new();
     install_defaults(&mut ctx, PermissionSet::default_secure());
-    let result = run_source("t.rite", r#"@fs.read("/etc/passwd")"#, &mut ctx).await;
+    let result = run_source("t.rite", r#"! @fs.read("/etc/passwd")"#, &mut ctx).await;
     // Either permission error at capability or result err — must not return ok file contents
     match result {
         Err(e) => {

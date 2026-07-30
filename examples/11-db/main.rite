@@ -1,15 +1,15 @@
 //! In-memory DuckDB: create, insert, query, transaction
 
-conn ← @db.open()?
+conn ← ! @db.open()?
 
 ! @db.exec(conn, "CREATE TABLE items(id INTEGER, name VARCHAR)")?
 ! @db.exec(conn, "INSERT INTO items VALUES (1, 'glyph'), (2, 'sigil')")?
 
-rows ← @db.query(conn, "SELECT name FROM items ORDER BY id")?
+rows ← ! @db.query(conn, "SELECT name FROM items ORDER BY id")?
 ! @console.println(rows)
 
 // prepared insert
-stmt ← @db.prepare(conn, "INSERT INTO items VALUES (?, ?)")?
+stmt ← ! @db.prepare(conn, "INSERT INTO items VALUES (?, ?)")?
 ! @db.exec_prepared(stmt, [3, "rune"])?
 ! @db.close_stmt(stmt)?
 
@@ -18,7 +18,7 @@ stmt ← @db.prepare(conn, "INSERT INTO items VALUES (?, ?)")?
 ! @db.exec(conn, "INSERT INTO items VALUES (99, 'ghost')")?
 ! @db.rollback(conn)?
 
-count ← @db.query(conn, "SELECT count(*) AS n FROM items")?
+count ← ! @db.query(conn, "SELECT count(*) AS n FROM items")?
 ! @console.println(count)
 
 ! @db.close(conn)?

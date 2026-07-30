@@ -77,7 +77,7 @@ impl CsvCap {
             name: "read",
             docs: "Read and parse a CSV file into a list of records.",
             arity: 1,
-            effectful: false,
+            effectful: true,
             permission: "fs:read",
         },
         NativeFunctionDescriptor {
@@ -198,7 +198,7 @@ fn decode_csv(text: &str, opts: &CsvOptions) -> Value {
                     if opts.skip_empty && rec.iter().all(|f| f.trim().is_empty()) {
                         continue;
                     }
-                    let cells: Vec<Value> = rec.iter().map(|f| Value::string(f)).collect();
+                    let cells: Vec<Value> = rec.iter().map(Value::string).collect();
                     rows.push(Value::list(cells));
                 }
                 Err(e) => {

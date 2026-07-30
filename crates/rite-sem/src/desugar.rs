@@ -3,7 +3,9 @@
 use crate::ir::*;
 use crate::resolve::ResolvedProgram;
 use rite_core::Span;
-use rite_syntax::{BinOp, Block, Expr, Item, LitKind, Pattern, ResultPatKind, Stmt, UnaryOp};
+use rite_syntax::{
+    BinOp, Block, Expr, Item, LitKind, Pattern, RecordKey, ResultPatKind, Stmt, UnaryOp,
+};
 use std::collections::HashMap;
 
 struct Desugar {
@@ -79,7 +81,11 @@ pub fn desugar_program(resolved: &ResolvedProgram) -> ProgramIr {
                 statements.push(d.desugar_stmt(s));
             }
             Item::Test(t) => {
-                // Lower tests as named functions __test_N
+                // Lower tests as named functions __test_N.
+                // `t.name` is deliberately NOT brace-decoded: the test runner
+                // pairs it by exact text (`format!("__test_{}", name)` in
+                // rite-test/src/lib.rs), so decoding only on this side would
+                // stop a test whose name contains braces from being found.
                 let id = FuncId(d.functions.len() as u32);
                 let body = d.desugar_block(&t.body);
                 d.functions.push(FunctionIr {
@@ -136,15 +142,7 @@ pub fn desugar_program(resolved: &ResolvedProgram) -> ProgramIr {
                 let fields: Vec<_> = data
                     .fields
                     .iter()
-                    .map(|e| {
-                        let key = match &e.key {
-                            rite_syntax::RecordKey::Ident(i) => KeyIr::Ident(i.name.clone()),
-                            rite_syntax::RecordKey::String(s) => KeyIr::String(s.clone()),
-                            rite_syntax::RecordKey::Atom(a) => KeyIr::Atom(a.parts.join(".")),
-                            rite_syntax::RecordKey::Spread => KeyIr::Ident("_spread".into()),
-                        };
-                        (key, d.desugar_expr(&e.value))
-                    })
+                    .map(|e| (key_ir(&e.key), d.desugar_expr(&e.value)))
                     .collect();
                 let rec = ExprIr::BuildRecord(fields, data.span);
                 let lid = d.fresh_local();
@@ -176,6 +174,20 @@ pub fn desugar_program(resolved: &ResolvedProgram) -> ProgramIr {
         entry,
         functions: d.functions,
         native_names: HashMap::new(),
+    }
+}
+
+/// Lower a record key.
+///
+/// A string key *names* a field — it is never interpolated — so the lexer's
+/// doubled-brace encoding is decoded here rather than split into holes. Without
+/// this, `⟨"\{a}": 1⟩` builds a field called `{{a}` and every lookup misses.
+fn key_ir(key: &RecordKey) -> KeyIr {
+    match key {
+        RecordKey::Ident(i) => KeyIr::Ident(i.name.clone()),
+        RecordKey::String(s) => KeyIr::String(rite_syntax::unescape_braces(s)),
+        RecordKey::Atom(a) => KeyIr::Atom(a.parts.join(".")),
+        RecordKey::Spread => KeyIr::Ident("_spread".into()),
     }
 }
 
@@ -390,23 +402,11 @@ impl Desugar {
                     let mut acc: Option<ExprIr> = None;
                     for e in &r.entries {
                         let piece = match &e.key {
-                            rite_syntax::RecordKey::Spread => self.desugar_expr(&e.value),
-                            other => {
-                                let key = match other {
-                                    rite_syntax::RecordKey::Ident(i) => {
-                                        KeyIr::Ident(i.name.clone())
-                                    }
-                                    rite_syntax::RecordKey::String(s) => KeyIr::String(s.clone()),
-                                    rite_syntax::RecordKey::Atom(a) => {
-                                        KeyIr::Atom(a.parts.join("."))
-                                    }
-                                    rite_syntax::RecordKey::Spread => unreachable!(),
-                                };
-                                ExprIr::BuildRecord(
-                                    vec![(key, self.desugar_expr(&e.value))],
-                                    e.span,
-                                )
-                            }
+                            RecordKey::Spread => self.desugar_expr(&e.value),
+                            other => ExprIr::BuildRecord(
+                                vec![(key_ir(other), self.desugar_expr(&e.value))],
+                                e.span,
+                            ),
                         };
                         acc = Some(match acc {
                             None => piece,
@@ -423,15 +423,7 @@ impl Desugar {
                     let entries = r
                         .entries
                         .iter()
-                        .map(|e| {
-                            let key = match &e.key {
-                                rite_syntax::RecordKey::Ident(i) => KeyIr::Ident(i.name.clone()),
-                                rite_syntax::RecordKey::String(s) => KeyIr::String(s.clone()),
-                                rite_syntax::RecordKey::Atom(a) => KeyIr::Atom(a.parts.join(".")),
-                                rite_syntax::RecordKey::Spread => KeyIr::Ident("_spread".into()),
-                            };
-                            (key, self.desugar_expr(&e.value))
-                        })
+                        .map(|e| (key_ir(&e.key), self.desugar_expr(&e.value)))
                         .collect();
                     ExprIr::BuildRecord(entries, r.span)
                 }
@@ -645,7 +637,12 @@ impl Desugar {
                                 let param = r.params.first().map(|_| self.fresh_local());
                                 routes.push(RouteIr {
                                     method: format!("{:?}", r.method).to_uppercase(),
-                                    path: r.path.clone(),
+                                    // A route path is matched by the router, not
+                                    // interpolated: single braces are route
+                                    // parameters (`/users/{id}`) and stay as-is,
+                                    // while a doubled brace is decoded like any
+                                    // other non-evaluated string literal.
+                                    path: rite_syntax::unescape_braces(&r.path),
                                     param,
                                     body: self.desugar_block(&r.body),
                                     span: r.span,
@@ -698,7 +695,10 @@ impl Desugar {
                         ),
                         (
                             KeyIr::Ident("path".into()),
-                            ExprIr::Constant(ValueLiteral::String(r.path.clone(), r.span)),
+                            ExprIr::Constant(ValueLiteral::String(
+                                rite_syntax::unescape_braces(&r.path),
+                                r.span,
+                            )),
                         ),
                     ],
                     r.span,
@@ -744,37 +744,58 @@ impl Desugar {
     }
 
     /// Desugar `"Hello, {name}."` into string concatenations.
+    ///
+    /// Brace convention in a string token's text (produced by
+    /// `rite_syntax::lexer::string_literal`, which documents it in full):
+    ///
+    /// * a single `{ … }` pair is an interpolation hole;
+    /// * a **doubled** brace (`{{`, `}}`) is a literal `{` / `}` — this is what
+    ///   the source escapes `\{` and `\}` lex to, so `"\{name}"` prints
+    ///   `{name}` instead of interpolating `name`;
+    /// * an unmatched `{` is taken literally, as before.
     fn desugar_interpolation(&mut self, s: &str, span: Span) -> ExprIr {
         let mut parts: Vec<ExprIr> = Vec::new();
+        // Literal text accumulated since the last interpolation hole.
+        let mut lit = String::new();
         let mut rest = s;
-        while let Some(start) = rest.find('{') {
+        while let Some(start) = rest.find(['{', '}']) {
             let (before, after) = rest.split_at(start);
-            if !before.is_empty() {
-                parts.push(ExprIr::Constant(ValueLiteral::String(
-                    before.to_string(),
-                    span,
-                )));
+            lit.push_str(before);
+            let brace = after.as_bytes()[0];
+            // Skip the brace itself.
+            let after = &after[1..];
+            // Doubled brace: one literal brace, no interpolation.
+            if after.as_bytes().first() == Some(&brace) {
+                lit.push(brace as char);
+                rest = &after[1..];
+                continue;
             }
-            let after = &after[1..]; // skip '{'
+            if brace == b'}' {
+                // Lone closing brace — literal, as there is no hole open.
+                lit.push('}');
+                rest = after;
+                continue;
+            }
             if let Some(end) = after.find('}') {
+                if !lit.is_empty() {
+                    parts.push(ExprIr::Constant(ValueLiteral::String(
+                        std::mem::take(&mut lit),
+                        span,
+                    )));
+                }
                 let expr_src = &after[..end];
                 parts.push(self.parse_interp_expr(expr_src, span));
                 rest = &after[end + 1..];
             } else {
-                // unmatched brace — treat rest literally
-                parts.push(ExprIr::Constant(ValueLiteral::String(
-                    format!("{{{}", after),
-                    span,
-                )));
-                rest = "";
-                break;
+                // unmatched brace — literal. No `}` remains, so nothing further
+                // can open a hole; keep scanning only to fold doubled braces.
+                lit.push('{');
+                rest = after;
             }
         }
-        if !rest.is_empty() {
-            parts.push(ExprIr::Constant(ValueLiteral::String(
-                rest.to_string(),
-                span,
-            )));
+        lit.push_str(rest);
+        if !lit.is_empty() {
+            parts.push(ExprIr::Constant(ValueLiteral::String(lit, span)));
         }
         if parts.is_empty() {
             return ExprIr::Constant(ValueLiteral::String(String::new(), span));
@@ -833,7 +854,14 @@ impl Desugar {
                     LitKind::Bool(b) => ValueLiteral::Bool(*b, l.span),
                     LitKind::Int(n) => ValueLiteral::Int(*n, l.span),
                     LitKind::Float(n) => ValueLiteral::Float(*n, l.span),
-                    LitKind::String(s) => ValueLiteral::String(s.clone(), l.span),
+                    // A pattern is matched, not evaluated: there is nothing to
+                    // interpolate against, so the doubled-brace encoding is
+                    // decoded instead of split. `~ s ⟦ "\{x}" → … ⟧` must compare
+                    // against the literal `{x}` (it compared against `{{x}` and
+                    // could never match).
+                    LitKind::String(s) => {
+                        ValueLiteral::String(rite_syntax::unescape_braces(s), l.span)
+                    }
                 };
                 PatternIr::Literal(lit)
             }

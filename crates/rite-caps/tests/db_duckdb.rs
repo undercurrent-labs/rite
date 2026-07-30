@@ -16,10 +16,10 @@ async fn run_allow_all(src: &str) -> rite_runtime::Value {
 async fn memory_create_insert_query() {
     let v = run_allow_all(
         r#"
-conn ← @db.open()?
+conn ← ! @db.open()?
 ! @db.exec(conn, "CREATE TABLE t(id INTEGER, name VARCHAR)")?
 ! @db.exec(conn, "INSERT INTO t VALUES (1, 'Ada'), (2, 'Bob')")?
-rows ← @db.query(conn, "SELECT name FROM t ORDER BY id")?
+rows ← ! @db.query(conn, "SELECT name FROM t ORDER BY id")?
 ! @db.close(conn)?
 ^ rows
 "#,
@@ -39,12 +39,12 @@ rows ← @db.query(conn, "SELECT name FROM t ORDER BY id")?
 async fn prepared_and_params() {
     let v = run_allow_all(
         r#"
-conn ← @db.open()?
+conn ← ! @db.open()?
 ! @db.exec(conn, "CREATE TABLE t(id INTEGER, n INTEGER)")?
-stmt ← @db.prepare(conn, "INSERT INTO t VALUES (?, ?)")?
+stmt ← ! @db.prepare(conn, "INSERT INTO t VALUES (?, ?)")?
 ! @db.exec_prepared(stmt, [1, 10])?
 ! @db.exec_prepared(stmt, [2, 20])?
-rows ← @db.query(conn, "SELECT n FROM t WHERE id = ?", [2])?
+rows ← ! @db.query(conn, "SELECT n FROM t WHERE id = ?", [2])?
 ! @db.close_stmt(stmt)?
 ! @db.close(conn)?
 ^ rows
@@ -64,12 +64,12 @@ rows ← @db.query(conn, "SELECT n FROM t WHERE id = ?", [2])?
 async fn transaction_rollback() {
     let v = run_allow_all(
         r#"
-conn ← @db.open()?
+conn ← ! @db.open()?
 ! @db.exec(conn, "CREATE TABLE t(id INTEGER)")?
 ! @db.begin(conn)?
 ! @db.exec(conn, "INSERT INTO t VALUES (1)")?
 ! @db.rollback(conn)?
-rows ← @db.query(conn, "SELECT * FROM t")?
+rows ← ! @db.query(conn, "SELECT * FROM t")?
 ! @db.close(conn)?
 ^ rows → count
 "#,
@@ -83,7 +83,7 @@ async fn permission_denied_without_allow() {
     let mut ctx = RuntimeContext::new();
     ctx.budget = rite_runtime::ExecutionBudget::unlimited();
     install_defaults(&mut ctx, PermissionSet::default_secure());
-    let err = run_source("db.rite", r#"conn ← @db.open()"#, &mut ctx)
+    let err = run_source("db.rite", r#"conn ← ! @db.open()"#, &mut ctx)
         .await
         .expect_err("should deny");
     let s = err.to_string();
@@ -103,8 +103,8 @@ async fn allow_db_memory_only() {
     let v = run_source(
         "db.rite",
         r#"
-conn ← @db.open()?
-rows ← @db.query(conn, "SELECT 1 AS x")?
+conn ← ! @db.open()?
+rows ← ! @db.query(conn, "SELECT 1 AS x")?
 ! @db.close(conn)?
 ^ rows
 "#,

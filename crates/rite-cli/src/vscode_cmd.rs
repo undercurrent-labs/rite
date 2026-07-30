@@ -108,6 +108,8 @@ struct VsixMeta {
     version: String,
     size: u64,
     sha256: String,
+    /// True when the sha256 matched the release SHA256SUMS entry.
+    verified: bool,
 }
 
 async fn fetch_vsix(
@@ -140,11 +142,37 @@ async fn fetch_vsix(
         let tmp = dest.with_extension("download");
         match github::download_to(&url, &tmp).await {
             Ok(()) => {
-                // basic sanity: vsix is a zip
+                // A .vsix is a zip. The old check ("at least 64 bytes") happily
+                // accepted the site's SPA fallback HTML and handed it to the
+                // editor.
                 let meta = fs::metadata(&tmp)?;
-                if meta.len() < 64 {
-                    last_err = Some(anyhow::anyhow!("file too small: {name}"));
-                    continue;
+                match crate::archive::sniff(&tmp)? {
+                    crate::archive::ArchiveKind::Zip => {}
+                    other => {
+                        last_err = Some(anyhow::anyhow!(
+                            "{name} from {url} is not a .vsix package ({other:?})"
+                        ));
+                        let _ = fs::remove_file(&tmp);
+                        continue;
+                    }
+                }
+                // Installing a VSIX runs third-party code in the editor: a
+                // mismatch against the published checksum is fatal.
+                let verified =
+                    match github::verify_against_release(release.as_ref(), &name, &tmp).await {
+                        Ok(v) => v,
+                        Err(e) => {
+                            let _ = fs::remove_file(&tmp);
+                            return Err(e);
+                        }
+                    };
+                if verified {
+                    println!("checksum ok ({name})");
+                } else {
+                    eprintln!(
+                        "warning: no published checksum for {name}; verify the sha256 below \
+                         against the release page before installing"
+                    );
                 }
                 fs::rename(&tmp, &dest).or_else(|_| {
                     fs::copy(&tmp, &dest)?;
@@ -159,6 +187,7 @@ async fn fetch_vsix(
                         version: tag,
                         size: meta.len(),
                         sha256: sha,
+                        verified,
                     },
                 ));
             }
@@ -178,6 +207,14 @@ fn print_meta(meta: &VsixMeta, path: &Path) {
     println!("  version: {}", meta.version);
     println!("  size:    {} bytes", meta.size);
     println!("  sha256:  {}", meta.sha256);
+    println!(
+        "  checked: {}",
+        if meta.verified {
+            "yes (matches release SHA256SUMS)"
+        } else {
+            "no published checksum for this asset"
+        }
+    );
     println!("  source:  {}", meta.source);
     println!("  file:    {}", path.display());
 }

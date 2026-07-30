@@ -1,23 +1,24 @@
 //! Rite CLI — run, build, check, fmt, repl, test, doc, and more.
 
+mod archive;
 mod config;
+mod docs_cmd;
 mod github;
 mod skill_cmd;
+mod studio;
 mod update_cmd;
+mod util;
 mod vscode_cmd;
 
-use axum::extract::State;
-use axum::routing::{get, post};
-use axum::{Json, Router};
-use clap::{Parser, Subcommand, ValueEnum};
+use clap::{CommandFactory, Parser, Subcommand, ValueEnum};
+use docs_cmd::DocsCmd;
 use rite_caps::{Permission, PermissionSet};
 use rite_core::SourceMap;
 use rite_runtime::{EvalError, RuntimeContext};
 use rite_sem::{compile_to_ir, ir_to_json};
 use rite_syntax::parse_source;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::process::ExitCode;
-use std::sync::Arc;
 use std::time::Duration;
 
 #[derive(Parser, Debug)]
@@ -37,6 +38,14 @@ struct Cli {
 #[derive(Subcommand, Debug)]
 enum Commands {
     /// Run a Rite script through the interpreter
+    ///
+    /// Output written by the script is always emitted, including when the script
+    /// fails. When the script's final expression evaluates to something other
+    /// than `none`, that value is printed after the script's own output.
+    ///
+    /// Arguments after `--` are exposed to the script as the `RITE_ARGV`
+    /// environment variable (a JSON array), readable with
+    /// `@env.get("RITE_ARGV")`.
     Run {
         file: PathBuf,
         #[arg(long = "allow", value_name = "PERM")]
@@ -49,10 +58,12 @@ enum Commands {
         timeout: Option<String>,
         #[arg(long = "max-steps")]
         max_steps: Option<u64>,
+        /// Print an execution summary (steps, elapsed) and stack traces to stderr
         #[arg(long)]
         trace: bool,
         #[arg(long = "json-errors")]
         json_errors: bool,
+        /// Script arguments (after `--`), exposed as the RITE_ARGV env var
         #[arg(last = true)]
         args: Vec<String>,
     },
@@ -76,15 +87,23 @@ enum Commands {
         #[arg(long = "json-errors")]
         json_errors: bool,
     },
-    /// Format Rite source
+    /// Format Rite source (rewrites files in place)
     Fmt {
+        /// Files or directories to format; required unless --all is given
         paths: Vec<PathBuf>,
+        /// Format every .rite file under the current directory
+        #[arg(long)]
+        all: bool,
         #[arg(long)]
         ascii: bool,
         #[arg(long, default_value = "glyph")]
         dialect: String,
+        /// Exit 1 if any file would change (does not write)
         #[arg(long)]
         check: bool,
+        /// List files that would change, then exit 0 (does not write)
+        #[arg(long = "dry-run")]
+        dry_run: bool,
     },
     /// Interactive REPL
     Repl {
@@ -139,14 +158,18 @@ enum Commands {
     },
     /// Start language server (stdio)
     Lsp,
-    /// Launch Rite Studio local service
+    /// Launch Rite Studio local service (loopback, token-authenticated)
     Studio {
         #[arg(long, default_value = "4041")]
         port: u16,
         #[arg(long = "no-open")]
         no_open: bool,
+        /// Project root: relative paths in executed scripts resolve here
         #[arg(long)]
         project: Option<PathBuf>,
+        /// Let Studio-executed scripts use the full host (fs, network, processes)
+        #[arg(long = "allow-all")]
+        allow_all: bool,
     },
     /// Dump syntax tree (alias of ast)
     #[command(name = "syntax-tree")]
@@ -276,30 +299,6 @@ enum VscodeCmd {
 }
 
 #[derive(Subcommand, Debug)]
-enum DocsCmd {
-    Build {
-        #[arg(long, default_value = "docs/generated")]
-        out: PathBuf,
-    },
-    Serve {
-        #[arg(long, default_value = "4042")]
-        port: u16,
-    },
-    Check,
-    Json {
-        #[arg(long, default_value = "docs/generated")]
-        out: PathBuf,
-    },
-    Agent {
-        #[arg(long, default_value = "skills/rite")]
-        output: PathBuf,
-    },
-    Open {
-        symbol: Option<String>,
-    },
-}
-
-#[derive(Subcommand, Debug)]
 enum DescribeCmd {
     Language {
         #[arg(long)]
@@ -342,36 +341,15 @@ async fn main() -> ExitCode {
     }
 }
 
-/// Known top-level subcommands (must stay in sync with [`Commands`]).
+/// Known top-level subcommands, read from clap's own command tree.
+///
+/// This used to be a hand-maintained `matches!` list that had to stay in sync
+/// with [`Commands`]; a new subcommand that nobody added here would have been
+/// swallowed by the implicit-run rewrite below and reported as a missing script.
 fn is_known_subcommand(name: &str) -> bool {
-    matches!(
-        name,
-        "run"
-            | "build"
-            | "check"
-            | "fmt"
-            | "repl"
-            | "test"
-            | "doc"
-            | "explain"
-            | "ast"
-            | "ir"
-            | "capabilities"
-            | "convert"
-            | "lsp"
-            | "studio"
-            | "syntax-tree"
-            | "semantic-ir"
-            | "emit-rust"
-            | "docs"
-            | "describe"
-            | "skill"
-            | "update"
-            | "self-update"
-            | "vscode"
-            | "version"
-            | "help"
-    )
+    Cli::command()
+        .get_subcommands()
+        .any(|sub| sub.get_name() == name || sub.get_all_aliases().any(|alias| alias == name))
 }
 
 /// If the first positional argument is not a subcommand, treat it as a script path
@@ -406,10 +384,36 @@ pub(crate) fn rewrite_argv_for_implicit_run(mut args: Vec<String>) -> Vec<String
 
 #[cfg(test)]
 mod argv_tests {
-    use super::rewrite_argv_for_implicit_run;
+    use super::{is_known_subcommand, rewrite_argv_for_implicit_run, Cli};
+    use clap::CommandFactory;
 
     fn args(xs: &[&str]) -> Vec<String> {
         xs.iter().map(|s| s.to_string()).collect()
+    }
+
+    /// Every subcommand clap knows about must be recognized by the
+    /// implicit-run guard, and vice versa: no drift possible.
+    #[test]
+    fn subcommand_list_matches_clap() {
+        let mut seen = 0;
+        for sub in Cli::command().get_subcommands() {
+            seen += 1;
+            let name = sub.get_name().to_string();
+            assert!(
+                is_known_subcommand(&name),
+                "clap subcommand `{name}` not recognized by is_known_subcommand"
+            );
+            let rewritten = rewrite_argv_for_implicit_run(args(&["rite", &name]));
+            assert_eq!(
+                rewritten,
+                args(&["rite", &name]),
+                "`rite {name}` must not be rewritten into `rite run {name}`"
+            );
+        }
+        assert!(seen > 10, "expected the full command surface, saw {seen}");
+        // A script path is not a subcommand.
+        assert!(!is_known_subcommand("hello.rite"));
+        assert!(!is_known_subcommand("runner"));
     }
 
     #[test]
@@ -489,13 +493,26 @@ async fn run(cli: Cli) -> anyhow::Result<ExitCode> {
             Ok(ExitCode::SUCCESS)
         }
         Commands::Lsp => {
-            // Delegate to rite-lsp binary if present, else note
-            let status = std::process::Command::new("rite-lsp").status();
-            match status {
+            // Delegate to the rite-lsp binary. Prefer the one shipped next to
+            // this executable (release archives contain both, and an editor
+            // pointing at an absolute `rite` should get the matching server)
+            // before falling back to PATH.
+            let exe_name = if cfg!(windows) {
+                "rite-lsp.exe"
+            } else {
+                "rite-lsp"
+            };
+            let sibling = std::env::current_exe()
+                .ok()
+                .and_then(|p| p.parent().map(|d| d.join(exe_name)))
+                .filter(|p| p.is_file());
+            let program = sibling.unwrap_or_else(|| PathBuf::from("rite-lsp"));
+            match std::process::Command::new(&program).status() {
                 Ok(s) if s.success() => Ok(ExitCode::SUCCESS),
                 Ok(s) => Ok(ExitCode::from(s.code().unwrap_or(1) as u8)),
-                Err(_) => {
-                    eprintln!("rite-lsp not found on PATH; run: cargo run -p rite-lsp");
+                Err(e) => {
+                    eprintln!("cannot start {} ({e})", program.display());
+                    eprintln!("install the LSP server or run: cargo run -p rite-lsp");
                     Ok(ExitCode::from(2))
                 }
             }
@@ -504,7 +521,8 @@ async fn run(cli: Cli) -> anyhow::Result<ExitCode> {
             port,
             no_open,
             project,
-        } => run_studio(port, no_open, project.as_deref()).await,
+            allow_all,
+        } => studio::run(port, no_open, project.as_deref(), allow_all).await,
         Commands::SyntaxTree { file, json } => {
             // reuse Ast
             let text = std::fs::read_to_string(&file)?;
@@ -553,15 +571,14 @@ async fn run(cli: Cli) -> anyhow::Result<ExitCode> {
             println!("{}", code);
             Ok(ExitCode::SUCCESS)
         }
-        Commands::Docs { cmd } => run_docs(cmd).await,
+        Commands::Docs { cmd } => docs_cmd::run(cmd).await,
         Commands::Describe { target } => run_describe(target),
         Commands::Check { file, json_errors } => {
-            let text = std::fs::read_to_string(&file)?;
-            let name = file.display().to_string();
-            let mut sources = SourceMap::new();
-            let id = sources.add_file(&name, &text);
-            let sf = sources.get(id).unwrap().clone();
-            let (ir, diags) = compile_to_ir(&sf);
+            // Path-aware compile: `compile_to_ir` has no notion of where the file lives,
+            // so `use math` could not be resolved and `rite check` reported E026 on
+            // scripts that `rite run` executes fine. `compile_path` resolves imports
+            // relative to the script, matching the runtime.
+            let (ir, diags, sources) = rite_sem::compile_path(&file);
             if json_errors {
                 println!("{}", serde_json::to_string_pretty(&diags.to_json())?);
             } else if !diags.is_empty() {
@@ -627,10 +644,28 @@ async fn run(cli: Cli) -> anyhow::Result<ExitCode> {
         }
         Commands::Fmt {
             paths,
+            all,
             ascii,
             dialect,
             check,
+            dry_run,
         } => {
+            // `rite fmt` with no argument used to mean "rewrite every .rite file
+            // under the current directory" — a destructive default for a
+            // no-argument command. Formatting a whole tree is now opt-in.
+            if paths.is_empty() && !all {
+                eprintln!("rite fmt: no paths given");
+                eprintln!(
+                    "  pass files or directories, or `--all` to format every .rite file under {}",
+                    std::env::current_dir()
+                        .map(|p| p.display().to_string())
+                        .unwrap_or_else(|_| ".".into())
+                );
+                eprintln!(
+                    "  `--check` reports without writing; `--dry-run` lists what would change"
+                );
+                return Ok(ExitCode::from(2));
+            }
             let paths = if paths.is_empty() {
                 vec![PathBuf::from(".")]
             } else {
@@ -646,28 +681,44 @@ async fn run(cli: Cli) -> anyhow::Result<ExitCode> {
                     _ => rite_fmt::Dialect::Glyph,
                 }
             };
+            let mut files = Vec::new();
+            for path in &paths {
+                files.extend(util::collect_rite_files(path)?);
+            }
+            let writing = !check && !dry_run;
+            if writing && files.len() > 1 {
+                // Say what is about to be rewritten in place.
+                println!("rite fmt: {} file(s) to check", files.len());
+            }
+
             let mut failed = false;
-            for path in paths {
-                for file in collect_rite_files(&path)? {
-                    let text = std::fs::read_to_string(&file)?;
-                    match rite_fmt::format_with_dialect(&text, dialect) {
-                        Ok(formatted) => {
-                            if check {
-                                if formatted.text != text {
-                                    eprintln!("would reformat {}", file.display());
-                                    failed = true;
-                                }
-                            } else if formatted.text != text {
-                                std::fs::write(&file, formatted.text)?;
-                                println!("formatted {}", file.display());
-                            }
+            let mut changed = 0usize;
+            for file in files {
+                let text = std::fs::read_to_string(&file)?;
+                match rite_fmt::format_with_dialect(&text, dialect) {
+                    Ok(formatted) => {
+                        if formatted.text == text {
+                            continue;
                         }
-                        Err(e) => {
-                            eprintln!("{}: {}", file.display(), e);
+                        changed += 1;
+                        if check {
+                            eprintln!("would reformat {}", file.display());
                             failed = true;
+                        } else if dry_run {
+                            println!("would reformat {}", file.display());
+                        } else {
+                            std::fs::write(&file, formatted.text)?;
+                            println!("formatted {}", file.display());
                         }
                     }
+                    Err(e) => {
+                        eprintln!("{}: {}", file.display(), e);
+                        failed = true;
+                    }
                 }
+            }
+            if dry_run {
+                println!("{changed} file(s) would change");
             }
             Ok(if failed {
                 ExitCode::from(1)
@@ -682,15 +733,25 @@ async fn run(cli: Cli) -> anyhow::Result<ExitCode> {
             deny,
             timeout,
             max_steps,
-            trace: _,
+            trace,
             json_errors,
-            args: _,
+            args,
         } => {
             let mut perms = if allow_all {
                 PermissionSet::allow_all()
             } else {
                 PermissionSet::default_secure()
             };
+
+            // Script arguments. No capability exposes argv yet (@env has
+            // get/require/all, @process has run/which), so the CLI publishes
+            // them as RITE_ARGV — a JSON array — and grants read access to just
+            // that variable, since its contents are exactly what the caller
+            // typed. `@env.get("RITE_ARGV")` works without extra --allow flags.
+            // Granted before the flag loops so `--deny env` still wins.
+            std::env::set_var(ARGV_ENV, serde_json::to_string(&args)?);
+            perms.grant(Permission::Env(ARGV_ENV.to_string()));
+
             for a in allow {
                 match Permission::parse(&a) {
                     Ok(p) => perms.grant(p),
@@ -720,23 +781,54 @@ async fn run(cli: Cli) -> anyhow::Result<ExitCode> {
                 ctx.budget = ctx.budget.with_max_steps(ms);
             }
             if let Some(t) = timeout {
-                if let Some(dur) = parse_duration(&t) {
-                    ctx.budget = ctx.budget.with_timeout(dur);
+                // A bad --timeout used to be discarded silently, leaving the
+                // default 60s budget in place.
+                match parse_duration(&t) {
+                    Ok(dur) => ctx.budget = ctx.budget.with_timeout(dur),
+                    Err(e) => {
+                        eprintln!("invalid --timeout {t:?}: {e}");
+                        return Ok(ExitCode::from(2));
+                    }
                 }
             }
             rite_caps::install_defaults(&mut ctx, perms);
 
-            match rite_runtime::run_file(&sf, &mut ctx).await {
-                Ok(value) => {
-                    // Print captured stdout
-                    for line in &ctx.stdout {
-                        print!("{}", line);
+            let started = std::time::Instant::now();
+            let result = rite_runtime::run_file(&sf, &mut ctx).await;
+            let elapsed = started.elapsed();
+
+            // Script output is emitted before the result is inspected, so it
+            // survives every failure path.
+            flush_script_output(&ctx);
+
+            if trace {
+                eprintln!("trace: script  {}", file.display());
+                eprintln!(
+                    "trace: steps   {} in {:.3}ms",
+                    ctx.budget.steps(),
+                    elapsed.as_secs_f64() * 1000.0
+                );
+                eprintln!(
+                    "trace: outcome {}",
+                    match &result {
+                        Ok(_) => "ok".to_string(),
+                        Err(e) => format!("error: {e}"),
                     }
+                );
+                let stack = ctx.format_stack_trace();
+                if !stack.is_empty() {
+                    eprintln!("trace:{stack}");
+                }
+            }
+
+            match result {
+                Ok(value) => {
+                    // The final expression's value is printed whenever it is not
+                    // `none`. It used to be suppressed as soon as the script had
+                    // printed anything, which made the result vanish for any
+                    // script that also logged.
                     if !matches!(value, rite_runtime::Value::None) {
-                        // Only print value if nothing was printed? print result for scripts
-                        if ctx.stdout.is_empty() {
-                            println!("{}", value.to_display(&ctx.atoms));
-                        }
+                        println!("{}", value.to_display(&ctx.atoms));
                     }
                     Ok(ExitCode::SUCCESS)
                 }
@@ -752,8 +844,8 @@ async fn run(cli: Cli) -> anyhow::Result<ExitCode> {
                     eprintln!("permission denied: {}", m);
                     Ok(ExitCode::from(5))
                 }
-                Err(EvalError::Budget(_)) => {
-                    eprintln!("execution budget exceeded");
+                Err(EvalError::Budget(b)) => {
+                    eprintln!("budget exceeded: {}", b);
                     Ok(ExitCode::from(8))
                 }
                 Err(e) => {
@@ -892,98 +984,82 @@ fn print_capabilities() {
     }
 }
 
-fn collect_rite_files(path: &Path) -> anyhow::Result<Vec<PathBuf>> {
-    let mut out = Vec::new();
-    if path.is_file() {
-        out.push(path.to_path_buf());
-        return Ok(out);
-    }
-    for entry in walkdir_simple(path)? {
-        if entry.extension().and_then(|s| s.to_str()) == Some("rite") {
-            out.push(entry);
+/// Environment variable carrying `rite run script.rite -- a b` arguments.
+const ARGV_ENV: &str = "RITE_ARGV";
+
+/// Write everything the script produced: stdout buffer to stdout, stderr buffer
+/// to stderr.
+///
+/// The runtime buffers `@console` output for the whole program in
+/// `ctx.stdout` / `ctx.stderr`. This used to be drained only in the success
+/// arm, so `println` followed by a runtime error printed nothing at all, and
+/// `@console.warn` / `@console.error` were never shown on any path.
+fn flush_script_output(ctx: &RuntimeContext) {
+    use std::io::Write;
+    if !ctx.stdout.is_empty() {
+        let mut out = std::io::stdout().lock();
+        for chunk in &ctx.stdout {
+            let _ = out.write_all(chunk.as_bytes());
         }
+        let _ = out.flush();
     }
-    Ok(out)
+    if !ctx.stderr.is_empty() {
+        let mut err = std::io::stderr().lock();
+        for chunk in &ctx.stderr {
+            let _ = err.write_all(chunk.as_bytes());
+        }
+        let _ = err.flush();
+    }
 }
 
-fn walkdir_simple(path: &Path) -> anyhow::Result<Vec<PathBuf>> {
-    let mut out = Vec::new();
-    if path.is_dir() {
-        for e in std::fs::read_dir(path)? {
-            let e = e?;
-            let p = e.path();
-            if p.is_dir() {
-                out.extend(walkdir_simple(&p)?);
-            } else {
-                out.push(p);
-            }
-        }
+/// Parse `500ms`, `30s`, `5m`, or a bare number of seconds.
+fn parse_duration(s: &str) -> Result<Duration, String> {
+    let t = s.trim();
+    let invalid = |unit: &str| format!("expected a number{unit} (e.g. 500ms, 30s, 5m)");
+    if let Some(ms) = t.strip_suffix("ms") {
+        return ms
+            .trim()
+            .parse()
+            .map(Duration::from_millis)
+            .map_err(|_| invalid(" of milliseconds"));
     }
-    Ok(out)
+    if let Some(sec) = t.strip_suffix('s') {
+        return sec
+            .trim()
+            .parse()
+            .map(Duration::from_secs)
+            .map_err(|_| invalid(" of seconds"));
+    }
+    if let Some(m) = t.strip_suffix('m') {
+        return m
+            .trim()
+            .parse::<u64>()
+            .map(|n| Duration::from_secs(n * 60))
+            .map_err(|_| invalid(" of minutes"));
+    }
+    t.parse::<u64>()
+        .map(Duration::from_secs)
+        .map_err(|_| invalid(" of seconds"))
 }
 
-fn parse_duration(s: &str) -> Option<Duration> {
-    if let Some(ms) = s.strip_suffix("ms") {
-        return ms.parse().ok().map(Duration::from_millis);
-    }
-    if let Some(sec) = s.strip_suffix('s') {
-        return sec.parse().ok().map(Duration::from_secs);
-    }
-    if let Some(m) = s.strip_suffix('m') {
-        return m.parse::<u64>().ok().map(|n| Duration::from_secs(n * 60));
-    }
-    s.parse::<u64>().ok().map(Duration::from_secs)
-}
+#[cfg(test)]
+mod duration_tests {
+    use super::parse_duration;
+    use std::time::Duration;
 
-async fn run_docs(cmd: DocsCmd) -> anyhow::Result<ExitCode> {
-    match cmd {
-        DocsCmd::Build { out } | DocsCmd::Json { out } => {
-            rite_doc::generate(None, &out)?;
-            rite_doc::generate_agent_bundle(Path::new("skills/rite"))?;
-            println!("docs written to {}", out.display());
-            Ok(ExitCode::SUCCESS)
-        }
-        DocsCmd::Check => {
-            rite_doc::generate(None, Path::new("docs/generated"))?;
-            let report = rite_doc::run_doctests(&[
-                Path::new("docs/book"),
-                Path::new("docs/diagnostics"),
-                Path::new("skills/rite"),
-            ])
-            .await;
-            println!(
-                "doctests: {} passed, {} failed",
-                report.passed, report.failed
-            );
-            for r in &report.results {
-                if !r.ok {
-                    eprintln!("FAIL {}:{} [{}] {}", r.file, r.line, r.mode, r.message);
-                }
-            }
-            if report.failed > 0 {
-                Ok(ExitCode::from(7))
-            } else {
-                println!("docs check ok");
-                Ok(ExitCode::SUCCESS)
-            }
-        }
-        DocsCmd::Serve { port } => {
-            println!("serving docs at http://127.0.0.1:{port}/ (static files in docs/generated)");
-            println!("open docs/generated/html/index.html or use a static file server");
-            let _ = port;
-            Ok(ExitCode::SUCCESS)
-        }
-        DocsCmd::Agent { output } => {
-            rite_doc::generate_agent_bundle(&output)?;
-            println!("agent skill written to {}", output.display());
-            Ok(ExitCode::SUCCESS)
-        }
-        DocsCmd::Open { symbol } => {
-            println!(
-                "open documentation for {}",
-                symbol.as_deref().unwrap_or("index")
-            );
-            Ok(ExitCode::SUCCESS)
+    #[test]
+    fn parses_units() {
+        assert_eq!(parse_duration("500ms"), Ok(Duration::from_millis(500)));
+        assert_eq!(parse_duration("30s"), Ok(Duration::from_secs(30)));
+        assert_eq!(parse_duration("5m"), Ok(Duration::from_secs(300)));
+        assert_eq!(parse_duration("7"), Ok(Duration::from_secs(7)));
+        assert_eq!(parse_duration(" 7 "), Ok(Duration::from_secs(7)));
+    }
+
+    #[test]
+    fn rejects_garbage_instead_of_ignoring_it() {
+        for bad in ["", "abc", "1h", "-5s", "1.5s", "ms", "s"] {
+            assert!(parse_duration(bad).is_err(), "{bad:?} should not parse");
         }
     }
 }
@@ -1049,217 +1125,6 @@ fn run_describe(target: DescribeCmd) -> anyhow::Result<ExitCode> {
             eprintln!("unknown capability @{name}");
             Ok(ExitCode::from(2))
         }
-        DescribeCmd::Diagnostic { code, json } => {
-            let v = serde_json::json!({
-                "code": code,
-                "summary": "See IMPLEMENTATION.md and diagnostics encyclopedia",
-                "docs": format!("docs/diagnostics/{}.md", code),
-            });
-            if json {
-                println!("{}", serde_json::to_string_pretty(&v)?);
-            } else {
-                println!("{code}: stable diagnostic — see documentation");
-            }
-            Ok(ExitCode::SUCCESS)
-        }
+        DescribeCmd::Diagnostic { code, json } => docs_cmd::describe_diagnostic(&code, json),
     }
 }
-
-async fn run_studio(port: u16, no_open: bool, project: Option<&Path>) -> anyhow::Result<ExitCode> {
-    use std::net::SocketAddr;
-
-    let token = uuid::Uuid::new_v4().to_string();
-    let state = Arc::new(StudioState {
-        token: token.clone(),
-        project: project.map(|p| p.to_path_buf()),
-    });
-
-    let app = Router::new()
-        .route("/api/v1/version", get(studio_version))
-        .route("/api/v1/parse", post(studio_parse))
-        .route("/api/v1/analyze", post(studio_analyze))
-        .route("/api/v1/format", post(studio_format))
-        .route("/api/v1/run", post(studio_run))
-        .route("/api/v1/check", post(studio_check))
-        .route("/api/v1/emit-rust", post(studio_emit_rust))
-        .route("/", get(|| async { axum::response::Html(STUDIO_HTML) }))
-        .with_state(state);
-
-    let addr = SocketAddr::from(([127, 0, 0, 1], port));
-    println!("Rite Studio local service on http://{addr}");
-    println!("session token: {token}");
-    if let Some(p) = project {
-        println!("project root: {}", p.display());
-    }
-    if !no_open {
-        let _ = std::process::Command::new("xdg-open")
-            .arg(format!("http://{addr}"))
-            .status();
-    }
-    let listener = tokio::net::TcpListener::bind(addr).await?;
-    axum::serve(listener, app).await?;
-    Ok(ExitCode::SUCCESS)
-}
-
-#[derive(Clone)]
-struct StudioState {
-    /// Session token reserved for authenticated Studio API routes.
-    #[allow(dead_code)]
-    token: String,
-    project: Option<PathBuf>,
-}
-
-#[derive(serde::Deserialize)]
-struct SourceBody {
-    source: String,
-    #[serde(default)]
-    dialect: Option<String>,
-    /// Optional client token (auth not yet enforced).
-    #[serde(default)]
-    #[allow(dead_code)]
-    token: Option<String>,
-}
-
-async fn studio_version(State(st): State<Arc<StudioState>>) -> Json<serde_json::Value> {
-    Json(serde_json::json!({
-        "rite": env!("CARGO_PKG_VERSION"),
-        "language_version": "1",
-        "token_required": true,
-        "project": st.project.as_ref().map(|p| p.display().to_string()),
-    }))
-}
-
-async fn studio_parse(Json(body): Json<SourceBody>) -> Json<serde_json::Value> {
-    Json(serde_json::to_value(rite_wasm::parse(&body.source)).unwrap_or_default())
-}
-
-async fn studio_analyze(Json(body): Json<SourceBody>) -> Json<serde_json::Value> {
-    Json(rite_wasm::analyze(&body.source))
-}
-
-async fn studio_format(Json(body): Json<SourceBody>) -> Json<serde_json::Value> {
-    let d = body.dialect.as_deref().unwrap_or("glyph");
-    match rite_wasm::format(&body.source, d) {
-        Ok(r) => Json(serde_json::json!({
-            "ok": true,
-            "text": r.text,
-            "dialect": r.dialect,
-            "source_map": r.source_map,
-        })),
-        Err(e) => Json(serde_json::json!({"ok": false, "error": e})),
-    }
-}
-
-async fn studio_run(Json(body): Json<SourceBody>) -> Json<serde_json::Value> {
-    // Await the async runner — do not call run_blocking() here (nested Tokio panic).
-    let result = rite_wasm::run(
-        &body.source,
-        rite_wasm::RunOptions {
-            allow_all: true,
-            timeout_ms: Some(5000),
-            seed: Some(42),
-            files: Default::default(),
-            browser_safe: false,
-        },
-    )
-    .await;
-    Json(serde_json::to_value(result).unwrap_or_default())
-}
-
-async fn studio_check(Json(body): Json<SourceBody>) -> Json<serde_json::Value> {
-    Json(rite_wasm::analyze(&body.source))
-}
-
-async fn studio_emit_rust(Json(body): Json<SourceBody>) -> Json<serde_json::Value> {
-    Json(rite_wasm::emit_rust(&body.source))
-}
-
-// Minimal embedded Studio shell (full Vue app lives in apps/rite-studio)
-const STUDIO_HTML: &str = r#"<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>Rite Studio</title>
-<style>
-:root { color-scheme: dark; --bg:#0b0f14; --panel:#121821; --fg:#e6edf3; --accent:#7ee0ff; --pink:#ff7edb; }
-* { box-sizing: border-box; }
-body { margin:0; font-family: ui-sans-serif, system-ui, sans-serif; background:var(--bg); color:var(--fg); }
-header { display:flex; gap:.5rem; flex-wrap:wrap; padding:.75rem 1rem; border-bottom:1px solid #222; align-items:center; }
-header h1 { font-size:1rem; margin:0; color:var(--accent); margin-right:auto; }
-button, select { background:#1a2332; color:var(--fg); border:1px solid #334; border-radius:6px; padding:.4rem .7rem; cursor:pointer; }
-button:hover { border-color:var(--accent); }
-main { display:grid; grid-template-columns: 1fr 1fr; min-height: calc(100vh - 52px); }
-@media (max-width: 800px) { main { grid-template-columns: 1fr; } }
-textarea { width:100%; height:100%; min-height:50vh; background:var(--panel); color:var(--fg); border:0; padding:1rem; font-family: ui-monospace, monospace; font-size:14px; resize:none; }
-.side { display:flex; flex-direction:column; border-left:1px solid #222; }
-.tabs { display:flex; gap:.25rem; padding:.5rem; border-bottom:1px solid #222; flex-wrap:wrap; }
-.tabs button.active { border-color:var(--pink); color:var(--pink); }
-pre { margin:0; padding:1rem; overflow:auto; flex:1; white-space:pre-wrap; font-size:13px; }
-</style>
-</head>
-<body>
-<header>
-  <h1>Rite Studio ◆</h1>
-  <button id="run">Run</button>
-  <button id="check">Check</button>
-  <button id="fmt">Format</button>
-  <select id="dialect"><option value="glyph">glyph</option><option value="ascii">ascii</option></select>
-  <button id="convert">Convert</button>
-  <button id="emit">Emit Rust</button>
-</header>
-<main>
-  <textarea id="src">◆ square(n) ⟦
-  ^ n * n
-⟧
-! @console.println(str(square(12)))
-</textarea>
-  <div class="side">
-    <div class="tabs">
-      <button class="active" data-tab="out">Output</button>
-      <button data-tab="diag">Diagnostics</button>
-      <button data-tab="ast">AST</button>
-      <button data-tab="ir">IR</button>
-      <button data-tab="rust">Rust</button>
-    </div>
-    <pre id="panel">Ready.</pre>
-  </div>
-</main>
-<script>
-const panel = document.getElementById('panel');
-const src = document.getElementById('src');
-let tab = 'out';
-document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => {
-  document.querySelectorAll('.tabs button').forEach(x => x.classList.remove('active'));
-  b.classList.add('active'); tab = b.dataset.tab; panel.textContent = '…';
-});
-async function post(path, body) {
-  const r = await fetch(path, { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify(body) });
-  return r.json();
-}
-document.getElementById('run').onclick = async () => {
-  const j = await post('/api/v1/run', { source: src.value });
-  panel.textContent = JSON.stringify(j, null, 2);
-};
-document.getElementById('check').onclick = async () => {
-  const j = await post('/api/v1/analyze', { source: src.value });
-  panel.textContent = JSON.stringify(j, null, 2);
-};
-document.getElementById('fmt').onclick = async () => {
-  const dialect = document.getElementById('dialect').value;
-  const j = await post('/api/v1/format', { source: src.value, dialect });
-  if (j.ok) src.value = j.text;
-  panel.textContent = JSON.stringify(j, null, 2);
-};
-document.getElementById('convert').onclick = async () => {
-  const dialect = document.getElementById('dialect').value;
-  const j = await post('/api/v1/format', { source: src.value, dialect });
-  if (j.ok) src.value = j.text;
-};
-document.getElementById('emit').onclick = async () => {
-  const j = await post('/api/v1/emit-rust', { source: src.value });
-  panel.textContent = j.rust || JSON.stringify(j, null, 2);
-};
-</script>
-</body>
-</html>"#;

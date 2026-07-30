@@ -14,7 +14,16 @@ Statement-level host I/O uses `!` (glyph) or `do` (ASCII):
 do host.console.println("hi")
 ```
 
-Some contexts bind host results in expressions (`text ← @fs.read(path)?`). The important part: **capabilities are explicit** — you see `@fs` / `host.fs` in the source.
+The marker is required wherever the call appears, including when you bind its result:
+`text ← ! @fs.read(path)?`. Two things are always explicit — the **capability** (you see
+`@fs` / `host.fs` in the source) and the **effect** (you see the `!` / `do`).
+
+A call is effectful if it observes *or* changes state outside the program: the filesystem,
+environment, subprocesses, sockets, the terminal, the clock, the entropy source, a
+database. Note that **reads count** — `@fs.read` and `@db.query` need `!` just as
+`@fs.write` does, for the same reason `@clock.now` does: the answer can differ between
+runs. The exception is state a capability owns in-process (`@game`'s world, `@store`'s
+map), where only writes are marked; reading it is like reading a local binding.
 
 ## Capability prefix
 

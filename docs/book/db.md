@@ -20,9 +20,9 @@ rite run script.rite --allow db=./data
 ## Open / close
 
 ```rite
-conn ← @db.open()?              // in-memory
-// conn ← @db.open(":memory:")?
-// conn ← @db.open("./data/app.duckdb")?   // needs --allow db=./data
+conn ← ! @db.open()?              // in-memory
+// conn ← ! @db.open(":memory:")?
+// conn ← ! @db.open("./data/app.duckdb")?   // needs --allow db=./data
 
 ! @db.close(conn)?
 ```
@@ -32,11 +32,11 @@ conn ← @db.open()?              // in-memory
 ## Exec and query
 
 ```rite
-conn ← @db.open()?
+conn ← ! @db.open()?
 ! @db.exec(conn, "CREATE TABLE events(id INTEGER, name VARCHAR)")?
 ! @db.exec(conn, "INSERT INTO events VALUES (1, 'boot'), (2, 'tick')")?
 
-rows ← @db.query(conn, "SELECT name FROM events ORDER BY id")?
+rows ← ! @db.query(conn, "SELECT name FROM events ORDER BY id")?
 // rows is a list of records: [⟨name: "boot"⟩, ⟨name: "tick"⟩]
 
 ! @console.println(rows)
@@ -46,15 +46,15 @@ rows ← @db.query(conn, "SELECT name FROM events ORDER BY id")?
 Optional **params** as a list (positional `?` in SQL):
 
 ```rite
-rows ← @db.query(conn, "SELECT * FROM events WHERE id = ?", [1])?
+rows ← ! @db.query(conn, "SELECT * FROM events WHERE id = ?", [1])?
 ```
 
 ## Prepared statements
 
 ```rite
-stmt ← @db.prepare(conn, "INSERT INTO events VALUES (?, ?)")?
+stmt ← ! @db.prepare(conn, "INSERT INTO events VALUES (?, ?)")?
 ! @db.exec_prepared(stmt, [3, "done"])?
-rows ← @db.query_prepared(stmt_select, [3])?   // if prepared as SELECT
+rows ← ! @db.query_prepared(stmt_select, [3])?   // if prepared as SELECT
 ! @db.close_stmt(stmt)?
 ```
 
@@ -72,11 +72,11 @@ You can load CSV via `@csv` then insert, or use DuckDB’s own readers when the 
 
 ```rite
 // Pure Rite path
-rows ← @csv.read("data/events.csv")?
+rows ← ! @csv.read("data/events.csv")?
 // … insert into @db …
 
 // DuckDB path (file must be under db allow root)
-// rows ← @db.query(conn, "SELECT * FROM read_csv_auto('data/events.csv')")?
+// rows ← ! @db.query(conn, "SELECT * FROM read_csv_auto('data/events.csv')")?
 ```
 
 ## Example

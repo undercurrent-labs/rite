@@ -47,7 +47,7 @@ impl DbCap {
     pub const DESCRIPTORS: &'static [NativeFunctionDescriptor] = &[
         NativeFunctionDescriptor {
             name: "open",
-            docs: "Open a DuckDB connection. Path omitted or \":memory:\" → in-memory. Needs --allow db or --allow db=path.",
+            docs: "Open a DuckDB connection. Path omitted or \":memory:\" → in-memory. Needs --allow db or --allow db=path. DuckDB's own file/network access (read_csv, COPY TO, ATTACH, extensions) is sandboxed to the granted db= / fs:write roots.",
             arity: 0,
             effectful: true,
             permission: "db",
@@ -207,6 +207,11 @@ impl DbCap {
                 )));
             }
         };
+        // A script controls arbitrary SQL, and DuckDB's SQL surface is a second
+        // filesystem/network host (read_csv, COPY TO, ATTACH, INSTALL/LOAD, httpfs).
+        // Constrain it to the granted permissions before the handle escapes — fail
+        // closed if the sandbox cannot be applied.
+        harden_connection(&conn, perms)?;
         let id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
         self.inner.lock().conns.insert(id, conn);
         Ok(Value::ok(Value::Handle(HostHandle {
@@ -354,6 +359,110 @@ impl Default for DbCap {
     fn default() -> Self {
         Self::new()
     }
+}
+
+/// Settings a sandboxed script may still tune after the configuration is locked.
+/// Deliberately limited to performance/formatting knobs: none of them can widen
+/// file, network, or extension access.
+#[cfg(all(feature = "duckdb", not(target_arch = "wasm32")))]
+const DUCKDB_UNLOCKED_SETTINGS: &[&str] = &[
+    "threads",
+    "memory_limit",
+    "max_memory",
+    "preserve_insertion_order",
+    "default_null_order",
+    "default_order",
+    "errors_as_json",
+];
+
+/// Clamp a fresh DuckDB connection down to the script's granted permissions.
+///
+/// DuckDB SQL can read and write files (`read_csv`, `COPY … TO`), attach other
+/// databases, and install/load extensions that speak HTTP/S3 — none of which go
+/// through `PermissionSet`. Without this, `--allow db` alone would be equivalent
+/// to `--allow fs:read=/ --allow fs:write=/ --allow net=*`.
+///
+/// | Grants | DuckDB file/network access |
+/// |---|---|
+/// | `--allow db` (memory only) | none — `enable_external_access=false` |
+/// | `--allow db=./data` | only under `./data` (plus any `fs:write` root) |
+/// | `--allow-all` | unrestricted |
+///
+/// `fs:read`-only roots are intentionally *not* exposed: DuckDB's
+/// `allowed_directories` has no read-only mode, so listing a read root there
+/// would silently upgrade it to a write root. Load read-only data with
+/// `@csv.read` / `@fs.read` and insert it instead.
+///
+/// The lock is not advisory: `allowed_configs` + `lock_configuration=true` make
+/// every security-relevant `SET` fail, and DuckDB additionally refuses
+/// `SET enable_external_access=true` while the database is running.
+#[cfg(all(feature = "duckdb", not(target_arch = "wasm32")))]
+fn harden_connection(conn: &Connection, perms: &PermissionSet) -> Result<(), EvalError> {
+    // `--allow-all` is the documented opt-out from every restriction.
+    if perms.allow_all {
+        return Ok(());
+    }
+
+    let mut dirs: Vec<String> = Vec::new();
+    let mut files: Vec<String> = Vec::new();
+    for root in perms.db_paths.iter().chain(perms.fs_write.iter()) {
+        let root_s = root.to_string_lossy().to_string();
+        if root.is_dir() {
+            dirs.push(root_s);
+        } else {
+            // A grant naming a single database file (`--allow db=./data/app.duckdb`),
+            // or a root that does not exist yet. Grant the path itself plus the two
+            // sidecars DuckDB writes next to a database: `<db>.wal` and the
+            // `<db>.tmp` spill directory.
+            files.push(root_s.clone());
+            files.push(format!("{root_s}.wal"));
+            dirs.push(format!("{root_s}.tmp"));
+            dirs.push(root_s);
+        }
+    }
+
+    let mut stmts: Vec<String> = Vec::new();
+    // Allow-list first: with external access off these are the only paths left.
+    if !dirs.is_empty() {
+        stmts.push(format!("SET allowed_directories={}", sql_str_list(&dirs)));
+    }
+    if !files.is_empty() {
+        stmts.push(format!("SET allowed_paths={}", sql_str_list(&files)));
+    }
+    // The main gate. Everything outside the allow-list now fails with
+    // "file system operations are disabled by configuration".
+    stmts.push("SET enable_external_access=false".into());
+    // No fetching, loading, or trusting extensions from inside the sandbox.
+    stmts.push("SET autoinstall_known_extensions=false".into());
+    stmts.push("SET allow_community_extensions=false".into());
+    stmts.push("SET allow_unsigned_extensions=false".into());
+    // Persistent secrets live in ~/.duckdb — outside every granted root.
+    stmts.push("SET allow_persistent_secrets=false".into());
+    // Keep a few harmless knobs settable, then freeze the rest.
+    stmts.push(format!(
+        "SET allowed_configs={}",
+        sql_str_list(DUCKDB_UNLOCKED_SETTINGS)
+    ));
+    stmts.push("SET lock_configuration=true".into());
+
+    for stmt in &stmts {
+        conn.execute_batch(stmt).map_err(|e| {
+            EvalError::Capability(format!(
+                "db.open: could not sandbox the connection (`{stmt}`): {e}"
+            ))
+        })?;
+    }
+    Ok(())
+}
+
+/// Render `['a', 'b']` with SQL single-quote escaping.
+#[cfg(all(feature = "duckdb", not(target_arch = "wasm32")))]
+fn sql_str_list<S: AsRef<str>>(items: &[S]) -> String {
+    let inner: Vec<String> = items
+        .iter()
+        .map(|s| format!("'{}'", s.as_ref().replace('\'', "''")))
+        .collect();
+    format!("[{}]", inner.join(", "))
 }
 
 fn handle_id(v: Option<&Value>, kind: &str) -> Result<u64, EvalError> {

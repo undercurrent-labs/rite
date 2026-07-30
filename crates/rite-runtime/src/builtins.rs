@@ -256,15 +256,12 @@ fn builtin_range(args: Vec<Value>) -> Result<Value, EvalError> {
     }
     let mut xs = im::Vector::new();
     let mut i = start;
-    if step > 0 {
-        while i < end {
-            xs.push_back(Value::Int(i));
-            i += step;
-        }
-    } else {
-        while i > end {
-            xs.push_back(Value::Int(i));
-            i += step;
+    while if step > 0 { i < end } else { i > end } {
+        xs.push_back(Value::Int(i));
+        // Stepping past i64::MIN/MAX ends the range instead of panicking.
+        match i.checked_add(step) {
+            Some(next) => i = next,
+            None => break,
         }
     }
     Ok(Value::List(xs))
@@ -280,15 +277,11 @@ fn builtin_range_incl(args: Vec<Value>) -> Result<Value, EvalError> {
     }
     let mut xs = im::Vector::new();
     let mut i = start;
-    if step > 0 {
-        while i <= end {
-            xs.push_back(Value::Int(i));
-            i += step;
-        }
-    } else {
-        while i >= end {
-            xs.push_back(Value::Int(i));
-            i += step;
+    while if step > 0 { i <= end } else { i >= end } {
+        xs.push_back(Value::Int(i));
+        match i.checked_add(step) {
+            Some(next) => i = next,
+            None => break,
         }
     }
     Ok(Value::List(xs))
@@ -363,6 +356,14 @@ fn builtin_clamp(args: Vec<Value>) -> Result<Value, EvalError> {
     let v = it.next().unwrap_or(Value::None);
     let lo = it.next().unwrap_or(Value::None);
     let hi = it.next().unwrap_or(Value::None);
+    // `Ord::clamp`/`f64::clamp` assert `min <= max` — report it instead of panicking.
+    if let (Some(a), Some(b)) = (lo.as_float(), hi.as_float()) {
+        if a > b || a.is_nan() || b.is_nan() {
+            return Err(EvalError::Message(
+                "clamp expects a lower bound not greater than the upper bound".into(),
+            ));
+        }
+    }
     match (&v, &lo, &hi) {
         (Value::Int(n), Value::Int(a), Value::Int(b)) => Ok(Value::Int((*n).clamp(*a, *b))),
         (Value::Float(n), Value::Float(a), Value::Float(b)) => Ok(Value::Float(n.clamp(*a, *b))),
@@ -392,7 +393,11 @@ fn builtin_pow(args: Vec<Value>) -> Result<Value, EvalError> {
     let base = it.next().unwrap_or(Value::Int(0));
     let exp = it.next().unwrap_or(Value::Int(0));
     match (&base, &exp) {
-        (Value::Int(a), Value::Int(b)) if *b >= 0 && *b <= 32 => Ok(Value::Int(a.pow(*b as u32))),
+        // `i64::pow` panics on overflow; fall through to the float result like `b > 32` does.
+        (Value::Int(a), Value::Int(b)) if *b >= 0 && *b <= 32 => Ok(a
+            .checked_pow(*b as u32)
+            .map(Value::Int)
+            .unwrap_or_else(|| Value::Float((*a as f64).powf(*b as f64)))),
         (Value::Int(a), Value::Int(b)) => Ok(Value::Float((*a as f64).powf(*b as f64))),
         (Value::Float(a), Value::Float(b)) => Ok(Value::Float(a.powf(*b))),
         (Value::Int(a), Value::Float(b)) => Ok(Value::Float((*a as f64).powf(*b))),
@@ -408,7 +413,10 @@ fn builtin_idiv(args: Vec<Value>) -> Result<Value, EvalError> {
     if b == 0 {
         return Err(EvalError::Message("division by zero".into()));
     }
-    Ok(Value::Int(a / b))
+    // `i64::MIN / -1` overflows.
+    a.checked_div(b)
+        .map(Value::Int)
+        .ok_or_else(|| EvalError::Message("integer overflow".into()))
 }
 
 fn builtin_xor(args: Vec<Value>) -> Result<Value, EvalError> {
@@ -470,6 +478,17 @@ fn builtin_repeat(args: Vec<Value>) -> Result<Value, EvalError> {
     let mut it = args.into_iter();
     let val = it.next().unwrap_or(Value::None);
     let n = it.next().and_then(|v| v.as_int()).unwrap_or(0).max(0) as usize;
+    // `str::repeat` aborts on capacity overflow and the list loop would spin for ages;
+    // refuse absurd counts instead.
+    const MAX_REPEAT: usize = 1 << 26;
+    let unit = match &val {
+        Value::String(s) => s.len().max(1),
+        Value::List(xs) => xs.len().max(1),
+        _ => 1,
+    };
+    if unit.checked_mul(n).is_none_or(|total| total > MAX_REPEAT) {
+        return Err(EvalError::Message("repeat count too large".into()));
+    }
     match val {
         Value::String(s) => Ok(Value::string(s.repeat(n))),
         Value::List(xs) => {
@@ -480,7 +499,7 @@ fn builtin_repeat(args: Vec<Value>) -> Result<Value, EvalError> {
             Ok(Value::List(out))
         }
         other => Ok(Value::list(
-            std::iter::repeat(other).take(n).collect::<Vec<_>>(),
+            std::iter::repeat_n(other, n).collect::<Vec<_>>(),
         )),
     }
 }

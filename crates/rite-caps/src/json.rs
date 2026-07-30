@@ -32,7 +32,7 @@ impl JsonCap {
             name: "read",
             docs: "Read and parse a JSON file.",
             arity: 1,
-            effectful: false,
+            effectful: true,
             permission: "fs:read",
         },
         NativeFunctionDescriptor {

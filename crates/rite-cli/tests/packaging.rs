@@ -134,14 +134,20 @@ fn package_skill_script_resolves_absolute_out() {
 
 #[test]
 fn site_public_skill_assets_exist_after_package() {
-    // Mirrors the site build step: package into apps/rite-web/public/skill
-    // so Cloudflare serves real files instead of SPA index.html.
+    // Mirrors the site build step, which packages into apps/rite-web/public/skill so
+    // Cloudflare serves real files instead of SPA index.html. We deliberately target a
+    // temp dir rather than that tracked path: writing there made `cargo test` dirty the
+    // working tree (the archives embed timestamps, so every run produced a diff in three
+    // committed binaries). What this test actually checks — that the script emits a real
+    // zip/tar and not HTML — is independent of the destination.
     let root = workspace();
-    let out = root.join("apps/rite-web/public/skill");
+    let out = std::env::temp_dir().join(format!("rite-skill-package-test-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&out);
+    std::fs::create_dir_all(&out).expect("create temp out dir");
     run_ok(
         Command::new("bash")
             .arg("scripts/package-skill.sh")
-            .arg("apps/rite-web/public/skill")
+            .arg(&out)
             .current_dir(&root),
     );
     let zip = out.join("rite-agent-skill.zip");
@@ -157,6 +163,7 @@ fn site_public_skill_assets_exist_after_package() {
     );
     // ZIP local file header magic PK\x03\x04
     assert_eq!(&head[0..2], b"PK", "skill zip missing PK magic");
+    let _ = std::fs::remove_dir_all(&out);
 }
 
 fn _ensure_path(p: &Path) {

@@ -16,9 +16,9 @@ impl ProcessCap {
         },
         NativeFunctionDescriptor {
             name: "which",
-            docs: "Locate an executable on PATH.",
+            docs: "Locate an executable on PATH. Reads the PATH environment variable and probes the filesystem, so it is effectful (`!`) and needs process *and* env access to PATH (--allow process --allow env=PATH).",
             arity: 1,
-            effectful: false,
+            effectful: true,
             permission: "process",
         },
     ];
@@ -74,6 +74,16 @@ impl ProcessCap {
                     .first()
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| EvalError::Message("process.which expects name".into()))?;
+                // Reading PATH is an env read, so it goes through the env capability
+                // instead of around it: `process` alone must not turn into a way to
+                // observe the environment. `@process.run` still needs only `process`
+                // (it never reports env contents back to the script).
+                perms.check_env("PATH").map_err(|_| {
+                    EvalError::Permission(
+                        "process.which reads the PATH environment variable: also needs `--allow env=PATH` (or --allow env / --allow-all)"
+                            .into(),
+                    )
+                })?;
                 // simple PATH search
                 if let Ok(path_var) = std::env::var("PATH") {
                     for dir in std::env::split_paths(&path_var) {

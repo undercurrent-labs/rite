@@ -210,12 +210,14 @@ impl<'a> Evaluator<'a> {
                     body: f.body.clone(),
                 },
             );
-            // Also bind as closures in env
+            // Also bind as closures in env. The capture is the module scope itself
+            // (shared frames), so a function body sees its siblings and every top-level
+            // binding, whichever order they are defined in.
             let clos = Value::Function(Closure {
                 id: CLOSURE_ID.fetch_add(1, Ordering::Relaxed),
                 name: Some(f.name.clone()),
                 params: f.param_names.clone(),
-                env: Arc::new(parking_lot::RwLock::new(Environment::new())),
+                env: Arc::new(parking_lot::RwLock::new(self.ctx.env.clone())),
                 body: f.body.clone(),
             });
             self.ctx.env.define_name(&f.name, clos, false);
@@ -349,7 +351,9 @@ impl<'a> Evaluator<'a> {
                 id: CLOSURE_ID.fetch_add(1, Ordering::Relaxed),
                 name: None,
                 params: c.param_names.clone(),
-                // Share ambient env so mutables assigned inside map/each/for are visible.
+                // Capture the defining chain. Frames are shared, so this is a handful of
+                // `Arc` clones, the closure keeps them alive after the defining call
+                // returns, and mutables assigned through it are visible to that scope.
                 env: Arc::new(parking_lot::RwLock::new(self.ctx.env.clone())),
                 body: c.body.clone(),
             })),
@@ -717,17 +721,25 @@ impl<'a> Evaluator<'a> {
                 (Value::Int(_), Value::Int(0)) => {
                     Err(EvalError::Message("division by zero".into()))
                 }
-                (Value::Int(a), Value::Int(b)) => Ok(Value::Int(a / b)),
+                // `i64::MIN / -1` overflows; Rust panics on that in every profile.
+                (Value::Int(a), Value::Int(b)) => a
+                    .checked_div(*b)
+                    .map(Value::Int)
+                    .ok_or_else(|| EvalError::Message("integer overflow".into())),
                 (Value::Float(a), Value::Float(b)) => Ok(Value::Float(a / b)),
                 (Value::Int(a), Value::Float(b)) => Ok(Value::Float(*a as f64 / b)),
                 (Value::Float(a), Value::Int(b)) => Ok(Value::Float(a / *b as f64)),
                 _ => Err(EvalError::Message("cannot divide values".into())),
             },
             BinaryOpIr::Rem => match (&l, &r) {
-                (Value::Int(a), Value::Int(b)) if *b != 0 => Ok(Value::Int(a % b)),
                 (Value::Int(_), Value::Int(0)) => {
                     Err(EvalError::Message("division by zero".into()))
                 }
+                // `i64::MIN % -1` overflows the same way `i64::MIN / -1` does.
+                (Value::Int(a), Value::Int(b)) => a
+                    .checked_rem(*b)
+                    .map(Value::Int)
+                    .ok_or_else(|| EvalError::Message("integer overflow".into())),
                 _ => Err(EvalError::Message("cannot rem values".into())),
             },
             BinaryOpIr::Eq => Ok(Value::Bool(l.structural_eq(&r))),
@@ -736,51 +748,33 @@ impl<'a> Evaluator<'a> {
             BinaryOpIr::LtEq => Ok(Value::Bool(compare_values(&l, &r) <= 0)),
             BinaryOpIr::Gt => Ok(Value::Bool(compare_values(&l, &r) > 0)),
             BinaryOpIr::GtEq => Ok(Value::Bool(compare_values(&l, &r) >= 0)),
-            BinaryOpIr::In => {
-                // atom in list/record special
-                if let Value::Atom(id) = &l {
-                    let name = self.ctx.atoms.name(*id);
-                    if let Value::List(xs) = &r {
-                        let atom_val = Value::Atom(*id);
-                        return Ok(Value::Bool(xs.iter().any(|x| {
-                            x.structural_eq(&atom_val) || x.as_str() == Some(name.as_str())
-                        })));
-                    }
-                    if let Value::Record(rec) = &r {
-                        return Ok(Value::Bool(
-                            rec.contains_key(&Key::String(name.clone()))
-                                || rec.contains_key(&Key::Atom(name)),
-                        ));
-                    }
-                }
-                Ok(Value::Bool(membership(&l, &r)))
-            }
-            BinaryOpIr::NotIn => {
-                // Inline membership check (avoid recursive async eval_binary)
-                let l2 = self.eval_expr(left).await?;
-                let r2 = self.eval_expr(right).await?;
-                let contained = if let Value::Atom(id) = &l2 {
-                    let name = self.ctx.atoms.name(*id);
-                    match &r2 {
-                        Value::List(xs) => {
-                            let atom_val = Value::Atom(*id);
-                            xs.iter().any(|x| {
-                                x.structural_eq(&atom_val) || x.as_str() == Some(name.as_str())
-                            })
-                        }
-                        Value::Record(rec) => {
-                            rec.contains_key(&Key::String(name.clone()))
-                                || rec.contains_key(&Key::Atom(name))
-                        }
-                        _ => membership(&l2, &r2),
-                    }
-                } else {
-                    membership(&l2, &r2)
-                };
-                Ok(Value::Bool(!contained))
-            }
+            // Both operands are already evaluated exactly once above; `∈` and `∉` share
+            // the same membership test so neither re-runs a side-effecting operand.
+            BinaryOpIr::In => Ok(Value::Bool(self.contains_value(&l, &r))),
+            BinaryOpIr::NotIn => Ok(Value::Bool(!self.contains_value(&l, &r))),
             BinaryOpIr::And | BinaryOpIr::Or => unreachable!(),
         }
+    }
+
+    /// Membership test behind `∈` / `∉`, with atoms also matching by name so
+    /// `#a ∈ ["a"]` and `#a ∈ ⟨a: 1⟩` hold.
+    fn contains_value(&self, item: &Value, container: &Value) -> bool {
+        if let Value::Atom(id) = item {
+            let name = self.ctx.atoms.name(*id);
+            match container {
+                Value::List(xs) => {
+                    return xs
+                        .iter()
+                        .any(|x| x.structural_eq(item) || x.as_str() == Some(name.as_str()))
+                }
+                Value::Record(rec) => {
+                    return rec.contains_key(&Key::String(name.clone()))
+                        || rec.contains_key(&Key::Atom(name))
+                }
+                _ => {}
+            }
+        }
+        membership(item, container)
     }
 
     async fn eval_block(&mut self, block: &BlockIr) -> Result<Value, EvalError> {
@@ -809,29 +803,18 @@ impl<'a> Evaluator<'a> {
         self.ctx.call_depth += 1;
         let result = match callee {
             Value::Function(c) => {
-                // Closures capture env at creation. If we are still inside the defining
-                // stack (ambient depth ≥ capture depth), prefer the ambient env so
-                // mutable assigns in `for`/`each` bodies affect outer bindings.
-                // If the closure has escaped (returned, stored), install the capture.
-                let captured = c.env.read().clone();
-                let has_capture = captured.depth() > 1 || !captured.bindings_snapshot().is_empty();
-                // Compose and other synthetic closures stash private names (`__f`);
-                // always install their capture. Escaped closures (returned) too.
-                let needs_capture = has_capture
-                    && (self.ctx.env.depth() < captured.depth()
-                        || c.name.as_deref() == Some("compose")
-                        || captured
-                            .bindings_snapshot()
-                            .iter()
-                            .any(|(k, _)| k.starts_with("__")));
-                if needs_capture {
-                    let saved = std::mem::replace(&mut self.ctx.env, captured);
-                    let r = self.call_block(&c.body, &c.params, args).await;
-                    self.ctx.env = saved;
-                    r
-                } else {
-                    self.call_block(&c.body, &c.params, args).await
-                }
+                // Lexical scoping: a closure always runs in the environment it captured,
+                // extended with the fresh frame `call_block` pushes for its parameters.
+                // Frames are shared (see `env::Environment`), so the capture still sees
+                // — and assigns through to — the defining scope's mutable bindings, which
+                // is what makes `count := count + 1` inside an `each`/`while_loop` body
+                // visible to the enclosing scope.
+                let mut captured = c.env.read().clone();
+                captured.ensure_globals_from(&self.ctx.env);
+                let saved = std::mem::replace(&mut self.ctx.env, captured);
+                let r = self.call_block(&c.body, &c.params, args).await;
+                self.ctx.env = saved;
+                r
             }
             Value::NativeName(name) => {
                 // Indirection avoids infinitely sized async future (call_value ↔ map/each).
@@ -987,7 +970,9 @@ impl<'a> Evaluator<'a> {
         }
         use rite_core::Span;
         use rite_sem::{BlockIr, ExprIr, LocalId};
-        let mut env = crate::env::Environment::new();
+        // Private frame layered over the ambient scope holds the two composed functions.
+        let mut env = self.ctx.env.clone();
+        env.push_frame();
         env.define_name("__f", f, false);
         env.define_name("__g", g, false);
         let body = BlockIr {
@@ -1344,9 +1329,11 @@ fn http_register_pending(
     }
 }
 
-static HTTP_REGISTER: std::sync::OnceLock<
-    fn(String, &[rite_sem::RouteIr], &[crate::value::HttpMiddleware], &RuntimeContext),
-> = std::sync::OnceLock::new();
+/// Registrar installed by rite-caps to hand `@http.listen` its route table.
+type HttpRegistrar =
+    fn(String, &[rite_sem::RouteIr], &[crate::value::HttpMiddleware], &RuntimeContext);
+
+static HTTP_REGISTER: std::sync::OnceLock<HttpRegistrar> = std::sync::OnceLock::new();
 
 /// Called by rite-caps/install to wire HTTP route registration.
 pub fn set_http_route_registrar(

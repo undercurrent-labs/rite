@@ -299,7 +299,7 @@ impl<'a> Lexer<'a> {
                         self.pos += 1;
                         self.consume_ident_bytes();
                     }
-                    let text = self.src[atom_start..self.pos].to_string();
+                    let text = self.slice(atom_start, self.pos).to_string();
                     let mut tok = self.make(TokenKind::Atom, start, self.pos);
                     tok.text = text;
                     return tok;
@@ -322,7 +322,7 @@ impl<'a> Lexer<'a> {
                         self.pos += 1;
                         self.consume_ident_bytes();
                     }
-                    let text = self.src[atom_start..self.pos].to_string();
+                    let text = self.slice(atom_start, self.pos).to_string();
                     let mut tok = self.make(TokenKind::Atom, start, self.pos);
                     tok.text = text;
                     return tok;
@@ -352,7 +352,6 @@ impl<'a> Lexer<'a> {
     }
 
     fn try_sigil(&mut self, start: usize) -> Option<Token> {
-        let rest = &self.src[self.pos..];
         let pairs: &[(&str, TokenKind)] = &[
             ("◆", TokenKind::Def),
             ("←", TokenKind::Bind),
@@ -380,7 +379,7 @@ impl<'a> Lexer<'a> {
             ("⊏", TokenKind::Use),  // use / plug-in (imports + HTTP middleware)
         ];
         for (sigil, kind) in pairs {
-            if rest.starts_with(sigil) {
+            if self.starts_with(sigil) {
                 self.pos += sigil.len();
                 return Some(self.make(*kind, start, self.pos));
             }
@@ -414,7 +413,10 @@ impl<'a> Lexer<'a> {
                 self.pos += 2;
                 depth -= 1;
             } else {
-                self.pos += 1;
+                // Advance a whole character: comment bodies may hold any text,
+                // and a byte-at-a-time bump would leave `pos` inside a
+                // multi-byte character.
+                self.advance_char();
             }
         }
         if depth != 0 {
@@ -429,6 +431,24 @@ impl<'a> Lexer<'a> {
         self.make(TokenKind::Comment, start, self.pos)
     }
 
+    /// Brace convention for `TokenKind::String` / `MultilineString` / `RawString`
+    /// token text, shared with `rite_sem::desugar::desugar_interpolation`:
+    ///
+    /// * a single `{ … }` pair is an interpolation hole — `"hi {name}"`;
+    /// * a **doubled** brace (`{{`, `}}`) is a literal `{` / `}`.
+    ///
+    /// In an escaped string the source escapes `\{` and `\}` are mapped onto the
+    /// doubled form, so escaped and literal braces stay distinguishable after
+    /// escape processing — before this, both arrived as a bare `{` and every
+    /// `"\{name}"` was interpolated anyway. A multiline string does no escape
+    /// processing, so there `{{` / `}}` is the only way to write a literal brace
+    /// (which also leaves `"""{{ mustache }}"""` templates untouched). A raw
+    /// string interpolates nothing at all: [`Lexer::raw_string`] escapes every
+    /// brace it contains.
+    ///
+    /// Doubling is decoded again either by `desugar_interpolation`, or — when
+    /// the finished text cannot reach it because no `{`+`}` pair is present —
+    /// by [`finish_interpolatable`], so both paths agree.
     fn string_literal(&mut self, start: usize) -> Token {
         self.pos += 1; // opening "
         let mut text = String::new();
@@ -437,7 +457,7 @@ impl<'a> Lexer<'a> {
             if c == b'"' {
                 self.pos += 1;
                 let mut tok = self.make(TokenKind::String, start, self.pos);
-                tok.text = text;
+                tok.text = finish_interpolatable(text);
                 return tok;
             }
             if c == b'\\' {
@@ -452,8 +472,10 @@ impl<'a> Lexer<'a> {
                     b'\\' => text.push('\\'),
                     b'"' => text.push('"'),
                     b'0' => text.push('\0'),
-                    b'{' => text.push('{'),
-                    b'}' => text.push('}'),
+                    // Escaped braces become doubled braces — see the doc
+                    // comment on `string_literal`.
+                    b'{' => text.push_str("{{"),
+                    b'}' => text.push_str("}}"),
                     b'u' => {
                         // \u{...}
                         self.pos += 1;
@@ -465,7 +487,7 @@ impl<'a> Lexer<'a> {
                             {
                                 self.pos += 1;
                             }
-                            let hex = &self.src[hex_start..self.pos];
+                            let hex = self.slice(hex_start, self.pos);
                             if self.bytes.get(self.pos) == Some(&b'}') {
                                 if let Ok(cp) = u32::from_str_radix(hex, 16) {
                                     if let Some(ch) = char::from_u32(cp) {
@@ -498,8 +520,8 @@ impl<'a> Lexer<'a> {
                 }
                 self.pos += 1;
             } else if c == b'{' {
-                // Interpolation marker: keep as text with special handling at parse time
-                // For lexer we store raw including braces; parser/eval handles interpolation
+                // Unescaped brace: an interpolation delimiter. Kept as-is; the
+                // desugarer splits the text and parses the hole.
                 text.push('{');
                 self.pos += 1;
             } else {
@@ -516,7 +538,7 @@ impl<'a> Lexer<'a> {
             "expected closing \"",
         ));
         let mut tok = self.make(TokenKind::String, start, self.pos);
-        tok.text = text;
+        tok.text = finish_interpolatable(text);
         tok
     }
 
@@ -525,14 +547,17 @@ impl<'a> Lexer<'a> {
         let content_start = self.pos;
         while self.pos < self.bytes.len() {
             if self.starts_with("\"\"\"") {
-                let raw = &self.src[content_start..self.pos];
+                let raw = self.slice(content_start, self.pos);
                 self.pos += 3;
                 let text = normalize_multiline(raw);
                 let mut tok = self.make(TokenKind::MultilineString, start, self.pos);
-                tok.text = text;
+                // Same brace convention as escaped strings; there is no escape
+                // processing here, so only doubling can spell a literal brace.
+                tok.text = finish_interpolatable(text);
                 return tok;
             }
-            self.pos += 1;
+            // Whole characters only — the body is arbitrary text.
+            self.advance_char();
         }
         self.diagnostics.push(simple_error(
             E003_UNTERMINATED_STRING,
@@ -550,7 +575,7 @@ impl<'a> Lexer<'a> {
         while self.pos < self.bytes.len() && self.bytes[self.pos] != b'"' {
             self.pos += 1;
         }
-        let text = self.src[content_start..self.pos].to_string();
+        let text = self.slice(content_start, self.pos).to_string();
         if self.pos < self.bytes.len() {
             self.pos += 1;
         } else {
@@ -563,7 +588,10 @@ impl<'a> Lexer<'a> {
             ));
         }
         let mut tok = self.make(TokenKind::RawString, start, self.pos);
-        tok.text = text;
+        // A raw string is literal: every brace is escaped so the desugarer — which
+        // interpolates any string literal it is handed — cannot read `r"{x}"` as a
+        // hole, and `r"{{x}}"` keeps both braces instead of collapsing them.
+        tok.text = finish_interpolatable(escape_braces(&text));
         tok
     }
 
@@ -573,9 +601,19 @@ impl<'a> Lexer<'a> {
         while self.pos < self.bytes.len() && self.bytes[self.pos] != b'`' {
             self.pos += 1;
         }
-        let text = self.src[content_start..self.pos].to_string();
+        let text = self.slice(content_start, self.pos).to_string();
         if self.pos < self.bytes.len() {
             self.pos += 1;
+        } else {
+            // Ran to end of file without the closing backtick — same class of
+            // error as an unterminated quoted literal.
+            self.diagnostics.push(simple_error(
+                E003_UNTERMINATED_STRING,
+                "unterminated escaped identifier",
+                self.file,
+                Span::from_range(start, self.pos),
+                "expected closing `",
+            ));
         }
         let mut tok = self.make(TokenKind::Ident, start, self.pos);
         tok.text = text;
@@ -700,7 +738,7 @@ impl<'a> Lexer<'a> {
             }
             self.pos += ch.len_utf8();
         }
-        let text = &self.src[start..self.pos];
+        let text = self.slice(start, self.pos);
         let kind = keyword_or_ident(text);
         let mut tok = self.make(kind, start, self.pos);
         tok.text = text.to_string();
@@ -732,12 +770,40 @@ impl<'a> Lexer<'a> {
         self.bytes.get(self.pos).copied().unwrap_or(0)
     }
 
+    /// Character at `pos`, decoded from bytes so it can never panic on a
+    /// non-boundary `pos` (returns `'\0'` there instead).
     fn peek_char_full(&self) -> char {
-        self.src[self.pos..].chars().next().unwrap_or('\0')
+        let rest = self.bytes.get(self.pos..).unwrap_or(&[]);
+        let len = utf8_len(rest.first().copied().unwrap_or(0)).min(rest.len());
+        std::str::from_utf8(&rest[..len])
+            .ok()
+            .and_then(|s| s.chars().next())
+            .unwrap_or('\0')
     }
 
+    /// Advance one whole character. Always makes progress and always leaves
+    /// `pos` on a character boundary for well-formed UTF-8.
+    fn advance_char(&mut self) {
+        let lead = self.bytes.get(self.pos).copied().unwrap_or(0);
+        self.pos = (self.pos + utf8_len(lead)).min(self.bytes.len());
+    }
+
+    /// Byte-wise prefix test: unlike `self.src[self.pos..].starts_with(..)` this
+    /// cannot panic when `pos` is not on a character boundary.
     fn starts_with(&self, s: &str) -> bool {
-        self.src[self.pos..].starts_with(s)
+        self.bytes
+            .get(self.pos..)
+            .map(|rest| rest.starts_with(s.as_bytes()))
+            .unwrap_or(false)
+    }
+
+    /// Source text in `start..end`, clamped and boundary-tolerant.
+    fn slice(&self, start: usize, end: usize) -> &'a str {
+        let end = end.min(self.src.len());
+        if start > end {
+            return "";
+        }
+        self.src.get(start..end).unwrap_or("")
     }
 
     fn make(&self, kind: TokenKind, start: usize, end: usize) -> Token {
@@ -745,9 +811,67 @@ impl<'a> Lexer<'a> {
             kind,
             span: Span::from_range(start, end),
             file: self.file,
-            text: self.src[start..end.min(self.src.len())].to_string(),
+            text: self.slice(start, end).to_string(),
         }
     }
+}
+
+/// Length in bytes of the UTF-8 sequence introduced by `lead`. Continuation and
+/// invalid bytes count as 1 so scanning always advances.
+fn utf8_len(lead: u8) -> usize {
+    match lead {
+        0x00..=0x7f => 1,
+        0xc0..=0xdf => 2,
+        0xe0..=0xef => 3,
+        0xf0..=0xf7 => 4,
+        _ => 1,
+    }
+}
+
+/// Final step for a string literal's text: keep the doubled-brace encoding when
+/// the desugarer will decode it (it only splits text holding both `{` and `}`),
+/// and decode it here when it will not, so `"\}"` is a lone `}` either way.
+/// See the doc comment on [`Lexer::string_literal`].
+fn finish_interpolatable(text: String) -> String {
+    if text.contains('{') && text.contains('}') {
+        text
+    } else {
+        unescape_braces(&text)
+    }
+}
+
+/// Decode the doubled-brace convention: `{{` -> `{`, `}}` -> `}`, everything
+/// else unchanged.
+///
+/// This is the counterpart of the encoding described on
+/// [`Lexer::string_literal`] and the single implementation shared with
+/// `rite_sem`: any consumer of a string literal's text that does **not**
+/// interpolate (a pattern is matched, a record key names a field) must decode
+/// with this, or an escaped brace stays doubled and silently changes the value.
+pub fn unescape_braces(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut chars = text.chars().peekable();
+    while let Some(c) = chars.next() {
+        if (c == '{' || c == '}') && chars.peek() == Some(&c) {
+            chars.next();
+        }
+        out.push(c);
+    }
+    out
+}
+
+/// Encode every brace as a doubled brace, so the whole text survives the
+/// desugarer as literal characters. Raw strings need this: `r"{x}"` must be the
+/// five characters it spells, not an interpolation of `x`.
+fn escape_braces(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    for c in text.chars() {
+        if c == '{' || c == '}' {
+            out.push(c);
+        }
+        out.push(c);
+    }
+    out
 }
 
 fn is_ident_start_byte(b: u8) -> bool {
@@ -780,7 +904,7 @@ fn normalize_multiline(raw: &str) -> String {
             lines.pop();
         }
     }
-    // Common indent
+    // Common indent, counted in characters of leading space/tab.
     let min_indent = lines
         .iter()
         .filter(|l| !l.trim().is_empty())
@@ -789,15 +913,22 @@ fn normalize_multiline(raw: &str) -> String {
         .unwrap_or(0);
     lines
         .iter()
-        .map(|l| {
-            if l.len() >= min_indent {
-                &l[min_indent..]
-            } else {
-                *l
-            }
-        })
+        .map(|l| strip_indent(l, min_indent))
         .collect::<Vec<_>>()
         .join("\n")
+}
+
+/// Drop up to `n` leading space/tab **characters** from `line`.
+///
+/// Counting characters but slicing bytes is what made this panic on lines whose
+/// leading text was multi-byte (e.g. a line holding a single U+00A0).
+fn strip_indent(line: &str, n: usize) -> &str {
+    for (stripped, (offset, c)) in line.char_indices().enumerate() {
+        if stripped == n || (c != ' ' && c != '\t') {
+            return &line[offset..];
+        }
+    }
+    ""
 }
 
 // Validate UTF-8 at load time — SourceFile already requires valid String.

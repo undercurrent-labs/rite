@@ -9,6 +9,9 @@ use rite_syntax::{parse_file, ImportDecl, Item, Program};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
+/// One resolved `use` in the entry module: (alias, module name, its exports, is_pub).
+type ImportBinding = (Option<String>, String, HashMap<String, FunctionMeta>, bool);
+
 #[derive(Debug, Clone)]
 pub struct LoadedModule {
     pub name: String,
@@ -280,8 +283,7 @@ pub fn merge_exports_into_entry(
     diagnostics: &mut Diagnostics,
 ) {
     // Build import alias map from entry
-    let mut bindings: Vec<(Option<String>, String, HashMap<String, FunctionMeta>, bool)> =
-        Vec::new();
+    let mut bindings: Vec<ImportBinding> = Vec::new();
     for item in &entry.items {
         if let Item::Import(imp) = item {
             let key = imp
@@ -320,7 +322,7 @@ pub fn merge_exports_into_entry(
             }
             // Inject re-exported functions that live only in exports map (from nested pub use)
             if alias.is_none() {
-                for (name, _meta) in exports {
+                for name in exports.keys() {
                     let already = entry
                         .items
                         .iter()
@@ -352,7 +354,7 @@ pub fn merge_exports_into_entry(
                         }
                     }
                 }
-                for (name, _) in exports {
+                for name in exports.keys() {
                     let pref = format!("{}__{}", prefix, name);
                     let already = entry
                         .items

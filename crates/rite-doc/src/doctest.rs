@@ -75,7 +75,7 @@ fn extract_rite_blocks(text: &str) -> Vec<FenceBlock> {
             // skip no_run unless parse-only
             let mut code = String::new();
             let start_line = i + 1;
-            while let Some((_, l)) = lines.next() {
+            for (_, l) in lines.by_ref() {
                 if l.trim().starts_with("```") {
                     break;
                 }
@@ -135,7 +135,8 @@ async fn run_block(file: &Path, block: &FenceBlock) -> DocTestResult {
                 },
             }
         }
-        "browser" | "exec" | _ => {
+        // "browser" and "exec" land here too — both parse + interpret.
+        _ => {
             // Parse + interpret when possible (skip if needs net bind without test mode)
             let (_p, diags, _) = parse_source(&file_s, &block.code);
             if diags.has_errors() {

@@ -135,7 +135,7 @@ impl Diagnostic {
                     .unwrap_or_else(|| file.name.clone());
 
                 out.push_str(&format!("\n  --> {}:{}:{}\n", path, lc.line, lc.column));
-                out.push_str(&format!("   |\n"));
+                out.push_str("   |\n");
                 out.push_str(&format!("{:4} | {}\n", lc.line, line_text));
 
                 let col = lc.column as usize;

@@ -35,7 +35,7 @@ pub fn compile_to_ir_with_roots(
             let (ast, diags) = parse_file(file);
             let mut all = loader.diagnostics;
             all.extend(diags.into_vec());
-            return (ast.and_then(|_| None), all);
+            return (ast.and(None), all);
         }
     };
     let (graph, mut load_diags) = loader.into_graph();

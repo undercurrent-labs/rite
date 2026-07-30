@@ -52,7 +52,7 @@ impl HttpCap {
     pub const DESCRIPTORS: &'static [NativeFunctionDescriptor] = &[
         NativeFunctionDescriptor {
             name: "listen",
-            docs: "Start an HTTP server and block until shutdown.",
+            docs: "Start an HTTP server and block until shutdown. Loopback (127.0.0.0/8, ::1, localhost) binds by default; any other interface — including the wildcards 0.0.0.0 and [::] — needs --allow net=<host>.",
             arity: 2,
             effectful: true,
             permission: "net",
@@ -251,14 +251,16 @@ impl HttpCap {
 async fn dispatch_fallback(state: ServerState, req: Request<Body>) -> Response {
     let method = req.method().clone();
     let path = req.uri().path().to_string();
-    if method == Method::GET && (path == "/health" || path == "/health/") {
-        if !state
+    // `GET /health` answers `{"status":"ok"}` unless the script defines the route
+    // itself — a convenience for probes that every server gets for free.
+    if method == Method::GET
+        && (path == "/health" || path == "/health/")
+        && !state
             .routes
             .iter()
             .any(|r| r.path == "/health" || r.path == "health")
-        {
-            return Json(json!({"status": "ok"})).into_response();
-        }
+    {
+        return Json(json!({"status": "ok"})).into_response();
     }
     for (idx, route) in state.routes.iter().enumerate() {
         if !route.method.eq_ignore_ascii_case(method.as_str()) {
@@ -274,8 +276,12 @@ async fn dispatch_fallback(state: ServerState, req: Request<Body>) -> Response {
     (StatusCode::NOT_FOUND, Json(json!({"error": "not_found"}))).into_response()
 }
 
+/// Largest request body buffered for a handler (`req.text` / `req.json` / `req.body`).
+/// A larger body is rejected with `413 Payload Too Large` rather than silently
+/// arriving as an empty body.
+const MAX_REQUEST_BODY_BYTES: usize = 1_048_576; // 1 MiB
+
 async fn dispatch_rite(state: ServerState, idx: usize, req: Request<Body>) -> Response {
-    let _guard = state.lock.lock().await;
     let route = match state.routes.get(idx) {
         Some(r) => r.clone(),
         None => {
@@ -287,22 +293,46 @@ async fn dispatch_rite(state: ServerState, idx: usize, req: Request<Body>) -> Re
     let uri = req.uri().clone();
     let path = uri.path().to_string();
     let headers = req.headers().clone();
-    let query: HashMap<String, String> = uri
-        .query()
-        .map(|q| {
-            q.split('&')
-                .filter_map(|pair| {
-                    let mut it = pair.splitn(2, '=');
-                    Some((it.next()?.to_string(), it.next().unwrap_or("").to_string()))
-                })
-                .collect()
-        })
-        .unwrap_or_default();
+    // Query pairs are `application/x-www-form-urlencoded`: percent-escapes and
+    // `+`-for-space must be decoded on both halves (`?name=a%20b` → `a b`).
+    // A repeated key keeps its **last** value (`?a=1&a=2` → `2`), matching how
+    // most frameworks bind a scalar field; insertion order is preserved so the
+    // `req.query` record is stable.
+    let mut query: IndexMap<String, String> = IndexMap::new();
+    if let Some(q) = uri.query() {
+        for pair in q.split('&').filter(|p| !p.is_empty()) {
+            let (raw_key, raw_val) = pair.split_once('=').unwrap_or((pair, ""));
+            query.insert(form_urldecode(raw_key), form_urldecode(raw_val));
+        }
+    }
 
     let path_params = match_path(&route.path, &path).unwrap_or_default();
-    let body_bytes = axum::body::to_bytes(req.into_body(), 1_048_576)
-        .await
-        .unwrap_or_default();
+    let body_bytes = match axum::body::to_bytes(req.into_body(), MAX_REQUEST_BODY_BYTES).await {
+        Ok(b) => b,
+        Err(e) => {
+            // `to_bytes` collapses two very different failures into one error:
+            // the body outgrew the cap, or the client/transport broke.
+            let inner = e.into_inner();
+            if inner
+                .downcast_ref::<http_body_util::LengthLimitError>()
+                .is_some()
+            {
+                return (
+                    StatusCode::PAYLOAD_TOO_LARGE,
+                    Json(json!({
+                        "error": "payload_too_large",
+                        "limit_bytes": MAX_REQUEST_BODY_BYTES,
+                    })),
+                )
+                    .into_response();
+            }
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(json!({"error": "invalid_request_body"})),
+            )
+                .into_response();
+        }
+    };
     let body_text = String::from_utf8_lossy(&body_bytes).to_string();
     let json_val = serde_json::from_str::<serde_json::Value>(&body_text).ok();
 
@@ -366,6 +396,23 @@ async fn dispatch_rite(state: ServerState, idx: usize, req: Request<Body>) -> Re
         .collect();
     let t0 = std::time::Instant::now();
 
+    // Custom (closure) middleware is driven through process-global state: the
+    // `next()` invoker hook installed by `set_http_next_invoker` plus the
+    // continuation map, which the outermost layer *clears* when it unwinds
+    // (`run_middleware_chain`, index == 0). Two overlapping requests would wipe
+    // each other's continuations, so those requests are serialized behind this
+    // mutex — one custom-middleware request at a time.
+    //
+    // Nothing else in the handler path is shared: each request builds its own
+    // RuntimeContext and its own capability host below, and named middleware
+    // (`use @http.log`, `use @http.recover`) is just a flag. So plain handlers
+    // and named-middleware handlers skip the mutex and run concurrently.
+    let _guard = if customs.is_empty() {
+        None
+    } else {
+        Some(state.lock.lock().await)
+    };
+
     let mut ctx = RuntimeContext::new();
     crate::install_defaults(&mut ctx, state.perms.clone());
     for (name, f) in &state.functions {
@@ -396,15 +443,14 @@ async fn dispatch_rite(state: ServerState, idx: usize, req: Request<Body>) -> Re
     // flush it so `! @console.println` is visible in the server process.
     flush_handler_io(&ctx);
 
+    // `use @http.recover` is what turns a failure into a *described* 500. Without
+    // it the client gets a bare 500 and the detail goes to the server's stderr:
+    // EvalError text carries source spans, values, and panic messages, which is
+    // an information leak to hand to an arbitrary HTTP caller.
     let response = match result {
         Ok(v) => coerce_response(v, &ctx),
         Err(EvalError::Return(v)) => coerce_response(v, &ctx),
         Err(EvalError::Panic(m)) if use_recover => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({"error": "panic", "message": m})),
-        )
-            .into_response(),
-        Err(EvalError::Panic(m)) => (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(json!({"error": "panic", "message": m})),
         )
@@ -414,11 +460,21 @@ async fn dispatch_rite(state: ServerState, idx: usize, req: Request<Body>) -> Re
             Json(json!({"error": "handler_error", "message": e.to_string()})),
         )
             .into_response(),
-        Err(e) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({"error": "handler_error", "message": e.to_string()})),
-        )
-            .into_response(),
+        Err(e) => {
+            let kind = if matches!(e, EvalError::Panic(_)) {
+                "panic"
+            } else {
+                "error"
+            };
+            emit_process_stderr(&format!(
+                "rite: {} {} handler {}: {} (add `use @http.recover` to return it as JSON)\n",
+                method.as_str(),
+                path,
+                kind,
+                e
+            ));
+            StatusCode::INTERNAL_SERVER_ERROR.into_response()
+        }
     };
 
     if use_log {
@@ -672,18 +728,115 @@ fn json_response(status: u16, v: &Value, ctx: &RuntimeContext) -> Response {
     (code, Json(v.to_json(&ctx.atoms))).into_response()
 }
 
-fn check_listen_perm(addr_str: &str, perms: &PermissionSet) -> Result<(), EvalError> {
-    if perms.allow_all
-        || perms.net.contains("*")
-        || perms.net.contains("127.0.0.1")
-        || perms.net.contains("localhost")
-        || addr_str.contains("127.0.0.1")
-        || addr_str.contains("localhost")
-        || addr_str.starts_with("0.0.0.0")
-    {
+/// Bind-address policy (docs/book/http.md): loopback is allowed under the
+/// default-secure posture, every other interface needs an explicit `net` grant.
+///
+/// The wildcards `0.0.0.0` and `[::]` are *more* exposed than a single LAN IP —
+/// they serve the whole network — so they are treated as non-loopback and denied
+/// by default. The host is parsed, never substring-matched: a hostname such as
+/// `evil-127.0.0.1.example.com` is not loopback.
+pub fn check_listen_perm(addr_str: &str, perms: &PermissionSet) -> Result<(), EvalError> {
+    if perms.allow_all {
         return Ok(());
     }
-    perms.check_net("listen").map_err(EvalError::Permission)
+    let host = listen_host(addr_str);
+    if is_loopback_host(&host) {
+        return Ok(());
+    }
+    // `--allow net=*`, `--allow net=0.0.0.0`, `--allow net=192.168.1.10`, or the
+    // whole `host:port` spelled out.
+    if perms.check_net(&host).is_ok() || perms.check_net(addr_str).is_ok() {
+        return Ok(());
+    }
+    Err(EvalError::Permission(format!(
+        "net permission denied for listen on `{addr_str}`: binding `{host}` exposes the server \
+         beyond loopback (only 127.0.0.0/8, ::1 and localhost are allowed by default). \
+         Re-run with `--allow net={host}` (or `--allow net=*` / `--allow-all`), \
+         or listen on `127.0.0.1:<port>`."
+    )))
+}
+
+/// Host part of a listen address: `"0.0.0.0:8080"` → `"0.0.0.0"`,
+/// `"[::1]:8080"` → `"::1"`, `"localhost"` → `"localhost"`.
+fn listen_host(addr_str: &str) -> String {
+    use std::net::{IpAddr, SocketAddr};
+    let addr = addr_str.trim();
+    if let Ok(sa) = addr.parse::<SocketAddr>() {
+        return sa.ip().to_string();
+    }
+    if let Ok(ip) = addr.parse::<IpAddr>() {
+        return ip.to_string();
+    }
+    if let Some(rest) = addr.strip_prefix('[') {
+        // Bracketed IPv6 that failed to parse as a SocketAddr (e.g. bad port).
+        if let Some((host, _port)) = rest.split_once("]:") {
+            return host.to_string();
+        }
+        if let Some(host) = rest.strip_suffix(']') {
+            return host.to_string();
+        }
+    }
+    match addr.rsplit_once(':') {
+        Some((host, _port)) => host.to_string(),
+        None => addr.to_string(),
+    }
+}
+
+/// Loopback = 127.0.0.0/8, `::1`, or the literal name `localhost`.
+///
+/// Any other name is *not* resolved: a DNS answer is attacker-influenced and
+/// resolution failures would have to fail open or block the bind, so an
+/// unrecognised name simply needs `--allow net=<name>`.
+fn is_loopback_host(host: &str) -> bool {
+    if host.eq_ignore_ascii_case("localhost") {
+        return true;
+    }
+    host.parse::<std::net::IpAddr>()
+        .map(|ip| ip.is_loopback())
+        .unwrap_or(false)
+}
+
+/// Decode one `application/x-www-form-urlencoded` component: `+` → space,
+/// `%XX` → byte. A malformed escape is kept verbatim (`%zz` stays `%zz`) rather
+/// than dropping input, and the decoded bytes are read as UTF-8 lossily.
+fn form_urldecode(s: &str) -> String {
+    let bytes = s.as_bytes();
+    let mut out: Vec<u8> = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        match bytes[i] {
+            b'+' => {
+                out.push(b' ');
+                i += 1;
+            }
+            b'%' if i + 2 < bytes.len() => {
+                match (hex_nibble(bytes[i + 1]), hex_nibble(bytes[i + 2])) {
+                    (Some(hi), Some(lo)) => {
+                        out.push((hi << 4) | lo);
+                        i += 3;
+                    }
+                    _ => {
+                        out.push(b'%');
+                        i += 1;
+                    }
+                }
+            }
+            b => {
+                out.push(b);
+                i += 1;
+            }
+        }
+    }
+    String::from_utf8_lossy(&out).into_owned()
+}
+
+fn hex_nibble(b: u8) -> Option<u8> {
+    match b {
+        b'0'..=b'9' => Some(b - b'0'),
+        b'a'..=b'f' => Some(b - b'a' + 10),
+        b'A'..=b'F' => Some(b - b'A' + 10),
+        _ => None,
+    }
 }
 
 fn normalize_path(path: &str) -> String {

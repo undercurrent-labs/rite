@@ -8,7 +8,12 @@ description = "Rite source formatter (glyphic and ASCII)"
 [dependencies]
 rite-core = { workspace = true }
 rite-syntax = { workspace = true }
+# Used only by the fail-safe: formatting must not introduce new diagnostics.
+rite-sem = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 
 [dev-dependencies]
+proptest = { workspace = true }
+rite-core = { workspace = true }
+rite-sem = { workspace = true }

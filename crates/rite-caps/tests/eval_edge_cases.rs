@@ -640,7 +640,7 @@ async fn secure_defaults_allow_console() {
 async fn fs_read_denied_under_secure() {
     let mut ctx = RuntimeContext::new();
     install_defaults(&mut ctx, PermissionSet::default_secure());
-    let r = run_source("t.rite", r#"@fs.read("/etc/passwd")"#, &mut ctx).await;
+    let r = run_source("t.rite", r#"! @fs.read("/etc/passwd")"#, &mut ctx).await;
     match r {
         Ok(v) => {
             // must not be ok(string contents of passwd)

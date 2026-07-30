@@ -1152,13 +1152,14 @@ impl Parser {
             TokenKind::Ident => {
                 // HTTP method routes only inside blocks — treat as ident here
                 // But GET "/path" is route
-                if self.is_http_method() && self.pos + 1 < self.tokens.len() {
-                    if matches!(
+                if self.is_http_method()
+                    && self.pos + 1 < self.tokens.len()
+                    && matches!(
                         self.tokens[self.pos + 1].kind,
                         TokenKind::String | TokenKind::MultilineString | TokenKind::RawString
-                    ) {
-                        return Expr::Route(self.parse_route());
-                    }
+                    )
+                {
+                    return Expr::Route(self.parse_route());
                 }
                 // also token kinds Get, Post, etc.
                 Expr::Ident(self.parse_ident())

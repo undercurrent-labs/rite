@@ -176,18 +176,11 @@ fn http_minimal_server_listens_and_serves() {
         .spawn()
         .expect("spawn server");
 
-    // Poll for "listening on" in stdout
-    let start = std::time::Instant::now();
-    let mut _addr: Option<String> = None;
-    while start.elapsed() < Duration::from_secs(5) {
-        // try common approach: read available stdout via try_wait + partial read is hard;
-        // instead probe by reading child stdout after small sleep using a concurrent reader.
-        std::thread::sleep(Duration::from_millis(50));
-        // We can't easily non-block read; use last_bound via side effect — curl is enough if we
-        // parse from a fixed retry of ports... Better: read stdout after kill is too late.
-        // Use reqwest against printed line — spawn thread to read stdout.
-        break;
-    }
+    // Give the child a moment to bind and print its listen line. We can't poll here:
+    // the pipe is drained by the helper thread below (a non-blocking read of the child's
+    // stdout before that thread owns it would race it), so the assertion on the captured
+    // output is what actually gates this test.
+    std::thread::sleep(Duration::from_millis(50));
 
     // Read stdout in a helper thread
     let stdout = child.stdout.take();

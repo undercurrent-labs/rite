@@ -6,7 +6,7 @@ pub mod parser;
 pub mod token;
 
 pub use ast::*;
-pub use lexer::{lex, Lexer};
+pub use lexer::{lex, unescape_braces, Lexer};
 pub use parser::{parse, parse_expression, Parser};
 pub use token::*;
 
