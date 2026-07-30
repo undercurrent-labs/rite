@@ -3,13 +3,26 @@
 //! Connections and prepared statements are opaque `Value::Handle`s.
 //! Disabled on wasm targets — calls return a clear capability error.
 
+// Most of this module only exists when DuckDB is linked in. Without the feature the
+// capability still answers — with a clear error — so the imports and state it needs are
+// gated rather than the whole file. `rite build` compiles this crate without the feature
+// for any program that never touches `@db`, and that configuration has to be warning-clean
+// or a user with `-Dwarnings` cannot build at all.
 use crate::permissions::PermissionSet;
 use crate::registry::NativeFunctionDescriptor;
-use indexmap::IndexMap;
 use parking_lot::Mutex;
-use rite_runtime::{EvalError, HostHandle, Key, Value};
+use rite_runtime::{EvalError, Value};
+use std::path::Path;
+
+#[cfg(all(feature = "duckdb", not(target_arch = "wasm32")))]
+use indexmap::IndexMap;
+#[cfg(all(feature = "duckdb", not(target_arch = "wasm32")))]
+use rite_runtime::{HostHandle, Key};
+#[cfg(all(feature = "duckdb", not(target_arch = "wasm32")))]
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+#[cfg(all(feature = "duckdb", not(target_arch = "wasm32")))]
+use std::path::PathBuf;
+#[cfg(all(feature = "duckdb", not(target_arch = "wasm32")))]
 use std::sync::atomic::{AtomicU64, Ordering};
 
 #[cfg(all(feature = "duckdb", not(target_arch = "wasm32")))]
@@ -17,6 +30,7 @@ use duckdb::types::Value as DuckValue;
 #[cfg(all(feature = "duckdb", not(target_arch = "wasm32")))]
 use duckdb::{params_from_iter, Connection};
 
+#[cfg(all(feature = "duckdb", not(target_arch = "wasm32")))]
 static NEXT_ID: AtomicU64 = AtomicU64::new(1);
 
 /// Inner state held under a mutex so `Connection` (!Sync) can live in `HostCapabilities`.
@@ -29,6 +43,10 @@ struct DbInner {
 }
 
 pub struct DbCap {
+    #[cfg_attr(
+        not(all(feature = "duckdb", not(target_arch = "wasm32"))),
+        allow(dead_code)
+    )]
     inner: Mutex<DbInner>,
 }
 
@@ -465,6 +483,7 @@ fn sql_str_list<S: AsRef<str>>(items: &[S]) -> String {
     format!("[{}]", inner.join(", "))
 }
 
+#[cfg(all(feature = "duckdb", not(target_arch = "wasm32")))]
 fn handle_id(v: Option<&Value>, kind: &str) -> Result<u64, EvalError> {
     match v {
         Some(Value::Handle(h)) if h.kind == kind => Ok(h.id),

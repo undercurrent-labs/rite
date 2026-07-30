@@ -1,6 +1,9 @@
 # Changelog
 
-## [Unreleased]
+## [0.3.0] — 2026-07-30
+
+`rite build` becomes a compiler. Also three fixes that are visible from a script, one of
+which put wrong bytes on disk.
 
 ### Changed
 
@@ -68,6 +71,12 @@
 - **A compiled binary dropped its result once it had printed.** `! @console.println("hi")`
   followed by `1 + 2` printed `hi` and swallowed the `3`, where `rite run` prints both — a
   standing parity break between the two commands, not a new one.
+- **`rite build` failed outright under `RUSTFLAGS=-Dwarnings`.** Skipping DuckDB left
+  `rite-caps` with unused imports in that configuration — which is now the default for any
+  program without `@db` — and the generated crate imported a name it does not always use.
+  Both configurations are warning-clean, and generated crates suppress lints the author of
+  a Rite script cannot act on anyway. Found by running the end-to-end build tests before
+  tagging rather than after.
 
 ## [0.2.0] — 2026-07-30
 
