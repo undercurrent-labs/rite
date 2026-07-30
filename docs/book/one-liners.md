@@ -125,8 +125,8 @@ do host.console.println(str(
 Convert either way:
 
 ```bash
-rite convert /tmp/sum.rite --to ascii --stdout
-rite fmt --ascii /tmp/sum.rite --stdout
+rite convert /tmp/sum.rite --to ascii --stdout   # print it
+rite fmt --ascii /tmp/sum.rite                   # rewrite it in place
 ```
 
 ## Recipes

@@ -57,7 +57,7 @@ do host.console.println("hello, rite")
 ```
 
 ```bash
-rite fmt --ascii hello.rite --stdout
+rite convert hello.rite --to ascii --stdout
 ```
 
 ## A slightly longer script
@@ -114,10 +114,10 @@ Rite has one AST and two surface skins. Formatting **normalizes** layout; conver
 # Pretty-print, keeping/preferring glyph forms
 rite fmt hello.rite
 
-# Emit ASCII keywords and operators
-rite fmt --ascii hello.rite --stdout
+# Rewrite the file in ASCII keywords and operators
+rite fmt --ascii hello.rite
 
-# Convert explicitly
+# Print the ASCII form without touching the file
 rite convert hello.rite --to ascii --stdout
 rite convert hello.rite --to glyph --stdout
 ```

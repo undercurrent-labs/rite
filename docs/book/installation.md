@@ -135,7 +135,7 @@ This **compiles on your machine** (slower first install) and still needs a netwo
 ```bash
 rite run examples/01-values/main.rite --allow-all
 rite check examples/hello/hello.rite
-rite fmt --stdout examples/hello/hello.rite
+rite convert examples/hello/hello.rite --to glyph --stdout
 ```
 
 ## CLI surface

@@ -65,11 +65,11 @@
       "patterns": [
         {
           "name": "keyword.control.rite",
-          "match": "\\b(def|return|if|match|do|use|as|pub|and|or|not|true|false|none|in|test|ok|err|some)\\b"
+          "match": "\\b(def|return|if|match|do|use|as|pub|and|or|not|xor|true|false|none|in|test|ok|err|some|else|for|while|loop|unless|say)\\b"
         },
         {
           "name": "keyword.operator.glyph.rite",
-          "match": "[◆←↢→^?~!@⟦⟧⟨⟩∈∉]"
+          "match": "[◆←↢→^?~!@⟦⟧⟨⟩∈∉∧∨¬⊻¶∘∀¿⊏]"
         }
       ]
     },

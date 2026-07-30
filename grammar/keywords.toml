@@ -1,15 +1,23 @@
 # Reserved keywords in Rite v1 (ASCII forms and special words)
+#
+# This list is checked against the lexer's own `keyword_or_ident` by
+# `cargo test -p rite-cli --test editor_grammar_sync`. It previously listed
+# `expect`, `expect_error`, `expect_match` and `fail` — those are builtin
+# functions, not reserved words — while omitting the sugar pack, which is
+# reserved.
 
 keywords = [
   "def",
   "return",
   "if",
+  "else",
   "match",
   "do",
   "in",
   "not",
   "and",
   "or",
+  "xor",
   "true",
   "false",
   "none",
@@ -20,13 +28,14 @@ keywords = [
   "room",
   "world",
   "test",
-  "expect",
-  "expect_error",
-  "expect_match",
-  "fail",
   "ok",
   "err",
   "some",
+  "for",
+  "while",
+  "loop",
+  "unless",
+  "say",
   "GET",
   "POST",
   "PUT",
@@ -36,10 +45,10 @@ keywords = [
   "OPTIONS",
 ]
 
-# Soft keywords (context-sensitive)
+# Soft keywords: meaningful to the parser in context, but lexed as identifiers,
+# so they stay usable as ordinary names.
 soft_keywords = [
   "on",
-  "say",
   "reveal",
   "exits",
   "text",
