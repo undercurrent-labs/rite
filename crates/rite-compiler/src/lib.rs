@@ -519,12 +519,20 @@ mod tests {
 
     #[test]
     fn workspace_dep_source_emits_path_deps() {
-        let toml = generate_cargo_toml("abc", &DepSource::Workspace(PathBuf::from("/src/rite")));
-        assert!(
-            toml.contains(r#"rite-runtime = { path = "/src/rite/crates/rite-runtime" }"#),
-            "{}",
-            toml
+        let root = PathBuf::from("/src/rite");
+        let toml = generate_cargo_toml("abc", &DepSource::Workspace(root.clone()));
+        // Build the expectation the way the emitter does. A hardcoded POSIX spelling
+        // failed on Windows for correct output: `join` produces `\` there, and the
+        // emitter's `{:?}` escapes it to `\\`, which is what TOML needs for a literal
+        // backslash. The path separator is the platform's business, not this test's.
+        let expected = format!(
+            "rite-runtime = {{ path = {:?} }}",
+            root.join("crates")
+                .join("rite-runtime")
+                .display()
+                .to_string()
         );
+        assert!(toml.contains(&expected), "want {expected}\ngot {toml}");
         assert!(toml.contains("[profile.release]"), "{}", toml);
     }
 

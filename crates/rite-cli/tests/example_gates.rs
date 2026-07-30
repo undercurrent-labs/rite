@@ -1,6 +1,7 @@
 //! Example scripts must keep running (docs/examples contract).
 //! Requires `target/debug/rite` (built by CI before tests).
 
+use std::io::BufRead;
 use std::path::PathBuf;
 use std::process::Command;
 use std::time::Duration;
@@ -68,6 +69,12 @@ fn hello_examples_run() {
     }
 }
 
+/// The two child streams, so one reader loop can serve both.
+enum Stream {
+    Out(std::process::ChildStdout),
+    Err(std::process::ChildStderr),
+}
+
 #[test]
 fn http_service_example_listens() {
     let path = workspace().join("examples/http-service/server.rite");
@@ -84,18 +91,60 @@ fn http_service_example_listens() {
         .spawn()
         .expect("spawn http example");
 
-    // Give server time to bind and print listen URL
-    std::thread::sleep(Duration::from_millis(600));
+    // Wait for the line rather than sleeping a fixed interval and hoping. A single
+    // 600ms sleep raced process startup and failed on a loaded macOS runner with empty
+    // output — the server had not finished binding yet. Reading until the marker appears
+    // is both faster when the machine is idle and reliable when it is not.
+    let (tx, rx) = std::sync::mpsc::channel::<String>();
+    for stream in [
+        child.stdout.take().map(Stream::Out),
+        child.stderr.take().map(Stream::Err),
+    ]
+    .into_iter()
+    .flatten()
+    {
+        let tx = tx.clone();
+        std::thread::spawn(move || {
+            let reader: Box<dyn std::io::Read + Send> = match stream {
+                Stream::Out(o) => Box::new(o),
+                Stream::Err(e) => Box::new(e),
+            };
+            for line in std::io::BufReader::new(reader)
+                .lines()
+                .map_while(Result::ok)
+            {
+                if tx.send(line).is_err() {
+                    break;
+                }
+            }
+        });
+    }
+    drop(tx);
+
+    let deadline = std::time::Instant::now() + Duration::from_secs(20);
+    let mut seen = String::new();
+    let mut found = false;
+    while std::time::Instant::now() < deadline {
+        match rx.recv_timeout(Duration::from_millis(250)) {
+            Ok(line) => {
+                let hit = line.contains("listening") || line.contains("127.0.0.1");
+                seen.push_str(&line);
+                seen.push('\n');
+                if hit {
+                    found = true;
+                    break;
+                }
+            }
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => continue,
+            // Both streams closed: the process exited without printing.
+            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => break,
+        }
+    }
     let _ = child.kill();
-    let out = child.wait_with_output().expect("wait");
-    let combined = format!(
-        "{}{}",
-        String::from_utf8_lossy(&out.stdout),
-        String::from_utf8_lossy(&out.stderr)
-    );
+    let _ = child.wait();
     assert!(
-        combined.contains("listening") || combined.contains("127.0.0.1"),
-        "http example should print listen URL; got: {combined}"
+        found,
+        "http example should print listen URL within 20s; got: {seen}"
     );
 }
 
