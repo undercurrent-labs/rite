@@ -335,25 +335,6 @@ impl<'a> Evaluator<'a> {
     }
 }
 
-fn num_binop(
-    l: &Value,
-    r: &Value,
-    int_op: impl Fn(i64, i64) -> Option<i64>,
-    float_op: impl Fn(f64, f64) -> f64,
-) -> Result<Value, EvalError> {
-    match (l, r) {
-        (Value::Int(a), Value::Int(b)) => int_op(*a, *b)
-            .map(Value::Int)
-            .ok_or_else(|| EvalError::Message("integer overflow".into())),
-        (Value::Float(a), Value::Float(b)) => Ok(Value::Float(float_op(*a, *b))),
-        (Value::Int(a), Value::Float(b)) => Ok(Value::Float(float_op(*a as f64, *b))),
-        (Value::Float(a), Value::Int(b)) => Ok(Value::Float(float_op(*a, *b as f64))),
-        _ => Err(EvalError::Message(
-            "numeric operation on non-numbers".into(),
-        )),
-    }
-}
-
 /// Async invoker for `http.next` handles used by custom middleware (`next(req)`).
 pub type HttpNextInvoker = Arc<
     dyn Fn(u64, Vec<Value>) -> Pin<Box<dyn Future<Output = Result<Value, EvalError>> + Send>>

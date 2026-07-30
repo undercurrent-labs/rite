@@ -1,8 +1,7 @@
 //! Expression and block evaluation, including the allocation-free sync path.
 
 use super::*;
-use crate::builtins::{compare_values, list_remove_first, membership, merge_records};
-use crate::value::{Closure, Key, ResultValue, Value};
+use crate::value::{Closure, Key, Value};
 use indexmap::IndexMap;
 use rite_sem::{
     BinaryOpIr, BlockIr, EffectKind, EntryPoint, ExprIr, ProgramIr, StageKind, UnaryOpIr,
@@ -430,50 +429,15 @@ impl<'a> Evaluator<'a> {
 
     /// Apply a unary operator to an already-evaluated value.
     pub(super) fn apply_unary(&mut self, op: UnaryOpIr, v: Value) -> Result<Value, EvalError> {
-        match op {
-            UnaryOpIr::Neg => match v {
-                Value::Int(n) => n
-                    .checked_neg()
-                    .map(Value::Int)
-                    .ok_or_else(|| EvalError::Message("integer overflow".into())),
-                Value::Float(f) => Ok(Value::Float(-f)),
-                _ => Err(EvalError::Message("cannot negate non-number".into())),
-            },
-            UnaryOpIr::Not => Ok(Value::Bool(!v.is_truthy())),
-            // `!` marks an effect for the reader and the checker; it does not transform.
-            UnaryOpIr::Effect => Ok(v),
-        }
+        crate::ops::unary(op, v)
     }
 
-    /// `object[index]`. Out of range, and any type that cannot be indexed, give `none`.
     pub(super) fn index_value(&mut self, obj: &Value, idx: &Value) -> Value {
-        match (obj, idx) {
-            (Value::List(xs), Value::Int(i)) => {
-                if *i < 0 || *i as usize >= xs.len() {
-                    Value::None
-                } else {
-                    xs[*i as usize].clone()
-                }
-            }
-            (Value::Record(r), Value::String(s)) => r
-                .get(&Key::String(s.to_string()))
-                .cloned()
-                .unwrap_or(Value::None),
-            (Value::Record(r), other) => r
-                .get(&Key::String(format!("{}", other)))
-                .cloned()
-                .unwrap_or(Value::None),
-            _ => Value::None,
-        }
+        crate::ops::index(obj, idx)
     }
 
-    /// Postfix `?`: unwrap `ok`, return early from the enclosing function on `err`.
     pub(super) fn unwrap_try(&mut self, v: Value) -> Result<Value, EvalError> {
-        match v {
-            Value::Result(ResultValue::Ok(inner)) => Ok(*inner),
-            Value::Result(ResultValue::Err(e)) => Err(EvalError::Return(Value::err(*e))),
-            other => Ok(other),
-        }
+        crate::ops::unwrap_try(v)
     }
 
     /// Evaluate an operand, allocating a future only if it actually needs one.
@@ -656,112 +620,7 @@ impl<'a> Evaluator<'a> {
         l: Value,
         r: Value,
     ) -> Result<Value, EvalError> {
-        match op {
-            BinaryOpIr::Add => match (&l, &r) {
-                (Value::Int(a), Value::Int(b)) => a
-                    .checked_add(*b)
-                    .map(Value::Int)
-                    .ok_or_else(|| EvalError::Message("integer overflow".into())),
-                (Value::Float(a), Value::Float(b)) => Ok(Value::Float(a + b)),
-                (Value::Int(a), Value::Float(b)) => Ok(Value::Float(*a as f64 + b)),
-                (Value::Float(a), Value::Int(b)) => Ok(Value::Float(a + *b as f64)),
-                (Value::String(a), Value::String(b)) => Ok(Value::string(format!("{}{}", a, b))),
-                (Value::List(a), Value::List(b)) => {
-                    let mut out = a.clone();
-                    out.append(b.clone());
-                    Ok(Value::List(out))
-                }
-                (Value::Record(a), Value::Record(b)) => Ok(Value::Record(merge_records(a, b))),
-                (Value::List(a), other) => {
-                    let mut out = a.clone();
-                    out.push_back(other.clone());
-                    Ok(Value::List(out))
-                }
-                _ => Err(EvalError::Message(format!(
-                    "cannot add {} and {}",
-                    l.type_name(),
-                    r.type_name()
-                ))),
-            },
-            BinaryOpIr::Sub => match (&l, &r) {
-                (Value::Int(a), Value::Int(b)) => a
-                    .checked_sub(*b)
-                    .map(Value::Int)
-                    .ok_or_else(|| EvalError::Message("integer overflow".into())),
-                (Value::Float(a), Value::Float(b)) => Ok(Value::Float(a - b)),
-                (Value::Int(a), Value::Float(b)) => Ok(Value::Float(*a as f64 - b)),
-                (Value::Float(a), Value::Int(b)) => Ok(Value::Float(a - *b as f64)),
-                (Value::List(a), other) => Ok(Value::List(list_remove_first(a, other))),
-                (Value::Record(a), Value::Atom(atom)) => {
-                    let name = self.ctx.atoms.name(*atom);
-                    let mut out = a.clone();
-                    out.shift_remove(&Key::String(name.clone()));
-                    out.shift_remove(&Key::Atom(name));
-                    Ok(Value::Record(out))
-                }
-                _ => Err(EvalError::Message("cannot subtract values".into())),
-            },
-            BinaryOpIr::Mul => num_binop(&l, &r, |a, b| a.checked_mul(b), |a, b| a * b),
-            BinaryOpIr::Div => match (&l, &r) {
-                (Value::Int(_), Value::Int(0)) => {
-                    Err(EvalError::Message("division by zero".into()))
-                }
-                // `i64::MIN / -1` overflows; Rust panics on that in every profile.
-                (Value::Int(a), Value::Int(b)) => a
-                    .checked_div(*b)
-                    .map(Value::Int)
-                    .ok_or_else(|| EvalError::Message("integer overflow".into())),
-                (Value::Float(a), Value::Float(b)) => Ok(Value::Float(a / b)),
-                (Value::Int(a), Value::Float(b)) => Ok(Value::Float(*a as f64 / b)),
-                (Value::Float(a), Value::Int(b)) => Ok(Value::Float(a / *b as f64)),
-                _ => Err(EvalError::Message("cannot divide values".into())),
-            },
-            BinaryOpIr::Rem => match (&l, &r) {
-                (Value::Int(_), Value::Int(0)) => {
-                    Err(EvalError::Message("division by zero".into()))
-                }
-                // `i64::MIN % -1` overflows the same way `i64::MIN / -1` does.
-                (Value::Int(a), Value::Int(b)) => a
-                    .checked_rem(*b)
-                    .map(Value::Int)
-                    .ok_or_else(|| EvalError::Message("integer overflow".into())),
-                _ => Err(EvalError::Message("cannot rem values".into())),
-            },
-            BinaryOpIr::Eq => Ok(Value::Bool(l.structural_eq(&r))),
-            BinaryOpIr::NotEq => Ok(Value::Bool(!l.structural_eq(&r))),
-            BinaryOpIr::Lt => Ok(Value::Bool(compare_values(&l, &r) < 0)),
-            BinaryOpIr::LtEq => Ok(Value::Bool(compare_values(&l, &r) <= 0)),
-            BinaryOpIr::Gt => Ok(Value::Bool(compare_values(&l, &r) > 0)),
-            BinaryOpIr::GtEq => Ok(Value::Bool(compare_values(&l, &r) >= 0)),
-            // Both operands are already evaluated exactly once above; `∈` and `∉` share
-            // the same membership test so neither re-runs a side-effecting operand.
-            BinaryOpIr::In => Ok(Value::Bool(self.contains_value(&l, &r))),
-            BinaryOpIr::NotIn => Ok(Value::Bool(!self.contains_value(&l, &r))),
-            // Handled above: these must short-circuit, so they cannot take
-            // pre-evaluated operands.
-            BinaryOpIr::And | BinaryOpIr::Or => unreachable!(),
-        }
-    }
-
-    /// Membership test behind `∈` / `∉`, with atoms also matching by name so
-    /// `#a ∈ ["a"]` and `#a ∈ ⟨a: 1⟩` hold.
-    pub(super) fn contains_value(&self, item: &Value, container: &Value) -> bool {
-        if let Value::Atom(id) = item {
-            let name = self.ctx.atoms.name(*id);
-            match container {
-                Value::List(xs) => {
-                    return xs
-                        .iter()
-                        .any(|x| x.structural_eq(item) || x.as_str() == Some(name.as_str()))
-                }
-                Value::Record(rec) => {
-                    return rec.contains_key(&Key::String(name.clone()))
-                        || rec.contains_key(&Key::Atom(name))
-                }
-                _ => {}
-            }
-        }
-        membership(item, container)
+        crate::ops::binary(&self.ctx.atoms, op, l, r)
     }
 
     pub(super) async fn eval_block(&mut self, block: &BlockIr) -> Result<Value, EvalError> {

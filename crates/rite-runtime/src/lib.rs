@@ -5,6 +5,7 @@ pub mod budget;
 pub mod builtins;
 pub mod env;
 pub mod eval;
+pub mod ops;
 pub mod value;
 
 pub use atom::AtomInterner;
