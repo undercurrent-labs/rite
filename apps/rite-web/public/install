@@ -57,7 +57,7 @@ detect_target() {
     linux)  os_part="unknown-linux-gnu" ;;
     darwin) os_part="apple-darwin" ;;
     msys*|mingw*|cygwin*)
-      die "this installer is for Unix shells; on Windows download a .zip from https://github.com/${REPO}/releases"
+      die "this installer is for Unix shells, and no Windows binary is published. Use WSL and run this again inside the distro, or build from source: cargo install --path crates/rite-cli"
       ;;
     *)
       die "unsupported OS: $(uname -s)"

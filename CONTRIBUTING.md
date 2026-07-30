@@ -84,3 +84,24 @@ rite docs build && rite docs agent
 # optional: cd apps/rite-studio && pnpm build
 # optional: cd editors/vscode && npm run compile && npx vsce package
 ```
+
+### Publishing a release
+
+```bash
+# on main, green CI
+git tag v0.3.0
+git push origin v0.3.0
+# → GitHub Actions "Release" builds assets + publishes the Release
+```
+
+Or **Actions → Release → Run workflow** and enter the tag.
+
+Local package for the current machine only:
+
+```bash
+bash scripts/package-release.sh
+# → dist/release/rite-$TARGET.tar.gz + SHA256SUMS
+```
+
+The site serves the installer from `scripts/install.sh`, copied into
+`apps/rite-web/public/` by `pnpm site:build`.

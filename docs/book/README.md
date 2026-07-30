@@ -8,7 +8,7 @@ This book is a linear path. You can stop after any chapter and experiment in [St
 
 1. [Installation](installation.md) — install binary, PATH, verify
 2. [First script](first-script.md) — hello world, run, format dialects
-3. [One-liners & REPL](one-liners.md) — daily scratch work, session model, recipes
+3. [One-liners & REPL](one-liners.md) — quick scripts, session model, recipes
 4. [Values and atoms](values.md) — types, truthiness, records & lists
 5. [Bindings](bindings.md) — immutable vs mutable, assignment
 6. [Functions](functions.md) — definitions, return, closures
@@ -16,7 +16,7 @@ This book is a linear path. You can stop after any chapter and experiment in [St
 8. [Collections](collections.md) — list & record ops in depth
 9. [Pattern matching](matching.md) — `~` / `match`, destructure
 10. [Results and errors](results.md) — `ok` / `err`, `?`, match
-11. [**Sugar pack**](sugar.md) — ranges, for/while, say, compose, op-assign, …
+11. [Syntax sugar](sugar.md) — ranges, for/while, say, compose, op-assign, …
 12. [Effects and capabilities](effects.md) — `!` / `do`, permissions
 13. [Files, JSON, and CSV](files-json.md) — `@fs`, `@json`, `@csv`
 14. [Databases](db.md) — `@db` (DuckDB), SQL, transactions
@@ -26,8 +26,8 @@ This book is a linear path. You can stop after any chapter and experiment in [St
 18. [Text RPG](rpg.md) — `@game` tutorial
 19. [Embedding](embedding.md) — `RiteEngine` from Rust
 20. [Browser & Studio](browser.md) — hosted site, WASM limits
-21. [Agents & skill](agents.md) — skill install, self-update, VS Code extension
-22. [Testing (contributors)](testing.md) — suite map, HTTP I/O capture, PR checklist
+21. [Agents & the skill bundle](agents.md) — skill install, self-update, VS Code extension
+22. [Testing](testing.md) — suite map, HTTP I/O capture, PR checklist
 
 ## Glyph ↔ ASCII at a glance
 
@@ -65,4 +65,4 @@ rite docs agent    # agent-oriented summary
 ## Repository
 
 Source: [github.com/undercurrent-labs/rite](https://github.com/undercurrent-labs/rite)  
-Hosted book + Studio: [rite.undrc.dev](https://rite.undrc.dev) (Undercurrent Labs LLC)
+Hosted book + Studio: [rite.undrc.dev](https://rite.undrc.dev)

@@ -117,7 +117,9 @@ jobs:
   studio:
     name: Studio
     runs-on: ubuntu-latest
-    needs: [wasm]
+    # `vscode` too: the site links a /vscode/rite.vsix mirror only when the packaged
+    # extension is really in dist, so the artifact has to exist before this builds.
+    needs: [wasm, vscode]
     steps:
       - uses: actions/checkout@v5
       # Must match package.json "packageManager": "pnpm@9.0.0" exactly
@@ -132,10 +134,19 @@ jobs:
         with:
           name: rite-wasm
           path: apps/rite-studio/public/wasm
+      - uses: actions/download-artifact@v5
+        with:
+          name: rite-vsix
+          path: apps/rite-web/public/vscode
       - name: install & build product site
         run: |
           set -euo pipefail
           pnpm install
+          # Gate, not advisory: `typecheck` was broken for both apps (vue-tsc 1.x
+          # against TypeScript 5.9 crashed on startup) and nothing noticed,
+          # because the build itself never typechecks.
+          pnpm --dir apps/rite-web typecheck
+          pnpm --dir apps/rite-studio typecheck
           # studio SPA is pulled into rite-web; build both
           pnpm --dir apps/rite-studio build
           # seed install endpoints + wasm for web
@@ -145,15 +156,17 @@ jobs:
           install -m 644 scripts/install.sh apps/rite-web/public/install
           # Agent skill archives must be real static files (not SPA HTML fallback)
           bash scripts/package-skill.sh apps/rite-web/public/skill
-          # Optional VSIX if vscode job artifact present later; placeholder ok
-          mkdir -p apps/rite-web/public/vscode
           pnpm --dir apps/rite-web build
           # Fail deploy if skill packages never made it into dist
           test -f apps/rite-web/dist/skill/rite-agent-skill.tar.gz
           test -f apps/rite-web/dist/skill/rite-agent-skill.zip
           test -f apps/rite-web/dist/install.sh || test -f apps/rite-web/dist/install
           file apps/rite-web/dist/skill/rite-agent-skill.zip
-          ls -la apps/rite-web/dist/skill/
+          # The site links the VSIX mirror because this job supplied one — so it
+          # has to be in dist, and has to be a zip rather than SPA HTML.
+          test -f apps/rite-web/dist/vscode/rite.vsix
+          file apps/rite-web/dist/vscode/rite.vsix | grep -qiE 'zip|archive'
+          ls -la apps/rite-web/dist/skill/ apps/rite-web/dist/vscode/
       - name: upload studio dist
         uses: actions/upload-artifact@v5
         with:
@@ -227,7 +240,11 @@ jobs:
           # Must be zip/gzip, not SPA HTML mistaken for a download
           file apps/rite-web/dist/skill/rite-agent-skill.zip | grep -qiE 'zip|archive'
           ! grep -q '<!DOCTYPE html' apps/rite-web/dist/skill/rite-agent-skill.zip
-          ls -la apps/rite-web/dist/skill/
+          # Same gate for the VSIX mirror the Agents page links.
+          test -f apps/rite-web/dist/vscode/rite.vsix
+          file apps/rite-web/dist/vscode/rite.vsix | grep -qiE 'zip|archive'
+          ! grep -q '<!DOCTYPE html' apps/rite-web/dist/vscode/rite.vsix
+          ls -la apps/rite-web/dist/skill/ apps/rite-web/dist/vscode/
           ls -la apps/rite-web/dist | head -25
       - name: Deploy Worker (rite-studio)
         uses: cloudflare/wrangler-action@v3

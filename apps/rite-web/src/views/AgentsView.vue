@@ -1,10 +1,18 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { computed } from "vue";
+import CopyBlock from "../components/CopyBlock.vue";
+import { useLatestTag } from "../lib/release";
 
 /** Site static files (must be real assets in dist — not SPA HTML). */
 const skillTarSite = "/skill/rite-agent-skill.tar.gz";
 const skillZipSite = "/skill/rite-agent-skill.zip";
 const vsixSite = "/vscode/rite.vsix";
+/**
+ * The VSIX mirror only exists when the deploy pipeline copied a packaged
+ * extension into public/vscode/. Linking it unconditionally served the SPA's
+ * index.html as a .vsix download.
+ */
+const hasVsixMirror = __HAS_VSIX__;
 /** GitHub Releases latest/download — reliable binary downloads. */
 const skillTarGh =
   "https://github.com/undercurrent-labs/rite/releases/latest/download/rite-agent-skill.tar.gz";
@@ -13,21 +21,21 @@ const skillZipGh =
 const vsixGh =
   "https://github.com/undercurrent-labs/rite/releases/latest/download/rite.vsix";
 const installCli = "curl -fsSL https://rite.undrc.dev/install | bash";
-const latestTag = ref("v0.1.9");
 
-onMounted(async () => {
-  try {
-    const res = await fetch(
-      "https://api.github.com/repos/undercurrent-labs/rite/releases/latest",
-      { headers: { Accept: "application/vnd.github+json" } }
-    );
-    if (!res.ok) return;
-    const data = (await res.json()) as { tag_name?: string };
-    if (data.tag_name) latestTag.value = data.tag_name;
-  } catch {
-    /* keep fallback */
-  }
-});
+const { tag: latestTag, resolved: tagResolved } = useLatestTag();
+
+const cliSnippet = computed(
+  () => `${installCli}
+# pin: RITE_VERSION=${latestTag.value} curl -fsSL https://rite.undrc.dev/install | bash`
+);
+const skillSnippet = `rite skill install --target all
+# or:  rite skill install --target grok`;
+const vscodeSnippet = `rite vscode install
+rite vscode download --out ./rite.vsix`;
+const updateSnippet = `rite update --check
+rite update`;
+
+const PRE = "overflow-x-auto rounded-lg bg-black/40 p-3 pr-16 text-rite-green";
 </script>
 
 <template>
@@ -47,29 +55,25 @@ onMounted(async () => {
     <section class="mt-12 rounded-xl border border-rite-border bg-rite-panel p-6">
       <h2 class="text-xl font-semibold text-white">One-liners</h2>
       <p class="mt-2 text-sm text-slate-400">
-        Latest release:
+        {{ tagResolved ? "Latest release:" : "Packaged with this site:" }}
         <code class="text-rite-green">{{ latestTag }}</code>
       </p>
       <div class="mt-4 space-y-4 font-mono text-sm">
         <div>
           <p class="mb-1 text-xs text-rite-muted">CLI (+ LSP)</p>
-          <pre class="overflow-x-auto rounded-lg bg-black/40 p-3 text-rite-green">{{ installCli }}
-# pin: RITE_VERSION={{ latestTag }} curl -fsSL https://rite.undrc.dev/install | bash</pre>
+          <CopyBlock :code="cliSnippet" :pre-class="PRE" />
         </div>
         <div>
           <p class="mb-1 text-xs text-rite-muted">Agent skill (Grok / Claude / Cursor)</p>
-          <pre class="overflow-x-auto rounded-lg bg-black/40 p-3 text-rite-green">rite skill install --target all
-# or:  rite skill install --target grok</pre>
+          <CopyBlock :code="skillSnippet" :pre-class="PRE" />
         </div>
         <div>
           <p class="mb-1 text-xs text-rite-muted">VS Code / Cursor extension</p>
-          <pre class="overflow-x-auto rounded-lg bg-black/40 p-3 text-rite-green">rite vscode install
-rite vscode download --out ./rite.vsix</pre>
+          <CopyBlock :code="vscodeSnippet" :pre-class="PRE" />
         </div>
         <div>
           <p class="mb-1 text-xs text-rite-muted">Self-update (CLI + skill freshness)</p>
-          <pre class="overflow-x-auto rounded-lg bg-black/40 p-3 text-rite-green">rite update --check
-rite update</pre>
+          <CopyBlock :code="updateSnippet" :pre-class="PRE" />
         </div>
       </div>
     </section>
@@ -77,16 +81,18 @@ rite update</pre>
     <!-- Downloads -->
     <section class="mt-10">
       <h2 class="text-xl font-semibold text-white">Direct downloads</h2>
-      <p class="mt-2 text-sm text-slate-500">
-        Prefer GitHub for large binaries. Site mirrors under
-        <code class="text-slate-400">/skill/</code> after deploy.
+      <p class="mt-2 text-sm text-slate-400">
+        GitHub Releases is authoritative. Site mirrors are published under
+        <code class="text-slate-300">/skill/</code> and
+        <code class="text-slate-300">/vscode/</code> by the deploy pipeline, and are only
+        linked here when they actually shipped.
       </p>
       <ul class="mt-4 space-y-3 text-slate-300">
         <li>
           <a :href="skillTarGh" class="text-rite-accent hover:underline" target="_blank" rel="noopener"
             >rite-agent-skill.tar.gz</a
           >
-          <span class="text-slate-500"> (GitHub)</span>
+          <span class="text-slate-400"> (GitHub)</span>
           ·
           <a :href="skillTarSite" class="text-slate-400 hover:text-rite-accent hover:underline"
             >site mirror</a
@@ -96,7 +102,7 @@ rite update</pre>
           <a :href="skillZipGh" class="text-rite-accent hover:underline" target="_blank" rel="noopener"
             >rite-agent-skill.zip</a
           >
-          <span class="text-slate-500"> (GitHub)</span>
+          <span class="text-slate-400"> (GitHub)</span>
           ·
           <a :href="skillZipSite" class="text-slate-400 hover:text-rite-accent hover:underline"
             >site mirror</a
@@ -106,11 +112,13 @@ rite update</pre>
           <a :href="vsixGh" class="text-rite-accent hover:underline" target="_blank" rel="noopener"
             >rite.vsix</a
           >
-          <span class="text-slate-500"> (GitHub)</span>
-          ·
-          <a :href="vsixSite" class="text-slate-400 hover:text-rite-accent hover:underline"
-            >site mirror</a
-          >
+          <span class="text-slate-400"> (GitHub)</span>
+          <template v-if="hasVsixMirror">
+            ·
+            <a :href="vsixSite" class="text-slate-300 hover:text-rite-accent hover:underline"
+              >site mirror</a
+            >
+          </template>
         </li>
         <li>
           <a
@@ -181,7 +189,7 @@ mkdir -p ~/.cursor/skills &amp;&amp; tar -xzf skill.tgz -C ~/.cursor/skills</pre
       </ul>
     </section>
 
-    <p class="mt-10 text-sm text-slate-500">
+    <p class="mt-10 text-sm text-slate-400">
       Docs:
       <RouterLink to="/docs/installation" class="text-rite-accent hover:underline">Installation</RouterLink>
       ·

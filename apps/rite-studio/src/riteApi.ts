@@ -148,6 +148,9 @@ export async function riteCall(
         return wasm.wasm_run(source, true);
       case "/api/v1/emit-rust":
         return wasm.wasm_emit_rust(source);
+      // No native studio route for this yet; the native call 404s and lands here.
+      case "/api/v1/ir":
+        return wasm.wasm_semantic_ir(source);
       default:
         return { ok: false, error: `unsupported offline path ${path}` };
     }

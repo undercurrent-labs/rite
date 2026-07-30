@@ -1,6 +1,6 @@
 # Installation
 
-You do **not** need the source tree to use Rite for personal scripts and one-liners. Prefer a **binary install** from GitHub Releases; clone only if you are developing Rite itself.
+You do **not** need the source tree to run Rite scripts. Prefer a **binary install** from GitHub Releases; clone only if you are developing Rite itself.
 
 ## Quick install (recommended)
 
@@ -24,7 +24,7 @@ This will:
 ### Pin a version
 
 ```bash
-curl -fsSL https://rite.undrc.dev/install | RITE_VERSION=v0.1.8 bash
+curl -fsSL https://rite.undrc.dev/install | RITE_VERSION=v0.3.0 bash
 ```
 
 Use the latest tag from [Releases](https://github.com/undercurrent-labs/rite/releases) (omit `RITE_VERSION` to install whatever is current).
@@ -33,7 +33,7 @@ Use the latest tag from [Releases](https://github.com/undercurrent-labs/rite/rel
 
 | Variable | Default | Meaning |
 |----------|---------|---------|
-| `RITE_VERSION` | latest release | Tag such as `v0.1.8` |
+| `RITE_VERSION` | latest release | Tag such as `v0.3.0` |
 | `RITE_INSTALL_DIR` | `$HOME/.local/bin` | Where binaries go |
 | `INSTALL_LSP` | `1` | Set `0` to skip `rite-lsp` |
 | `RITE_REPO` | `undercurrent-labs/rite` | GitHub repo for assets |
@@ -53,7 +53,7 @@ source ~/.bashrc
 
 ```bash
 rite version --verbose
-echo '! @console.println("hello from work")' > /tmp/hi.rite
+echo '! @console.println("hello from Rite")' > /tmp/hi.rite
 rite run /tmp/hi.rite
 # or: rite /tmp/hi.rite
 ```
@@ -87,12 +87,12 @@ reaching you with nothing in its way. Two supported routes:
 
 `rite update` says the same rather than looking for an archive that is not there.
 
-### No release yet?
+### If the installer cannot find a release
 
-If the installer says there are no releases, either:
+No binary matches every platform — see **Windows** above, and new architectures land in
+Releases before they land in the installer's detection table. Either:
 
-- Someone needs to publish a tag (maintainers: `git tag v0.1.8 && git push origin v0.1.8`), or  
-- Use [from source](#from-source-contributors) / `cargo install` below, or  
+- Build [from source](#from-source-contributors) or use `cargo install` below, or  
 - Use [Studio](https://rite.undrc.dev/studio) in the browser for pure scripts (no CLI)
 
 ## Studio only (zero install)
@@ -115,7 +115,8 @@ export PATH="$PWD/target/release:$PATH"
 rite version --verbose
 ```
 
-Requirements: recent stable Rust (see `rust-toolchain.toml` if present).
+Requirements: the Rust toolchain pinned in `rust-toolchain.toml` (1.97.1), which `rustup`
+installs automatically from within the checkout.
 
 ### cargo install from git
 
@@ -157,10 +158,11 @@ rite --help
 
 ## Permissions
 
-Default: **console**, **clock**, **random** allowed; **fs**, **net**, **env**, **process** denied.
+Default: **console**, **clock**, **random** allowed; **fs**, **net**, **env**, **process**
+and **db** denied. Any default can be revoked with `--deny`.
 
 ```bash
-rite run script.rite --allow-all          # demos
+rite run script.rite --allow-all          # trusted scripts only
 rite run script.rite --allow fs:read=./data
 ```
 
@@ -179,26 +181,6 @@ rite-lsp   # stdio language server
 ```bash
 cd editors/vscode && npm install && npm run compile
 ```
-
-## Maintainers: publishing a release
-
-```bash
-# on main, green CI
-git tag v0.1.8
-git push origin v0.1.8
-# → GitHub Actions "Release" builds assets + publishes the Release
-```
-
-Or **Actions → Release → Run workflow** and enter the tag (e.g. `v0.1.8`).
-
-Local package for the current machine only:
-
-```bash
-bash scripts/package-release.sh
-# → dist/release/rite-$TARGET.tar.gz + SHA256SUMS
-```
-
-Site hosts the installer from `scripts/install.sh` (copied into `apps/rite-web/public/` on `pnpm site:build`).
 
 ## Next
 

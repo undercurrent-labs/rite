@@ -5,6 +5,11 @@ export type DocChapter = {
   file: string;
 };
 
+/**
+ * Order and titles are the same list the book README prints, so the numbering in
+ * the sidebar matches the numbering a reader sees on the /docs index page.
+ * Change both together.
+ */
 export const DOC_CHAPTERS: DocChapter[] = [
   { slug: "installation", title: "Installation", file: "installation.md" },
   { slug: "first-script", title: "First script", file: "first-script.md" },
@@ -16,40 +21,56 @@ export const DOC_CHAPTERS: DocChapter[] = [
   { slug: "collections", title: "Collections", file: "collections.md" },
   { slug: "matching", title: "Pattern matching", file: "matching.md" },
   { slug: "results", title: "Results and errors", file: "results.md" },
-  { slug: "effects", title: "Effects and capabilities", file: "effects.md" },
-  { slug: "files-json", title: "Files and JSON", file: "files-json.md" },
-  { slug: "http", title: "HTTP services", file: "http.md" },
-  { slug: "db", title: "Databases", file: "db.md" },
-  { slug: "modules", title: "Modules", file: "modules.md" },
   { slug: "sugar", title: "Syntax sugar", file: "sugar.md" },
-  { slug: "testing", title: "Testing", file: "testing.md" },
+  { slug: "effects", title: "Effects and capabilities", file: "effects.md" },
+  { slug: "files-json", title: "Files, JSON, and CSV", file: "files-json.md" },
+  { slug: "db", title: "Databases", file: "db.md" },
+  { slug: "http", title: "HTTP services", file: "http.md" },
+  { slug: "modules", title: "Modules", file: "modules.md" },
   { slug: "compiling", title: "Compiling to Rust", file: "compiling.md" },
   { slug: "rpg", title: "Text RPG", file: "rpg.md" },
   { slug: "embedding", title: "Embedding", file: "embedding.md" },
   { slug: "browser", title: "Browser & Studio", file: "browser.md" },
   { slug: "agents", title: "Agents & the skill bundle", file: "agents.md" },
+  { slug: "testing", title: "Testing", file: "testing.md" },
 ];
 
+/**
+ * Lazy on purpose. Eager loading inlined all 22 chapters (~91 KB of markdown)
+ * into the entry chunk, so every visitor to the homepage downloaded the whole
+ * book. Each chapter is now its own chunk, fetched when it is opened.
+ */
 const rawModules = import.meta.glob("../../../../docs/book/*.md", {
   query: "?raw",
   import: "default",
-  eager: true,
-}) as Record<string, string>;
+}) as Record<string, () => Promise<string>>;
 
 function fileFromPath(p: string): string {
   const parts = p.replace(/\\/g, "/").split("/");
   return parts[parts.length - 1] || p;
 }
 
-const byFile = new Map<string, string>();
-for (const [path, content] of Object.entries(rawModules)) {
-  byFile.set(fileFromPath(path), content);
+const byFile = new Map<string, () => Promise<string>>();
+for (const [path, load] of Object.entries(rawModules)) {
+  byFile.set(fileFromPath(path), load);
 }
 
-export function getDocMarkdown(slug: string): string | null {
+const cache = new Map<string, string>();
+
+async function loadFile(file: string): Promise<string | null> {
+  const cached = cache.get(file);
+  if (cached !== undefined) return cached;
+  const load = byFile.get(file);
+  if (!load) return null;
+  const text = await load();
+  cache.set(file, text);
+  return text;
+}
+
+export async function getDocMarkdown(slug: string): Promise<string | null> {
   const ch = DOC_CHAPTERS.find((c) => c.slug === slug);
   if (!ch) return null;
-  return byFile.get(ch.file) ?? null;
+  return loadFile(ch.file);
 }
 
 export function chapterBySlug(slug: string): DocChapter | undefined {
@@ -69,9 +90,9 @@ export function adjacentChapters(slug: string): {
 }
 
 /** Index page body when visiting /docs without a slug. */
-export function docsIndexMarkdown(): string {
+export async function docsIndexMarkdown(): Promise<string> {
   // Prefer the book README when present (keeps site + repo docs in sync).
-  const readme = byFile.get("README.md");
+  const readme = await loadFile("README.md");
   if (readme && readme.trim().length > 0) {
     return readme;
   }

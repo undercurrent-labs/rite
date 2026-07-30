@@ -1,6 +1,6 @@
 # One-liners and the REPL
 
-Rite is handy for **scratch work** on a machine where you already installed the CLI:
+Rite suits short, self-contained scripts — the kind you reach for between larger tools. Install the CLI first:
 
 ```bash
 curl -fsSL https://rite.undrc.dev/install | bash
@@ -17,7 +17,7 @@ This page is a field guide for **quick scripts**, **pipelines**, and **`rite rep
 | **REPL** | `rite repl` — explore values, define helpers, iterate |
 
 ```bash
-rite run job.rite --allow-all          # demos / trusted personal scripts
+rite run job.rite --allow-all          # trusted scripts only
 rite run job.rite --allow fs:read=./data
 rite repl                              # default caps (console/clock/random)
 rite repl --allow-all                  # full host for local exploration
@@ -27,7 +27,7 @@ rite repl --allow-all                  # full host for local exploration
 
 ```text
 $ rite repl
-Rite 0.1.8 — type :help for commands
+Rite 0.3.0 — type :help for commands
 rite〉1 + 2
 3
 rite〉xs ← [1, 2, 3, 4, 5]
@@ -48,7 +48,7 @@ rite〉:quit
 - **Definitions** (bindings like `x ← …`, functions, imports) are kept in a **prelude** and re-applied before each new input.  
 - **Expressions** and **effects** (e.g. `! @console.println(...)`) run against that prelude but are **not** stored — they will not re-fire later.  
 - **`:reset`** clears the prelude and environment.  
-- Each evaluation **restarts** the time/step budget, so **idle time does not count** toward the timeout (this used to cause `execution wall-clock timeout exceeded` after ~60s of sitting in the REPL).
+- Each evaluation **restarts** the time/step budget, so **idle time does not count** toward the timeout — only the current expression is on the clock.
 
 ### Meta commands
 
@@ -129,7 +129,7 @@ rite convert /tmp/sum.rite --to ascii --stdout
 rite fmt --ascii /tmp/sum.rite --stdout
 ```
 
-## Work-machine recipes
+## Recipes
 
 ### 1. Summarize a list of numbers
 
@@ -144,11 +144,13 @@ nums ← [12, 7, 99, 3, 40]
 ```rite
 words ← ["alpha", "beta", "gamma", "δ"]
 // keep short names
-short ← words → keep { |w| (w → count) <= 5 }
+short ← words → keep { |w| (w → count) <= 4 }
 ! @console.println(short)
+// → [beta, δ]
 ```
 
-*(String length via pipeline `count` depends on builtins treating strings as countable; if a form fails, use list length on `words` only.)*
+`count` works on strings as well as lists, and counts **characters**, not bytes — `δ`
+is one, not two.
 
 ### 3. Read JSON file (needs FS)
 
@@ -258,8 +260,6 @@ value.
 
 | Symptom | Cause | Fix |
 |---------|--------|-----|
-| `execution wall-clock timeout exceeded` after sitting idle | Old builds started a 60s clock at REPL open | Upgrade CLI (`curl … \| bash`); new builds restart the budget every eval |
-| Name not found for `x` after binding | Old builds did not keep a session prelude | Upgrade; definitions now accumulate in-session |
 | `room` unexpected token | `room` is reserved (game DSL) | Use another name (`place`, `chamber`) |
 | Nested list `[[1,2]]` parse error | `[[` is ASCII block open | Use `[ [1, 2], [3, 4] ]` with spaces |
 | `ok(42)` parse error | `ok` / `err` are keywords | Use match on atoms / host results + `?` |

@@ -1,4 +1,4 @@
-/** Stateless share links via URL fragment (compressed JSON). */
+/** Stateless share links: the editor state as base64url JSON in the URL fragment. */
 
 export type ShareState = {
   source?: string;
@@ -6,23 +6,24 @@ export type ShareState = {
   example?: string;
 };
 
+/** btoa/atob are byte-oriented, so round-trip UTF-8 explicitly rather than via escape(). */
+function toBase64Url(bytes: Uint8Array): string {
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+function fromBase64Url(text: string): Uint8Array {
+  const binary = atob(text.replace(/-/g, "+").replace(/_/g, "/"));
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+
 export function encodeShare(state: ShareState): string {
-  const json = JSON.stringify(state);
-  // base64url
-  if (typeof btoa !== "undefined") {
-    return btoa(unescape(encodeURIComponent(json)))
-      .replace(/\+/g, "-")
-      .replace(/\//g, "_")
-      .replace(/=+$/, "");
-  }
-  return Buffer.from(json, "utf8").toString("base64url");
+  return toBase64Url(new TextEncoder().encode(JSON.stringify(state)));
 }
 
 export function decodeShare(frag: string): ShareState {
-  const b64 = frag.replace(/-/g, "+").replace(/_/g, "/");
-  if (typeof atob !== "undefined") {
-    const json = decodeURIComponent(escape(atob(b64)));
-    return JSON.parse(json);
-  }
-  return JSON.parse(Buffer.from(b64, "base64").toString("utf8"));
+  return JSON.parse(new TextDecoder().decode(fromBase64Url(frag))) as ShareState;
 }

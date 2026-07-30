@@ -3,6 +3,7 @@ import HomeView from "./views/HomeView.vue";
 import DocsView from "./views/DocsView.vue";
 import StudioView from "./views/StudioView.vue";
 import AgentsView from "./views/AgentsView.vue";
+import NotFoundView from "./views/NotFoundView.vue";
 
 export const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -36,6 +37,14 @@ export const router = createRouter({
     {
       path: "/play",
       redirect: (to) => ({ path: "/studio", hash: to.hash, query: to.query }),
+    },
+    // Cloudflare's SPA fallback answers every unknown path with index.html, so
+    // without this the router matches nothing and renders a blank page.
+    {
+      path: "/:pathMatch(.*)*",
+      name: "not-found",
+      component: NotFoundView,
+      meta: { title: "Not found · Rite" },
     },
   ],
   scrollBehavior(to, _from, saved) {

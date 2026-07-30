@@ -4,7 +4,7 @@ Rite’s public site and playground run as a static app plus a **WASM** build of
 
 ## Product site map
 
-Hosted at [https://rite.undrc.dev](https://rite.undrc.dev) (Undercurrent Labs LLC):
+Hosted at [https://rite.undrc.dev](https://rite.undrc.dev):
 
 | Path | Content |
 |------|---------|
@@ -97,18 +97,6 @@ Browser
 Native (optional)
   └─ rite studio              → Axum API + full evaluator + caps
 ```
-
-## Deploy notes
-
-- Worker name historically `rite-studio`; assets from `apps/rite-web/dist`  
-- Custom domain can point at the same Worker  
-- Cache: hard-refresh after deploys if JS/WASM look stale  
-
-## Teaching and demos
-
-1. **Talk track** — open `/`, then `/studio`, run square/println  
-2. **Dialects** — paste glyph, Format → ascii  
-3. **Limits** — show that FS needs CLI; keeps the security story honest  
 
 ## Next
 

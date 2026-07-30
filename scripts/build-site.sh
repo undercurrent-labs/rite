@@ -23,17 +23,28 @@ bash "$ROOT/scripts/package-skill.sh" "$ROOT/apps/rite-web/public/skill"
 mkdir -p "$ROOT/dist/skill"
 cp -a "$ROOT/apps/rite-web/public/skill/." "$ROOT/dist/skill/" 2>/dev/null || true
 
-echo "==> VS Code VSIX placeholder dir (/vscode/)"
+echo "==> VS Code VSIX (/vscode/)"
+# Copy a packaged vsix when one exists (CI artifact or local `pnpm package:vsix`).
+# When none does, leave the directory absent: the site only links the mirror when
+# the asset is really there, because Cloudflare's SPA fallback answers a missing
+# /vscode/rite.vsix with 200 + index.html — an HTML file named .vsix.
 mkdir -p "$ROOT/apps/rite-web/public/vscode"
-# Prefer a freshly packaged vsix when present (CI release or local)
 if [[ -f "$ROOT/editors/vscode/rite.vsix" ]]; then
   cp -f "$ROOT/editors/vscode/rite.vsix" "$ROOT/apps/rite-web/public/vscode/rite.vsix"
 elif [[ -f "$ROOT/dist/vscode/rite.vsix" ]]; then
   cp -f "$ROOT/dist/vscode/rite.vsix" "$ROOT/apps/rite-web/public/vscode/rite.vsix"
+fi
+if [[ -f "$ROOT/apps/rite-web/public/vscode/rite.vsix" ]]; then
+  # A vsix is a zip. If this is HTML, the copy source was itself an SPA fallback.
+  if head -c 2 "$ROOT/apps/rite-web/public/vscode/rite.vsix" | grep -q 'PK'; then
+    echo "    vsix present and looks like a zip"
+  else
+    echo "error: public/vscode/rite.vsix is not a zip" >&2
+    exit 1
+  fi
 else
-  # Lightweight note so /vscode/ isn't empty in dev; real vsix comes from release CI
-  printf 'Packaged VSIX is published on GitHub Releases and copied here by the release pipeline.\n' \
-    > "$ROOT/apps/rite-web/public/vscode/README.txt"
+  rmdir "$ROOT/apps/rite-web/public/vscode" 2>/dev/null || true
+  echo "    no vsix packaged — site will not link a mirror"
 fi
 
 echo "==> Install JS deps (if needed)"

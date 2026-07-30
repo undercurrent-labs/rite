@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, watch } from "vue";
+import { computed, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import {
   adjacentChapters,
@@ -18,6 +18,23 @@ function onChapterSelect(ev: Event) {
   router.push(v ? `/docs/${v}` : "/docs");
 }
 
+/**
+ * Rendered markdown is injected as raw HTML, so its in-book links are plain
+ * anchors and would reload the whole app. Route them instead, leaving external
+ * links, new-tab clicks and same-page anchors alone.
+ */
+function onDocClick(ev: MouseEvent) {
+  if (ev.defaultPrevented || ev.button !== 0) return;
+  if (ev.metaKey || ev.ctrlKey || ev.shiftKey || ev.altKey) return;
+  const anchor = (ev.target as HTMLElement | null)?.closest("a");
+  if (!anchor) return;
+  if (anchor.target && anchor.target !== "_self") return;
+  const href = anchor.getAttribute("href");
+  if (!href || !href.startsWith("/")) return;
+  ev.preventDefault();
+  router.push(href);
+}
+
 const slug = computed(() => {
   const s = route.params.slug;
   if (typeof s === "string" && s.length) return s;
@@ -26,15 +43,21 @@ const slug = computed(() => {
 
 const chapter = computed(() => (slug.value ? chapterBySlug(slug.value) : undefined));
 
-const markdown = computed(() => {
-  if (!slug.value) return docsIndexMarkdown();
-  return getDocMarkdown(slug.value);
-});
+/** null = no such chapter, undefined = still loading this chapter's chunk. */
+const markdown = ref<string | null | undefined>(undefined);
 
-const html = computed(() => {
-  if (!markdown.value) return "<p>Chapter not found.</p>";
-  return renderMarkdown(markdown.value);
-});
+watch(
+  slug,
+  async (current) => {
+    markdown.value = undefined;
+    const text = current ? await getDocMarkdown(current) : await docsIndexMarkdown();
+    // A fast second navigation must not be overwritten by the slower first load.
+    if (slug.value === current) markdown.value = text;
+  },
+  { immediate: true }
+);
+
+const html = computed(() => (markdown.value ? renderMarkdown(markdown.value) : ""));
 
 const neighbors = computed(() => (slug.value ? adjacentChapters(slug.value) : {}));
 
@@ -77,7 +100,7 @@ watch(
                 : 'text-slate-400 hover:bg-slate-800/40 hover:text-slate-100'
             "
           >
-            <span class="mr-1.5 font-mono text-[10px] text-slate-600">{{ i + 1 }}</span>
+            <span class="mr-1.5 font-mono text-[10px] text-slate-400">{{ i + 1 }}</span>
             {{ ch.title }}
           </RouterLink>
         </nav>
@@ -116,7 +139,8 @@ watch(
           <RouterLink to="/docs">Back to overview</RouterLink>.
         </p>
       </div>
-      <div v-else class="prose-rite max-w-prose" v-html="html" />
+      <p v-else-if="markdown === undefined" class="text-slate-400">Loading…</p>
+      <div v-else class="prose-rite max-w-prose" @click="onDocClick" v-html="html" />
 
       <nav
         v-if="slug && (neighbors.prev || neighbors.next)"
@@ -139,7 +163,7 @@ watch(
         </RouterLink>
       </nav>
 
-      <p v-if="slug === 'browser' || slug === 'first-script'" class="mt-8 max-w-prose text-sm text-slate-500">
+      <p v-if="slug === 'browser' || slug === 'first-script'" class="mt-8 max-w-prose text-sm text-slate-400">
         Try pure examples in
         <RouterLink to="/studio" class="text-rite-accent hover:underline">Studio</RouterLink>
         without installing.

@@ -1,22 +1,13 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import CopyBlock from "../components/CopyBlock.vue";
+import { useLatestTag } from "../lib/release";
 
-/** Shown for pin examples; refreshed from GitHub Releases when possible. */
-const latestTag = ref("v0.1.8");
+const { tag: latestTag, resolved: tagResolved } = useLatestTag();
 
-onMounted(async () => {
-  try {
-    const res = await fetch(
-      "https://api.github.com/repos/undercurrent-labs/rite/releases/latest",
-      { headers: { Accept: "application/vnd.github+json" } }
-    );
-    if (!res.ok) return;
-    const data = (await res.json()) as { tag_name?: string };
-    if (data.tag_name) latestTag.value = data.tag_name;
-  } catch {
-    /* keep fallback */
-  }
-});
+const installSnippet = `curl -fsSL https://rite.undrc.dev/install | bash
+# → ~/.local/bin/rite  (+ rite-lsp)
+export PATH="$HOME/.local/bin:$PATH"
+rite version`;
 
 const pillars = [
   {
@@ -160,7 +151,7 @@ do host.console.println(str(square(12)))`;
           <p class="mt-2 text-sm text-slate-400">
             Browser playground with WASM. Share snippets, format, check, run pure code.
           </p>
-          <span class="mt-3 inline-block text-sm text-slate-500 group-hover:text-rite-accent"
+          <span class="mt-3 inline-block text-sm text-slate-400 group-hover:text-rite-accent"
             >Open →</span
           >
         </RouterLink>
@@ -172,7 +163,7 @@ do host.console.println(str(square(12)))`;
           <p class="mt-2 text-sm text-slate-400">
             Install through pipelines, matching, capabilities, HTTP, modules, and embedding.
           </p>
-          <span class="mt-3 inline-block text-sm text-slate-500 group-hover:text-rite-pink"
+          <span class="mt-3 inline-block text-sm text-slate-400 group-hover:text-rite-pink"
             >Start reading →</span
           >
         </RouterLink>
@@ -186,7 +177,7 @@ do host.console.println(str(square(12)))`;
             <code class="text-xs text-rite-green">fmt</code>,
             <code class="text-xs text-rite-green">check</code>, LSP, VS Code, compile to native.
           </p>
-          <span class="mt-3 inline-block text-sm text-slate-500 group-hover:text-rite-green"
+          <span class="mt-3 inline-block text-sm text-slate-400 group-hover:text-rite-green"
             >Install →</span
           >
         </RouterLink>
@@ -200,14 +191,13 @@ do host.console.println(str(square(12)))`;
         <p class="mt-2 max-w-2xl text-sm text-slate-400">
           No clone required — binaries from GitHub Releases, verified with SHA-256.
         </p>
-        <pre
-          class="mt-4 overflow-x-auto rounded-lg border border-rite-border bg-rite-bg p-4 font-mono text-sm text-slate-300"
-        >curl -fsSL https://rite.undrc.dev/install | bash
-# → ~/.local/bin/rite  (+ rite-lsp)
-export PATH="$HOME/.local/bin:$PATH"
-rite version</pre>
-        <p class="mt-3 text-sm text-slate-500">
-          Latest release
+        <CopyBlock
+          class="mt-4"
+          :code="installSnippet"
+          pre-class="overflow-x-auto rounded-lg border border-rite-border bg-rite-bg p-4 pr-16 font-mono text-sm text-slate-300"
+        />
+        <p class="mt-3 text-sm text-slate-400">
+          {{ tagResolved ? "Latest release" : "Packaged with this site" }}
           <code class="text-rite-green text-xs">{{ latestTag }}</code>
           · pin with
           <code class="text-rite-green text-xs">RITE_VERSION={{ latestTag }}</code>
