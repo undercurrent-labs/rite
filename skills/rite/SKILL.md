@@ -99,4 +99,63 @@ needs no grant; `0.0.0.0` does) and the target host of an outbound `@http.get`.
 | ~ | match |
 | ! | do |
 | @ | host. |
-| #name |
+| #name | :name |
+| ⟦ ⟧ | [[ ]] |
+| ⟨ ⟩ | << >> |
+| ∈ | in |
+| ∉ | not in |
+| ⊏ | use |
+| : (else branch) | else |
+| ‥ | ..= |
+| ..rec (spread) | ..rec |
+
+## Minimal example
+
+```rite
+◆ greet(name) ⟦
+  ^ "hello, {name}"
+⟧
+! @console.println(greet("Aura"))
+```
+
+## Records
+
+```rite
+base ← ⟨host: "localhost", port: 80⟩
+prod ← ⟨..base, port: 443⟩      // spread: later entries win; same as base + ⟨port: 443⟩
+```
+
+## HTTP (native)
+
+Serving — a handler returns status and body by juxtaposition:
+
+```rite
+@http.listen "127.0.0.1:0" ⟦
+  ⊏ @http.log
+  GET "/health" ⟦
+    ^ 200 ⟨status: #ok⟩
+  ⟧
+  GET "/echo/:word" |req| ⟦
+    ^ 200 ⟨echo: req.path.word⟩
+  ⟧
+⟧
+```
+
+Calling out — the response has the same shape a handler receives:
+
+```rite
+resp ← ! @http.get("https://api.example.com/status")?   // --allow net=api.example.com
+body ← resp.json?
+! @console.println(str(resp.status) + " " + body.message)
+```
+
+`@http.post(url, ⟨…⟩)` sends a record as JSON; `@http.request(⟨method, url, headers, body⟩)`
+is the general form. A refused connection or timeout is `err(⟨kind: "net.error", …⟩)`,
+not a crash.
+
+## When stuck
+
+- Read `machine/capabilities.json` for APIs.
+- Read `machine/diagnostics.json` for error codes.
+- Prefer pipelines and records over ad-hoc strings.
+- Never treat generated Rust as the language surface.

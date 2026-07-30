@@ -6,6 +6,7 @@ pub mod builtins;
 pub mod env;
 pub mod eval;
 pub mod ops;
+pub mod patterns;
 pub mod value;
 
 pub use atom::AtomInterner;

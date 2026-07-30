@@ -17,32 +17,78 @@ async fn book_doctests_mostly_pass() {
     assert_eq!(report.failed, 0, "{} doctest failures", report.failed);
 }
 
+/// The shipped `SKILL.md` must be whole.
+///
+/// This is the check that was missing. Its neighbour below asserts the file is *unchanged*
+/// by a regeneration, which a file that was already truncated passes happily — and that is
+/// how twelve commits shipped a `SKILL.md` cut off mid-table at exactly 4096 bytes with a
+/// green suite. Invariance is not integrity.
+#[test]
+fn the_shipped_skill_file_is_not_truncated() {
+    let Some(text) = read_tracked_skill() else {
+        return; // not a full checkout
+    };
+    assert!(
+        text.ends_with('\n'),
+        "SKILL.md does not end with a newline, so it was cut short"
+    );
+    // The last section, and a line from it: a truncation loses the tail first.
+    for marker in ["## When stuck", "machine/diagnostics.json"] {
+        assert!(
+            text.contains(marker),
+            "SKILL.md is missing {marker:?} — truncated? ({} bytes)",
+            text.len()
+        );
+    }
+    // A page-boundary size with an unterminated table row is the exact signature.
+    let last = text.lines().last().unwrap_or_default();
+    assert!(
+        !last.starts_with('|') || last.ends_with('|'),
+        "SKILL.md ends mid-table row: {last:?}"
+    );
+}
+
 /// `rite docs agent --output skills/rite` reads its SKILL.md from that same path.
 /// Regenerating in place must leave the hand-written file alone: a failed read falls
 /// back to a stub, which would otherwise replace real content with a placeholder.
+///
+/// Runs against a **copy**. Pointing it at the tracked tree meant a test mutated a
+/// committed file on every `cargo test`, and this test also `chdir`s — which is
+/// process-global, so it raced the doctest above for the cwd. Whether that is what
+/// truncated the shipped file could not be reproduced on demand; either way a test has no
+/// business writing into the working tree, and on a copy it cannot.
 #[test]
 fn regenerating_the_bundle_in_place_keeps_skill_md() {
-    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .expect("workspace root");
-    let skill = root.join("skills/rite/SKILL.md");
-    if !skill.is_file() {
-        return; // not a full checkout
-    }
-    let before = std::fs::read_to_string(&skill).expect("read SKILL.md");
-    assert!(
-        !before.trim().is_empty(),
-        "SKILL.md is empty before the run"
-    );
+    let Some(before) = read_tracked_skill() else {
+        return;
+    };
+    let stage = tempfile::tempdir().expect("tempdir");
+    let bundle = stage.path().join("skills/rite");
+    std::fs::create_dir_all(&bundle).expect("create bundle dir");
+    std::fs::write(bundle.join("SKILL.md"), &before).expect("seed the copy");
+    // `grammar/` is read relative to the cwd too; absent is fine (it falls back).
+    let _ = std::fs::create_dir_all(stage.path().join("grammar"));
 
-    // generate_agent_bundle resolves its source relative to the cwd.
+    // `generate_agent_bundle` resolves its source relative to the cwd, which is why this
+    // has to chdir at all.
     let prev = std::env::current_dir().expect("cwd");
-    std::env::set_current_dir(&root).expect("chdir to root");
+    std::env::set_current_dir(stage.path()).expect("chdir to the copy");
     let result = rite_doc::generate_agent_bundle(std::path::Path::new("skills/rite"));
     std::env::set_current_dir(prev).expect("restore cwd");
     result.expect("generate bundle");
 
-    let after = std::fs::read_to_string(&skill).expect("read SKILL.md after");
+    let after = std::fs::read_to_string(bundle.join("SKILL.md")).expect("read after");
     assert_eq!(before, after, "regenerating in place rewrote SKILL.md");
+    assert!(
+        bundle.join("machine/capabilities.json").is_file(),
+        "the rest of the bundle was still generated"
+    );
+}
+
+/// The tracked `SKILL.md`, or `None` outside a full checkout.
+fn read_tracked_skill() -> Option<String> {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../skills/rite/SKILL.md");
+    std::fs::read_to_string(path)
+        .ok()
+        .filter(|t| !t.trim().is_empty())
 }
