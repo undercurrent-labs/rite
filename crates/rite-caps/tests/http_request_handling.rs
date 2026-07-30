@@ -117,9 +117,21 @@ async fn oversized_body_gets_413_not_an_empty_body() {
     );
 
     // Over the limit: 413, not a silently emptied body.
+    //
+    // Only just over, and that matters. The server reads through `Limited`,
+    // which streams until the accumulated length passes the cap and then stops
+    // reading and answers 413 — so whatever the client sent beyond the cap is
+    // left sitting in the socket with nobody draining it. Send a full megabyte
+    // of excess (this used to post 2 MiB) and the client is still writing when
+    // the server closes, which arrives as ECONNRESET *instead of* the response:
+    // the write fails before the 413 can be read. Linux hides it because its
+    // auto-tuned buffers usually swallow the excess; macOS, with smaller
+    // defaults, failed in CI. A kilobyte over the cap exercises exactly the same
+    // rejection path — it is the boundary that matters — while leaving too
+    // little unread to ever stall the write.
     let resp = client
         .post(format!("http://{addr}/upload"))
-        .body("x".repeat(2 * 1_048_576))
+        .body("x".repeat(1_048_576 + 1_024))
         .send()
         .await
         .expect("request");
