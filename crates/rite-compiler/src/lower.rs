@@ -20,7 +20,15 @@
 use rite_sem::{
     BinaryOpIr, BlockIr, EffectKind, ExprIr, FunctionIr, KeyIr, ProgramIr, UnaryOpIr, ValueLiteral,
 };
+use std::collections::HashSet;
 use std::fmt::Write as _;
+
+/// Names of the functions emitted as real Rust, so a call to one becomes a direct Rust
+/// call rather than a trip through the interpreter's closure machinery. That indirection
+/// is where the time goes: without it a compiled `fib(24)` ran in exactly the same 778ms
+/// as the interpreter, because only the top-level call was compiled and the body — where
+/// the work is — was not.
+pub type Compiled = HashSet<String>;
 
 /// Why a node could not be lowered. Carries the variant name so the build note is specific.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -93,7 +101,7 @@ fn constant(lit: &ValueLiteral) -> String {
 /// The emitted code runs inside an `async` block returning `Result<Value, EvalError>`, so
 /// `?` is available and an `EvalError::Return` propagates exactly as it does in the
 /// tree-walker: outward until a function boundary converts it.
-pub fn expr(e: &ExprIr) -> Lowered {
+pub fn expr(e: &ExprIr, compiled: &Compiled) -> Lowered {
     Ok(match e {
         ExprIr::Constant(lit) => constant(lit),
 
@@ -120,7 +128,7 @@ pub fn expr(e: &ExprIr) -> Lowered {
             ..
         } => format!(
             "{{ let __v = {}; ctx.env.define({}, rite_sem::LocalId({}), __v.clone(), {}); __v }}",
-            expr(value)?,
+            expr(value, compiled)?,
             rust_str(name),
             local.0,
             mutable
@@ -132,13 +140,13 @@ pub fn expr(e: &ExprIr) -> Lowered {
             };
             let mut out = String::from("{ ");
             for p in rest {
-                let _ = write!(out, "let _ = {}; ", expr(p)?);
+                let _ = write!(out, "let _ = {}; ", expr(p, compiled)?);
             }
-            let _ = write!(out, "{} }}", expr(last)?);
+            let _ = write!(out, "{} }}", expr(last, compiled)?);
             out
         }
 
-        ExprIr::Block(b) => block(b)?,
+        ExprIr::Block(b) => block(b, compiled)?,
 
         ExprIr::If {
             condition,
@@ -147,13 +155,13 @@ pub fn expr(e: &ExprIr) -> Lowered {
             ..
         } => {
             let els = match else_branch {
-                Some(b) => block(b)?,
+                Some(b) => block(b, compiled)?,
                 None => "Value::None".into(),
             };
             format!(
                 "{{ let __c = {}; if __c.is_truthy() {{ {} }} else {{ {} }} }}",
-                expr(condition)?,
-                block(then_branch)?,
+                expr(condition, compiled)?,
+                block(then_branch, compiled)?,
                 els
             )
         }
@@ -161,7 +169,7 @@ pub fn expr(e: &ExprIr) -> Lowered {
         ExprIr::BuildList(items, _) => {
             let mut parts = Vec::new();
             for i in items {
-                parts.push(expr(i)?);
+                parts.push(expr(i, compiled)?);
             }
             format!("Value::list(vec![{}])", parts.join(", "))
         }
@@ -179,19 +187,19 @@ pub fn expr(e: &ExprIr) -> Lowered {
                     }
                     KeyIr::Atom(name) => format!("Key::Atom({}.to_string())", rust_str(name)),
                 };
-                parts.push(format!("({}, {})", key, expr(v)?));
+                parts.push(format!("({}, {})", key, expr(v, compiled)?));
             }
             format!("Value::record(vec![{}])", parts.join(", "))
         }
 
         ExprIr::Member { object, field, .. } => {
-            format!("{}.get_field({})", expr(object)?, rust_str(field))
+            format!("{}.get_field({})", expr(object, compiled)?, rust_str(field))
         }
 
         ExprIr::Index { object, index, .. } => format!(
             "{{ let __o = {}; let __i = {}; rite_runtime::ops::index(&__o, &__i) }}",
-            expr(object)?,
-            expr(index)?
+            expr(object, compiled)?,
+            expr(index, compiled)?
         ),
 
         ExprIr::Unary {
@@ -199,7 +207,7 @@ pub fn expr(e: &ExprIr) -> Lowered {
         } => format!(
             "rite_runtime::ops::unary(rite_sem::UnaryOpIr::{}, {})?",
             unary_op_path(*op),
-            expr(inner)?
+            expr(inner, compiled)?
         ),
 
         // `and` / `or` short-circuit, so they cannot go through `ops::binary` — it takes
@@ -212,8 +220,8 @@ pub fn expr(e: &ExprIr) -> Lowered {
             ..
         } => format!(
             "{{ let __l = {}; if __l.is_truthy() {{ {} }} else {{ __l }} }}",
-            expr(left)?,
-            expr(right)?
+            expr(left, compiled)?,
+            expr(right, compiled)?
         ),
         ExprIr::Binary {
             op: BinaryOpIr::Or,
@@ -222,41 +230,41 @@ pub fn expr(e: &ExprIr) -> Lowered {
             ..
         } => format!(
             "{{ let __l = {}; if __l.is_truthy() {{ __l }} else {{ {} }} }}",
-            expr(left)?,
-            expr(right)?
+            expr(left, compiled)?,
+            expr(right, compiled)?
         ),
         ExprIr::Binary {
             op, left, right, ..
         } => format!(
             "{{ let __l = {}; let __r = {}; \
              rite_runtime::ops::binary(&ctx.atoms, rite_sem::BinaryOpIr::{}, __l, __r)? }}",
-            expr(left)?,
-            expr(right)?,
+            expr(left, compiled)?,
+            expr(right, compiled)?,
             binary_op_path(*op)
         ),
 
         ExprIr::Coalesce { left, right, .. } => format!(
             "{{ let __l = {}; if matches!(__l, Value::None) {{ {} }} else {{ __l }} }}",
-            expr(left)?,
-            expr(right)?
+            expr(left, compiled)?,
+            expr(right, compiled)?
         ),
 
         ExprIr::Try { expr: inner, .. } => {
-            format!("rite_runtime::ops::unwrap_try({})?", expr(inner)?)
+            format!("rite_runtime::ops::unwrap_try({})?", expr(inner, compiled)?)
         }
 
         // `^` unwinds to the enclosing function boundary, which is what `EvalError::Return`
         // means to every layer between here and there.
         ExprIr::Return(value, _) => {
             let v = match value {
-                Some(v) => expr(v)?,
+                Some(v) => expr(v, compiled)?,
                 None => "Value::None".into(),
             };
             format!("return Err(EvalError::Return({v}))")
         }
 
         ExprIr::NativeCall { name, args, .. } => {
-            let argv = args_vec(args)?;
+            let argv = args_vec(args, compiled)?;
             // Args are evaluated before the evaluator borrows ctx, so the borrow is
             // confined to the call itself.
             format!(
@@ -267,12 +275,21 @@ pub fn expr(e: &ExprIr) -> Lowered {
         }
 
         ExprIr::Call { callee, args, .. } => {
-            let argv = args_vec(args)?;
+            // A call to a function this backend also compiled becomes a direct Rust call.
+            // Everything else goes through the interpreter's dispatch, which is what makes
+            // a closure value, a builtin used as a value, and a fallback function all work.
+            if let ExprIr::Global(name) = callee.as_ref() {
+                if compiled.contains(name) {
+                    let argv = args_vec(args, compiled)?;
+                    return Ok(format!("{{ {argv} {}(ctx, __args).await? }}", mangle(name)));
+                }
+            }
+            let argv = args_vec(args, compiled)?;
             format!(
                 "{{ let __callee = {}; {argv} \
                  let mut __ev = rite_runtime::Evaluator::new(ctx); \
                  __ev.call_value_public(__callee, __args).await? }}",
-                expr(callee)?
+                expr(callee, compiled)?
             )
         }
 
@@ -285,7 +302,7 @@ pub fn expr(e: &ExprIr) -> Lowered {
             if path.first().map(String::as_str) == Some("console") {
                 return Err(Unsupported("CapabilityCall(@console)"));
             }
-            let argv = args_vec(args)?;
+            let argv = args_vec(args, compiled)?;
             let eff = matches!(effect, EffectKind::Effect);
             let parts: Vec<String> = path
                 .iter()
@@ -308,10 +325,10 @@ pub fn expr(e: &ExprIr) -> Lowered {
 }
 
 /// `let __args = vec![…];` with each argument evaluated in order.
-fn args_vec(args: &[ExprIr]) -> Lowered {
+fn args_vec(args: &[ExprIr], compiled: &Compiled) -> Lowered {
     let mut parts = Vec::new();
     for a in args {
-        parts.push(expr(a)?);
+        parts.push(expr(a, compiled)?);
     }
     Ok(format!("let __args = vec![{}];", parts.join(", ")))
 }
@@ -320,10 +337,10 @@ fn args_vec(args: &[ExprIr]) -> Lowered {
 ///
 /// The frame is pushed and popped around an inner `async` block so an early `?` — a Rite
 /// `^`, or any error — cannot skip the pop. Awaiting ends the borrow before the pop runs.
-pub fn block(b: &BlockIr) -> Lowered {
+pub fn block(b: &BlockIr, compiled: &Compiled) -> Lowered {
     let mut body = String::new();
     for e in &b.body {
-        let _ = write!(body, "__last = {}; ", expr(e)?);
+        let _ = write!(body, "__last = {}; ", expr(e, compiled)?);
     }
     Ok(format!(
         "{{ ctx.env.push_frame(); \
@@ -333,38 +350,61 @@ pub fn block(b: &BlockIr) -> Lowered {
     ))
 }
 
-/// A whole function as an `async fn`, or the reason it cannot be one.
-pub fn function(f: &FunctionIr) -> Result<String, Unsupported> {
-    let body = block(&f.body)?;
+/// A whole function as real Rust, or the reason it cannot be.
+///
+/// Returns a boxed future rather than being a plain `async fn`, because a Rite function
+/// may recurse and a directly-recursive `async fn` has an infinitely-sized future. This
+/// is the same reason `Evaluator::eval_expr` boxes — but once per *call* instead of once
+/// per node, which is the difference the backend is here to make.
+///
+/// The prologue mirrors `call_value`/`call_block` exactly. Skipping any of it would let a
+/// compiled binary escape a guarantee the interpreter makes: the depth check is what turns
+/// runaway recursion into an error instead of a stack overflow, and the budget tick is what
+/// stops a runaway loop.
+pub fn function(f: &FunctionIr, compiled: &Compiled) -> Result<String, Unsupported> {
+    let body = block(&f.body, compiled)?;
     let mut out = String::new();
+    let _ = writeln!(out, "// rite: fn {} at {:?}", f.name, f.span);
     let _ = writeln!(
         out,
-        "// rite: fn {} at {:?}\n\
-         pub async fn {}(ctx: &mut RuntimeContext, __params: Vec<Value>) -> Result<Value, EvalError> {{",
-        f.name,
-        f.span,
+        "pub fn {}<'a>(ctx: &'a mut RuntimeContext, __args: Vec<Value>) \
+         -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Value, EvalError>> + Send + 'a>> {{",
         mangle(&f.name)
     );
-    // Parameters are bound into a fresh frame, the way `call_block` does it, so the body
-    // finds them under both their id and their name.
-    let _ = writeln!(out, "    ctx.env.push_frame();");
+    let _ = writeln!(out, "    Box::pin(async move {{");
+    let _ = writeln!(out, "        ctx.budget.tick()?;");
+    let _ = writeln!(
+        out,
+        "        ctx.budget.check_depth(ctx.call_depth + 1)?;\n        ctx.call_depth += 1;"
+    );
+    let _ = writeln!(
+        out,
+        "        if __args.len() != {} {{ ctx.call_depth -= 1; return Err(EvalError::Message(\
+         format!(\"arity mismatch: expected {} args, got {{}}\", __args.len()))); }}",
+        f.params.len(),
+        f.params.len()
+    );
+    let _ = writeln!(out, "        ctx.env.push_frame();");
+    // Bound under both the name and the local id, as `call_block` does — the body may
+    // reference either depending on how the resolver saw it.
     for (i, (id, name)) in f.params.iter().zip(&f.param_names).enumerate() {
         let _ = writeln!(
             out,
-            "    ctx.env.define({}, rite_sem::LocalId({}), __params.get({i}).cloned().unwrap_or(Value::None), false);",
+            "        ctx.env.define({}, rite_sem::LocalId({}), __args.get({i}).cloned().unwrap_or(Value::None), false);",
             rust_str(name),
             id.0
         );
     }
     let _ = writeln!(
         out,
-        "    let __r: Result<Value, EvalError> = async {{ Ok({body}) }}.await;"
+        "        let __r: Result<Value, EvalError> = async {{ Ok({body}) }}.await;"
     );
-    let _ = writeln!(out, "    ctx.env.pop_frame();");
+    let _ = writeln!(out, "        ctx.env.pop_frame();");
+    let _ = writeln!(out, "        ctx.call_depth -= 1;");
     // A function boundary is where `^` stops being an unwind and becomes the value.
     let _ = writeln!(
         out,
-        "    match __r {{ Err(EvalError::Return(v)) => Ok(v), other => other }}\n}}"
+        "        match __r {{ Err(EvalError::Return(v)) => Ok(v), other => other }}\n    }})\n}}"
     );
     Ok(out)
 }
@@ -384,14 +424,22 @@ pub fn mangle(name: &str) -> String {
 }
 
 /// Which functions in `ir` can be lowered, and why the rest cannot.
-pub fn survey(ir: &ProgramIr) -> (Vec<String>, Vec<(String, &'static str)>) {
-    let mut ok = Vec::new();
+///
+/// Whether a function lowers does not depend on which *other* functions do — a call to an
+/// uncompiled one still lowers, through the interpreter's dispatch — so surveying with an
+/// empty set and then emitting with the result is stable rather than a fixpoint.
+pub fn survey(ir: &ProgramIr) -> (Compiled, Vec<(String, &'static str)>) {
+    let empty = Compiled::new();
+    let mut ok = Compiled::new();
     let mut fell_back = Vec::new();
     for f in &ir.functions {
-        match function(f) {
-            Ok(_) => ok.push(f.name.clone()),
+        match function(f, &empty) {
+            Ok(_) => {
+                ok.insert(f.name.clone());
+            }
             Err(Unsupported(why)) => fell_back.push((f.name.clone(), why)),
         }
     }
+    fell_back.sort();
     (ok, fell_back)
 }

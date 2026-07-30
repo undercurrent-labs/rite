@@ -39,6 +39,17 @@ pub fn generate_from_ir(ir: &ProgramIr, source_path: &Path) -> Result<String, St
     let mut lowered = 0usize;
     let mut fell_back: Vec<&'static str> = Vec::new();
 
+    // Emit the function bodies first. This is where a program spends its time — with only
+    // top-level statements compiled, a `fib(24)` binary ran in exactly the interpreter's
+    // 778ms, because the call was compiled and the body it called was not.
+    let (compiled, fn_fallbacks) = crate::lower::survey(ir);
+    for f in &ir.functions {
+        if let Ok(code) = crate::lower::function(f, &compiled) {
+            out.push_str(&code);
+            out.push('\n');
+        }
+    }
+
     out.push_str(
         "pub async fn rite_main(ctx: &mut RuntimeContext) -> Result<Value, EvalError> {\n",
     );
@@ -52,7 +63,7 @@ pub fn generate_from_ir(ir: &ProgramIr, source_path: &Path) -> Result<String, St
     out.push_str("    let mut __last = Value::None;\n");
     out.push_str("    let __r: Result<Value, EvalError> = async {\n");
     for (i, stmt) in statements.iter().enumerate() {
-        match crate::lower::expr(stmt) {
+        match crate::lower::expr(stmt, &compiled) {
             Ok(code) => {
                 lowered += 1;
                 out.push_str(&format!("        __last = {};\n", code));
@@ -72,10 +83,15 @@ pub fn generate_from_ir(ir: &ProgramIr, source_path: &Path) -> Result<String, St
     out.push_str("}\n\n");
 
     out.push_str(&format!(
-        "// backend: {} of {} top-level statements lowered to Rust\n",
+        "// backend: {} of {} top-level statements and {} of {} functions lowered to Rust\n",
         lowered,
-        statements.len()
+        statements.len(),
+        compiled.len(),
+        ir.functions.len()
     ));
+    for (name, why) in &fn_fallbacks {
+        out.push_str(&format!("// interpreted function `{}`: {}\n", name, why));
+    }
     if !fell_back.is_empty() {
         let mut kinds: Vec<&str> = fell_back.clone();
         kinds.sort_unstable();

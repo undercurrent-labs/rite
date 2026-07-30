@@ -1,5 +1,35 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+
+- **`rite build` is a real backend.** It used to base64-encode the IR into the generated
+  crate and call `run_ir`, so a compiled binary was the interpreter carrying its program as
+  a payload — exactly as fast as `rite run`, after a multi-minute build. Statements and
+  function bodies now lower to Rust: control flow becomes Rust control flow, operators
+  become direct calls into `rite_runtime::ops`, and a call to a compiled function is a
+  direct Rust call.
+
+  Measured on `fib(24)`, release build, best of five: **782 ms interpreted → 153 ms
+  compiled, 5.1×**. Worth recording how that number was reached — the first version
+  compiled only top-level statements and measured **778 ms against 778 ms**, no
+  improvement whatsoever, because `fib` is a *function* and function bodies were still
+  interpreted. Compiling the bodies is the whole difference.
+
+  Not everything lowers yet. `Match`, `Pipeline`, `Closure` and `@console` fall back to the
+  interpreter per function, and pipelines are idiomatic Rite, so real programs will still
+  meet the tree-walker often. The generated file names what fell back rather than leaving
+  it to be inferred from a benchmark. Locals also stay in `ctx.env` rather than becoming
+  Rust `let` bindings: a Rite closure captures the environment, and promoting them without
+  escape analysis would silently break capture.
+
+### Fixed
+
+- **A compiled binary dropped its result once it had printed.** `! @console.println("hi")`
+  followed by `1 + 2` printed `hi` and swallowed the `3`, where `rite run` prints both — a
+  standing parity break between the two commands, not a new one.
+
 ## [0.2.0] — 2026-07-30
 
 A correctness, security and honesty pass over the whole tree, from a full review.

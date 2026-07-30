@@ -5,6 +5,7 @@
 //! behind `--ignored` in `build_permissions.rs`.
 
 use rite_compiler::lower;
+use rite_compiler::lower::Compiled;
 use rite_sem::ProgramIr;
 
 fn ir_of(source: &str) -> ProgramIr {
@@ -24,7 +25,7 @@ fn lower_all(source: &str) -> Result<String, &'static str> {
         .unwrap_or_default();
     let mut out = String::new();
     for s in &stmts {
-        match lower::expr(s) {
+        match lower::expr(s, &Compiled::new()) {
             Ok(code) => out.push_str(&code),
             Err(lower::Unsupported(why)) => return Err(why),
         }
@@ -162,7 +163,7 @@ fn a_survey_separates_lowered_functions_from_fallbacks() {
          pure(1)\n",
     );
     let (ok, fell_back) = lower::survey(&ir);
-    assert!(ok.contains(&"pure".to_string()), "ok: {ok:?}");
+    assert!(ok.contains("pure"), "ok: {ok:?}");
     assert_eq!(
         fell_back,
         vec![("piped".to_string(), "Pipeline")],
@@ -179,4 +180,81 @@ fn a_unicode_function_name_mangles_to_a_rust_identifier() {
         "not a Rust identifier: {m}"
     );
     assert_ne!(lower::mangle("café"), lower::mangle("cafe"));
+}
+
+// ------------------------------------------------------------------ compiled functions
+
+/// A compiled function must keep every guarantee the interpreter's call path makes.
+///
+/// The prologue here is hand-written to mirror `call_value`/`call_block`. Dropping any of
+/// it would let a compiled binary escape something the interpreter enforces — and the
+/// symptom would be a stack overflow or a hung process, not a test failure elsewhere.
+#[test]
+fn a_compiled_function_keeps_the_interpreter_guarantees() {
+    let ir = ir_of("◆ f(n) ⟦ ^ n * 2 ⟧\nf(1)\n");
+    let f = ir.functions.iter().find(|f| f.name == "f").expect("fn");
+    let code = lower::function(f, &Compiled::new()).expect("lowered");
+
+    assert!(code.contains("budget.tick()"), "no budget tick:\n{code}");
+    assert!(
+        code.contains("check_depth"),
+        "no depth guard — runaway recursion would overflow the stack instead of \
+         reporting a budget error:\n{code}"
+    );
+    assert!(code.contains("call_depth += 1"), "{code}");
+    assert!(
+        code.contains("call_depth -= 1"),
+        "depth must be restored:\n{code}"
+    );
+    assert!(code.contains("arity mismatch"), "no arity check:\n{code}");
+    assert_eq!(
+        code.matches("push_frame").count(),
+        code.matches("pop_frame").count(),
+        "unbalanced frames:\n{code}"
+    );
+    // `^` becomes the function's value here and nowhere else.
+    assert!(code.contains("EvalError::Return(v)) => Ok(v)"), "{code}");
+}
+
+#[test]
+fn a_compiled_function_boxes_so_it_can_recurse() {
+    // A directly-recursive `async fn` has an infinitely-sized future and will not compile.
+    let ir = ir_of("◆ down(n) ⟦ ^ ? n <= 0 ⟦ 0 ⟧ : ⟦ down(n - 1) ⟧ ⟧\ndown(3)\n");
+    let f = &ir.functions[0];
+    let code = lower::function(f, &Compiled::new()).expect("lowered");
+    assert!(code.contains("Box::pin"), "{code}");
+    assert!(
+        !code.contains("pub async fn"),
+        "must not be a plain async fn:\n{code}"
+    );
+}
+
+#[test]
+fn a_call_to_a_compiled_function_is_a_direct_rust_call() {
+    // The whole point of the second stage: with only top-level statements compiled, a
+    // `fib(24)` binary ran in exactly the interpreter's time because the body was not.
+    let ir = ir_of("◆ f(n) ⟦ ^ n ⟧\nf(1)\n");
+    let mut compiled = Compiled::new();
+    compiled.insert("f".to_string());
+    let stmt = &ir.modules.first().expect("module").statements[0];
+    let code = lower::expr(stmt, &compiled).expect("lowered");
+
+    assert!(
+        code.contains(&lower::mangle("f")),
+        "not a direct call:\n{code}"
+    );
+    assert!(
+        !code.contains("call_value_public"),
+        "a compiled callee should not go through interpreter dispatch:\n{code}"
+    );
+}
+
+#[test]
+fn a_call_to_an_uncompiled_function_still_goes_through_dispatch() {
+    // A function that fell back, a closure value, a builtin used as a value — all of them
+    // resolve through the interpreter, so the generic path has to stay.
+    let ir = ir_of("◆ f(n) ⟦ ^ n ⟧\nf(1)\n");
+    let stmt = &ir.modules.first().expect("module").statements[0];
+    let code = lower::expr(stmt, &Compiled::new()).expect("lowered");
+    assert!(code.contains("call_value_public"), "{code}");
 }
