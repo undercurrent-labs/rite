@@ -582,17 +582,17 @@ async fn wall_clock_timeout() {
     ctx.budget = rite_runtime::ExecutionBudget::new()
         .with_timeout(std::time::Duration::from_millis(1))
         .with_max_steps(u64::MAX);
-    // busy work
+    // Busy work by *iteration*, not recursion. This test is about the wall clock; when it
+    // spun with a recursive `spin(5000000)` it also raced the native stack, and on macOS —
+    // where a test thread gets a smaller stack than on Linux — the stack lost, aborting the
+    // process instead of reporting a timeout. Recursion depth is covered by
+    // `deep_recursion_reports_a_budget_error_not_an_abort`.
     let err = run_source(
         "t.rite",
         r#"
-◆ spin(n) ⟦
-  ? n > 0 ⟦
-    ^ spin(n - 1)
-  ⟧
-  ^ 0
-⟧
-spin(5000000)
+total ↢ 0
+(1..5000000) → each { |i| total := total + i }
+total
 "#,
         &mut ctx,
     )

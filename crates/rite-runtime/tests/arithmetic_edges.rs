@@ -160,3 +160,70 @@ async fn index_out_of_range_is_none() {
         Value::None
     );
 }
+
+/// Unbounded recursion must be stopped by the budget, not by the native stack.
+///
+/// A stack overflow is a process *abort*: no error value, no buffered output, nothing a
+/// host can catch. The depth limit exists to prevent exactly that, so it has to be low
+/// enough that the budget wins. It was 256 on every profile, which is unreachable in a
+/// debug build — one Rite call costs several nested async frames, measured at roughly
+/// 64 KB in debug — so this aborted instead. Linux CI passed only because the tests that
+/// recursed also had a step budget that tripped first; macOS, with a smaller test-thread
+/// stack, did not.
+///
+/// Runs on an 8 MiB thread, matching the process main thread that `rite run` evaluates on
+/// — the depth limit is only meaningful relative to a stack size, and that is the one the
+/// CLI actually provides. See `DEFAULT_MAX_CALL_DEPTH` for the measured relationship.
+#[test]
+fn deep_recursion_reports_a_budget_error_not_an_abort() {
+    let handle = std::thread::Builder::new()
+        .stack_size(8 * 1024 * 1024)
+        .spawn(|| {
+            let rt = tokio::runtime::Builder::new_current_thread()
+                .build()
+                .expect("runtime");
+            rt.block_on(async {
+                let mut ctx = rite_runtime::RuntimeContext::new();
+                // Only the depth limit may stop this: no step ceiling, no timeout.
+                ctx.budget = rite_runtime::ExecutionBudget::new()
+                    .with_max_steps(u64::MAX)
+                    .with_timeout(std::time::Duration::from_secs(60));
+                let err = rite_runtime::run_source(
+                    "deep.rite",
+                    "◆ bomb(n) ⟦ ^ bomb(n + 1) ⟧\nbomb(0)\n",
+                    &mut ctx,
+                )
+                .await
+                .expect_err("unbounded recursion must fail");
+                err.to_string()
+            })
+        })
+        .expect("spawn");
+
+    // A stack overflow aborts the process, so reaching this line at all is part of the
+    // assertion; `join` would report a panic, and an abort would take the test binary out.
+    let message = handle
+        .join()
+        .expect("the evaluator must not abort the process");
+    assert!(
+        message.to_lowercase().contains("depth"),
+        "expected a call-depth budget error, got: {message}"
+    );
+}
+
+/// The default limit must be low enough for the profile actually being run.
+#[test]
+fn the_default_depth_limit_matches_the_build_profile() {
+    let d = rite_runtime::ExecutionBudget::new().max_call_depth;
+    if cfg!(debug_assertions) {
+        assert!(
+            d <= 32,
+            "debug frames are ~64 KB per Rite call; {d} levels will not fit the stack"
+        );
+    } else {
+        assert!(
+            d >= 128,
+            "release frames are small; {d} is needlessly strict"
+        );
+    }
+}

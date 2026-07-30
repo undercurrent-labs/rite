@@ -2278,6 +2278,7 @@ dependencies = [
  "rite-syntax",
  "serde",
  "serde_json",
+ "tempfile",
  "tokio",
 ]
 
