@@ -38,10 +38,17 @@ jobs:
           - os: macos-latest
             target: x86_64-apple-darwin
             archive: tar
-          # Windows x86_64
-          - os: windows-latest
-            target: x86_64-pc-windows-msvc
-            archive: zip
+          # Windows x86_64 — not built. CI stopped testing Windows on every push, and
+          # shipping a binary nothing exercises is worse than not shipping one: the last
+          # four Windows failures were all unportable *tests*, but a real regression would
+          # now reach a user unopposed. WSL is the supported route, and the Linux archive
+          # covers it.
+          #
+          # To bring it back: restore these three lines. The `zip` packaging step below is
+          # kept for exactly that, and is inert while no target selects it.
+          # - os: windows-latest
+          #   target: x86_64-pc-windows-msvc
+          #   archive: zip
     steps:
       - uses: actions/checkout@v5
 
@@ -255,6 +262,12 @@ jobs:
             ```
 
             Binaries install to `~/.local/bin` by default (`rite` + `rite-lsp`).
+
+            ### Windows
+
+            No Windows binary is published — CI does not test Windows on every change, and
+            an untested binary is worse than none. Use **WSL** with the line above, or
+            build from source: `cargo install --path crates/rite-cli`.
 
             ### Agent skill
 

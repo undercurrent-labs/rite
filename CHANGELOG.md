@@ -1,5 +1,17 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+
+- **No Windows binary is published.** CI stopped testing Windows on every change in 0.3.0,
+  and shipping a binary nothing exercises is worse than shipping none — every Windows
+  failure so far was an unportable *test*, but a real regression would now reach a user
+  with nothing in its way. Rite still builds and runs there: use WSL, or
+  `cargo install --path crates/rite-cli`. `rite update`, the installer, the release notes
+  and the book all say so rather than pointing at an archive that is not there. Restoring
+  it is three commented lines in the release workflow.
+
 ## [0.3.0] — 2026-07-30
 
 `rite build` becomes a compiler. Also three fixes that are visible from a script, one of

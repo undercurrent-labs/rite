@@ -99,7 +99,13 @@ pub fn host_target_triple() -> anyhow::Result<&'static str> {
         ("linux", "aarch64") => Ok("aarch64-unknown-linux-gnu"),
         ("macos", "x86_64") => Ok("x86_64-apple-darwin"),
         ("macos", "aarch64") => Ok("aarch64-apple-darwin"),
-        ("windows", "x86_64") => Ok("x86_64-pc-windows-msvc"),
+        // No Windows binary is published, so there is nothing to self-update to. Saying
+        // so beats a 404 on an asset name that looks like it should exist.
+        ("windows", _) => bail!(
+            "no Windows binary is published, so `rite update` has nothing to fetch.\n  \
+             Use WSL and the Linux build, or build from source with \
+             `cargo install --path crates/rite-cli`."
+        ),
         _ => bail!("unsupported platform {os}/{arch} for self-update"),
     }
 }

@@ -77,14 +77,15 @@ Details: [Agents & skill](agents.md) · [https://rite.undrc.dev/agents](https://
 
 ### Windows
 
-The shell installer targets Unix (macOS, Linux, WSL). On native Windows:
+**No Windows binary is published.** Rite builds and runs on Windows, but CI no longer
+tests it on every change, and shipping a binary nothing exercises would mean a regression
+reaching you with nothing in its way. Two supported routes:
 
-1. Open [Releases](https://github.com/undercurrent-labs/rite/releases)
-2. Download `rite-x86_64-pc-windows-msvc.zip`
-3. Verify against `SHA256SUMS`
-4. Put `rite.exe` on your `PATH`
+- **WSL** — use the Linux one-liner inside the distro. This is the recommended path.
+- **Build from source** — `cargo install --path crates/rite-cli` in a checkout. You get
+  the same program; you are the one testing it.
 
-WSL: use the Linux one-liner inside the distro.
+`rite update` says the same rather than looking for an archive that is not there.
 
 ### No release yet?
 
