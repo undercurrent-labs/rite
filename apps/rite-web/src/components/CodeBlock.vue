@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
-import { detectDialect, isHighlighted, tokenize } from "../lib/highlight";
+import { detectDialect, tokenize } from "@studio/highlight";
 import type { CodeMode } from "../lib/markdown";
 import { encodeShare } from "@studio/share";
 

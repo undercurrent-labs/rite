@@ -89,8 +89,12 @@ function tokenizeRite(src: string): Token[] {
   while (i < src.length) {
     const c = src[i];
 
-    // Comments — `///` doc, `//` line, `/* */` block
-    if (c === "/" && src[i + 1] === "/") {
+    // Comments — `///` doc, `//` line, `/* */` block.
+    //
+    // Not after a colon: Studio highlights run output with this tokeniser, and a
+    // printed `http://…` would otherwise comment out the rest of the line. In
+    // real source a URL only appears inside a string, which is consumed above.
+    if (c === "/" && src[i + 1] === "/" && src[i - 1] !== ":") {
       const end = src.indexOf("\n", i);
       const stop = end === -1 ? src.length : end;
       push("comment", src.slice(i, stop));

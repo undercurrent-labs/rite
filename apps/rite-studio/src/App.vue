@@ -3,6 +3,8 @@ import { computed, reactive, ref, watch } from "vue";
 import { EXAMPLES } from "./examples";
 import { decodeShare, encodeShare } from "./share";
 import { convertWithMap, formatOutput, riteCall } from "./riteApi";
+import CodeEditor from "./CodeEditor.vue";
+import { tokenize } from "./highlight";
 
 /**
  * One pane per action. Each button writes only its own pane, so switching tabs
@@ -172,16 +174,22 @@ function loadExample(id: string) {
   panel.value = "out";
   content.out = `Loaded ${ex.title} — ${ex.description}`;
 }
-function onCursor(ev: Event) {
-  const el = ev.target as HTMLTextAreaElement;
-  const pos = el.selectionStart ?? 0;
-  const before = source.value.slice(0, pos);
-  const lines = before.split("\n");
-  cursor.value = {
-    line: lines.length - 1,
-    character: (lines[lines.length - 1] ?? "").length,
-  };
-}
+/**
+ * What each pane actually contains, so it is highlighted as itself: the parse
+ * and analysis panes are JSON documents, `rust` is generated Rust, and `out`
+ * carries Rite values and printed text.
+ */
+const PANEL_LANGS: Record<Panel, string> = {
+  out: "rite",
+  diag: "json",
+  ast: "json",
+  ir: "json",
+  rust: "rust",
+  http: "bash",
+};
+
+const shownTokens = computed(() => tokenize(shown.value, PANEL_LANGS[panel.value]));
+const curlTokens = computed(() => tokenize(`rite run server.rite\n${curlCommand.value}`, "bash"));
 </script>
 
 <template>
@@ -226,13 +234,12 @@ function onCursor(ev: Event) {
 
     <main class="flex-1 grid md:grid-cols-2 min-h-0 overflow-hidden">
       <label class="sr-only" for="studio-source">Rite source</label>
-      <textarea
-        id="studio-source"
+      <CodeEditor
         v-model="source"
-        class="w-full h-[40vh] md:h-full bg-rite-panel p-4 font-mono text-sm outline-none border-0 resize-none"
-        spellcheck="false"
-        @click="onCursor"
-        @keyup="onCursor"
+        input-id="studio-source"
+        lang="rite"
+        class="h-[40vh] md:h-full"
+        @cursor="cursor = $event"
       />
       <section class="flex flex-col border-l border-slate-800 min-h-[35vh] md:min-h-0 overflow-hidden">
         <div class="flex flex-wrap gap-1 p-2 border-b border-slate-800 text-sm" role="tablist">
@@ -284,9 +291,8 @@ function onCursor(ev: Event) {
               />
             </div>
             <pre
-              class="overflow-x-auto rounded bg-black/40 p-3 font-mono text-xs text-rite-green"
-            >rite run server.rite
-{{ curlCommand }}</pre>
+              class="overflow-x-auto rounded bg-black/40 p-3 font-mono text-xs"
+            ><code><span v-for="(t, i) in curlTokens" :key="i" :class="`tok-${t.kind}`">{{ t.text }}</span></code></pre>
             <button class="btn" @click="flash('curl', curlCommand)">
               {{ copied === "curl" ? "Copied" : "Copy curl" }}
             </button>
@@ -295,8 +301,8 @@ function onCursor(ev: Event) {
 
         <pre
           v-else
-          class="flex-1 overflow-auto p-4 text-xs text-slate-300 whitespace-pre-wrap"
-        >{{ shown }}</pre>
+          class="flex-1 overflow-auto p-4 text-xs whitespace-pre-wrap"
+        ><code><span v-for="(t, i) in shownTokens" :key="i" :class="`tok-${t.kind}`">{{ t.text }}</span></code></pre>
       </section>
     </main>
   </div>

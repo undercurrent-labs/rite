@@ -26,8 +26,8 @@ const labs = "https://undrc.dev";
         >Undercurrent Labs LLC</a
       >.
     </p>
-    <p class="mt-2 text-xs text-slate-400">
-      A language can be visually strange while remaining semantically disciplined.
+    <p class="mt-2 text-xs italic text-slate-400">
+      a language can be visually strange while remaining semantically disciplined
     </p>
   </footer>
 </template>
