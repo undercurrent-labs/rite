@@ -34,6 +34,31 @@ ASCII records use `<< >>`:
 rec <- <<name: name, score: score>>
 ```
 
+### Spreading one record into another
+
+`..other` pours an existing record into the one being built. Entries flow left to
+right and **later ones win**, so a spread reads as "start from this, then override":
+
+```rite
+base ← ⟨host: "localhost", port: 80, tls: false⟩
+prod ← ⟨..base, port: 443, tls: true⟩
+// ⟨host: "localhost", port: 443, tls: true⟩
+```
+
+Spread anywhere, as often as you like — `⟨..a, ..b⟩`, `⟨k: 1, ..a⟩`, `⟨..a⟩`. A key
+keeps the position where it **first** appears and the value from the **last** write, so
+`⟨port: 1, ..base⟩` is `⟨port: 80⟩`: `port` stays first, but `base` wins the value.
+
+This is exactly the `+` merge operator wearing different clothes — one merge rule in
+the language, not two:
+
+```rite
+⟨..base, ..over⟩ = base + over    // true, always
+```
+
+`..` is the canonical sigil in both dialects; `...` is accepted and `rite fmt`
+normalises it to `..`.
+
 ## Atoms
 
 Atoms are lightweight symbolic values — great for statuses, enums, and match tags.

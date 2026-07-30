@@ -302,3 +302,48 @@ fn empty_list_and_record() {
     parse_ok("⟨⟩");
     parse_ok("<<>>");
 }
+
+/// A statement-position `⟨…⟩` is speculatively parsed as a destructuring pattern first.
+/// When that fails the parser rewinds and re-parses it as an expression — it must also
+/// discard the abandoned attempt's diagnostics, or a perfectly good literal reports
+/// errors it does not have.
+#[test]
+fn statement_position_record_literal_reports_no_errors() {
+    for src in [
+        "base ← ⟨p: 1⟩\n⟨..base, q: 2⟩\n",
+        "base <- <<p: 1>>\n<<..base, q: 2>>\n",
+        "⟨a: 1, b: 2⟩\n",
+        "[1, 2, 3]\n",
+    ] {
+        let (_, diags, _) = rite_syntax::parse_source("t.rite", src);
+        assert!(
+            !diags.has_errors(),
+            "`{}` should parse cleanly, got {:#?}",
+            src.trim(),
+            diags.into_vec()
+        );
+    }
+}
+
+/// The rewind must not swallow real errors from the expression parse that follows.
+#[test]
+fn rewind_still_surfaces_genuine_parse_errors() {
+    let (_, diags, _) = rite_syntax::parse_source("t.rite", "⟨a: 1,\n");
+    assert!(diags.has_errors(), "unclosed record should still error");
+}
+
+/// Destructuring still wins when a bind operator actually follows.
+#[test]
+fn statement_position_record_pattern_still_destructures() {
+    let (program, diags, _) = rite_syntax::parse_source("t.rite", "⟨a, b⟩ ← ⟨a: 1, b: 2⟩\n");
+    assert!(!diags.has_errors(), "{:#?}", diags.into_vec());
+    let program = program.expect("parse");
+    assert!(
+        matches!(
+            program.items.first(),
+            Some(rite_syntax::Item::Statement(rite_syntax::Stmt::Binding(_)))
+        ),
+        "expected a destructuring binding, got {:#?}",
+        program.items.first()
+    );
+}

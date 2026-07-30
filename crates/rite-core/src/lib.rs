@@ -44,6 +44,15 @@ impl Diagnostics {
         self.items.iter()
     }
 
+    /// Drop everything recorded after `len`.
+    ///
+    /// For speculative parses: a parser that tries one interpretation, fails, and
+    /// re-parses the same tokens another way must not leave the abandoned attempt's
+    /// complaints behind. Rewinding the token position is not enough on its own.
+    pub fn rewind(&mut self, len: usize) {
+        self.items.truncate(len);
+    }
+
     pub fn into_vec(self) -> Vec<Diagnostic> {
         self.items
     }

@@ -344,6 +344,12 @@ impl Parser {
         // Lookahead for binding: pattern bind_op expr
         // Heuristic: ident/pattern then Bind/BindMut
         let checkpoint = self.pos;
+        // Speculative: `⟨…⟩` and `[…]` at statement start might be a destructuring
+        // binding or might just be a literal expression. Snapshot the diagnostics too —
+        // rewinding `pos` alone left the abandoned pattern attempt's errors behind, so a
+        // statement-position literal that is not valid *as a pattern* (`⟨..base, k: v⟩`)
+        // reported bogus errors even though the expression parse then succeeded.
+        let diag_checkpoint = self.diagnostics.len();
         if let Some(pat) = self.try_parse_binding_pattern() {
             if self.check(TokenKind::Bind) || self.check(TokenKind::BindMut) {
                 let mutable = self.check(TokenKind::BindMut);
@@ -362,6 +368,7 @@ impl Parser {
             }
         }
         self.pos = checkpoint;
+        self.diagnostics.rewind(diag_checkpoint);
 
         // assignment: ident := or op-assign += -= *= /= %=
         if self.check(TokenKind::Ident) && self.pos + 1 < self.tokens.len() {
@@ -1404,6 +1411,25 @@ impl Parser {
         let start = self.advance().span; // ⟨ or <<
         let mut entries = Vec::new();
         while !self.is_eof() && !self.check(TokenKind::RecordClose) {
+            // `⟨..base, k: v⟩` — spread `base` in, then let later entries win.
+            // Sugar for record merge: see the fold in rite-sem's `Expr::Record`.
+            // `..` is canonical (grammar/sigils.toml) and dialect-neutral; `...` is
+            // accepted as a synonym and normalised to `..` by the formatter.
+            if self.check(TokenKind::Rest) || self.check(TokenKind::Spread) {
+                let open = self.advance().span;
+                let value = self.parse_expression();
+                let span = open.merge(value.span());
+                entries.push(RecordEntry {
+                    key: RecordKey::Spread,
+                    value,
+                    span,
+                });
+                if self.check(TokenKind::Comma) {
+                    self.advance();
+                    continue;
+                }
+                break;
+            }
             let key = self.parse_record_key();
             self.expect(TokenKind::Colon);
             let value = self.parse_expression();

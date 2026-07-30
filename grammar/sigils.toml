@@ -112,4 +112,4 @@ meaning = "Mutable assignment"
 canonical = ".."
 ascii = [".."]
 token = "Rest"
-meaning = "Rest/spread in patterns"
+meaning = "Rest in patterns; spread in record literals (`⟨..base, k: v⟩`, sugar for `+`)"

@@ -254,3 +254,52 @@ f(3)
         Value::Int(8) // double(inc(3)) = 8
     );
 }
+
+/// Record spread is sugar for the record-merge operator: `⟨..a, k: v⟩` ≡ `a + ⟨k: v⟩`.
+/// Entries flow left to right and later ones win, so a spread reads as "start from
+/// this, then override". The parser used to reject the form outright.
+#[tokio::test]
+async fn record_spread_is_sugar_for_merge() {
+    let src = r#"
+base ← ⟨host: "h", port: 80⟩
+over ← ⟨port: 443⟩
+⟨..base, ..over⟩ = base + over
+"#;
+    assert_eq!(eval(src).await, Value::Bool(true));
+}
+
+#[tokio::test]
+async fn record_spread_lets_later_entries_win() {
+    let src = r#"
+base ← ⟨host: "h", port: 80, tls: false⟩
+⟨..base, port: 443, tls: true⟩.port
+"#;
+    assert_eq!(eval(src).await, Value::Int(443));
+
+    // ...and a spread placed *after* a literal key wins over it, same rule.
+    let src = r#"
+base ← ⟨port: 80⟩
+⟨port: 1, ..base⟩.port
+"#;
+    assert_eq!(eval(src).await, Value::Int(80));
+}
+
+#[tokio::test]
+async fn record_spread_composes_and_is_position_free() {
+    // Several spreads, spreads mixed with keys, and a lone spread (identity).
+    let src = r#"
+a ← ⟨x: 1⟩
+b ← ⟨y: 2⟩
+⟨..a, ..b, z: 3⟩ = ⟨x: 1, y: 2, z: 3⟩
+"#;
+    assert_eq!(eval(src).await, Value::Bool(true));
+    assert_eq!(eval("a ← ⟨x: 1⟩\n⟨..a⟩ = a").await, Value::Bool(true));
+    assert_eq!(eval("⟨..⟨x: 5⟩⟩.x").await, Value::Int(5));
+}
+
+#[tokio::test]
+async fn record_spread_accepts_both_sigils_in_both_dialects() {
+    // `..` is canonical; `...` is a synonym the formatter normalises.
+    assert_eq!(eval("a ← ⟨x: 1⟩\n⟨...a, y: 2⟩.x").await, Value::Int(1));
+    assert_eq!(eval("a <- <<x: 1>>\n<<..a, y: 2>>.y").await, Value::Int(2));
+}
