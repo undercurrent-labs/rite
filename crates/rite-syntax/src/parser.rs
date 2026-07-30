@@ -12,9 +12,12 @@ pub struct Parser {
     diagnostics: Diagnostics,
     /// When false, `status ⟦…⟧` is not treated as a call (needed for `~ status ⟦…⟧`).
     allow_trailing_block: bool,
+    /// `///` blocks kept out of the token stream, for attaching to declarations.
+    doc_comments: Vec<(usize, usize, String)>,
 }
 
 pub fn parse(file: FileId, tokens: &[Token]) -> (Option<Program>, Diagnostics) {
+    let doc_comments = collect_doc_comments(tokens);
     let filtered: Vec<Token> = tokens
         .iter()
         .filter(|t| !t.kind.is_trivia())
@@ -26,6 +29,7 @@ pub fn parse(file: FileId, tokens: &[Token]) -> (Option<Program>, Diagnostics) {
         pos: 0,
         diagnostics: Diagnostics::new(),
         allow_trailing_block: true,
+        doc_comments,
     };
     let program = p.parse_program();
     (Some(program), p.diagnostics)
@@ -43,9 +47,41 @@ pub fn parse_expression(file: FileId, tokens: &[Token]) -> (Option<Expr>, Diagno
         pos: 0,
         diagnostics: Diagnostics::new(),
         allow_trailing_block: true,
+        doc_comments: Vec::new(),
     };
     let expr = p.parse_expression();
     (Some(expr), p.diagnostics)
+}
+
+/// `///` runs in source order, as (start offset, end offset, text).
+///
+/// Kept aside because the parser drops trivia before it starts, which is why
+/// `FunctionDecl.doc` was always `None` and nothing ever harvested doc comments.
+/// Consecutive lines are merged so a multi-line doc block is one string.
+fn collect_doc_comments(tokens: &[Token]) -> Vec<(usize, usize, String)> {
+    let mut out: Vec<(usize, usize, String)> = Vec::new();
+    for tok in tokens {
+        if tok.kind != TokenKind::DocComment {
+            continue;
+        }
+        let body = tok
+            .text
+            .trim_start()
+            .trim_start_matches("///")
+            .trim()
+            .to_string();
+        let (start, end) = (tok.span.start.as_usize(), tok.span.end.as_usize());
+        // Merge with the previous line when only whitespace separates them.
+        match out.last_mut() {
+            Some((_, prev_end, text)) if *prev_end < start && start - *prev_end <= 2 => {
+                text.push('\n');
+                text.push_str(&body);
+                *prev_end = end;
+            }
+            _ => out.push((start, end, body)),
+        }
+    }
+    out
 }
 
 impl Parser {
@@ -91,6 +127,10 @@ impl Parser {
     }
 
     fn parse_decl_item(&mut self) -> Item {
+        // Taken here, before any of the declaration is consumed: `doc_before` locates
+        // the block by what precedes the *current* token, and by the end of this
+        // function `self.pos` has moved past the whole body.
+        let doc = self.doc_before_current();
         let is_pub = if self.check(TokenKind::Pub) {
             self.advance();
             true
@@ -160,9 +200,34 @@ impl Parser {
             params,
             return_type,
             body,
-            doc: None,
+            doc,
             span,
         })
+    }
+
+    /// The `///` block attached to the declaration at the current token.
+    ///
+    /// A block qualifies when it sits between the previous piece of code and here —
+    /// i.e. nothing else intervenes. That test needs no source text and correctly
+    /// rejects a stray block that some other statement has already passed. Blocks are
+    /// consumed on use, so two declarations cannot claim the same one.
+    ///
+    /// Must be called before consuming any of the declaration.
+    fn doc_before_current(&mut self) -> Option<String> {
+        let offset = self.peek().span.start.as_usize();
+        // End of the last code token before here (0 at the start of the file).
+        let prev_code_end = self
+            .pos
+            .checked_sub(1)
+            .and_then(|i| self.tokens.get(i))
+            .map(|t| t.span.end.as_usize())
+            .unwrap_or(0);
+        let idx = self
+            .doc_comments
+            .iter()
+            .rposition(|(start, end, _)| *end <= offset && *start >= prev_code_end)?;
+        let (_, _, text) = self.doc_comments.remove(idx);
+        Some(text)
     }
 
     fn parse_import(&mut self, is_pub: bool) -> ImportDecl {
@@ -2010,3 +2075,67 @@ fn parse_int_literal(text: &str) -> i64 {
 
 // Fix: TokenKind::Type doesn't exist - remove from match
 // The is_keyword_as_ident has TokenKind::Type which won't compile - need to fix
+
+#[cfg(test)]
+mod doc_comments {
+    use super::*;
+    use rite_core::{FileId, SourceFile};
+
+    fn docs_of(src: &str) -> Vec<(String, Option<String>)> {
+        let file = SourceFile::new(FileId(0), "t.rite", src);
+        let (toks, _) = crate::lex(&file);
+        let (prog, _) = parse(FileId(0), &toks);
+        prog.expect("parse")
+            .items
+            .into_iter()
+            .filter_map(|i| match i {
+                Item::Function(f) => Some((f.name.name, f.doc)),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// `FunctionDecl.doc` was always `None`: the parser drops trivia before it runs, so
+    /// nothing could ever harvest `///` from real sources.
+    #[test]
+    fn doc_comment_attaches_to_the_following_function() {
+        let got = docs_of("/// Squares a value.\ndef square(n) [[ ^ n * n ]]\n");
+        assert_eq!(
+            got,
+            vec![("square".into(), Some("Squares a value.".into()))]
+        );
+    }
+
+    #[test]
+    fn consecutive_doc_lines_merge_into_one_block() {
+        let got = docs_of("/// First.\n/// Second.\ndef f(n) [[ ^ n ]]\n");
+        assert_eq!(got[0].1.as_deref(), Some("First.\nSecond."));
+    }
+
+    #[test]
+    fn a_function_without_a_doc_gets_none() {
+        let got = docs_of("/// For f only.\ndef f(n) [[ ^ n ]]\ndef g(n) [[ ^ n ]]\n");
+        assert_eq!(got[0].1.as_deref(), Some("For f only."));
+        assert_eq!(got[1].1, None, "doc leaked to the next function");
+    }
+
+    #[test]
+    fn a_doc_block_is_claimed_by_the_nearest_declaration_below_it() {
+        let got = docs_of("/// One.\ndef a(n) [[ ^ n ]]\n/// Two.\ndef b(n) [[ ^ n ]]\n");
+        assert_eq!(got[0].1.as_deref(), Some("One."));
+        assert_eq!(got[1].1.as_deref(), Some("Two."));
+    }
+
+    #[test]
+    fn code_between_the_doc_and_the_declaration_detaches_it() {
+        // The block documents nothing: a statement intervenes.
+        let got = docs_of("/// Stray.\nx <- 1\ndef f(n) [[ ^ n ]]\n");
+        assert_eq!(got[0].1, None);
+    }
+
+    #[test]
+    fn pub_functions_keep_their_doc() {
+        let got = docs_of("/// Exported.\npub def f(n) [[ ^ n ]]\n");
+        assert_eq!(got[0].1.as_deref(), Some("Exported."));
+    }
+}

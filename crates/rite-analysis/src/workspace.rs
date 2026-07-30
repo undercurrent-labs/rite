@@ -134,41 +134,35 @@ impl WorkspaceIndex {
             .or_else(|| self.symbols.iter().find(|s| s.name == name).cloned())
     }
 
-    /// Find textual references to `name` across open/indexed documents.
+    /// Find references to `name` across open/indexed documents.
+    ///
+    /// Identifier tokens only. This was a word-boundary substring scan, so it reported
+    /// hits inside string literals and comments — `"x marks x"` and `// x` counted as
+    /// references to `x`. Read-only, so it never corrupted anything, but the results
+    /// were not trustworthy enough to drive rename.
     pub fn find_references(&self, name: &str) -> Vec<ReferenceLoc> {
         let mut out = Vec::new();
         for (uri, text) in &self.documents {
-            for (line_idx, line) in text.lines().enumerate() {
-                let mut start = 0usize;
-                while let Some(rel) = line[start..].find(name) {
-                    let abs = start + rel;
-                    // word boundary check (byte-safe via char slices)
-                    let before_ok = abs == 0
-                        || !line[..abs]
-                            .chars()
-                            .last()
-                            .map(|c| c.is_alphanumeric() || c == '_')
-                            .unwrap_or(false);
-                    let after = abs + name.len();
-                    let after_ok = after >= line.len()
-                        || !line[after..]
-                            .chars()
-                            .next()
-                            .map(|c| c.is_alphanumeric() || c == '_')
-                            .unwrap_or(false);
-                    if before_ok && after_ok {
-                        // utf16 columns
-                        let col = line[..abs].chars().map(|c| c.len_utf16() as u32).sum();
-                        let end_col = col + name.chars().map(|c| c.len_utf16() as u32).sum::<u32>();
-                        out.push(ReferenceLoc {
-                            uri: uri.clone(),
-                            line: (line_idx as u32) + 1,
-                            character: col,
-                            end_character: end_col,
-                        });
-                    }
-                    start = abs + name.len();
+            let mut sources = rite_core::SourceMap::new();
+            let id = sources.add_file(uri, text);
+            let Some(file) = sources.get(id) else {
+                continue;
+            };
+            let (tokens, _) = rite_syntax::lex(file);
+            for tok in tokens {
+                if tok.kind != rite_syntax::TokenKind::Ident || tok.text != name {
+                    continue;
                 }
+                let offset = tok.span.start.as_usize();
+                let (line, character) = line_and_utf16_column(text, offset);
+                let width: u32 = name.chars().map(|c| c.len_utf16() as u32).sum();
+                out.push(ReferenceLoc {
+                    uri: uri.clone(),
+                    // Callers expect 1-based lines, as the old scan produced.
+                    line: line + 1,
+                    character,
+                    end_character: character + width,
+                });
             }
         }
         out
@@ -243,10 +237,61 @@ fn resolve_on_disk(segs: &[String], from_uri: &str, roots: &[PathBuf]) -> Option
     resolve_module_path(segs, from_dir, roots)
 }
 
+/// Byte offset → (0-based line, UTF-16 column).
+fn line_and_utf16_column(text: &str, offset: usize) -> (u32, u32) {
+    let mut line = 0u32;
+    let mut line_start = 0usize;
+    for (i, b) in text.bytes().enumerate() {
+        if i >= offset {
+            break;
+        }
+        if b == b'\n' {
+            line += 1;
+            line_start = i + 1;
+        }
+    }
+    let column = text
+        .get(line_start..offset)
+        .map(|s| s.chars().map(|c| c.len_utf16()).sum::<usize>())
+        .unwrap_or(0);
+    (line, column as u32)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::io::Write;
+
+    #[test]
+    fn references_ignore_strings_comments_and_substrings() {
+        // The old word-boundary substring scan counted every one of these.
+        let mut ws = WorkspaceIndex::new(vec![]);
+        ws.upsert_document(
+            "file:///tmp/r.rite",
+            "x ← 1\ns ← \"x marks x\"\n// x in a comment\nm ← max(x, 2)\n",
+        );
+        let refs = ws.find_references("x");
+        // Real uses: the binding on line 1 and the argument on line 4.
+        assert_eq!(refs.len(), 2, "unexpected references: {refs:#?}");
+        let lines: Vec<u32> = refs.iter().map(|r| r.line).collect();
+        assert_eq!(lines, vec![1, 4], "wrong lines: {refs:#?}");
+    }
+
+    #[test]
+    fn reference_columns_are_utf16() {
+        let mut ws = WorkspaceIndex::new(vec![]);
+        // `◆ f() ⟦ ` is glyph-heavy, so a byte column would overshoot.
+        ws.upsert_document("file:///tmp/g.rite", "◆ f() ⟦ ^ target ⟧\n");
+        let refs = ws.find_references("target");
+        assert_eq!(refs.len(), 1);
+        let line = "◆ f() ⟦ ^ target ⟧";
+        let expected: u32 = line
+            .chars()
+            .take_while(|c| *c != 't')
+            .map(|c| c.len_utf16() as u32)
+            .sum();
+        assert_eq!(refs[0].character, expected);
+    }
 
     #[test]
     fn indexes_open_docs_and_finds_refs() {

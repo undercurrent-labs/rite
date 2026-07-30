@@ -52,14 +52,9 @@
       "properties": {
         "rite.binaryPath": { "type": "string", "default": "", "description": "Path to rite CLI" },
         "rite.lspPath": { "type": "string", "default": "", "description": "Path to rite-lsp" },
-        "rite.languageVersion": { "type": "string", "default": "1" },
-        "rite.defaultDialect": { "type": "string", "enum": ["glyph", "ascii", "mixed", "preserve"], "default": "glyph" },
-        "rite.formatOnSave": { "type": "boolean", "default": true },
         "rite.renderOnlyGlyph": { "type": "boolean", "default": false },
-        "rite.inlayHints": { "type": "boolean", "default": true },
         "rite.trace.server": { "type": "string", "enum": ["off", "messages", "verbose"], "default": "off" },
-        "rite.studioUrl": { "type": "string", "default": "http://127.0.0.1:4041" },
-        "rite.compilerOutput": { "type": "string", "default": ".rite/build" }
+        "rite.studioUrl": { "type": "string", "default": "http://127.0.0.1:4041" }
       }
     }
   },

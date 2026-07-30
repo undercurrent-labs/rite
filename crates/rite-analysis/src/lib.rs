@@ -82,10 +82,22 @@ impl AnalysisEngine {
         if let Some(p) = program {
             for item in &p.items {
                 if let rite_syntax::Item::Function(f) = item {
+                    // Prefer the first line of the `///` block as the detail — a
+                    // summary is more use in a completion list than the arity alone.
+                    let signature = format!("fn {}/{}", f.name.name, f.params.len());
+                    let detail = match f
+                        .doc
+                        .as_deref()
+                        .and_then(|d| d.lines().next())
+                        .map(str::trim)
+                    {
+                        Some(first) if !first.is_empty() => format!("{signature} — {first}"),
+                        _ => signature,
+                    };
                     items.push(CompletionItem {
                         label: f.name.name.clone(),
                         kind: "function".into(),
-                        detail: format!("fn {}/{}", f.name.name, f.params.len()),
+                        detail,
                         insert_text: f.name.name.clone(),
                     });
                 }
@@ -104,13 +116,21 @@ impl AnalysisEngine {
             for item in &p.items {
                 if let rite_syntax::Item::Function(f) = item {
                     if f.name.name == word {
+                        // Show the `///` block when the source has one; the parser
+                        // attaches it to the declaration. Falls back to the signature
+                        // line so an undocumented function still hovers usefully.
+                        let body = match f.doc.as_deref().map(str::trim) {
+                            Some(doc) if !doc.is_empty() => doc.to_string(),
+                            _ => "User-defined function.".to_string(),
+                        };
                         return Some(HoverInfo {
                             title: format!("function {}", f.name.name),
                             markdown: format!(
-                                "**{}** (`{}/{}`)\n\nUser-defined function.",
+                                "**{}** (`{}/{}`)\n\n{}",
                                 f.name.name,
                                 f.name.name,
-                                f.params.len()
+                                f.params.len(),
+                                body
                             ),
                         });
                     }
