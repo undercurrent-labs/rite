@@ -93,8 +93,8 @@ Lists registered host modules and related metadata.
 | `@clock` | now, sleep, parse, … |
 | `@random` | seed, int, … |
 | `@env` | get/set environment (permissioned) |
-| `@process` | run subprocesses (dangerous; native only) |
-| `@http` | listen, client, middleware helpers |
+| `@process` | `args` (this script's own arguments, no grant needed); `run`/`which` spawn or probe, and need `process` |
+| `@http` | listen and middleware helpers (no outbound client yet) |
 | `@game` | text adventure helpers |
 
 Details and signatures: `rite docs build` → `docs/generated/`.
@@ -147,6 +147,24 @@ See [Browser & Studio](browser.md).
 ## Embedding
 
 Rust hosts configure permissions via `RiteEngine::builder()` (see [Embedding](embedding.md)).
+
+## Reading the script's own arguments
+
+Arguments after `--` are the invoker's input to *this* program, so reading them needs
+no grant — refusing would be like refusing to let a script read its own source:
+
+```bash
+rite run tool.rite -- alpha beta
+```
+
+```rite
+argv ← ! @process.args        // ["alpha", "beta"]
+```
+
+It still takes the `!` marker, because the answer differs between runs for the same
+reason `@clock.now` does. Spawning something new (`@process.run`) is a different
+privilege and does need `--allow process`. A compiled binary reads its own argv, with
+no `--` to strip.
 
 ## Next
 

@@ -1,6 +1,16 @@
-//! Tiny CLI-style transform
+//! Tiny CLI tool: reads its own arguments.
+//!
+//! Run: rite run examples/06-cli-tool/main.rite -- alpha beta gamma
+//! With no arguments it falls back to a sample list, so the example still runs bare.
+//!
+//! `@process.args` needs no `--allow` flag — the arguments are the invoker's own
+//! input to this program. Spawning a *new* process (`@process.run`) does need one.
 
-args ← ["alpha", "beta", "gamma"]
-upper ← args → map { |s| s }
-! @console.println(upper → count)
-! @console.println(upper)
+argv ← ! @process.args
+
+// Parens are required: `→` binds looser than `>`, so `argv → count > 0` would
+// parse as `argv → (count > 0)` and try to call a bool at runtime.
+args ← ? (argv → count) > 0 ⟦ argv ⟧ : ⟦ ["alpha", "beta", "gamma"] ⟧
+
+! @console.println("count: " + str(args → count))
+! @console.println(args → join(", "))

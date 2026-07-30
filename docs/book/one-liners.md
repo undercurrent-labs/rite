@@ -213,6 +213,7 @@ Copy the function into a `.rite` file when it stabilizes; use `:load` / `:reload
 | Read data dir | `--allow fs:read=./data` |
 | Write output | `--allow fs:write=./out` |
 | Outbound HTTP host | `--allow net=api.example.com` |
+| Script's own arguments | *(none — `! @process.args` always works)* |
 | Everything local | `--allow-all` (trusted scripts only) |
 
 ## Common “weird” REPL moments

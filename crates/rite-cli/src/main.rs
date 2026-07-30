@@ -43,9 +43,7 @@ enum Commands {
     /// fails. When the script's final expression evaluates to something other
     /// than `none`, that value is printed after the script's own output.
     ///
-    /// Arguments after `--` are exposed to the script as the `RITE_ARGV`
-    /// environment variable (a JSON array), readable with
-    /// `@env.get("RITE_ARGV")`.
+    /// Arguments after `--` are readable with `! @process.args`.
     Run {
         file: PathBuf,
         #[arg(long = "allow", value_name = "PERM")]
@@ -63,7 +61,7 @@ enum Commands {
         trace: bool,
         #[arg(long = "json-errors")]
         json_errors: bool,
-        /// Script arguments (after `--`), exposed as the RITE_ARGV env var
+        /// Script arguments (after `--`), readable with `! @process.args`
         #[arg(last = true)]
         args: Vec<String>,
     },
@@ -743,15 +741,6 @@ async fn run(cli: Cli) -> anyhow::Result<ExitCode> {
                 PermissionSet::default_secure()
             };
 
-            // Script arguments. No capability exposes argv yet (@env has
-            // get/require/all, @process has run/which), so the CLI publishes
-            // them as RITE_ARGV — a JSON array — and grants read access to just
-            // that variable, since its contents are exactly what the caller
-            // typed. `@env.get("RITE_ARGV")` works without extra --allow flags.
-            // Granted before the flag loops so `--deny env` still wins.
-            std::env::set_var(ARGV_ENV, serde_json::to_string(&args)?);
-            perms.grant(Permission::Env(ARGV_ENV.to_string()));
-
             for a in allow {
                 match Permission::parse(&a) {
                     Ok(p) => perms.grant(p),
@@ -773,6 +762,8 @@ async fn run(cli: Cli) -> anyhow::Result<ExitCode> {
 
             let mut ctx = RuntimeContext::new();
             ctx.sources = sources.clone();
+            // Everything after `--`, readable with `! @process.args`.
+            ctx.script_args = args;
             if let Some(parent) = file.parent() {
                 ctx.script_dir = Some(parent.to_path_buf());
                 ctx.module_roots.push(parent.to_path_buf());
@@ -983,9 +974,6 @@ fn print_capabilities() {
         println!();
     }
 }
-
-/// Environment variable carrying `rite run script.rite -- a b` arguments.
-const ARGV_ENV: &str = "RITE_ARGV";
 
 /// Write everything the script produced: stdout buffer to stdout, stderr buffer
 /// to stderr.

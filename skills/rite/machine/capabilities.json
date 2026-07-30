@@ -488,6 +488,13 @@
       "permission": "process"
     },
     {
+      "arity": 0,
+      "docs": "Arguments passed to this script after `--`, as a list of strings. Needs no permission: they are the invoker's own input to this program, not ambient state.",
+      "effectful": true,
+      "name": "args",
+      "permission": ""
+    },
+    {
       "arity": 1,
       "docs": "Locate an executable on PATH. Reads the PATH environment variable and probes the filesystem, so it is effectful (`!`) and needs process *and* env access to PATH (--allow process --allow env=PATH).",
       "effectful": true,

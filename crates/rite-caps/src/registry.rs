@@ -131,7 +131,7 @@ impl CapabilityHost for HostCapabilities {
             "csv" => self.csv.call(method, args, &self.perms).await,
             "clock" => self.clock.call(method, args, effect, &self.perms).await,
             "env" => self.env.call(method, args, &self.perms).await,
-            "process" => self.process.call(method, args, &self.perms).await,
+            "process" => self.process.call(method, args, &self.perms, ctx).await,
             "random" => {
                 let mut rng = self.random.write();
                 rng.call(method, args, &self.perms)

@@ -1,6 +1,6 @@
 use crate::permissions::PermissionSet;
 use crate::registry::NativeFunctionDescriptor;
-use rite_runtime::{EvalError, Key, Value};
+use rite_runtime::{EvalError, Key, RuntimeContext, Value};
 use std::process::Stdio;
 
 pub struct ProcessCap;
@@ -13,6 +13,13 @@ impl ProcessCap {
             arity: 3,
             effectful: true,
             permission: "process",
+        },
+        NativeFunctionDescriptor {
+            name: "args",
+            docs: "Arguments passed to this script after `--`, as a list of strings. Needs no permission: they are the invoker's own input to this program, not ambient state.",
+            arity: 0,
+            effectful: true,
+            permission: "",
         },
         NativeFunctionDescriptor {
             name: "which",
@@ -28,7 +35,20 @@ impl ProcessCap {
         method: &str,
         args: Vec<Value>,
         perms: &PermissionSet,
+        ctx: &RuntimeContext,
     ) -> Result<Value, EvalError> {
+        // `args` is exempt from the `process` grant: spawning a subprocess and reading
+        // the arguments you were handed are not the same privilege, and requiring
+        // `--allow process` to read argv would mean a CLI script had to be able to run
+        // arbitrary commands just to see its own flags.
+        if method == "args" {
+            return Ok(Value::list(
+                ctx.script_args
+                    .iter()
+                    .map(|a| Value::string(a.clone()))
+                    .collect::<Vec<_>>(),
+            ));
+        }
         perms.check_process().map_err(EvalError::Permission)?;
         match method {
             "run" => {

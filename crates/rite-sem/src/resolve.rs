@@ -86,6 +86,9 @@ pub const HOST_EFFECTS: &[(&str, bool)] = &[
     // @process — subprocesses. `which` probes PATH and the filesystem.
     ("process.run", true),
     ("process.which", true),
+    // `args` observes what the invoker typed — outside the program, and different
+    // between runs, so it takes a marker for the same reason `@clock.now` does.
+    ("process.args", true),
     // @random — the entropy source (`seed` mutates it).
     ("random.int", true),
     ("random.float", true),
@@ -481,10 +484,29 @@ impl Resolver {
                     ));
                 }
             }
-            // A bare capability reference performs no effect — it names a host
-            // function without invoking it (`use @http.log`, `f ← @fs.write`).
-            // E021 belongs on the call site, in `Expr::Call` below.
-            Expr::Capability(_) => {}
+            // A bare capability reference is not inert: the evaluator invokes it, so
+            // `n ← @clock.now` really did read the clock — and skipping the check here
+            // meant every zero-arity effectful capability could be used with no marker
+            // at all. The resolver and the evaluator have to agree on what evaluating
+            // this expression does, so it takes a marker exactly like a call.
+            //
+            // Pure capabilities are unaffected, which is what keeps `use @http.log` and
+            // `⊏ @http.recover` (middleware markers, `effectful: false`) working.
+            Expr::Capability(c) => {
+                let path = c.path.join(".");
+                if is_effectful(&path) && !in_effect {
+                    self.diagnostics.push(
+                        simple_error(
+                            E021_EFFECT_REQUIRED,
+                            "effectful capability requires `!`",
+                            file,
+                            c.span,
+                            "evaluating this performs an external effect",
+                        )
+                        .with_help(format!("mark it as an explicit effect: ! @{}", path)),
+                    );
+                }
+            }
             Expr::Call(c) => {
                 // `! @fs.write(…)` can attach the marker to the callee rather
                 // than to the whole call, depending on how it was written.
@@ -507,7 +529,12 @@ impl Resolver {
                         );
                     }
                 }
-                self.resolve_expr(&c.callee, file, effect);
+                // A capability callee needs no further resolution (its path is just
+                // idents) and the check above already owns this call's diagnostic —
+                // recursing would report the same effect twice.
+                if !matches!(strip_effect(c.callee.as_ref()), Expr::Capability(_)) {
+                    self.resolve_expr(&c.callee, file, effect);
+                }
                 // Arguments are independent computations: reset.
                 for a in &c.args {
                     self.resolve_expr(a, file, false);
@@ -891,9 +918,24 @@ mod tests {
     }
 
     #[test]
-    fn a_bare_capability_reference_is_not_a_call() {
-        // Naming a host function performs no effect; only calling it does.
-        assert_ok("f ← @fs.write\n");
+    fn a_bare_capability_reference_is_a_call() {
+        // This test used to assert the opposite — that naming a host function performs
+        // no effect — but capability references are not first-class values. The
+        // evaluator invokes a bare mention as a zero-argument call, so
+        //
+        //     f ← @clock.now
+        //
+        // binds the *timestamp*, not the function: `f()` afterwards fails with "cannot
+        // call value of type string". While the resolver believed a bare mention was
+        // inert, every zero-arity effectful capability could be used with no marker at
+        // all, and `f ← @fs.write` silently called `fs.write`.
+        assert_effect_error("f ← @fs.write\n");
+        assert_effect_error("n ← @clock.now\n");
+        assert_ok("n ← ! @clock.now\n");
+        // Pure capabilities are still free to name — this is what `use @http.log` and
+        // `⊏ @http.recover` rely on.
+        assert_ok("m ← @http.log\n");
+        assert_ok("r ← @http.response(200)\n");
     }
 
     // ---- effect-marker propagation (one test per arm) -----------------------

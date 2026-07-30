@@ -4,11 +4,14 @@
 
 use rite_caps::process::ProcessCap;
 use rite_caps::{Permission, PermissionSet};
-use rite_runtime::{ResultValue, Value};
+use rite_runtime::{ResultValue, RuntimeContext, Value};
 
 async fn which(perms: &PermissionSet, name: &str) -> Result<Value, String> {
+    // `call` takes the context because `@process.args` reads `ctx.script_args`;
+    // `which` ignores it.
+    let ctx = RuntimeContext::new();
     ProcessCap
-        .call("which", vec![Value::string(name)], perms)
+        .call("which", vec![Value::string(name)], perms, &ctx)
         .await
         .map_err(|e| e.to_string())
 }
@@ -99,4 +102,31 @@ fn which_descriptor_documents_the_env_requirement() {
     // or E021 and the documentation contradict each other.
     assert!(d.effectful, "which observes the environment and filesystem");
     assert_eq!(d.permission, "process");
+}
+
+/// `@process.args` reports what the host put in `script_args`, and needs no grant —
+/// the arguments are the invoker's own input to this program, unlike `run`/`which`,
+/// which reach outside it.
+#[tokio::test]
+async fn args_reads_script_args_without_any_permission() {
+    let mut ctx = RuntimeContext::new();
+    ctx.script_args = vec!["alpha".into(), "beta".into()];
+    let out = ProcessCap
+        .call("args", vec![], &PermissionSet::default_secure(), &ctx)
+        .await
+        .expect("args must not require a grant");
+    assert_eq!(
+        out,
+        Value::list(vec![Value::string("alpha"), Value::string("beta")])
+    );
+}
+
+#[tokio::test]
+async fn args_is_empty_when_the_host_set_none() {
+    let ctx = RuntimeContext::new();
+    let out = ProcessCap
+        .call("args", vec![], &PermissionSet::default_secure(), &ctx)
+        .await
+        .expect("args");
+    assert_eq!(out, Value::list(Vec::<Value>::new()));
 }

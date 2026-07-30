@@ -122,6 +122,9 @@ pub struct RuntimeContext {
     pub script_dir: Option<std::path::PathBuf>,
     /// Opaque permission snapshot for host callbacks (JSON or flag blob).
     pub allow_all: bool,
+    /// Arguments the invoker passed to the script, after `--`. Read by
+    /// `@process.args`. Set by the CLI and by compiled binaries; empty otherwise.
+    pub script_args: Vec<String>,
 }
 
 #[derive(Clone)]
@@ -147,6 +150,7 @@ impl RuntimeContext {
             module_roots: Vec::new(),
             script_dir: None,
             allow_all: false,
+            script_args: Vec::new(),
         }
     }
 

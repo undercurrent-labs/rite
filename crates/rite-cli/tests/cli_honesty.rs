@@ -178,34 +178,23 @@ fn trace_reports_steps_and_outcome() {
 
 // ----------------------------------------------------------------- script args
 
-/// Read `RITE_ARGV` and print it.
-///
-/// `@env.get` is declared pure (`effectful: false`) but rite-sem currently
-/// requires `!` on it; effect classification is being unified elsewhere, so try
-/// both spellings and assert on the CLI behaviour under test — that the run
-/// command publishes the arguments and grants permission to read them.
+/// Print the script's own arguments via the capability that exposes them.
 fn run_argv_script(tag: &str, extra: &[&str]) -> String {
-    let variants = [
-        "argv <- ! @env.get(\"RITE_ARGV\")\n! @console.println(argv)\n",
-        "argv <- @env.get(\"RITE_ARGV\")\n! @console.println(argv)\n",
-    ];
-    let mut last = String::new();
-    for (i, body) in variants.iter().enumerate() {
-        let f = script(&format!("{tag}_{i}"), body);
-        let mut args = vec!["run", f.to_str().unwrap()];
-        args.extend_from_slice(extra);
-        let out = run_rite(&args);
-        if out.status.success() {
-            return stdout_of(&out);
-        }
-        last = format!("{}{}", stdout_of(&out), stderr_of(&out));
-    }
-    panic!("no @env.get spelling ran successfully; last output:\n{last}");
+    let f = script(tag, "argv ← ! @process.args\n! @console.println(argv)\n");
+    let mut args = vec!["run", f.to_str().unwrap()];
+    args.extend_from_slice(extra);
+    let out = run_rite(&args);
+    assert!(
+        out.status.success(),
+        "argv script failed:\n{}{}",
+        stdout_of(&out),
+        stderr_of(&out)
+    );
+    stdout_of(&out)
 }
 
 #[test]
 fn script_arguments_reach_the_script() {
-    // No --allow-all and no --allow env: the CLI grants RITE_ARGV itself.
     let stdout = run_argv_script("argv", &["--", "alpha", "beta"]);
     assert!(
         stdout.contains("alpha") && stdout.contains("beta"),
@@ -214,18 +203,40 @@ fn script_arguments_reach_the_script() {
 }
 
 #[test]
-fn no_arguments_still_defines_argv() {
+fn no_arguments_still_yields_an_empty_list() {
     let stdout = run_argv_script("argv_empty", &[]);
     assert!(stdout.contains("[]"), "{stdout}");
 }
 
+/// Arguments are the invoker's own input to this program, so reading them needs no
+/// grant — unlike `@process.run`, which spawns something new. This pins that
+/// distinction: no `--allow` flags at all, and `--deny process` must not block it.
 #[test]
-fn explicit_deny_still_beats_the_argv_grant() {
+fn reading_arguments_needs_no_permission() {
     let f = script(
-        "argv_denied",
-        "argv <- ! @env.get(\"RITE_ARGV\")\n! @console.println(argv)\n",
+        "argv_no_perm",
+        "argv ← ! @process.args\n! @console.println(argv)\n",
     );
-    let out = run_rite(&["run", f.to_str().unwrap(), "--deny", "env", "--", "x"]);
+    let out = run_rite(&[
+        "run",
+        f.to_str().unwrap(),
+        "--deny",
+        "process",
+        "--",
+        "kept",
+    ]);
+    assert!(out.status.success(), "{}", stderr_of(&out));
+    assert!(stdout_of(&out).contains("kept"), "{}", stdout_of(&out));
+}
+
+/// ...but spawning still is gated.
+#[test]
+fn spawning_a_process_still_needs_permission() {
+    let f = script(
+        "argv_spawn",
+        "r ← ! @process.run(\"echo\", [\"hi\"])\n! @console.println(str(r))\n",
+    );
+    let out = run_rite(&["run", f.to_str().unwrap()]);
     assert!(!out.status.success(), "{}", stdout_of(&out));
     assert!(
         stderr_of(&out).to_lowercase().contains("permission"),

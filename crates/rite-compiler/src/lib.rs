@@ -178,6 +178,9 @@ fn generate_main_rs(file: &Path, perms: &PermissionSet, build_cwd: &Path) -> Str
 async fn main() {
     let mut ctx = RuntimeContext::new();
     install_defaults(&mut ctx, rite_perms());
+    // A compiled binary is invoked directly, so its own argv *is* the script's
+    // arguments — no `--` separator to strip. Read with `! @process.args`.
+    ctx.script_args = std::env::args().skip(1).collect();
     let result = generated::rite_main(&mut ctx).await;
 
     // Buffered output is flushed on *both* paths: a script that printed and then
