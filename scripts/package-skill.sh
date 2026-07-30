@@ -11,14 +11,19 @@ OUT_IN="${1:-$ROOT/dist/skill}"
 mkdir -p "$OUT_IN"
 OUT="$(cd "$OUT_IN" && pwd)"
 
-# Ensure agent bundle is fresh when rite is available (optional — never fail package)
-if command -v rite >/dev/null 2>&1; then
-  rite docs agent --output skills/rite 2>/dev/null || true
-elif [[ -x "$ROOT/target/release/rite" ]]; then
-  "$ROOT/target/release/rite" docs agent --output skills/rite 2>/dev/null || true
-elif [[ -x "$ROOT/target/debug/rite" ]]; then
-  "$ROOT/target/debug/rite" docs agent --output skills/rite 2>/dev/null || true
-fi
+# Packages what is committed. It used to regenerate the bundle in place first, with
+# whichever `rite` it could find — PATH, then target/release, then target/debug — and
+# `2>/dev/null || true` so nothing it did could fail the package.
+#
+# A stale `target/release/rite` is the normal state of a working tree, and this rewrote
+# tracked files with its output: version 0.1.6 and 45 fewer capability lines than the
+# committed manifest, silently, on every `cargo test` that exercised packaging. An old
+# enough binary predates the guard that stops `docs agent --output skills/rite` rewriting
+# the hand-written SKILL.md, so it could rewrite that too.
+#
+# Regenerating is a deliberate act — `rite docs build` — not a side effect of packaging.
+# If the committed bundle drifts from what the current binary emits, that is for a
+# freshness check to report, not for a release script to paper over with unknown output.
 
 [[ -f skills/rite/SKILL.md ]] || { echo "error: skills/rite/SKILL.md missing" >&2; exit 1; }
 

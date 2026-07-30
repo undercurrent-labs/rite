@@ -13,27 +13,7 @@ use std::sync::Arc;
 
 impl<'a> Evaluator<'a> {
     pub async fn eval_program(&mut self, ir: &ProgramIr) -> Result<Value, EvalError> {
-        // Register functions
-        for f in &ir.functions {
-            self.ctx.functions.insert(
-                f.name.clone(),
-                FunctionEntry {
-                    params: f.param_names.clone(),
-                    body: f.body.clone(),
-                },
-            );
-            // Also bind as closures in env. The capture is the module scope itself
-            // (shared frames), so a function body sees its siblings and every top-level
-            // binding, whichever order they are defined in.
-            let clos = Value::Function(Closure {
-                id: CLOSURE_ID.fetch_add(1, Ordering::Relaxed),
-                name: Some(f.name.clone()),
-                params: f.param_names.clone(),
-                env: Arc::new(parking_lot::RwLock::new(self.ctx.env.clone())),
-                body: f.body.clone(),
-            });
-            self.ctx.env.define_name(&f.name, clos, false);
-        }
+        crate::register_functions(ir, self.ctx);
 
         let mut last = Value::None;
         if let Some(module) = ir.modules.first() {

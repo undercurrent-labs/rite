@@ -236,6 +236,11 @@ pub struct PendingHttpServer {
     pub middleware: Vec<crate::value::HttpMiddleware>,
 }
 
+/// Next id for a freshly constructed closure.
+pub fn next_closure_id() -> u64 {
+    CLOSURE_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+}
+
 #[derive(Clone)]
 pub struct FunctionEntry {
     pub params: Vec<String>,
