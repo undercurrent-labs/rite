@@ -3,7 +3,11 @@
 ## [0.2.0] — 2026-07-30
 
 A correctness, security and honesty pass over the whole tree, from a full review.
-One behaviour change to the grammar (pipeline precedence) — see **Changed**.
+
+**Four behaviour changes**, all in **Changed**: pipeline precedence (`→` binds tighter than
+the operators), `@random` no longer returning the same sequence on every run, and two in the
+REPL. If you have a script that depended on `@random` being effectively constant, seed it
+explicitly with `@random.seed(n)`.
 
 ### Security
 
@@ -48,9 +52,39 @@ One behaviour change to the grammar (pipeline precedence) — see **Changed**.
   print success and do nothing. `--trace` is implemented.
 - Documentation for string interpolation, escapes and raw strings — previously undocumented
   despite being used throughout the examples.
+- **`rite doc <path>` documents your own scripts.** The path argument was accepted and
+  thrown away, so it produced the generic language reference either way; meanwhile
+  `parse_doc_comment` was public with no callers and the parser had been attaching doc
+  comments to declarations all along. `///` on a declaration and `//!` at the top of a file
+  now reach `scripts.md`, the JSON index, the search index and the HTML site, with
+  `@param` / `@returns` / `@effects` / `@permission` tags and fenced examples.
+  `rite docs build --scripts <path>` does the same from the maintained command family.
+- Documentation for **doc comments** — a language feature since the lexer, and undocumented
+  until now — plus the `@random` seeding contract, the REPL session model, and two rules the
+  book never stated: match arms are newline-separated (a comma is a syntax error), and
+  result patterns are juxtaposed (`ok data`, not `ok(data)`).
+- **`rite_runtime::ops`** — operator semantics as public free functions, so an ahead-of-time
+  backend can reach the same definition of `+` the interpreter uses instead of carrying a
+  second copy.
 
 ### Changed
 
+- **`@random` is random.** The default generator was seeded with a constant, so every
+  `rite run` on every machine drew the identical sequence forever — `@random.int(1, 6)` was
+  effectively a constant and a dice roller always rolled the same numbers. It is now seeded
+  from the operating system. `@random.seed(n)` still pins a sequence when you want one, and
+  now covers `uuid` too: that path called the system generator directly, so a run that
+  asked to be reproducible produced a different identifier every time. Studio pins a seed,
+  so editing and re-running shows what you changed rather than noise.
+- **The REPL redefines names instead of refusing them.** `x ← 1` then `x ← 2` was a
+  duplicate-binding error, and redefining a function failed *silently* while the old body
+  stayed live. A redefinition now replaces the earlier one in place, keeping its position,
+  so anything defined in between sees the new value.
+- **The REPL performs an effect once.** An effectful binding was replayed before every
+  later input, so `data ← ! @fs.read(f)` re-read the file each time and
+  `r ← ! @http.post("/orders", …)` re-submitted the order. The session now stores the
+  result rather than the expression. A `↢` declaration is remembered; a later `:=` is not,
+  so mutations reset — documented in the book.
 - **`→` binds tighter than the operators.** `xs → count > 2` now means
   `(xs → count) > 2`; it used to parse as `xs → (count > 2)` and fail at runtime with
   "cannot call value of type bool". Every binary operator after a stage was affected.
@@ -70,6 +104,21 @@ One behaviour change to the grammar (pipeline precedence) — see **Changed**.
 
 ### Fixed
 
+- **Diagnostic columns counted bytes, not characters.** On any line containing a glyph —
+  which in idiomatic Rite is most of them — every caret sat several columns right of what it
+  pointed at, and the reported `file:line:col` was unusable for jumping. The same program
+  written in ASCII reported the correct column, which is why it survived: the tests were
+  ASCII. Carets now pad by display width, so a CJK string literal lines up too.
+- **An atom reaching a string rendered as a number.** `str(#ok)` gave `"#0"`, and so did
+  `"{status}"` and `[#a, #b] → join(", ")` and `panic(#boom)`. `@console.println` was correct
+  the whole time, which is what hid it — the same atom printed two ways depending on which
+  path it took to the screen.
+- **Editor positions disagreed with each other.** `rite-analysis` carried three position
+  implementations and two conventions: references used UTF-16 code units (what LSP means),
+  symbols used character columns, diagnostics a third. Jumping to a name could land in a
+  different place depending on whether you asked for the definition, a reference, or the
+  diagnostic pointing at it. One implementation now, and `café` — a legal Rite identifier —
+  no longer overshoots its own highlight by a column.
 - **Any non-ASCII character in a comment or multi-line string panicked** the lexer, and so
   `run`, `check`, `fmt`, the LSP and Studio. `/* résumé */` was enough.
 - **Closures were dynamically scoped** when a caller shadowed a captured name: an adder
@@ -91,6 +140,24 @@ One behaviour change to the grammar (pipeline precedence) — see **Changed**.
 - The agent bundle could truncate its own `SKILL.md`; its capability manifest was three
   releases stale and advertised the wrong effect flags.
 - `rite check` reported `E026` on module examples that `rite run` executed fine.
+
+### Tests
+
+- 255 → 743, and the gaps were where the bugs were: the byte-column, atom-rendering,
+  `@random`, REPL and editor-position faults above were all found by writing tests for a
+  thin crate rather than by using the language.
+- **Interpreter/compiler parity** — 117 programs across the language surface, each run
+  through the interpreter and through the IR path a compiled binary takes, comparing value,
+  stdout *and* stderr. No cargo build, so it runs in milliseconds.
+- **Three green tests were proving nothing.** Conformance fixtures declaring `allow = []`
+  ran with every capability granted, because the loader returned `allow_all()` from both
+  branches. Two `@db` sandbox tests asserted the absence of content from `/etc/passwd`, a
+  file that does not exist on Windows — so on that platform they passed without the read
+  ever happening. All now fail if the property they claim to check breaks.
+- CI runs every test binary before reporting (`--no-fail-fast`); without it a
+  platform-specific break surfaced one failure per 36-minute run. Windows tests are
+  advisory while its remaining gaps are test portability rather than product faults; `fmt`,
+  `clippy` and the build still gate there.
 
 ### Performance
 
