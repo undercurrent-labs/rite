@@ -12,7 +12,7 @@ examples/modules/
 
 ### Library (`math.rite`)
 
-```rite
+```rite browser
 //! Pure math helpers (public exports)
 
 pub ◆ square(value) ⟦
@@ -103,7 +103,7 @@ Keep side effects near the edges (`main`, HTTP handlers), not deep in utility mo
 
 ## Visibility checklist
 
-```rite
+```rite browser
 pub ◆ exported(x) ⟦ ^ x + 1 ⟧
 
 ◆ internal(x) ⟦ ^ x * 2 ⟧   // not imported by use

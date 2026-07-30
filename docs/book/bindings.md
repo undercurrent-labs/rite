@@ -10,7 +10,7 @@ Rite distinguishes **immutable** bindings, **mutable** bindings, and **assignmen
 | `name ↢ expr` | `name <~ expr` | Bind **mutable** name |
 | `name := expr` | `name := expr` | Assign to an existing **mutable** |
 
-```rite
+```rite browser
 // Immutable — default choice
 x ← 1
 // x := 2          // error: x is not mutable
@@ -39,7 +39,7 @@ Re-binding with `←` in an inner block is normal **shadowing** (inner scope), n
 
 ### Running totals
 
-```rite
+```rite browser
 total ↢ 0
 xs ← [1, 2, 3, 4]
 // pipelines often avoid mutation entirely — see next chapters
@@ -52,7 +52,7 @@ For list processing, prefer [pipelines](pipelines.md) (`→ sum`, `→ map`) ove
 
 ### Accumulating in a function
 
-```rite
+```rite browser
 ◆ countdown(n) ⟦
   c ↢ n
   // body uses c := c - 1 in a loop-like structure when needed
@@ -68,7 +68,7 @@ For list processing, prefer [pipelines](pipelines.md) (`→ sum`, `→ map`) ove
 
 ## Shadowing vs assign
 
-```rite
+```rite browser
 x ← 1
 ◆ demo() ⟦
   x ← 2              // shadows outer x inside demo
@@ -78,7 +78,7 @@ x ← 1
 ! @console.println(x)  // still 1
 ```
 
-```rite
+```rite browser
 x ↢ 1
 ◆ bump() ⟦
   // cannot assign outer x unless you design for shared mutables;
@@ -91,7 +91,7 @@ x ↢ 1
 
 Pattern matching can bind names inside arms:
 
-```rite
+```rite browser
 pair ← [10, 20]
 head ← ~ pair ⟦
   [h, ..rest] → h

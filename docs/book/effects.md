@@ -6,11 +6,11 @@ Rite separates **pure computation** from **host effects**. Host functions live u
 
 Statement-level host I/O uses `!` (glyph) or `do` (ASCII):
 
-```rite
+```rite browser
 ! @console.println("hi")
 ```
 
-```rite
+```rite browser
 do host.console.println("hi")
 ```
 
@@ -29,7 +29,7 @@ Naming a host function is not a way around the marker. A capability reference is
 value you can pass around — mentioning it *calls* it, with no arguments — so it takes a
 marker too:
 
-```rite
+```rite browser
 now ← ! @clock.now        // reads the clock
 ```
 
@@ -112,7 +112,7 @@ Details and signatures: `rite docs build` → `docs/generated/`.
 
 ## Example: safe defaults
 
-```rite
+```rite browser
 ! @console.println("console ok")
 now ← ! @clock.now()
 ! @console.println(now)
@@ -131,7 +131,7 @@ rite run examples/05-capabilities/main.rite
 `@random` is seeded from the operating system, so two runs of the same script differ.
 Call `@random.seed(n)` to pin a sequence:
 
-```rite
+```rite browser
 ! @random.seed(1)
 ! @console.println(str(! @random.int(1, 6)))   // same value on every run
 ```
@@ -148,7 +148,7 @@ noise you didn't.
 
 ## Example: files need FS
 
-```rite
+```rite browser
 data ← ⟨hello: "world"⟩
 text ← @json.encode(data)
 // writing would need fs:write
@@ -188,7 +188,7 @@ no grant — refusing would be like refusing to let a script read its own source
 rite run tool.rite -- alpha beta
 ```
 
-```rite
+```rite native_only
 argv ← ! @process.args        // ["alpha", "beta"]
 ```
 

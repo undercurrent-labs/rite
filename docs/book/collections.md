@@ -6,7 +6,7 @@ Lists and records are the structured data tools you’ll use in almost every scr
 
 ### Literals
 
-```rite
+```rite browser
 empty ← []
 nums ← [1, 2, 3, 4, 5]
 mixed ← [1, "two", #three]
@@ -16,7 +16,7 @@ mixed ← [1, "two", #three]
 
 Prefer pipelines (see [Pipelines](pipelines.md)):
 
-```rite
+```rite browser
 xs ← [1, 2, 3, 4, 5, 6]
 
 evens ← xs → keep { |n| n % 2 = 0 }
@@ -31,7 +31,7 @@ n ← xs → count
 - Empty list: `[] → first` and `[] → last` yield **`none`** (no panic).  
 - **Rest is a match pattern**, not a pipeline stage: write `[h, ..rest]` in `~` / `match`, not `xs → rest`.
 
-```rite
+```rite browser
 pair ← [10, 20, 30]
 head ← pair → first
 tail_sum ← ~ pair ⟦
@@ -44,7 +44,7 @@ tail_sum ← ~ pair ⟦
 
 ### Nested lists
 
-```rite
+```rite browser
 // Nested lists: spaces keep `[[` from being read as a block opener
 grid ← [ [1, 2], [3, 4] ]
 // flatten when you need a single level — use flatten/builtin if available
@@ -56,7 +56,7 @@ grid ← [ [1, 2], [3, 4] ]
 
 Glyph:
 
-```rite
+```rite browser
 user ← ⟨
   id: 1,
   name: "Aura",
@@ -66,7 +66,7 @@ user ← ⟨
 
 ASCII:
 
-```rite
+```rite browser
 user <- <<
   id: 1,
   name: "Aura",
@@ -92,7 +92,7 @@ email ← user.email ?? "nobody@example.com"
 
 Record `+` is **right-biased merge**: keys on the right overwrite the left.
 
-```rite
+```rite browser
 defaults ← ⟨host: "localhost", port: 8080, debug: false⟩
 overrides ← ⟨port: 9090⟩
 cfg ← defaults + overrides
@@ -106,7 +106,7 @@ Useful for config layers and HTTP response shaping.
 
 There is no heavy OOP “set field” model. Build a new record by merge:
 
-```rite
+```rite browser
 base ← ⟨count: 0⟩
 next ← base + ⟨count: 1⟩
 ```
@@ -115,7 +115,7 @@ next ← base + ⟨count: 1⟩
 
 Records are the v1 associative structure (implementation may use ordered maps). Keys are typically identifiers, strings, or atoms. Nested records are fine:
 
-```rite
+```rite browser
 doc ← ⟨
   meta: ⟨version: 1, kind: #note⟩,
   body: "hello"
@@ -125,7 +125,7 @@ doc ← ⟨
 
 ## Membership
 
-```rite
+```rite browser
 xs ← [1, 2, 3]
 // glyph: n ∈ xs   /  n ∉ xs
 // ascii: n in xs  /  n not in xs
@@ -137,7 +137,7 @@ Use membership in `keep` predicates and guards.
 
 Lists and records map naturally to JSON via `@json` (see [Files and JSON](files-json.md)):
 
-```rite
+```rite browser
 data ← ⟨hello: "world", n: 1⟩
 text ← @json.encode(data)
 again ← @json.decode(text)?

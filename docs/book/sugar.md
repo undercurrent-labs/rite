@@ -30,7 +30,7 @@ Rite is a **sigil language**: dense glyphs with ASCII twins, all desugaring into
 
 ## Ranges
 
-```rite
+```rite browser
 (1..5) → sum      // 10  (1+2+3+4)
 (1..=5) → sum     // 15
 (0‥3) → count     // 4
@@ -38,31 +38,31 @@ Rite is a **sigil language**: dense glyphs with ASCII twins, all desugaring into
 
 ## Pipeline stages
 
-```rite
+```rite browser
 [1, 2, 3, 4] → rest → take(2) → reverse → sum
 ```
 
-```rite
+```rite browser
 [⟨score: 1⟩, ⟨score: 2⟩] → .score → sum
 ```
 
-```rite
+```rite browser
 "a b c" → words → count
 ```
 
-```rite
+```rite browser
 ["a", "b"] → join("-")
 ```
 
 List “spread” is written with **`concat`** (literal `..` inside lists is reserved for match rest / ranges):
 
-```rite
+```rite browser
 concat([1], [2, 3], [4]) → sum   // 10
 ```
 
 Record update uses **merge** (`+`):
 
-```rite
+```rite browser
 base ← ⟨a: 1, b: 2⟩
 base + ⟨b: 9, c: 3⟩              // ⟨a: 1, b: 9, c: 3⟩
 ```
@@ -99,7 +99,7 @@ loop 3 ⟦
 
 ## Numbers and logic
 
-```rite
+```rite browser
 2 ** 10          // 1024
 7 ÷ 2            // 3
 abs(-5)
@@ -109,7 +109,7 @@ true ⊻ false
 
 ## Results
 
-```rite
+```rite browser
 ✓ 200            // ok(200)
 ✗ "fail"         // err("fail")
 unwrap_or(err(1), 99)
@@ -118,7 +118,7 @@ is_ok(ok(1))
 
 ## Print
 
-```rite
+```rite browser
 say "hello"
 ¶ 42
 ! @console.println("full form still works")
@@ -126,7 +126,7 @@ say "hello"
 
 ## Compose
 
-```rite
+```rite browser
 ◆ double(n) ⟦ ^ n * 2 ⟧
 ◆ inc(n) ⟦ ^ n + 1 ⟧
 f ← double ∘ inc

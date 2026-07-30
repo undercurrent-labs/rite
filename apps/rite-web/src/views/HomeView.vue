@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import CopyBlock from "../components/CopyBlock.vue";
+import CodeBlock from "../components/CodeBlock.vue";
 import { useLatestTag } from "../lib/release";
 
 const { tag: latestTag, resolved: tagResolved } = useLatestTag();
@@ -109,18 +109,8 @@ do host.console.println(str(square(12)))`;
         </RouterLink>
       </div>
       <div class="grid gap-4 md:grid-cols-2">
-        <div class="rounded-xl border border-rite-border bg-rite-panel overflow-hidden">
-          <div class="border-b border-rite-border px-4 py-2 text-xs font-mono text-rite-muted">
-            glyph
-          </div>
-          <pre class="p-4 font-mono text-sm text-slate-200 overflow-x-auto">{{ sampleGlyph }}</pre>
-        </div>
-        <div class="rounded-xl border border-rite-border bg-rite-panel overflow-hidden">
-          <div class="border-b border-rite-border px-4 py-2 text-xs font-mono text-rite-muted">
-            ascii
-          </div>
-          <pre class="p-4 font-mono text-sm text-slate-200 overflow-x-auto">{{ sampleAscii }}</pre>
-        </div>
+        <CodeBlock :code="sampleGlyph" lang="rite" label="glyph" mode="browser" class="!my-0" />
+        <CodeBlock :code="sampleAscii" lang="rite" label="ascii" mode="browser" class="!my-0" />
       </div>
       <p class="mt-3 font-mono text-sm text-rite-green">→ 144</p>
     </section>
@@ -191,11 +181,7 @@ do host.console.println(str(square(12)))`;
         <p class="mt-2 max-w-2xl text-sm text-slate-400">
           No clone required — binaries from GitHub Releases, verified with SHA-256.
         </p>
-        <CopyBlock
-          class="mt-4"
-          :code="installSnippet"
-          pre-class="overflow-x-auto rounded-lg border border-rite-border bg-rite-bg p-4 pr-16 font-mono text-sm text-slate-300"
-        />
+        <CodeBlock class="mt-4" :code="installSnippet" lang="bash" />
         <p class="mt-3 text-sm text-slate-400">
           {{ tagResolved ? "Latest release" : "Packaged with this site" }}
           <code class="text-rite-green text-xs">{{ latestTag }}</code>

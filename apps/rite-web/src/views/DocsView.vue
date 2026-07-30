@@ -8,7 +8,8 @@ import {
   docsIndexMarkdown,
   getDocMarkdown,
 } from "../lib/docs";
-import { renderMarkdown } from "../lib/markdown";
+import { segmentMarkdown } from "../lib/markdown";
+import CodeBlock from "../components/CodeBlock.vue";
 
 const route = useRoute();
 const router = useRouter();
@@ -57,7 +58,8 @@ watch(
   { immediate: true }
 );
 
-const html = computed(() => (markdown.value ? renderMarkdown(markdown.value) : ""));
+/** Code blocks render as components; prose stays a single v-html run per gap. */
+const segments = computed(() => (markdown.value ? segmentMarkdown(markdown.value) : []));
 
 const neighbors = computed(() => (slug.value ? adjacentChapters(slug.value) : {}));
 
@@ -140,7 +142,17 @@ watch(
         </p>
       </div>
       <p v-else-if="markdown === undefined" class="text-slate-400">Loading…</p>
-      <div v-else class="prose-rite max-w-prose" @click="onDocClick" v-html="html" />
+      <div v-else class="prose-rite max-w-prose">
+        <template v-for="(seg, i) in segments" :key="i">
+          <CodeBlock
+            v-if="seg.kind === 'code'"
+            :code="seg.code"
+            :lang="seg.lang"
+            :mode="seg.mode"
+          />
+          <div v-else @click="onDocClick" v-html="seg.html" />
+        </template>
+      </div>
 
       <nav
         v-if="slug && (neighbors.prev || neighbors.next)"

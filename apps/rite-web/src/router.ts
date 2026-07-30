@@ -1,9 +1,15 @@
 import { createRouter, createWebHistory } from "vue-router";
 import HomeView from "./views/HomeView.vue";
-import DocsView from "./views/DocsView.vue";
-import StudioView from "./views/StudioView.vue";
-import AgentsView from "./views/AgentsView.vue";
-import NotFoundView from "./views/NotFoundView.vue";
+
+/*
+ * Only the landing page is eager. Studio in particular pulls in the whole
+ * playground and its runtime bridge, which a reader who never leaves /docs
+ * should not be made to download.
+ */
+const DocsView = () => import("./views/DocsView.vue");
+const StudioView = () => import("./views/StudioView.vue");
+const AgentsView = () => import("./views/AgentsView.vue");
+const NotFoundView = () => import("./views/NotFoundView.vue");
 
 export const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),

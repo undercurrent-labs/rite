@@ -35,7 +35,7 @@ If Run shows a clear error about capabilities or “native host”, switch to lo
 
 In [Studio](/studio):
 
-```rite
+```rite browser
 ◆ square(n) ⟦
   ^ n * n
 ⟧

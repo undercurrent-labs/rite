@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import CopyBlock from "../components/CopyBlock.vue";
+import CodeBlock from "../components/CodeBlock.vue";
 import { useLatestTag } from "../lib/release";
 
 /** Site static files (must be real assets in dist — not SPA HTML). */
@@ -35,7 +35,6 @@ rite vscode download --out ./rite.vsix`;
 const updateSnippet = `rite update --check
 rite update`;
 
-const PRE = "overflow-x-auto rounded-lg bg-black/40 p-3 pr-16 text-rite-green";
 </script>
 
 <template>
@@ -61,19 +60,19 @@ const PRE = "overflow-x-auto rounded-lg bg-black/40 p-3 pr-16 text-rite-green";
       <div class="mt-4 space-y-4 font-mono text-sm">
         <div>
           <p class="mb-1 text-xs text-rite-muted">CLI (+ LSP)</p>
-          <CopyBlock :code="cliSnippet" :pre-class="PRE" />
+          <CodeBlock :code="cliSnippet" lang="bash" />
         </div>
         <div>
           <p class="mb-1 text-xs text-rite-muted">Agent skill (Grok / Claude / Cursor)</p>
-          <CopyBlock :code="skillSnippet" :pre-class="PRE" />
+          <CodeBlock :code="skillSnippet" lang="bash" />
         </div>
         <div>
           <p class="mb-1 text-xs text-rite-muted">VS Code / Cursor extension</p>
-          <CopyBlock :code="vscodeSnippet" :pre-class="PRE" />
+          <CodeBlock :code="vscodeSnippet" lang="bash" />
         </div>
         <div>
           <p class="mb-1 text-xs text-rite-muted">Self-update (CLI + skill freshness)</p>
-          <CopyBlock :code="updateSnippet" :pre-class="PRE" />
+          <CodeBlock :code="updateSnippet" lang="bash" />
         </div>
       </div>
     </section>

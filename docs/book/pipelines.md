@@ -6,7 +6,7 @@ Pipelines are the main way to transform collections and values without nested ca
 
 **The value on the left becomes the first argument** of the call on the right.
 
-```rite
+```rite browser
 xs ← [1, 2, 3, 4, 5, 6]
 
 result ← xs
@@ -42,7 +42,7 @@ These names are available as pipeline-friendly builtins (collection-oriented):
 | `sort` / related | Ordering helpers where implemented |
 | `flatten` | Nested lists → flat |
 
-```rite
+```rite browser
 words ← ["alpha", "beta", "gamma"]
 ! @console.println(words → count)
 ```
@@ -64,7 +64,7 @@ summary ← rows
 
 When the piped value should **not** be the first argument, use `$`:
 
-```rite
+```rite browser
 // Conceptual: pass piped value as a later argument
 // value → some_fn(fixed, $, other)
 ```
@@ -98,7 +98,7 @@ Useful for debugging: print an intermediate list before the next stage.
 
 Some stages accept scalars or records depending on the function. When in doubt, keep pipelines on **lists** and use ordinary calls for scalars:
 
-```rite
+```rite browser
 n ← 12
 ! @console.println(str(n * n))
 ```
@@ -117,7 +117,7 @@ Pipelines work offline in [Studio](/studio) for pure data (no FS). Paste the eve
 
 `→` binds **tighter than the operators**, so a pipeline's result is an ordinary operand:
 
-```rite
+```rite browser
 xs ← [1, 2, 3]
 xs → count > 2        // (xs → count) > 2   → true
 xs → sum + 1          // (xs → sum) + 1     → 7

@@ -17,7 +17,7 @@ Rite is dynamically typed at runtime. Values are simple, JSON-adjacent, and desi
 | **function** | `◆ f(x) ⟦ ^ x ⟧` | Closures and defs |
 | **result** | `ok(v)`, `err(e)` | Success / failure (see [Results](results.md)) |
 
-```rite
+```rite browser
 name ← "Aura"
 score ← 42
 pi ← 3.14
@@ -39,7 +39,7 @@ rec <- <<name: name, score: score>>
 `..other` pours an existing record into the one being built. Entries flow left to
 right and **later ones win**, so a spread reads as "start from this, then override":
 
-```rite
+```rite browser
 base ← ⟨host: "localhost", port: 80, tls: false⟩
 prod ← ⟨..base, port: 443, tls: true⟩
 // ⟨host: "localhost", port: 443, tls: true⟩
@@ -73,7 +73,7 @@ Compare with `=` / `!=`. Match on them with `~` / `match` (next chapters).
 
 ## Strings
 
-```rite
+```rite browser
 a ← "hello"
 b ← " " + "world"
 ! @console.println(a + b)
@@ -87,7 +87,7 @@ b ← " " + "world"
 
 `{name}` inside a double-quoted string is replaced by that binding's value:
 
-```rite
+```rite browser
 name ← "Aura"
 n ← 3
 ! @console.println("hi {name}, you have {n}")
@@ -110,7 +110,7 @@ A doubled brace means the same thing: `{{` produces one `{`, so `"{{ mustache }}
 text `{ mustache }`. `rite fmt` prints the doubled spelling, so a `\{` you wrote comes
 back as `{{`; both mean a literal brace and both re-read identically.
 
-```rite
+```rite browser
 ! @console.println("literal \{name} stays as written")
 ```
 
@@ -125,14 +125,14 @@ back as `{{`; both mean a literal brace and both re-read identically.
 Use a raw string for anything full of braces or backslashes that should not be touched —
 a regex, a Windows path, a template:
 
-```rite
+```rite browser
 pattern ← r"\d+"
 tpl ← r"{name} is not substituted here"
 ```
 
 ## Lists
 
-```rite
+```rite browser
 xs ← [1, 2, 3]
 ys ← ["a", "b"]
 empty ← []
@@ -142,7 +142,7 @@ Lists are the workhorse of [pipelines](pipelines.md): `map`, `keep`, `sum`, `cou
 
 ## Records
 
-```rite
+```rite browser
 user ← ⟨
   id: 1,
   name: "Aura",
@@ -163,7 +163,7 @@ user ← ⟨
 
 Glyph conditional uses `?` (ASCII `if`):
 
-```rite
+```rite browser
 score ← 42
 label ← ? score > 0 ⟦ #ok ⟧ : ⟦ #nope ⟧
 ! @console.println(label)
@@ -192,7 +192,7 @@ Common operators:
 - Membership: `∈` / `in`, `∉` / `not in`
 - Coalesce: `??` — use right side if left is `none` (and similar absence cases)
 
-```rite
+```rite browser
 x ← none
 y ← x ?? 10
 ! @console.println(y)   // 10
@@ -202,7 +202,7 @@ y ← x ?? 10
 
 `@console.println` shows a human-readable form of structured values. For string building, prefer `str(...)`.
 
-```rite
+```rite browser
 ! @console.println(⟨a: 1⟩)
 ! @console.println("a=" + str(1))
 ```

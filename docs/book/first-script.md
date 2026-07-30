@@ -6,7 +6,7 @@ This chapter gets you from empty file to printed output, then shows glyph vs ASC
 
 Create `hello.rite`:
 
-```rite
+```rite browser
 ! @console.println("hello, rite")
 ```
 
@@ -30,7 +30,7 @@ Console is allowed by default, so you usually do **not** need `--allow-all` for 
 
 Put a shebang on line 1, then `chmod +x`:
 
-```rite
+```rite browser
 #!/usr/bin/env rite
 ! @console.println("direct exec")
 ```
@@ -52,7 +52,7 @@ Permissions match `rite run`: grant host access on the shebang with `env -S` whe
 
 ASCII form of the same program:
 
-```rite
+```rite browser
 do host.console.println("hello, rite")
 ```
 
@@ -62,7 +62,7 @@ rite fmt --ascii hello.rite --stdout
 
 ## A slightly longer script
 
-```rite
+```rite browser
 // hello.rite
 ! @console.println("hello, rite")
 

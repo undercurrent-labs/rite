@@ -13,6 +13,60 @@ body {
   color: #e2e8f0;
 }
 
+/*
+ * Syntax highlighting palette.
+ *
+ * Cyberpunk, but every colour is checked against the panel background
+ * (#121821) at 4.5:1 or better — a neon theme that cannot be read is just a
+ * screenshot. Sigils get the accent treatment because they are the language's
+ * signature; the faint glow is the one purely decorative touch here.
+ */
+.tok-comment {
+  color: #8b9bb4;
+  font-style: italic;
+}
+.tok-string {
+  color: #c3e88d;
+}
+.tok-number {
+  color: #f78c6c;
+}
+.tok-atom {
+  color: #ff7edb;
+}
+.tok-capability {
+  color: #7ee0ff;
+}
+.tok-capability-fn {
+  color: #a9e9ff;
+}
+.tok-keyword {
+  color: #c792ea;
+}
+.tok-operator {
+  color: #89ddff;
+}
+.tok-http {
+  color: #ffcb6b;
+  font-weight: 500;
+}
+.tok-punctuation {
+  color: #8b9bb4;
+}
+.tok-plain {
+  color: #e2e8f0;
+}
+.tok-sigil {
+  color: #ff7edb;
+  text-shadow: 0 0 10px rgb(255 126 219 / 45%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tok-sigil {
+    text-shadow: none;
+  }
+}
+
 /* Markdown docs */
 .prose-rite {
   @apply text-slate-300 leading-relaxed;

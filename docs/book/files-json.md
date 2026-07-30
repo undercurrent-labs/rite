@@ -4,7 +4,7 @@ Most automation scripts read files, parse structured data, transform records, an
 
 ## JSON encode / decode
 
-```rite
+```rite browser
 data ← ⟨hello: "world", n: 1⟩
 text ← @json.encode(data)
 ! @console.println(text)
@@ -25,7 +25,7 @@ rite run examples/03-files-and-json/main.rite --allow-all
 
 ## Reading files
 
-```rite
+```rite native_only
 text ← ! @fs.read("data/config.json")?
 cfg ← @json.decode(text)?
 host ← cfg.host ?? "localhost"
@@ -42,7 +42,7 @@ rite run app.rite --allow-all
 
 ## Writing files
 
-```rite
+```rite native_only
 out ← @json.encode(⟨ok: true, count: 3⟩)
 ! @fs.write("output/result.json", out)
 ```
@@ -55,7 +55,7 @@ rite run app.rite --allow fs:write=./output
 
 ## Typical pipeline
 
-```rite
+```rite native_only
 // 1. read
 raw ← ! @fs.read("input.json")?
 
@@ -76,7 +76,7 @@ Keep steps 3 pure when you can — easier to test in Studio without FS.
 
 ## CSV encode / decode
 
-```rite
+```rite browser
 rows ← [
   ⟨name: "Ada", age: "36"⟩,
   ⟨name: "Bob", age: "42"⟩
@@ -123,7 +123,7 @@ rite run examples/csv/main.rite --allow-all
 
 ## Errors
 
-```rite
+```rite native_only
 outcome ← ! @fs.read("missing.txt")
 
 ~ outcome ⟦
@@ -134,7 +134,7 @@ outcome ← ! @fs.read("missing.txt")
 
 Or linear style:
 
-```rite
+```rite native_only
 text ← ! @fs.read("missing.txt")?   // propagates err
 ```
 

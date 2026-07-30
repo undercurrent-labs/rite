@@ -8,7 +8,7 @@ Rite can serve HTTP with a small Sinatra-style DSL under `@http.listen`. Handler
 
 Save as `health.rite`:
 
-```rite
+```rite browser
 @http.listen "127.0.0.1:4040" ⟦
   GET "/health" ⟦
     ^ 200 ⟨status: #ok⟩
@@ -18,7 +18,7 @@ Save as `health.rite`:
 
 ASCII form (same program):
 
-```rite
+```rite browser
 host.http.listen "127.0.0.1:4040" [[
   GET "/health" [[
     return 200 <<status: :ok>>
@@ -52,7 +52,7 @@ Stop the server with **Ctrl-C**. The process **blocks** until then (that is expe
 
 The juxta form used above:
 
-```rite
+```rite browser
 ^ 200 ⟨status: #ok⟩
 ```
 
@@ -60,7 +60,7 @@ means **HTTP status `200`** and **JSON body** `{"status":"ok"}` (the atom `#ok` 
 
 Equivalent explicit form:
 
-```rite
+```rite browser
 ^ ⟨status: 200, body: ⟨ok: true⟩⟩
 ```
 
@@ -72,7 +72,7 @@ Equivalent explicit form:
 
 ### Port `0` (ephemeral)
 
-```rite
+```rite browser
 @http.listen "127.0.0.1:0" ⟦
   GET "/health" ⟦
     ^ 200 ⟨status: #ok⟩
@@ -90,7 +90,7 @@ Use that URL with `curl`. Prefer a fixed port while learning.
 
 ## Routes and params
 
-```rite
+```rite browser
 @http.listen "127.0.0.1:4040" ⟦
   use @http.log          // or glyph: ⊏ @http.log
   use @http.recover      // or glyph: ⊏ @http.recover
@@ -127,7 +127,7 @@ Declaration order is **outer-first** (first `use` runs first). Built-ins and cus
 
 Handler `! @console.println(...)` writes to the **server process stdout** (flushed after each request). That is separate from the access log on stderr.
 
-```rite
+```rite browser
 @http.listen "127.0.0.1:4040" ⟦
   ⊏ @http.log
   ⊏ @http.recover
@@ -148,7 +148,7 @@ rite run examples/07-http-service/main.rite --allow-all
 
 Closures receive the request and a **`next`** callable. Call `next(req)` to run the rest of the chain (more middleware + the route). Return a status/body **without** calling `next` to short-circuit (typical for auth failures).
 
-```rite
+```rite browser
 @http.listen "127.0.0.1:4040" ⟦
   use @http.log
   use @http.recover
@@ -222,7 +222,7 @@ rite run server.rite --allow net=0.0.0.0
 rite run fetch.rite --allow net=api.example.com
 ```
 
-```rite
+```rite native_only
 resp ← ! @http.get("https://api.example.com/v1/status")?
 ! @console.println(str(resp.status))
 
@@ -232,13 +232,13 @@ body ← resp.json?
 
 A record body is sent as JSON; a string is sent verbatim:
 
-```rite
+```rite native_only
 resp ← ! @http.post("https://api.example.com/items", ⟨name: "aura"⟩)?
 ```
 
 `@http.request` takes the whole request as a record when you need a method or headers:
 
-```rite
+```rite native_only
 resp ← ! @http.request(⟨
   method: "PUT",
   url: "https://api.example.com/items/1",

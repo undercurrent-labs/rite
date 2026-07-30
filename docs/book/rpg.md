@@ -21,7 +21,7 @@ ASCII twin: `examples/text-rpg/game.ascii.rite`.
 
 ## Register content
 
-```rite
+```rite browser
 ! @game.register_item(#glyph_key, ⟨
   name: "Violet Glyph Key",
   weight: 1
@@ -70,7 +70,7 @@ msgs ← @game.messages()
 
 ## Save / load
 
-```rite
+```rite browser
 save ← @game.save()?
 ! @console.println("saved")
 ! @game.load(save)?
@@ -91,7 +91,7 @@ Save returns a **result** — use `?` or match. Persist the payload with `@fs.wr
 
 Keep narrative logic in functions:
 
-```rite
+```rite browser
 ◆ describe_exit(dir, place) ⟦
   // pure helper for custom UIs (`room` is a reserved keyword)
   ^ dir + " -> " + place

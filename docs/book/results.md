@@ -11,7 +11,7 @@ Exceptions are not the primary control model. You either:
 
 ## Creating results
 
-```rite
+```rite browser
 // Fallible host ops produce results (ok/err). Prefer matching tags or `?`:
 status ← #ok
 label ← ~ status ⟦
@@ -26,7 +26,7 @@ Error payloads from the host are often **records** with machine-readable fields 
 
 ## Postfix `?` (unwrap or early return)
 
-```rite
+```rite native_only
 // If left is ok(v), the expression yields v
 // If left is err(e), the current function/script returns that err
 text ← ! @fs.read("config.json")?
@@ -72,7 +72,7 @@ For **results**, prefer `?` or match — don’t confuse `none` with `err`.
 
 Request JSON is often fallible:
 
-```rite
+```rite browser
 POST "/sum" |req| ⟦
   payload ← req.json?
   numbers ← payload.numbers ?? []

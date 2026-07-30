@@ -6,7 +6,7 @@ Functions are first-class values: define them, pass them to pipelines, return th
 
 Glyph:
 
-```rite
+```rite browser
 ◆ square(n) ⟦
   ^ n * n
 ⟧
@@ -16,7 +16,7 @@ Glyph:
 
 ASCII:
 
-```rite
+```rite browser
 def square(n) [[
   return n * n
 ]]
@@ -36,7 +36,7 @@ do host.console.println(str(square(4)))
 2. The **last expression** in a block can also act as the result when you structure bodies that way — explicit `^` is clearer for readers and early exits.
 3. **Multi-value return** (HTTP handlers): juxta expressions after `^` become a list, e.g. `^ 200 ⟨status: #ok⟩` → `[200, ⟨status: #ok⟩]`. Keep status/body on the same return statement; don’t put unrelated following statements on the juxta list.
 
-```rite
+```rite browser
 ◆ abs(n) ⟦
   ? n < 0 ⟦
     ^ -n
@@ -47,7 +47,7 @@ do host.console.println(str(square(4)))
 
 ## Multiple parameters
 
-```rite
+```rite browser
 ◆ add(a, b) ⟦
   ^ a + b
 ⟧
@@ -59,7 +59,7 @@ do host.console.println(str(square(4)))
 
 Functions close over bindings from outer scopes:
 
-```rite
+```rite browser
 factor ← 10
 ◆ scale(n) ⟦
   ^ n * factor
@@ -70,7 +70,7 @@ factor ← 10
 
 Pipeline stages often use **block lambdas**:
 
-```rite
+```rite browser
 xs ← [1, 2, 3, 4]
 ys ← xs → map { |n| n * n }
 ! @console.println(ys)
@@ -82,7 +82,7 @@ The `{ |args| body }` form is the small anonymous function used by `map`, `keep`
 
 Non-exported helpers are just functions without `pub` (modules) or **nested defs** inside a function body. Nested `◆` / `def` bind in the enclosing block and close over outer parameters:
 
-```rite
+```rite browser
 ◆ area(w, h) ⟦
   ◆ clamp(n) ⟦
     ? n < 0 ⟦ ^ 0 ⟧
@@ -97,7 +97,7 @@ Non-exported helpers are just functions without `pub` (modules) or **nested defs
 
 ASCII:
 
-```rite
+```rite browser
 def area(w, h) [[
   def clamp(n) [[
     if n < 0 [[
@@ -111,7 +111,7 @@ def area(w, h) [[
 
 You can also **return** a nested function (it keeps its capture):
 
-```rite
+```rite browser
 ◆ make_adder(n) ⟦
   ◆ add(x) ⟦ ^ x + n ⟧
   ^ add
@@ -145,7 +145,7 @@ Trailing-block call sugar exists for some forms (e.g. `keep { … }` in pipeline
 
 If a function performs host I/O, mark those calls with `!` / `do`:
 
-```rite
+```rite browser
 ◆ greet(name) ⟦
   ! @console.println("hi " + name)
   ^ none
@@ -158,7 +158,7 @@ Permission checks still apply at the host boundary.
 
 ## Public functions (modules)
 
-```rite
+```rite browser
 // math.rite
 pub ◆ square(value) ⟦
   ^ value * value
@@ -172,7 +172,7 @@ Only `pub` items are imported by `use` — see [Modules](modules.md).
 A `///` comment directly above a declaration is its documentation. A `//!` comment at the
 top of the file documents the file itself.
 
-```rite
+```rite browser
 //! Geometry helpers.
 
 /// Area of a circle.

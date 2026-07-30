@@ -4,7 +4,7 @@ Matching turns values into control flow and bindings. Glyph form uses `~`; ASCII
 
 ## Basic match
 
-```rite
+```rite browser
 status ← #ok
 
 msg ← ~ status ⟦
@@ -41,7 +41,7 @@ error, not a style choice:
 
 Write it across lines instead:
 
-```rite
+```rite browser
 ~ #ok ⟦
   #ok → 1
   _ → 2
@@ -50,7 +50,7 @@ Write it across lines instead:
 
 ## Atoms and literals
 
-```rite
+```rite browser
 code ← 200
 label ← ~ code ⟦
   200 → #ok
@@ -61,7 +61,7 @@ label ← ~ code ⟦
 
 ## List destructuring
 
-```rite
+```rite browser
 pair ← [1, 2, 3]
 
 head ← ~ pair ⟦
@@ -79,7 +79,7 @@ head ← ~ pair ⟦
 
 Match structure and pull fields (syntax as supported by the matcher — field patterns and nested forms):
 
-```rite
+```rite browser
 user ← ⟨name: "Aura", role: #admin⟩
 
 title ← ~ user ⟦
@@ -93,7 +93,7 @@ Prefer simple field access when you don’t need multi-way branching: `user.name
 
 ## Nested match
 
-```rite
+```rite browser
 event ← ⟨kind: #click, x: 10⟩
 
 ~ event ⟦
@@ -108,7 +108,7 @@ event ← ⟨kind: #click, x: 10⟩
 Host and fallible ops return results. The patterns are **juxtaposed, not called** —
 `ok value`, never `ok(value)`, even though `ok(value)` is how you *construct* one:
 
-```rite
+```rite browser
 outcome ← ok(⟨n: 7⟩)
 
 text ← ~ outcome ⟦

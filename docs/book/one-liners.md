@@ -78,7 +78,7 @@ rite run /tmp/sum.rite
 
 ### Glyph examples
 
-```rite
+```rite browser
 // sum of squares of even numbers
 ! @console.println(str(
   [1, 2, 3, 4, 5, 6]
@@ -88,14 +88,14 @@ rite run /tmp/sum.rite
 ))
 ```
 
-```rite
+```rite browser
 // record merge for config layers
 defaults ← ⟨host: "localhost", port: 8080, debug: false⟩
 overrides ← ⟨port: 9090⟩
 ! @console.println(defaults + overrides)
 ```
 
-```rite
+```rite browser
 // match on a status atom
 msg ← ~ #ok ⟦
   #ok → "ready"
@@ -105,7 +105,7 @@ msg ← ~ #ok ⟦
 ! @console.println(msg)
 ```
 
-```rite
+```rite browser
 // JSON in memory (no FS)
 data ← ⟨hello: "world", n: 1⟩
 ! @console.println(@json.encode(data))
@@ -113,7 +113,7 @@ data ← ⟨hello: "world", n: 1⟩
 
 ### ASCII equivalents
 
-```rite
+```rite browser
 do host.console.println(str(
   [1, 2, 3, 4]
     -> keep { |n| n % 2 = 0 }
@@ -133,7 +133,7 @@ rite fmt --ascii /tmp/sum.rite --stdout
 
 ### 1. Summarize a list of numbers
 
-```rite
+```rite browser
 nums ← [12, 7, 99, 3, 40]
 ! @console.println("count=" + str(nums → count))
 ! @console.println("sum=" + str(nums → sum))
@@ -141,7 +141,7 @@ nums ← [12, 7, 99, 3, 40]
 
 ### 2. Filter + map text-ish tokens
 
-```rite
+```rite browser
 words ← ["alpha", "beta", "gamma", "δ"]
 // keep short names
 short ← words → keep { |w| (w → count) <= 4 }
@@ -154,7 +154,7 @@ is one, not two.
 
 ### 3. Read JSON file (needs FS)
 
-```rite
+```rite native_only
 raw ← ! @fs.read("data/input.json")?
 doc ← @json.decode(raw)?
 ! @console.println(doc)
@@ -166,7 +166,7 @@ rite run job.rite --allow fs:read=./data
 
 ### 4. Write a report JSON
 
-```rite
+```rite native_only
 report ← ⟨ok: true, total: 42⟩
 ! @fs.write("out/report.json", @json.encode(report))
 ```
@@ -177,7 +177,7 @@ rite run job.rite --allow fs:write=./out
 
 ### 5. Tiny HTTP health server
 
-```rite
+```rite browser
 @http.listen "127.0.0.1:4040" ⟦
   GET "/health" ⟦
     ^ 200 ⟨status: #ok⟩

@@ -19,7 +19,7 @@ rite run script.rite --allow db=./data
 
 ## Open / close
 
-```rite
+```rite browser
 conn ← ! @db.open()?              // in-memory
 // conn ← ! @db.open(":memory:")?
 // conn ← ! @db.open("./data/app.duckdb")?   // needs --allow db=./data
@@ -31,7 +31,7 @@ conn ← ! @db.open()?              // in-memory
 
 ## Exec and query
 
-```rite
+```rite browser
 conn ← ! @db.open()?
 ! @db.exec(conn, "CREATE TABLE events(id INTEGER, name VARCHAR)")?
 ! @db.exec(conn, "INSERT INTO events VALUES (1, 'boot'), (2, 'tick')")?
@@ -70,7 +70,7 @@ rows ← ! @db.query_prepared(stmt_select, [3])?   // if prepared as SELECT
 
 You can load CSV via `@csv` then insert, or use DuckDB’s own readers when the path is allowed under `--allow db=…`:
 
-```rite
+```rite native_only
 // Pure Rite path
 rows ← ! @csv.read("data/events.csv")?
 // … insert into @db …
