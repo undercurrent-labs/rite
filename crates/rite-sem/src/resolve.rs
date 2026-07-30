@@ -343,7 +343,19 @@ impl Resolver {
             }
             Item::Event(e) => self.resolve_event(e, file),
             Item::Import(_) => {}
-            Item::Data(_) => {}
+            // `◆ Cfg ⟨a: 1⟩` lowers to a binding of the record, so the name has to be
+            // defined here or every use reports E020. Bound *in order* rather than
+            // hoisted like a function: desugar emits it as a top-level statement, so a
+            // use above the declaration genuinely has no value yet. Declaring it in the
+            // first pass instead would let the resolver accept that and leave it to fail
+            // at runtime. Fields resolve before the name is bound, so a field cannot
+            // reference the declaration itself.
+            Item::Data(d) => {
+                for entry in &d.fields {
+                    self.resolve_expr(&entry.value, file, false);
+                }
+                self.define(&d.name.name, false, d.name.span, file);
+            }
         }
     }
 
@@ -785,6 +797,35 @@ mod tests {
             "expected E021 for `{}`, got {:#?}",
             src.trim(),
             diags.into_vec()
+        );
+    }
+
+    // ---- data declarations -------------------------------------------------
+
+    #[test]
+    fn data_declaration_binds_its_name() {
+        // `Item::Data` used to be skipped entirely, so any use of the name was E020
+        // even though desugar emitted a binding for it.
+        assert_ok("◆ Cfg ⟨a: 1, b: \"x\"⟩\n! @console.println(str(Cfg))");
+        assert_ok("def Cfg <<n: 5>>\ndef f() [[ ^ Cfg.n * 2 ]]\n! @console.println(str(f()))");
+    }
+
+    #[test]
+    fn data_declaration_fields_are_still_resolved() {
+        assert_eq!(
+            codes("◆ Cfg ⟨a: missing_name⟩"),
+            vec![E020_UNDEFINED_NAME.to_string()]
+        );
+    }
+
+    #[test]
+    fn data_declaration_is_bound_in_order_not_hoisted() {
+        // Desugar emits the binding as a top-level statement, so a use above the
+        // declaration has no value yet. Reject it here rather than letting it reach
+        // the runtime as "undefined name" — functions hoist, records do not.
+        assert_eq!(
+            codes("! @console.println(str(Later))\n◆ Later ⟨v: 7⟩"),
+            vec![E020_UNDEFINED_NAME.to_string()]
         );
     }
 
