@@ -17,7 +17,15 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        # Windows is opt-in, not gone. It takes ~36 minutes against ~10 for the others and
+        # gates nothing anyone is currently shipping on, so it does not run on push or PR.
+        # Everything that made it pass — paths written as raw strings, POSIX-only fixtures
+        # replaced, separator-neutral assertions, the `bash`-is-really-WSL guard — stays,
+        # so turning it back on is one click rather than another afternoon.
+        #
+        #   Actions → CI → Run workflow      (includes Windows)
+        #   gh workflow run ci.yml --ref <branch>
+        os: ${{ github.event_name == 'workflow_dispatch' && fromJSON('["ubuntu-latest", "macos-latest", "windows-latest"]') || fromJSON('["ubuntu-latest", "macos-latest"]') }}
     steps:
       # Line endings are pinned by .gitattributes, so the Windows runner does not
       # rewrite every file on checkout and make the generation guard below see the
@@ -42,18 +50,12 @@ jobs:
       # runs each surfaced exactly one more problem — at 36 minutes a run, that is a
       # whole afternoon spent discovering things one machine already knew.
       #
-      # Advisory on Windows, blocking everywhere else. Every Windows failure so far has
-      # been the suite being unportable rather than Rite being broken — a path in a Rite
-      # string, POSIX-only fixtures, a `/` in an assertion, `bash` resolving to the WSL
-      # stub — and each one cost a 36-minute round trip to find one at a time.
-      #
-      # This is a real trade: a genuine Windows regression caught only by a test would now
-      # report without blocking. `fmt`, `clippy` and the debug build stay blocking on
-      # Windows, so a compile or lint break there still fails CI. Read the Windows test
-      # log before a release rather than trusting the green tick. (Note the clippy comment
-      # above: `continue-on-error` has already hidden a broken step in this file once.)
+      # Blocking on every platform in the matrix, Windows included. It was advisory while
+      # it ran on every push and its failures were all unportable *tests* rather than a
+      # broken Rite; now that it only runs when someone asks for it, a masked result would
+      # defeat the point of asking. (See the clippy comment above: `continue-on-error` has
+      # already hidden a broken step in this file once.)
       - name: test
-        continue-on-error: ${{ runner.os == 'Windows' }}
         run: cargo test --workspace --all-features --no-fail-fast
       # Shells out to scripts/package-*.sh; the release archives are produced on Linux.
       - name: packaging gate (skill archives)

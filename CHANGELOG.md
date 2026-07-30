@@ -100,7 +100,11 @@ explicitly with `@random.seed(n)`.
 - The LSP no longer advertises semantic tokens or `execute_command` — declaring the former
   while returning nothing made editors drop their TextMate grammar.
 - CI: clippy is a hard gate (it had `continue-on-error` and a command cargo rejected),
-  `deploy` requires the Rust job, and the matrix covers macOS and Windows.
+  `deploy` requires the Rust job, and every test binary runs before a failure is reported
+  (`--no-fail-fast`) — without it a platform-specific break surfaced one failure per run.
+  Linux and macOS run on push and PR; Windows is opt-in via **Run workflow**, since it
+  takes ~36 minutes and its every failure so far was an unportable test rather than a
+  broken Rite. The fixes that made it pass are all still in place.
 
 ### Fixed
 
