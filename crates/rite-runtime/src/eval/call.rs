@@ -28,6 +28,34 @@ impl<'a> Evaluator<'a> {
                 self.ctx.env = saved;
                 r
             }
+            // Same contract as the interpreted arm above: run in the captured environment,
+            // extended with a fresh frame for the parameters. `ensure_globals_from` and the
+            // shared frames are what let a compiled `{ |n| total := total + n }` assign
+            // through to the scope that defined `total`.
+            Value::NativeClosure(c) => {
+                if c.params.len() != args.len() {
+                    self.ctx.call_depth -= 1;
+                    return Err(EvalError::Message(format!(
+                        "arity mismatch: expected {} args, got {}",
+                        c.params.len(),
+                        args.len()
+                    )));
+                }
+                let mut captured = c.env.read().clone();
+                captured.ensure_globals_from(&self.ctx.env);
+                let saved = std::mem::replace(&mut self.ctx.env, captured);
+                // The generated function pushes its own frame and binds its parameters,
+                // the way `call_block` does for an interpreted body — it knows the local
+                // ids, which are not in `params`.
+                let r = (c.func)(self.ctx, args).await;
+                self.ctx.env = saved;
+                // `^` inside a closure body ends the closure, as it does for an
+                // interpreted one.
+                match r {
+                    Err(EvalError::Return(v)) => Ok(v),
+                    other => other,
+                }
+            }
             Value::NativeName(name) => {
                 // Indirection avoids infinitely sized async future (call_value ↔ map/each).
                 let name = name.clone();

@@ -14,6 +14,7 @@ pub fn generate_from_ir(ir: &ProgramIr, source_path: &Path) -> Result<String, St
     out.push_str(&format!("// rite: {}\n", source_path.display()));
     out.push_str("// Source map: IR node spans retained inside embedded ProgramIr JSON.\n\n");
     out.push_str("use rite_runtime::{Key, RuntimeContext, Value, EvalError};\n");
+
     out.push_str("use rite_sem::ProgramIr;\n\n");
 
     out.push_str("fn embedded_ir() -> ProgramIr {\n");
@@ -43,10 +44,11 @@ pub fn generate_from_ir(ir: &ProgramIr, source_path: &Path) -> Result<String, St
     // top-level statements compiled, a `fib(24)` binary ran in exactly the interpreter's
     // 778ms, because the call was compiled and the body it called was not.
     let (compiled, fn_fallbacks) = crate::lower::survey(ir);
+    let mut bodies = String::new();
     for f in &ir.functions {
         if let Ok(code) = crate::lower::function(f, &compiled) {
-            out.push_str(&code);
-            out.push('\n');
+            bodies.push_str(&code);
+            bodies.push('\n');
         }
     }
 
@@ -81,6 +83,14 @@ pub fn generate_from_ir(ir: &ProgramIr, source_path: &Path) -> Result<String, St
     // A `^` at the top level is the script's value, not an error.
     out.push_str("    match __r { Err(EvalError::Return(v)) => Ok(v), other => other }\n");
     out.push_str("}\n\n");
+
+    // Closure bodies hoisted during lowering, then the compiled functions. Emitted after
+    // `rite_main` because lowering the statements is what discovers them.
+    for code in compiled.take_hoisted() {
+        out.push_str(&code);
+        out.push('\n');
+    }
+    out.push_str(&bodies);
 
     out.push_str(&format!(
         "// backend: {} of {} top-level statements and {} of {} functions lowered to Rust\n",

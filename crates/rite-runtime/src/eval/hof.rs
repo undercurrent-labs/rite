@@ -87,9 +87,7 @@ impl<'a> Evaluator<'a> {
         let mut out = im::Vector::new();
         for item in list {
             let mapped = match &f {
-                Value::Function(_) | Value::NativeFunction(_) => {
-                    self.call_value(f.clone(), vec![item]).await?
-                }
+                _ if f.is_callable() => self.call_value(f.clone(), vec![item]).await?,
                 Value::None => item,
                 other => {
                     // If f is not a function, treat as identity error
@@ -207,7 +205,7 @@ impl<'a> Evaluator<'a> {
         for item in list {
             let key = match &key_fn {
                 Some(Value::String(s)) => item.get_field(s).to_string(),
-                Some(Value::Function(_)) => {
+                Some(f) if f.is_callable() => {
                     let k = self
                         .call_value(key_fn.clone().unwrap(), vec![item.clone()])
                         .await?;

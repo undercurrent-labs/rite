@@ -23,12 +23,58 @@ use rite_sem::{
 use std::collections::HashSet;
 use std::fmt::Write as _;
 
-/// Names of the functions emitted as real Rust, so a call to one becomes a direct Rust
-/// call rather than a trip through the interpreter's closure machinery. That indirection
-/// is where the time goes: without it a compiled `fib(24)` ran in exactly the same 778ms
-/// as the interpreter, because only the top-level call was compiled and the body — where
-/// the work is — was not.
-pub type Compiled = HashSet<String>;
+/// Lowering context: which functions were compiled, plus the closure bodies hoisted out
+/// during lowering.
+///
+/// A call to a compiled function becomes a direct Rust call rather than a trip through the
+/// interpreter's closure machinery — that indirection is where the time goes. Without it a
+/// compiled `fib(24)` ran in exactly the same 778ms as the interpreter.
+///
+/// Closure bodies cannot be emitted inline (Rust has no expression-position `async fn`
+/// returning a boxed future), so they are hoisted to module level and referenced by name.
+#[derive(Default)]
+pub struct Compiled {
+    names: HashSet<String>,
+    hoisted: std::cell::RefCell<Vec<String>>,
+    next_id: std::cell::Cell<usize>,
+}
+
+impl Compiled {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn contains(&self, name: &str) -> bool {
+        self.names.contains(name)
+    }
+
+    pub fn insert(&mut self, name: String) {
+        self.names.insert(name);
+    }
+
+    pub fn len(&self) -> usize {
+        self.names.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.names.is_empty()
+    }
+
+    /// Park a generated function at module level, returning its name.
+    fn hoist(&self, make: impl FnOnce(&str) -> String) -> String {
+        let id = self.next_id.get();
+        self.next_id.set(id + 1);
+        let name = format!("rite_closure_{id}");
+        let code = make(&name);
+        self.hoisted.borrow_mut().push(code);
+        name
+    }
+
+    /// The hoisted closure bodies, to emit alongside the compiled functions.
+    pub fn take_hoisted(&self) -> Vec<String> {
+        std::mem::take(&mut self.hoisted.borrow_mut())
+    }
+}
 
 /// Why a node could not be lowered. Carries the variant name so the build note is specific.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -315,12 +361,136 @@ pub fn expr(e: &ExprIr, compiled: &Compiled) -> Lowered {
             )
         }
 
+        ExprIr::Closure(c) => closure_value(c, compiled)?,
+
+        // Thread the value through the stages, exactly as `eval_pipeline_stage` does. The
+        // win is not the threading — it is that a closure argument here is now a compiled
+        // body rather than a `BlockIr` the interpreter walks once per element.
+        ExprIr::Pipeline { input, stages, .. } => {
+            let mut out = format!("{{ let mut __v = {};", expr(input, compiled)?);
+            for stage in stages {
+                let _ = write!(out, " __v = {};", pipeline_stage(stage, compiled)?);
+            }
+            out.push_str(" __v }");
+            out
+        }
+
         ExprIr::Match { .. } => return Err(Unsupported("Match")),
-        ExprIr::Closure(_) => return Err(Unsupported("Closure")),
-        ExprIr::Pipeline { .. } => return Err(Unsupported("Pipeline")),
         ExprIr::HttpListen { .. } => return Err(Unsupported("HttpListen")),
-        ExprIr::Assign { .. } => return Err(Unsupported("Assign")),
+        // `n := v` arrives from the desugarer as Assign{ value: Seq[Global(name), value] }.
+        // Assigning through `env.assign` is what makes the write reach the frame that
+        // declared the name, including a frame a closure captured.
+        ExprIr::Assign { value, .. } => {
+            let ExprIr::Seq(parts, _) = value.as_ref() else {
+                return Err(Unsupported("Assign"));
+            };
+            let [ExprIr::Global(name), rhs] = parts.as_slice() else {
+                return Err(Unsupported("Assign"));
+            };
+            format!(
+                "{{ let __v = {}; ctx.env.assign({}, __v.clone()).map_err(EvalError::Message)?; __v }}",
+                expr(rhs, compiled)?,
+                rust_str(name)
+            )
+        }
         ExprIr::Placeholder(_) => return Err(Unsupported("Placeholder")),
+    })
+}
+
+/// A closure as a `Value`, with its body hoisted to a module-level function.
+fn closure_value(c: &rite_sem::ClosureIr, compiled: &Compiled) -> Lowered {
+    let body = block(&c.body, compiled)?;
+    let mut binds = String::new();
+    for (i, (id, name)) in c.params.iter().zip(&c.param_names).enumerate() {
+        let _ = write!(
+            binds,
+            "ctx.env.define({}, rite_sem::LocalId({}), __args.get({i}).cloned().unwrap_or(Value::None), false); ",
+            rust_str(name),
+            id.0
+        );
+    }
+    let fn_name = compiled.hoist(|name| {
+        format!(
+            "fn {name}<'a>(ctx: &'a mut RuntimeContext, __args: Vec<Value>) \
+             -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Value, EvalError>> + Send + 'a>> {{\n    \
+             Box::pin(async move {{\n        \
+             ctx.budget.tick()?;\n        \
+             ctx.env.push_frame();\n        {binds}\n        \
+             let __r: Result<Value, EvalError> = async {{ Ok({body}) }}.await;\n        \
+             ctx.env.pop_frame();\n        __r\n    }})\n}}\n"
+        )
+    });
+    let params: Vec<String> = c
+        .param_names
+        .iter()
+        .map(|p| format!("{}.to_string()", rust_str(p)))
+        .collect();
+    Ok(format!(
+        "rite_runtime::native_closure(vec![{}], ctx, {fn_name})",
+        params.join(", ")
+    ))
+}
+
+/// One pipeline stage applied to `__v`, mirroring `Evaluator::eval_pipeline_stage`.
+fn pipeline_stage(stage: &rite_sem::PipelineStageIr, compiled: &Compiled) -> Lowered {
+    use rite_sem::StageKind;
+    Ok(match &stage.kind {
+        // `xs → map .name` — project a field over a list, or off a single value.
+        StageKind::MemberProjection(field) => format!(
+            "match __v {{ Value::List(__xs) => Value::list(__xs.iter().map(|__x| __x.get_field({f})).collect::<Vec<_>>()), \
+             __other => __other.get_field({f}) }}",
+            f = rust_str(field)
+        ),
+        StageKind::Block | StageKind::Call | StageKind::PlaceholderCall => match &stage.expr {
+            rite_sem::ExprIr::NativeCall { name, args, .. } => {
+                let mut parts = vec!["__v".to_string()];
+                for a in args {
+                    parts.push(expr(a, compiled)?);
+                }
+                format!(
+                    "{{ let __args = vec![{}]; let mut __ev = rite_runtime::Evaluator::new(ctx); \
+                     __ev.call_native_public({}, __args).await? }}",
+                    parts.join(", "),
+                    rust_str(name)
+                )
+            }
+            // A bare name in stage position is a builtin applied to the value.
+            rite_sem::ExprIr::Global(name) => format!(
+                "{{ let __args = vec![__v]; let mut __ev = rite_runtime::Evaluator::new(ctx); \
+                 __ev.call_native_public({}, __args).await? }}",
+                rust_str(name)
+            ),
+            rite_sem::ExprIr::Closure(c) => format!(
+                "{{ let __c = {}; let __args = vec![__v]; \
+                 let mut __ev = rite_runtime::Evaluator::new(ctx); \
+                 __ev.call_value_public(__c, __args).await? }}",
+                closure_value(c, compiled)?
+            ),
+            // `$` marks where the value goes; without one it is prepended.
+            rite_sem::ExprIr::Call { callee, args, .. } => {
+                let mut parts = Vec::new();
+                let mut used_placeholder = false;
+                for a in args {
+                    if matches!(a, rite_sem::ExprIr::Placeholder(_)) {
+                        used_placeholder = true;
+                        parts.push("__v.clone()".to_string());
+                    } else {
+                        parts.push(expr(a, compiled)?);
+                    }
+                }
+                if !used_placeholder {
+                    parts.insert(0, "__v".to_string());
+                }
+                format!(
+                    "{{ let __c = {}; let __args = vec![{}]; \
+                     let mut __ev = rite_runtime::Evaluator::new(ctx); \
+                     __ev.call_value_public(__c, __args).await? }}",
+                    expr(callee, compiled)?,
+                    parts.join(", ")
+                )
+            }
+            _ => return Err(Unsupported("PipelineStage")),
+        },
     })
 }
 

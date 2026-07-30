@@ -121,9 +121,7 @@ fn a_string_literal_is_escaped_for_rust() {
 fn unsupported_nodes_report_what_stopped_them() {
     // The build note is only useful if it names the construct.
     for (src, expected) in [
-        ("[1] → sum", "Pipeline"),
         ("~ 1 ⟦\n  1 → #one\n  _ → #other\n⟧", "Match"),
-        ("{ |x| x }", "Closure"),
         ("! @console.println(\"x\")", "CapabilityCall(@console)"),
     ] {
         match lower_all(src) {
@@ -163,11 +161,11 @@ fn a_survey_separates_lowered_functions_from_fallbacks() {
          pure(1)\n",
     );
     let (ok, fell_back) = lower::survey(&ir);
-    assert!(ok.contains("pure"), "ok: {ok:?}");
-    assert_eq!(
-        fell_back,
-        vec![("piped".to_string(), "Pipeline")],
-        "fallbacks should name the function and the construct"
+    assert!(ok.contains("pure"), "a plain function lowers");
+    assert!(ok.contains("piped"), "a pipeline function lowers too now");
+    assert!(
+        fell_back.is_empty(),
+        "nothing should fall back here: {fell_back:?}"
     );
 }
 

@@ -128,13 +128,14 @@ fn a_record_key_needing_escapes_generates_parseable_rust() {
 fn the_generated_file_declares_what_it_lowered() {
     // The build note is the honest part of the backend: without it, whether a program was
     // compiled or interpreted is invisible until someone benchmarks it.
-    let code = generated("◆ f(n) ⟦ ^ n ⟧\n◆ g(xs) ⟦ ^ xs → sum ⟧\nf(1)");
+    // `g` uses `~`, which still falls back; pipelines no longer do.
+    let code = generated("◆ f(n) ⟦ ^ n ⟧\n◆ g(v) ⟦ ^ ~ v ⟦\n  1 → #one\n  _ → #other\n⟧ ⟧\nf(1)");
     assert!(
         code.contains("// backend:"),
         "no backend summary in the generated file"
     );
     assert!(
-        code.contains("interpreted function `g`: Pipeline"),
+        code.contains("interpreted function `g`: Match"),
         "a fallback function must be named with its reason:\n{code}"
     );
 }

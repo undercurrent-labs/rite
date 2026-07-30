@@ -16,6 +16,8 @@ pub enum Value {
     List(im::Vector<Value>),
     Record(IndexMap<Key, Value>),
     Function(Closure),
+    /// A closure compiled to Rust by `rite build`.
+    NativeClosure(NativeClosure),
     NativeFunction(NativeFnId),
     /// Named pure/host-dispatch builtin resolved at call time (shadowable by locals).
     NativeName(String),
@@ -44,6 +46,38 @@ impl Key {
 impl fmt::Display for Key {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.as_str())
+    }
+}
+
+/// A closure whose body `rite build` compiled to Rust.
+///
+/// Takes the same shape as [`Closure`] — parameters and a captured environment — but
+/// reaches a function pointer instead of a `BlockIr`. Without this a compiled
+/// `→ map { |n| n * 3 }` still interpreted the body once per element, which is where the
+/// time in a pipeline actually goes.
+pub type NativeClosureFn = for<'a> fn(
+    &'a mut crate::RuntimeContext,
+    Vec<Value>,
+) -> std::pin::Pin<
+    Box<dyn std::future::Future<Output = Result<Value, crate::EvalError>> + Send + 'a>,
+>;
+
+#[derive(Clone)]
+pub struct NativeClosure {
+    pub id: u64,
+    pub params: Vec<String>,
+    /// Shared with the defining scope, so `total := total + n` inside the body is still
+    /// visible outside it — the same property `Closure` relies on.
+    pub env: std::sync::Arc<parking_lot::RwLock<crate::env::Environment>>,
+    pub func: NativeClosureFn,
+}
+
+impl std::fmt::Debug for NativeClosure {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("NativeClosure")
+            .field("id", &self.id)
+            .field("params", &self.params)
+            .finish_non_exhaustive()
     }
 }
 
@@ -105,6 +139,22 @@ impl Value {
         !matches!(self, Value::None | Value::Bool(false))
     }
 
+    /// Whether this value can be called.
+    ///
+    /// One definition, because the alternative is what happened: `map` tested for
+    /// `Value::Function` specifically, so a compiled closure was rejected with
+    /// "map expects function, got function" — `type_name` said they were the same kind and
+    /// the match arm disagreed.
+    pub fn is_callable(&self) -> bool {
+        matches!(
+            self,
+            Value::Function(_)
+                | Value::NativeClosure(_)
+                | Value::NativeFunction(_)
+                | Value::NativeName(_)
+        )
+    }
+
     pub fn type_name(&self) -> &'static str {
         match self {
             Value::None => "none",
@@ -115,7 +165,7 @@ impl Value {
             Value::Atom(_) => "atom",
             Value::List(_) => "list",
             Value::Record(_) => "record",
-            Value::Function(_) => "function",
+            Value::Function(_) | Value::NativeClosure(_) => "function",
             Value::NativeFunction(_) => "native",
             Value::NativeName(_) => "native",
             Value::Result(_) => "result",
@@ -213,6 +263,9 @@ impl Value {
                 c.name.as_deref().unwrap_or("anonymous"),
                 c.params.len()
             ),
+            // Indistinguishable from an interpreted closure on purpose: whether a body was
+            // compiled is a build detail, not something a program should be able to see.
+            Value::NativeClosure(c) => format!("<fn anonymous/{}>", c.params.len()),
             Value::NativeFunction(n) => format!("<native {}>", n.0),
             Value::NativeName(n) => format!("<native {}>", n),
             Value::Result(ResultValue::Ok(v)) => format!("ok({})", v.to_display(atoms)),

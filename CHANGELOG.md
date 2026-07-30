@@ -15,13 +15,15 @@
 
   | program | interpreted | compiled | |
   |---------|------------|----------|---|
-  | `fib(24)` — all calls, fully lowered | 782 ms | 153 ms | **5.1×** |
-  | pipelines over `map`/`keep`/`each` | 72 ms | 72 ms | **1.0×** |
+  | `fib(24)` — calls and arithmetic | 771 ms | 150 ms | **5.1×** |
+  | pipelines over `map`/`keep`/`each` | 71 ms | 39 ms | **1.8×** |
 
-  The second number is the honest one for most Rite. `Match`, `Pipeline`, `Closure` and
-  `@console` still fall back to the interpreter, pipelines are idiomatic, and a program
-  built from them gets no improvement at all today. The generated file names what fell
-  back, so this is visible without benchmarking.
+  Pipelines were 1.0× — no improvement whatsoever — until closures compiled too. The
+  remaining gap is that iteration still runs through `builtin_map` and `call_value` per
+  element even when the closure body is compiled; only the body got faster.
+
+  `Match`, `@console` and `@http.listen` still fall back. The generated file names what
+  fell back, so this is visible without benchmarking.
 
   Worth recording how the first number was reached, too: the initial version compiled only
   top-level statements and measured **778 ms against 778 ms** — nothing, because `fib` is a
@@ -32,6 +34,12 @@
   captures the environment, and promoting them without escape analysis would silently break
   capture.
 
+- **Closures and pipelines compile.** A closure body is now a Rust function reached
+  through a new `Value::NativeClosure`, capturing its environment by sharing exactly as an
+  interpreted closure does — so `total := total + n` inside a compiled `each` body still
+  assigns through to the scope that declared `total`. `:=` lowers too; without it an `each`
+  loop driven by a mutable counter fell back and took everything inside it along.
+
 - **`rite build` skips DuckDB when the program never uses `@db`.** It is a `bundled`
   dependency, so including it compiles the whole database from source. Cold builds of a
   one-line script, measured with an empty target directory: **425 s → 265 s** and 12 GB →
@@ -40,6 +48,11 @@
 
 ### Fixed
 
+- **`map` rejected a compiled closure with "map expects function, got function".** It
+  tested for `Value::Function` specifically while `type_name` reported both kinds as
+  `function`, so the message named the same type twice. Callability is now one predicate,
+  `Value::is_callable`, rather than a match arm per site. Caught by checking the compiled
+  program's *output*, not its timing — it had "won" the benchmark by failing in 5 ms.
 - **An atom written through a capability lost its name.** `@fs.write(p, #ok)` put the bytes
   `#0` on disk — the interner index — and `@fs.append`, `@console` and `@game.say` did the
   same. The builtins were fixed in 0.2.0; the capabilities had their own copies of the

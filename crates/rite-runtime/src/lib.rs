@@ -55,6 +55,26 @@ pub async fn run_file(file: &SourceFile, ctx: &mut RuntimeContext) -> Result<Val
 }
 
 /// Evaluate a pre-built ProgramIr (used by compiled binaries and differential tests).
+/// Build a closure value whose body is compiled Rust.
+///
+/// A constructor rather than a struct literal in generated code, so the generated crate
+/// never names `parking_lot` or `Arc` — its manifest lists only what the emitted source
+/// uses directly, and adding a dependency there is a build failure rather than a fallback.
+pub fn native_closure(
+    params: Vec<String>,
+    ctx: &RuntimeContext,
+    func: crate::value::NativeClosureFn,
+) -> Value {
+    Value::NativeClosure(crate::value::NativeClosure {
+        id: crate::eval::next_closure_id(),
+        params,
+        // Captured by sharing, not copying: frames are shared, so an assignment inside the
+        // body still reaches the scope that defined the name.
+        env: std::sync::Arc::new(parking_lot::RwLock::new(ctx.env.clone())),
+        func,
+    })
+}
+
 /// Resolve a bare name the way the interpreter does.
 ///
 /// Three tiers, and the order is the semantics: an environment binding wins, then a
