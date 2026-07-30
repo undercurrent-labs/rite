@@ -600,6 +600,19 @@ impl<'a> Formatter<'a> {
         line_at(self.line_starts, byte)
     }
 
+    /// Did the author write this construct across more than one line?
+    ///
+    /// Collection literals are reprinted the way they were laid out: a record or list
+    /// broken over several lines stays broken, a one-liner stays a one-liner. Collapsing
+    /// everything produced single lines hundreds of characters long out of deliberately
+    /// tabulated data. Idempotent by construction — the reprinted form spans the same
+    /// number of lines, so a second pass makes the same decision.
+    fn spans_lines(&self, span: rite_core::Span) -> bool {
+        let start = span.start.as_usize();
+        let end = span.end.as_usize().saturating_sub(1).max(start);
+        self.line_at(start) != self.line_at(end)
+    }
+
     fn at_line_start(&self) -> bool {
         self.out.is_empty() || self.out.ends_with('\n')
     }
@@ -825,9 +838,20 @@ impl<'a> Formatter<'a> {
             }
             Stmt::Return(r) => {
                 self.out.push_str(&self.sigil("^", "return"));
-                if let Some(v) = &r.value {
-                    self.out.push(' ');
-                    self.expr(v);
+                match &r.value {
+                    // `^ 200 ⟨…⟩` — juxtaposition, not a list literal. Printing the
+                    // lowered `^ [200, ⟨…⟩]` reworded the central HTTP handler idiom.
+                    Some(Expr::List(l)) if r.juxtaposed => {
+                        for e in &l.elements {
+                            self.out.push(' ');
+                            self.expr(e);
+                        }
+                    }
+                    Some(v) => {
+                        self.out.push(' ');
+                        self.expr(v);
+                    }
+                    None => {}
                 }
             }
             Stmt::Expr(e) => self.expr(e),
@@ -856,6 +880,25 @@ impl<'a> Formatter<'a> {
             self.out.push(' ');
             self.out.push_str(&self.sigil("⟧", "]]"));
             return;
+        }
+        // A block the author wrote on one line stays on one line — `◆ sq(n) ⟦ ^ n * n ⟧`
+        // and inline `? c ⟦ a ⟧ : ⟦ b ⟧` are idiomatic and were being expanded to four
+        // lines each. Only for a single statement, and never when comments are involved,
+        // since those need lines of their own. Idempotent: the reprinted form occupies
+        // one line too, so a second pass decides the same way.
+        if block.body.len() == 1 && !holds_comments && !self.spans_lines(block.span) {
+            self.out.push(' ');
+            let before = self.out.len();
+            self.item(&block.body[0]);
+            // Anything that broke a line anyway (a nested multi-line literal) falls
+            // back to the block layout rather than emitting a ragged half-inline form.
+            if self.out[before..].contains('\n') {
+                self.out.truncate(before);
+            } else {
+                self.out.push(' ');
+                self.out.push_str(&self.sigil("⟧", "]]"));
+                return;
+            }
         }
         self.out.push('\n');
         self.indent += 1;
@@ -897,19 +940,44 @@ impl<'a> Formatter<'a> {
                 self.out.push_str(&a.parts.join("."));
             }
             Expr::List(l) => {
+                let multi = !l.elements.is_empty() && self.spans_lines(l.span);
                 self.out.push('[');
+                if multi {
+                    self.indent += 1;
+                }
                 for (i, e) in l.elements.iter().enumerate() {
-                    if i > 0 {
+                    if multi {
+                        if i > 0 {
+                            self.out.push(',');
+                        }
+                        self.out.push('\n');
+                        self.pad();
+                    } else if i > 0 {
                         self.out.push_str(", ");
                     }
                     self.expr(e);
                 }
+                if multi {
+                    self.indent -= 1;
+                    self.out.push('\n');
+                    self.pad();
+                }
                 self.out.push(']');
             }
             Expr::Record(r) => {
+                let multi = !r.entries.is_empty() && self.spans_lines(r.span);
                 self.out.push_str(&self.sigil("⟨", "<<"));
+                if multi {
+                    self.indent += 1;
+                }
                 for (i, e) in r.entries.iter().enumerate() {
-                    if i > 0 {
+                    if multi {
+                        if i > 0 {
+                            self.out.push(',');
+                        }
+                        self.out.push('\n');
+                        self.pad();
+                    } else if i > 0 {
                         self.out.push_str(", ");
                     }
                     if matches!(e.key, rite_syntax::RecordKey::Spread) {
@@ -920,6 +988,11 @@ impl<'a> Formatter<'a> {
                         self.out.push_str(": ");
                         self.expr(&e.value);
                     }
+                }
+                if multi {
+                    self.indent -= 1;
+                    self.out.push('\n');
+                    self.pad();
                 }
                 self.out.push_str(&self.sigil("⟩", ">>"));
             }
@@ -975,6 +1048,19 @@ impl<'a> Formatter<'a> {
                 self.expr(&u.expr);
             }
             Expr::Call(c) => {
+                // `use @http.log` / `⊏ { |req, next| … }` is parsed into a call to the
+                // internal `__middleware_use`. Print the source form back: emitting the
+                // internal name rewrote hand-written middleware into a symbol users are
+                // not supposed to see (and `__`-prefixed names are reserved for desugar,
+                // so nobody can have written this call themselves).
+                if let Expr::Ident(callee) = c.callee.as_ref() {
+                    if callee.name == "__middleware_use" && c.args.len() == 1 {
+                        self.out.push_str(&self.sigil("⊏", "use"));
+                        self.out.push(' ');
+                        self.expr(&c.args[0]);
+                        return;
+                    }
+                }
                 self.expr(&c.callee);
                 self.out.push('(');
                 for (i, a) in c.args.iter().enumerate() {
@@ -997,12 +1083,27 @@ impl<'a> Formatter<'a> {
                 self.out.push(']');
             }
             Expr::Pipeline(p) => {
+                // A pipeline broken across lines is the language's most readable shape —
+                // one stage per line, arrows aligned. Collapsing it onto one line was the
+                // single biggest loss of rhythm in the formatter.
+                let multi = self.spans_lines(p.span);
                 self.expr(&p.input);
+                if multi {
+                    self.indent += 1;
+                }
                 for s in &p.stages {
-                    self.out.push(' ');
+                    if multi {
+                        self.out.push('\n');
+                        self.pad();
+                    } else {
+                        self.out.push(' ');
+                    }
                     self.out.push_str(&self.sigil("→", "->"));
                     self.out.push(' ');
                     self.expr(s);
+                }
+                if multi {
+                    self.indent -= 1;
                 }
             }
             Expr::If(i) => {
@@ -1012,7 +1113,11 @@ impl<'a> Formatter<'a> {
                 self.out.push(' ');
                 self.block(&i.then_branch);
                 if let Some(e) = &i.else_branch {
-                    self.out.push_str(" : ");
+                    // Was a hardcoded " : ", so an ASCII-dialect file came back with the
+                    // glyph spelling of `else` while its `if` stayed ASCII.
+                    self.out.push(' ');
+                    self.out.push_str(&self.sigil(":", "else"));
+                    self.out.push(' ');
                     self.block(e);
                 }
             }

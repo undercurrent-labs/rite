@@ -411,3 +411,109 @@ fn diagnostic_titles(source: &str) -> Vec<String> {
     out.sort();
     out
 }
+
+// ---- sugar fidelity ----------------------------------------------------------
+//
+// The formatter prints from the AST, so anything the parser desugars is at risk of
+// coming back in its lowered form. These pin the cases that mattered.
+
+#[test]
+fn middleware_use_is_not_printed_as_its_internal_call() {
+    // `use @http.log` parses into a call to `__middleware_use`; printing that name
+    // rewrote hand-written middleware into an internal symbol.
+    let src =
+        "@http.listen \"127.0.0.1:0\" ⟦\n  use @http.log\n  GET \"/\" ⟦ ^ 200 ⟨ok: true⟩ ⟧\n⟧\n";
+    let out = format_with_dialect(src, Dialect::Glyph).unwrap().text;
+    assert!(
+        !out.contains("__middleware_use"),
+        "internal symbol leaked into output:\n{out}"
+    );
+    assert!(out.contains("⊏ @http.log"), "{out}");
+
+    let ascii = format_with_dialect(src, Dialect::Ascii).unwrap().text;
+    assert!(ascii.contains("use host.http.log"), "{ascii}");
+}
+
+#[test]
+fn juxtaposed_return_is_not_printed_as_a_list() {
+    // `^ 200 ⟨…⟩` lowers to a list; printing `^ [200, ⟨…⟩]` reworded the central
+    // HTTP handler idiom.
+    let src = "◆ h() ⟦\n  ^ 200 ⟨ok: true⟩\n⟧\n";
+    let out = format_with_dialect(src, Dialect::Glyph).unwrap().text;
+    assert!(out.contains("^ 200 ⟨ok: true⟩"), "{out}");
+    assert!(!out.contains("[200,"), "printed the lowered list:\n{out}");
+}
+
+#[test]
+fn an_explicit_list_return_is_still_a_list() {
+    // The flag must not make every list-valued return juxtaposed.
+    let src = "◆ h() ⟦\n  ^ [1, 2]\n⟧\n";
+    let out = format_with_dialect(src, Dialect::Glyph).unwrap().text;
+    assert!(out.contains("^ [1, 2]"), "{out}");
+}
+
+#[test]
+fn else_follows_the_dialect() {
+    let src = "? true ⟦\n  1\n⟧ else ⟦\n  2\n⟧\n";
+    let glyph = format_with_dialect(src, Dialect::Glyph).unwrap().text;
+    assert!(glyph.contains("⟧ : ⟦"), "glyph else:\n{glyph}");
+    let ascii = format_with_dialect(src, Dialect::Ascii).unwrap().text;
+    assert!(ascii.contains("]] else [["), "ascii else:\n{ascii}");
+}
+
+#[test]
+fn multi_line_literals_keep_their_layout() {
+    // Collapsing these produced single lines hundreds of characters wide out of
+    // deliberately tabulated data.
+    let src = "cfg ← ⟨\n  a: 1,\n  b: 2\n⟩\n";
+    let out = format_with_dialect(src, Dialect::Glyph).unwrap().text;
+    assert!(out.contains("⟨\n"), "record was collapsed:\n{out}");
+    assert!(out.contains("  a: 1,\n"), "{out}");
+    // ...and a one-liner stays a one-liner.
+    let one = format_with_dialect("cfg ← ⟨a: 1, b: 2⟩\n", Dialect::Glyph)
+        .unwrap()
+        .text;
+    assert!(one.contains("⟨a: 1, b: 2⟩"), "{one}");
+}
+
+#[test]
+fn multi_line_layout_is_idempotent() {
+    let src = "rows ← [\n  1,\n  2\n]\ncfg ← ⟨\n  a: 1\n⟩\n";
+    let once = format_with_dialect(src, Dialect::Glyph).unwrap().text;
+    let twice = format_with_dialect(&once, Dialect::Glyph).unwrap().text;
+    assert_eq!(once, twice, "layout not stable across two passes");
+}
+
+#[test]
+fn multi_line_pipelines_keep_one_stage_per_line() {
+    let src = "xs ← [1, 2, 3]\nout ← xs\n  → keep(⟦ |n| n > 1 ⟧)\n  → sum\n";
+    let out = format_with_dialect(src, Dialect::Glyph).unwrap().text;
+    assert!(out.contains("xs\n  → keep"), "pipeline collapsed:\n{out}");
+    assert!(out.contains("\n  → sum"), "{out}");
+    // A single-line pipeline stays on one line.
+    let one = format_with_dialect("out ← [1, 2] → sum\n", Dialect::Glyph)
+        .unwrap()
+        .text;
+    assert!(one.contains("[1, 2] → sum"), "{one}");
+}
+
+#[test]
+fn inline_blocks_stay_inline() {
+    // `◆ sq(n) ⟦ ^ n * n ⟧` is how the README and book write short helpers; the
+    // formatter used to expand every one of them to three lines.
+    let src = "◆ sq(n) ⟦ ^ n * n ⟧\n";
+    assert_eq!(format_with_dialect(src, Dialect::Glyph).unwrap().text, src);
+
+    let cond = "score ← 1\nr ← ? score > 0 ⟦ #ok ⟧ : ⟦ #nope ⟧\n";
+    assert_eq!(
+        format_with_dialect(cond, Dialect::Glyph).unwrap().text,
+        cond
+    );
+
+    // A block written across lines is still printed across lines.
+    let multi = "◆ f(n) ⟦\n  ^ n\n⟧\n";
+    assert_eq!(
+        format_with_dialect(multi, Dialect::Glyph).unwrap().text,
+        multi
+    );
+}

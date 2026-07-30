@@ -122,6 +122,11 @@ pub struct Assign {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ReturnStmt {
     pub value: Option<Expr>,
+    /// True when the value came from juxtaposition — `^ 200 ⟨…⟩` — rather than an
+    /// explicit list. Both produce a `List`, so without this the formatter cannot tell
+    /// them apart and reprints the HTTP handler idiom as `^ [200, ⟨…⟩]`.
+    #[serde(default)]
+    pub juxtaposed: bool,
     pub span: Span,
 }
 

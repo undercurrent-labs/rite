@@ -113,3 +113,9 @@ canonical = ".."
 ascii = [".."]
 token = "Rest"
 meaning = "Rest in patterns; spread in record literals (`⟨..base, k: v⟩`, sugar for `+`)"
+
+[[sigil]]
+canonical = ":"
+ascii = ["else"]
+token = "Colon"
+meaning = "Else branch of `?` / `if` (both spellings parse in either dialect)"

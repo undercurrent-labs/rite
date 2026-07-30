@@ -291,6 +291,9 @@ impl Parser {
     fn parse_statement(&mut self) -> Option<Stmt> {
         if self.check(TokenKind::Return) {
             let start = self.advance().span;
+            // Set when the value is several juxtaposed expressions, so the formatter can
+            // reprint `^ 200 ⟨…⟩` instead of the list it lowers to.
+            let mut juxtaposed = false;
             let value = if self.at_expr_start() {
                 // Support `^ 200 ⟨…⟩` / `^ 200 "text"` as multi-value return (status, body, …)
                 let first = self.parse_expression();
@@ -324,6 +327,7 @@ impl Parser {
                         .map(|e| e.span())
                         .unwrap_or(start)
                         .merge(elements.last().map(|e| e.span()).unwrap_or(start));
+                    juxtaposed = true;
                     Some(Expr::List(ListExpr { elements, span }))
                 } else {
                     Some(first)
@@ -337,6 +341,7 @@ impl Parser {
             }
             return Some(Stmt::Return(ReturnStmt {
                 value,
+                juxtaposed,
                 span: start.merge(end),
             }));
         }
