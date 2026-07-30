@@ -22,6 +22,47 @@ use std::sync::Arc;
 /// host: ids only have to be unique, and nothing reads this to make a decision.
 static CLOSURE_ID: AtomicU64 = AtomicU64::new(1);
 
+/// Can this whole subtree be evaluated without suspending?
+///
+/// Inspection only — it must not evaluate anything, because a `false` answer means the
+/// async path will run the subtree from the start. Every variant is listed explicitly
+/// rather than with a `_ => false` catch-all, so a new `ExprIr` variant fails to compile
+/// here instead of silently taking the slow path forever.
+fn is_sync(expr: &ExprIr) -> bool {
+    match expr {
+        ExprIr::Constant(_) | ExprIr::Atom(..) | ExprIr::Local(_) | ExprIr::Global(_) => true,
+        ExprIr::Unary { expr, .. } => is_sync(expr),
+        ExprIr::Binary { left, right, .. } => is_sync(left) && is_sync(right),
+        ExprIr::Member { object, .. } => is_sync(object),
+        ExprIr::Index { object, index, .. } => is_sync(object) && is_sync(index),
+        ExprIr::Coalesce { left, right, .. } => is_sync(left) && is_sync(right),
+        ExprIr::Bind { value, .. } | ExprIr::Assign { value, .. } => is_sync(value),
+        ExprIr::Try { expr, .. } => is_sync(expr),
+        ExprIr::Seq(parts, _) | ExprIr::BuildList(parts, _) => parts.iter().all(is_sync),
+        ExprIr::BuildRecord(entries, _) => entries.iter().all(|(_, v)| is_sync(v)),
+        // These reach user code, a host call, a closure body, or the scheduler.
+        ExprIr::Call { .. }
+        | ExprIr::NativeCall { .. }
+        | ExprIr::CapabilityCall { .. }
+        | ExprIr::Closure(_)
+        | ExprIr::Pipeline { .. }
+        | ExprIr::If { .. }
+        | ExprIr::Match { .. }
+        | ExprIr::Block(_)
+        | ExprIr::Return(..)
+        | ExprIr::HttpListen { .. }
+        | ExprIr::Placeholder(_) => false,
+    }
+}
+
+/// Lower an IR record key to a runtime key.
+fn key_of(k: &KeyIr) -> Key {
+    match k {
+        KeyIr::Ident(s) | KeyIr::String(s) => Key::String(s.clone()),
+        KeyIr::Atom(a) => Key::Atom(a.clone()),
+    }
+}
+
 #[derive(Debug)]
 pub enum EvalError {
     Message(String),
@@ -305,7 +346,7 @@ impl<'a> Evaluator<'a> {
         let mut last = Value::None;
         if let Some(module) = ir.modules.first() {
             for stmt in &module.statements {
-                match self.eval_expr(stmt).await {
+                match self.eval_operand(stmt).await {
                     // Top-level `^` / postfix `?` on err: script result is the returned value.
                     Err(EvalError::Return(v)) => {
                         last = v;
@@ -350,24 +391,7 @@ impl<'a> Evaluator<'a> {
                 .env
                 .get_local(*id)
                 .ok_or_else(|| EvalError::Message(format!("undefined local {}", id.0))),
-            ExprIr::Global(name) => {
-                if let Some(v) = self.ctx.env.get(name) {
-                    return Ok(v);
-                }
-                if self.ctx.functions.contains_key(name) {
-                    // return function value from env (registered)
-                    return self
-                        .ctx
-                        .env
-                        .get(name)
-                        .ok_or_else(|| EvalError::Message(format!("undefined function {}", name)));
-                }
-                // Shadowable builtins: prefer env binding above; else native dispatch token.
-                if is_runtime_builtin(name) {
-                    return Ok(Value::NativeName(name.clone()));
-                }
-                Err(EvalError::Message(format!("undefined name `{}`", name)))
-            }
+            ExprIr::Global(name) => self.lookup_global(name),
             ExprIr::Bind {
                 local,
                 name,
@@ -375,7 +399,7 @@ impl<'a> Evaluator<'a> {
                 value,
                 ..
             } => {
-                let v = self.eval_expr(value).await?;
+                let v = self.eval_operand(value).await?;
                 self.ctx.env.define(name, *local, v.clone(), *mutable);
                 Ok(v)
             }
@@ -384,7 +408,7 @@ impl<'a> Evaluator<'a> {
                 if let ExprIr::Seq(parts, _) = value.as_ref() {
                     if parts.len() == 2 {
                         if let ExprIr::Global(name) = &parts[0] {
-                            let v = self.eval_expr(&parts[1]).await?;
+                            let v = self.eval_operand(&parts[1]).await?;
                             self.ctx
                                 .env
                                 .assign(name, v.clone())
@@ -394,21 +418,21 @@ impl<'a> Evaluator<'a> {
                     }
                 }
                 let _ = span;
-                let v = self.eval_expr(value).await?;
+                let v = self.eval_operand(value).await?;
                 Ok(v)
             }
             ExprIr::Call { callee, args, .. } => {
-                let c = self.eval_expr(callee).await?;
+                let c = self.eval_operand(callee).await?;
                 let mut argv = Vec::new();
                 for a in args {
-                    argv.push(self.eval_expr(a).await?);
+                    argv.push(self.eval_operand(a).await?);
                 }
                 self.call_value(c, argv).await
             }
             ExprIr::NativeCall { name, args, .. } => {
                 let mut argv = Vec::new();
                 for a in args {
-                    argv.push(self.eval_expr(a).await?);
+                    argv.push(self.eval_operand(a).await?);
                 }
                 self.call_native(name, argv).await
             }
@@ -417,7 +441,7 @@ impl<'a> Evaluator<'a> {
             } => {
                 let mut argv = Vec::new();
                 for a in args {
-                    argv.push(self.eval_expr(a).await?);
+                    argv.push(self.eval_operand(a).await?);
                 }
                 let eff = matches!(effect, EffectKind::Effect);
                 // Special-case console for when host not fully wired
@@ -437,7 +461,7 @@ impl<'a> Evaluator<'a> {
                 body: c.body.clone(),
             })),
             ExprIr::Pipeline { input, stages, .. } => {
-                let mut val = self.eval_expr(input).await?;
+                let mut val = self.eval_operand(input).await?;
                 for stage in stages {
                     val = self.eval_pipeline_stage(val, stage).await?;
                 }
@@ -449,7 +473,7 @@ impl<'a> Evaluator<'a> {
                 else_branch,
                 ..
             } => {
-                let cond = self.eval_expr(condition).await?;
+                let cond = self.eval_operand(condition).await?;
                 if cond.is_truthy() {
                     self.eval_block(then_branch).await
                 } else if let Some(e) = else_branch {
@@ -459,14 +483,14 @@ impl<'a> Evaluator<'a> {
                 }
             }
             ExprIr::Match { value, arms, .. } => {
-                let scrut = self.eval_expr(value).await?;
+                let scrut = self.eval_operand(value).await?;
                 for arm in arms {
                     if let Some(bindings) = self.match_pattern(&arm.pattern, &scrut)? {
                         self.ctx.env.push_frame();
                         for (name, val) in bindings {
                             self.ctx.env.define_name(&name, val, false);
                         }
-                        let result = self.eval_expr(&arm.body).await;
+                        let result = self.eval_operand(&arm.body).await;
                         self.ctx.env.pop_frame();
                         return result;
                     }
@@ -475,7 +499,7 @@ impl<'a> Evaluator<'a> {
             }
             ExprIr::Return(val, _) => {
                 let v = match val {
-                    Some(e) => self.eval_expr(e).await?,
+                    Some(e) => self.eval_operand(e).await?,
                     None => Value::None,
                 };
                 Err(EvalError::Return(v))
@@ -483,77 +507,41 @@ impl<'a> Evaluator<'a> {
             ExprIr::BuildList(xs, _) => {
                 let mut out = im::Vector::new();
                 for x in xs {
-                    out.push_back(self.eval_expr(x).await?);
+                    out.push_back(self.eval_operand(x).await?);
                 }
                 Ok(Value::List(out))
             }
             ExprIr::BuildRecord(entries, _) => {
                 let mut rec = IndexMap::new();
                 for (k, v) in entries {
-                    let key = match k {
-                        KeyIr::Ident(s) | KeyIr::String(s) => Key::String(s.clone()),
-                        KeyIr::Atom(a) => Key::Atom(a.clone()),
-                    };
-                    rec.insert(key, self.eval_expr(v).await?);
+                    rec.insert(key_of(k), self.eval_operand(v).await?);
                 }
                 Ok(Value::Record(rec))
             }
             ExprIr::Member { object, field, .. } => {
-                let obj = self.eval_expr(object).await?;
+                let obj = self.eval_operand(object).await?;
                 Ok(obj.get_field(field))
             }
             ExprIr::Index { object, index, .. } => {
-                let obj = self.eval_expr(object).await?;
-                let idx = self.eval_expr(index).await?;
-                match (&obj, &idx) {
-                    (Value::List(xs), Value::Int(i)) => {
-                        if *i < 0 || *i as usize >= xs.len() {
-                            Ok(Value::None)
-                        } else {
-                            Ok(xs[*i as usize].clone())
-                        }
-                    }
-                    (Value::Record(r), Value::String(s)) => Ok(r
-                        .get(&Key::String(s.to_string()))
-                        .cloned()
-                        .unwrap_or(Value::None)),
-                    (Value::Record(r), other) => {
-                        let k = Key::String(format!("{}", other));
-                        Ok(r.get(&k).cloned().unwrap_or(Value::None))
-                    }
-                    _ => Ok(Value::None),
-                }
+                let obj = self.eval_operand(object).await?;
+                let idx = self.eval_operand(index).await?;
+                Ok(self.index_value(&obj, &idx))
             }
             ExprIr::Unary { op, expr, .. } => {
-                let v = self.eval_expr(expr).await?;
-                match op {
-                    UnaryOpIr::Neg => match v {
-                        Value::Int(n) => n
-                            .checked_neg()
-                            .map(Value::Int)
-                            .ok_or_else(|| EvalError::Message("integer overflow".into())),
-                        Value::Float(f) => Ok(Value::Float(-f)),
-                        _ => Err(EvalError::Message("cannot negate non-number".into())),
-                    },
-                    UnaryOpIr::Not => Ok(Value::Bool(!v.is_truthy())),
-                    UnaryOpIr::Effect => Ok(v),
-                }
+                let v = self.eval_operand(expr).await?;
+                self.apply_unary(*op, v)
             }
             ExprIr::Binary {
                 op, left, right, ..
             } => self.eval_binary(*op, left, right).await,
             ExprIr::Try { expr, .. } => {
-                let v = self.eval_expr(expr).await?;
-                match v {
-                    Value::Result(ResultValue::Ok(inner)) => Ok(*inner),
-                    Value::Result(ResultValue::Err(e)) => Err(EvalError::Return(Value::err(*e))),
-                    other => Ok(other),
-                }
+                let v = self.eval_operand(expr).await?;
+                self.unwrap_try(v)
             }
             ExprIr::Coalesce { left, right, .. } => {
-                let l = self.eval_expr(left).await?;
+                let l = self.eval_operand(left).await?;
                 if matches!(l, Value::None) {
-                    self.eval_expr(right).await
+                    self.eval_operand(right).await
                 } else {
                     Ok(l)
                 }
@@ -569,7 +557,7 @@ impl<'a> Evaluator<'a> {
                 middleware,
                 ..
             } => {
-                let a = self.eval_expr(addr).await?;
+                let a = self.eval_operand(addr).await?;
                 let addr_str = a
                     .as_str()
                     .map(|s| s.to_string())
@@ -594,14 +582,14 @@ impl<'a> Evaluator<'a> {
                             mw_specs.push(crate::value::HttpMiddleware::Named(name.clone()));
                         }
                         ExprIr::Closure(_) => {
-                            let v = self.eval_expr(m).await?;
+                            let v = self.eval_operand(m).await?;
                             if let Value::Function(c) = v {
                                 mw_specs.push(crate::value::HttpMiddleware::Function(c));
                             }
                         }
                         other => {
                             // Evaluate (e.g. already-resolved values) and classify
-                            let v = self.eval_expr(other).await?;
+                            let v = self.eval_operand(other).await?;
                             match v {
                                 Value::Function(c) => {
                                     mw_specs.push(crate::value::HttpMiddleware::Function(c));
@@ -652,7 +640,7 @@ impl<'a> Evaluator<'a> {
             ExprIr::Seq(xs, _) => {
                 let mut last = Value::None;
                 for x in xs {
-                    last = self.eval_expr(x).await?;
+                    last = self.eval_operand(x).await?;
                 }
                 Ok(last)
             }
@@ -677,7 +665,7 @@ impl<'a> Evaluator<'a> {
                     ExprIr::NativeCall { name, args, .. } => {
                         let mut argv = vec![input];
                         for a in args {
-                            argv.push(self.eval_expr(a).await?);
+                            argv.push(self.eval_operand(a).await?);
                         }
                         // special: map with member projection stage already handled
                         self.call_native(name, argv).await
@@ -691,13 +679,13 @@ impl<'a> Evaluator<'a> {
                                 argv.push(input.clone());
                                 used_placeholder = true;
                             } else {
-                                argv.push(self.eval_expr(a).await?);
+                                argv.push(self.eval_operand(a).await?);
                             }
                         }
                         if !used_placeholder {
                             argv.insert(0, input);
                         }
-                        let c = self.eval_expr(callee).await?;
+                        let c = self.eval_operand(callee).await?;
                         self.call_value(c, argv).await
                     }
                     ExprIr::Closure(c) => {
@@ -720,11 +708,218 @@ impl<'a> Evaluator<'a> {
                     }
                     other => {
                         // Evaluate stage as function then call with input
-                        let f = self.eval_expr(other).await?;
+                        let f = self.eval_operand(other).await?;
                         self.call_value(f, vec![input]).await
                     }
                 }
             }
+        }
+    }
+
+    /// Resolve a bare global name: a binding, a registered function, or a builtin token.
+    fn lookup_global(&mut self, name: &str) -> Result<Value, EvalError> {
+        if let Some(v) = self.ctx.env.get(name) {
+            return Ok(v);
+        }
+        if self.ctx.functions.contains_key(name) {
+            return self
+                .ctx
+                .env
+                .get(name)
+                .ok_or_else(|| EvalError::Message(format!("undefined function {}", name)));
+        }
+        // Shadowable builtins: an env binding wins above; otherwise a dispatch token.
+        if is_runtime_builtin(name) {
+            return Ok(Value::NativeName(name.to_string()));
+        }
+        Err(EvalError::Message(format!("undefined name `{}`", name)))
+    }
+
+    /// Apply a unary operator to an already-evaluated value.
+    fn apply_unary(&mut self, op: UnaryOpIr, v: Value) -> Result<Value, EvalError> {
+        match op {
+            UnaryOpIr::Neg => match v {
+                Value::Int(n) => n
+                    .checked_neg()
+                    .map(Value::Int)
+                    .ok_or_else(|| EvalError::Message("integer overflow".into())),
+                Value::Float(f) => Ok(Value::Float(-f)),
+                _ => Err(EvalError::Message("cannot negate non-number".into())),
+            },
+            UnaryOpIr::Not => Ok(Value::Bool(!v.is_truthy())),
+            // `!` marks an effect for the reader and the checker; it does not transform.
+            UnaryOpIr::Effect => Ok(v),
+        }
+    }
+
+    /// `object[index]`. Out of range, and any type that cannot be indexed, give `none`.
+    fn index_value(&mut self, obj: &Value, idx: &Value) -> Value {
+        match (obj, idx) {
+            (Value::List(xs), Value::Int(i)) => {
+                if *i < 0 || *i as usize >= xs.len() {
+                    Value::None
+                } else {
+                    xs[*i as usize].clone()
+                }
+            }
+            (Value::Record(r), Value::String(s)) => r
+                .get(&Key::String(s.to_string()))
+                .cloned()
+                .unwrap_or(Value::None),
+            (Value::Record(r), other) => r
+                .get(&Key::String(format!("{}", other)))
+                .cloned()
+                .unwrap_or(Value::None),
+            _ => Value::None,
+        }
+    }
+
+    /// Postfix `?`: unwrap `ok`, return early from the enclosing function on `err`.
+    fn unwrap_try(&mut self, v: Value) -> Result<Value, EvalError> {
+        match v {
+            Value::Result(ResultValue::Ok(inner)) => Ok(*inner),
+            Value::Result(ResultValue::Err(e)) => Err(EvalError::Return(Value::err(*e))),
+            other => Ok(other),
+        }
+    }
+
+    /// Evaluate an operand, allocating a future only if it actually needs one.
+    ///
+    /// `eval_expr` boxes: it is the recursion break for an async tree-walker, and the
+    /// allocation happens whether or not the node does anything async. Most nodes in a
+    /// hot loop — constants, locals, field reads, arithmetic — cannot suspend at all, so
+    /// they run directly and the box is never allocated.
+    ///
+    /// The decision is made by `is_sync`, which only *inspects* the tree. An earlier
+    /// version tried evaluating and bailed out on reaching an async node: the abandoned
+    /// work had already charged the step budget, and the async path then charged for it
+    /// again. Deciding first also rules out double-applying an environment mutation —
+    /// not reachable from source today, since `←` and `:=` are statement forms and so
+    /// cannot sit beside a call inside one expression, but not something to leave
+    /// resting on that.
+    async fn eval_operand(&mut self, expr: &ExprIr) -> Result<Value, EvalError> {
+        if is_sync(expr) {
+            return self.eval_sync(expr);
+        }
+        self.eval_expr(expr).await
+    }
+
+    /// Evaluate a subtree that [`is_sync`] has already accepted.
+    ///
+    /// Every arm delegates to the same helper the async path uses (`apply_binary`,
+    /// `apply_unary`, `index_value`, `unwrap_try`, `Value::get_field`), so there is one
+    /// implementation of each operation rather than a fast copy that can drift.
+    ///
+    /// Panics only if called on a node `is_sync` rejects — the two must stay in step, and
+    /// `sync_and_async_paths_agree` pins that.
+    fn eval_sync(&mut self, expr: &ExprIr) -> Result<Value, EvalError> {
+        // Charged once per node, exactly as `eval_expr_inner` does.
+        self.ctx.budget.tick()?;
+        match expr {
+            ExprIr::Constant(lit) => Ok(self.lit_to_value(lit)),
+            ExprIr::Atom(name, _) => Ok(Value::Atom(self.ctx.atoms.intern(name))),
+            ExprIr::Local(id) => self
+                .ctx
+                .env
+                .get_local(*id)
+                .ok_or_else(|| EvalError::Message(format!("undefined local {}", id.0))),
+            ExprIr::Global(name) => self.lookup_global(name),
+            ExprIr::Unary { op, expr, .. } => {
+                let v = self.eval_sync(expr)?;
+                self.apply_unary(*op, v)
+            }
+            ExprIr::Binary {
+                op, left, right, ..
+            } => {
+                if matches!(op, BinaryOpIr::And | BinaryOpIr::Or) {
+                    // Short-circuit: the right side must not run when the left decides.
+                    let l = self.eval_sync(left)?.is_truthy();
+                    let decided = if *op == BinaryOpIr::And { !l } else { l };
+                    if decided {
+                        return Ok(Value::Bool(l));
+                    }
+                    return Ok(Value::Bool(self.eval_sync(right)?.is_truthy()));
+                }
+                let l = self.eval_sync(left)?;
+                let r = self.eval_sync(right)?;
+                self.apply_binary(*op, l, r)
+            }
+            ExprIr::Member { object, field, .. } => {
+                let obj = self.eval_sync(object)?;
+                Ok(obj.get_field(field))
+            }
+            ExprIr::Index { object, index, .. } => {
+                let obj = self.eval_sync(object)?;
+                let idx = self.eval_sync(index)?;
+                Ok(self.index_value(&obj, &idx))
+            }
+            ExprIr::Coalesce { left, right, .. } => {
+                let l = self.eval_sync(left)?;
+                if matches!(l, Value::None) {
+                    self.eval_sync(right)
+                } else {
+                    Ok(l)
+                }
+            }
+            ExprIr::Bind {
+                local,
+                name,
+                mutable,
+                value,
+                ..
+            } => {
+                let v = self.eval_sync(value)?;
+                self.ctx.env.define(name, *local, v.clone(), *mutable);
+                Ok(v)
+            }
+            // `x := v`, which desugar lowers to `Assign { value: Seq[Global, value] }`.
+            ExprIr::Assign { value, .. } => {
+                if let ExprIr::Seq(parts, _) = value.as_ref() {
+                    if parts.len() == 2 {
+                        if let ExprIr::Global(name) = &parts[0] {
+                            let v = self.eval_sync(&parts[1])?;
+                            return self
+                                .ctx
+                                .env
+                                .assign(name, v.clone())
+                                .map(|()| v)
+                                .map_err(EvalError::Message);
+                        }
+                    }
+                }
+                self.eval_sync(value)
+            }
+            ExprIr::Seq(parts, _) => {
+                let mut last = Value::None;
+                for part in parts {
+                    last = self.eval_sync(part)?;
+                }
+                Ok(last)
+            }
+            ExprIr::BuildList(items, _) => {
+                let mut out = im::Vector::new();
+                for item in items {
+                    out.push_back(self.eval_sync(item)?);
+                }
+                Ok(Value::List(out))
+            }
+            ExprIr::BuildRecord(entries, _) => {
+                let mut rec = IndexMap::new();
+                for (k, v) in entries {
+                    let value = self.eval_sync(v)?;
+                    rec.insert(key_of(k), value);
+                }
+                Ok(Value::Record(rec))
+            }
+            ExprIr::Try { expr, .. } => {
+                let v = self.eval_sync(expr)?;
+                self.unwrap_try(v)
+            }
+            other => Err(EvalError::Message(format!(
+                "internal: eval_sync reached a node it cannot handle ({:?}); \
+                 is_sync and eval_sync disagree",
+                std::mem::discriminant(other)
+            ))),
         }
     }
 
@@ -736,24 +931,33 @@ impl<'a> Evaluator<'a> {
     ) -> Result<Value, EvalError> {
         // Short-circuit and/or
         if op == BinaryOpIr::And {
-            let l = self.eval_expr(left).await?;
+            let l = self.eval_operand(left).await?;
             if !l.is_truthy() {
                 return Ok(Value::Bool(false));
             }
-            let r = self.eval_expr(right).await?;
+            let r = self.eval_operand(right).await?;
             return Ok(Value::Bool(r.is_truthy()));
         }
         if op == BinaryOpIr::Or {
-            let l = self.eval_expr(left).await?;
+            let l = self.eval_operand(left).await?;
             if l.is_truthy() {
                 return Ok(Value::Bool(true));
             }
-            let r = self.eval_expr(right).await?;
+            let r = self.eval_operand(right).await?;
             return Ok(Value::Bool(r.is_truthy()));
         }
 
-        let l = self.eval_expr(left).await?;
-        let r = self.eval_expr(right).await?;
+        let l = self.eval_operand(left).await?;
+        let r = self.eval_operand(right).await?;
+        self.apply_binary(op, l, r)
+    }
+
+    /// Apply a binary operator to values that are already evaluated.
+    ///
+    /// The single implementation of operator semantics: both the async path above and
+    /// the allocation-free path in `try_sync` funnel through here, so the two cannot
+    /// drift into disagreeing about what `+` means.
+    fn apply_binary(&mut self, op: BinaryOpIr, l: Value, r: Value) -> Result<Value, EvalError> {
         match op {
             BinaryOpIr::Add => match (&l, &r) {
                 (Value::Int(a), Value::Int(b)) => a
@@ -835,6 +1039,8 @@ impl<'a> Evaluator<'a> {
             // the same membership test so neither re-runs a side-effecting operand.
             BinaryOpIr::In => Ok(Value::Bool(self.contains_value(&l, &r))),
             BinaryOpIr::NotIn => Ok(Value::Bool(!self.contains_value(&l, &r))),
+            // Handled above: these must short-circuit, so they cannot take
+            // pre-evaluated operands.
             BinaryOpIr::And | BinaryOpIr::Or => unreachable!(),
         }
     }
@@ -868,7 +1074,7 @@ impl<'a> Evaluator<'a> {
         let mut last = Value::None;
         let result = async {
             for expr in &block.body {
-                match self.eval_expr(expr).await {
+                match self.eval_operand(expr).await {
                     Err(EvalError::Return(v)) => return Err(EvalError::Return(v)),
                     Err(e) => return Err(e),
                     Ok(v) => last = v,
@@ -982,7 +1188,7 @@ impl<'a> Evaluator<'a> {
         let mut last = Value::None;
         let result = async {
             for expr in &body.body {
-                match self.eval_expr(expr).await {
+                match self.eval_operand(expr).await {
                     Err(EvalError::Return(v)) => return Ok(v),
                     Err(e) => return Err(e.with_stack(self.ctx)),
                     Ok(v) => last = v,

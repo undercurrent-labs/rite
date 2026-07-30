@@ -48,17 +48,23 @@ Tracks implementation status for the Rite language and V1 tooling. Detailed desi
     |------|------|
     | `frontend/compile` small script | ~38 us |
     | `frontend/compile` 200 functions | ~1.6 ms |
-    | `values/record_build` 5 fields | ~3.7 us |
-    | `values/record_spread` | ~4.3 us |
-    | `closures/closure_creation` x2000 | ~12.6 ms |
-    | `pipelines/pipeline_map_keep` x5000 | ~16.8 ms |
-    | `calls/fib_recursive` fib(20) | ~95 ms (~7 us/call) |
-    | `floor/arithmetic_loop` x20000 | ~45 ms (~2.3 us/iteration) |
+    | `values/record_build` 5 fields | ~3.3 us |
+    | `values/record_spread` | ~3.8 us |
+    | `closures/closure_creation` x2000 | ~12.3 ms |
+    | `pipelines/pipeline_map_keep` x5000 | ~12.8 ms |
+    | `calls/fib_recursive` fib(20) | ~87 ms (~6.5 us/call) |
+    | `floor/arithmetic_loop` x20000 | ~36 ms (~1.8 us/iteration) |
 
     The v1 LSP target (100-300 ms) has plenty of headroom: compiling 200 functions is
-    ~1.6 ms, so analysis is nowhere near the budget. The interpreter is the slow part —
-    2.3 us to evaluate `total := total + i * 2` once is the boxed-future-per-AST-node
-    floor, and that is the number a bytecode VM would move.
+    ~1.6 ms, so analysis is nowhere near the budget.
+
+    Those interpreter figures are after the sync-path change (see `is_sync` /
+    `eval_sync` in rite-runtime): a node that cannot suspend is evaluated without
+    allocating the boxed future an async tree-walker otherwise needs per node. Measured
+    against the previous baseline that bought arithmetic -31%, pipelines -24%, record
+    spread -21%, recursive calls -9%. What remains — ~1.8 us to evaluate
+    `total := total + i * 2` once — is the floor for tree-walking at all, and is the
+    number a bytecode VM would move.
 13. **VS Code VSIX in CI** — package.json ready; not produced by a release job.  
 14. **Example 07/08 HTTP** — blocks until shutdown (correct for servers); e2e ladder skips them.
 
