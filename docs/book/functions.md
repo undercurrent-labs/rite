@@ -146,7 +146,7 @@ Trailing-block call sugar exists for some forms (e.g. `keep { … }` in pipeline
 If a function performs host I/O, mark those calls with `!` / `do`:
 
 ```rite browser
-◆ greet(name) ⟦
+◆! greet(name) ⟦
   ! @console.println("hi " + name)
   ^ none
 ⟧

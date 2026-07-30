@@ -151,6 +151,10 @@ pub const HOST_EFFECTS: &[(&str, bool)] = &[
 /// splits it into `number` and `?`.
 /// The one list of builtin names. `rite-runtime` reads it too, so the resolver and
 /// the interpreter cannot disagree about which bare names resolve to a builtin.
+/// Builtins that reach the host. `print`/`println` write to the terminal just as
+/// `@console.print` does, so they take a marker for the same reason.
+pub const EFFECTFUL_BUILTINS: &[&str] = &["print", "println"];
+
 pub const BUILTIN_NAMES: &[&str] = &[
     "map",
     "keep",
@@ -231,6 +235,12 @@ pub struct FunctionMeta {
     pub arity: usize,
     pub is_pub: bool,
     pub span: Span,
+    /// Inferred: this function performs a host effect, directly or through
+    /// something it calls. Computed by [`Resolver::infer_effects`] after the
+    /// bodies have been walked, so it accounts for the whole call graph.
+    pub effectful: bool,
+    /// Declared with `◆!` / `def!`.
+    pub declares_effect: bool,
 }
 
 pub struct Resolver {
@@ -242,6 +252,18 @@ pub struct Resolver {
     /// A member access through one of these is a call into a module, and can be
     /// checked here rather than failing at runtime.
     import_qualifiers: HashSet<String>,
+    /// The function whose body is being walked; `None` at top level.
+    current_fn: Option<String>,
+    /// The file diagnostics are attributed to, kept for checks that run after the
+    /// walk (effect inference) rather than during it.
+    file_for_effects: rite_core::FileId,
+    /// Functions that perform a host effect in their own body.
+    direct_effects: HashSet<String>,
+    /// Every effect seen while walking, marked or not. Snapshotting this around
+    /// a call's arguments is how an effectful lambda argument is detected.
+    effects_seen: usize,
+    /// Who calls whom, so effect-ness can be closed over the call graph.
+    call_edges: HashMap<String, HashSet<String>>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -268,6 +290,7 @@ pub fn resolve(program: &Program, file: &SourceFile) -> (ResolvedProgram, Diagno
     );
     let mut r = Resolver::new();
     r.resolve_program(program);
+    r.infer_effects();
     let resolved = ResolvedProgram {
         ast: program.clone(),
         functions: r.functions.clone(),
@@ -290,6 +313,11 @@ impl Resolver {
             diagnostics: Diagnostics::new(),
             functions: HashMap::new(),
             import_qualifiers: HashSet::new(),
+            current_fn: None,
+            file_for_effects: rite_core::FileId(0),
+            direct_effects: HashSet::new(),
+            effects_seen: 0,
+            call_edges: HashMap::new(),
         };
         // Predefine pure builtins
         for name in BUILTIN_NAMES {
@@ -300,6 +328,10 @@ impl Resolver {
                     arity: 0,
                     is_pub: true,
                     span: Span::DUMMY,
+                    // `print`/`println` reach the terminal exactly as
+                    // `@console.print` does; the rest are value functions.
+                    effectful: EFFECTFUL_BUILTINS.contains(name),
+                    declares_effect: EFFECTFUL_BUILTINS.contains(name),
                 },
             );
         }
@@ -307,6 +339,7 @@ impl Resolver {
     }
 
     fn resolve_program(&mut self, program: &Program) {
+        self.file_for_effects = program.file;
         // First pass: collect function declarations (may shadow builtins)
         for item in &program.items {
             if let Item::Function(f) = item {
@@ -330,6 +363,8 @@ impl Resolver {
                         arity: f.params.len(),
                         is_pub: f.is_pub,
                         span: f.span,
+                        effectful: false,
+                        declares_effect: f.is_effectful,
                     },
                 );
             }
@@ -386,12 +421,101 @@ impl Resolver {
     }
 
     fn resolve_function(&mut self, f: &FunctionDecl, file: rite_core::FileId) {
+        // Remember which body we are inside, so host calls and calls to other
+        // functions can be attributed to it and closed over afterwards.
+        let outer = self.current_fn.replace(f.name.name.clone());
         self.push_scope();
         for p in &f.params {
             self.define(&p.name.name, false, p.span, file);
         }
         self.resolve_block(&f.body, file);
         self.pop_scope();
+        self.current_fn = outer;
+    }
+
+    /// Attribute a host effect to the body currently being walked.
+    fn note_effect(&mut self) {
+        self.effects_seen += 1;
+        if let Some(name) = self.current_fn.clone() {
+            self.direct_effects.insert(name);
+        }
+    }
+
+    /// Record `current → callee`, the edge effect-ness travels along.
+    fn note_call(&mut self, callee: &str) {
+        if let Some(name) = self.current_fn.clone() {
+            self.call_edges
+                .entry(name)
+                .or_default()
+                .insert(callee.to_string());
+        }
+    }
+
+    /// Close direct effects over the call graph.
+    ///
+    /// A function is effectful if its own body performs an effect or if anything
+    /// it calls is effectful. Recursion and mutual recursion make this a
+    /// least-fixed-point rather than a walk, so iterate until nothing changes;
+    /// the set only grows, so it terminates in at most one round per function.
+    fn infer_effects(&mut self) {
+        // Seeded from both what bodies do and what declarations promise, so a
+        // caller of a declared-effectful function is itself effectful even when
+        // its own body touches no capability directly.
+        let mut effectful = self.direct_effects.clone();
+        for (name, meta) in &self.functions {
+            if meta.declares_effect {
+                effectful.insert(name.clone());
+            }
+        }
+        loop {
+            let mut grew = false;
+            for (caller, callees) in &self.call_edges {
+                if effectful.contains(caller) {
+                    continue;
+                }
+                if callees.iter().any(|c| effectful.contains(c)) {
+                    effectful.insert(caller.clone());
+                    grew = true;
+                }
+            }
+            if !grew {
+                break;
+            }
+        }
+        for (name, meta) in self.functions.iter_mut() {
+            meta.effectful = effectful.contains(name);
+        }
+
+        // A body that performs effects has to say so. Reported at the declaration
+        // rather than at each call, so the fix is one edit in one place instead of
+        // a marker on every caller.
+        let mut undeclared: Vec<(String, Span)> = self
+            .functions
+            .values()
+            .filter(|m| m.effectful && !m.declares_effect && m.span != Span::DUMMY)
+            .map(|m| (m.name.clone(), m.span))
+            .collect();
+        undeclared.sort_by_key(|(_, span)| span.start);
+        for (name, span) in undeclared {
+            let reason = if self.direct_effects.contains(&name) {
+                "its body performs a host effect"
+            } else {
+                "it calls a function that performs host effects"
+            };
+            self.diagnostics.push(
+                rite_core::Diagnostic::error(
+                    E021_EFFECT_REQUIRED,
+                    format!("`{name}` performs host effects but is not declared `◆!`"),
+                )
+                .with_primary(
+                    rite_core::SourceSpan::new(self.file_for_effects, span),
+                    reason,
+                )
+                .with_help(format!(
+                    "declare it `◆! {name}(…)` (ASCII `def! {name}(…)`), then callers mark the call with `!`"
+                )),
+            );
+        }
     }
 
     fn resolve_event(&mut self, e: &EventDecl, file: rite_core::FileId) {
@@ -515,6 +639,9 @@ impl Resolver {
             // `⊏ @http.recover` (middleware markers, `effectful: false`) working.
             Expr::Capability(c) => {
                 let path = c.path.join(".");
+                if is_effectful(&path) {
+                    self.note_effect();
+                }
                 if is_effectful(&path) && !in_effect {
                     self.diagnostics.push(
                         simple_error(
@@ -532,8 +659,38 @@ impl Resolver {
                 // `! @fs.write(…)` can attach the marker to the callee rather
                 // than to the whole call, depending on how it was written.
                 let effect = in_effect || has_effect_marker(c.callee.as_ref());
+                if let Expr::Ident(callee) = strip_effect(c.callee.as_ref()) {
+                    self.note_call(&callee.name);
+                    // Calling something declared effectful needs a marker, exactly
+                    // as calling the capability directly would. Driven by the
+                    // declaration rather than by inference: the contract is what a
+                    // caller can see, and it is known before any body is walked.
+                    let declared = self
+                        .functions
+                        .get(&callee.name)
+                        .map(|m| m.declares_effect)
+                        .unwrap_or(false);
+                    if declared {
+                        self.note_effect();
+                    }
+                    if declared && !effect {
+                        self.diagnostics.push(
+                            simple_error(
+                                E021_EFFECT_REQUIRED,
+                                format!("calling `{}` requires `!`", callee.name),
+                                file,
+                                c.span,
+                                "this function performs an external effect",
+                            )
+                            .with_help(format!("mark the call: ! {}(…)", callee.name)),
+                        );
+                    }
+                }
                 if let Expr::Capability(cap) = strip_effect(c.callee.as_ref()) {
                     let path = cap.path.join(".");
+                    if is_effectful(&path) {
+                        self.note_effect();
+                    }
                     if is_effectful(&path) && !effect {
                         self.diagnostics.push(
                             simple_error(
@@ -557,7 +714,36 @@ impl Resolver {
                     self.resolve_expr(&c.callee, file, effect);
                 }
                 // Arguments are independent computations: reset.
+                // Passing an effectful function to another one runs it, so the
+                // call performs effects: `each(shout)` writes to the terminal
+                // however pure `each` itself is, and nothing on that line says so.
+                //
+                // Only a *named* effectful function counts. An inline lambda that
+                // performs effects already carries its own `!` in plain sight at
+                // the call site, so demanding a second marker around it would add
+                // noise without adding information. A closure stored in a binding
+                // and passed later is not tracked, and cannot be without types.
                 for a in &c.args {
+                    if let Expr::Ident(arg) = a {
+                        let passes_effect = self
+                            .functions
+                            .get(&arg.name)
+                            .map(|m| m.declares_effect)
+                            .unwrap_or(false);
+                        if passes_effect && !effect {
+                            self.note_effect();
+                            self.diagnostics.push(
+                                simple_error(
+                                    E021_EFFECT_REQUIRED,
+                                    format!("passing `{}` here requires `!` on the call", arg.name),
+                                    file,
+                                    c.span,
+                                    "the function passed performs an external effect when run",
+                                )
+                                .with_help("mark the call, or the whole pipeline: ! (… → …)"),
+                            );
+                        }
+                    }
                     self.resolve_expr(a, file, false);
                 }
             }
@@ -573,10 +759,12 @@ impl Resolver {
                 self.resolve_expr(&b.right, file, false);
             }
             Expr::Pipeline(p) => {
-                // The input is the head computation; each stage is its own.
+                // The input is the head computation; each stage is its own — but a
+                // marker on the whole pipeline covers all of it, or `! (xs → each
+                // (shout))` would have no way to be written.
                 self.resolve_expr(&p.input, file, in_effect);
                 for s in &p.stages {
-                    self.resolve_expr(s, file, false);
+                    self.resolve_expr(s, file, in_effect);
                 }
             }
             Expr::If(i) => {

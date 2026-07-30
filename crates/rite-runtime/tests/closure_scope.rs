@@ -35,8 +35,8 @@ def apply_with_shadow(f) [[
   return f(5)
 ]]
 add10 <- make_adder(10)
-println(str(add10(5)))
-println(str(apply_with_shadow(add10)))
+do println(str(add10(5)))
+do println(str(apply_with_shadow(add10)))
 "#,
     )
     .await;

@@ -1,0 +1,13 @@
+// Effects travel through the call graph. `outer` touches no capability itself,
+// but it calls something that does, so it is effectful too and says so — and
+// every call to either takes a marker.
+◆! inner(n) ⟦
+  ! @console.println(str(n))
+  ^ n
+⟧
+
+◆! outer(n) ⟦
+  ^ ! inner(n) + 1
+⟧
+
+! outer(41)

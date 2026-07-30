@@ -35,6 +35,7 @@ This book is a linear path. You can stop after any chapter and experiment in [St
 | Glyph | ASCII | Role |
 |-------|-------|------|
 | `◆` | `def` | Function definition |
+| `◆!` | `def!` | Function that performs host effects |
 | `←` | `<-` | Immutable bind |
 | `↢` | `<~` | Mutable bind |
 | `→` | `->` | Pipeline |

@@ -8,7 +8,7 @@ item             = function_decl
                  | import_decl
                  | test_decl ;
 
-function_decl    = [ "pub" ] def_kw identifier [ type_params ]
+function_decl    = [ "pub" ] def_kw [ effect_kw ] identifier [ type_params ]
                    "(" [ parameter_list ] ")"
                    [ return_annotation ] block ;
 
@@ -116,6 +116,8 @@ pipe_op          = "→" | "->" ;
 return_kw        = "^" | "return" ;
 if_kw            = "?" | "if" ;
 match_kw         = "~" | "match" ;
+(* Marks an effectful statement, and on a declaration marks the function as
+   performing host effects — which makes callers mark the call. *)
 effect_kw        = "!" | "do" ;
 host_kw          = "@" | "host." ;
 atom_kw          = "#" | ":" ;

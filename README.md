@@ -135,6 +135,17 @@ Effectful host calls must be marked with `!` (ASCII: `do`) — **including reads
 `@fs.read` and `@db.query` need it for the same reason `@clock.now` does. `--allow net=…`
 gates both the bind address of `@http.listen` and the target of an outbound `@http.get`.
 
+Effects travel with the call graph. A function that reaches the host declares it
+with `◆!` (ASCII `def!`), and so does anything that calls one:
+
+```rite
+◆! greet(name) ⟦
+  ! @console.println("hello, {name}")
+⟧
+
+! greet("Aura")
+```
+
 ## Modules
 
 ```rite

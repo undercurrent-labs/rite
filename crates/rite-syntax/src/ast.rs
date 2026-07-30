@@ -21,6 +21,10 @@ pub enum Item {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FunctionDecl {
     pub is_pub: bool,
+    /// Declared with `◆!` / `def!`: this function performs host effects, so
+    /// calling it takes a marker. Checked against what the body actually does.
+    #[serde(default)]
+    pub is_effectful: bool,
     pub name: Ident,
     pub params: Vec<Param>,
     pub return_type: Option<TypeExpr>,

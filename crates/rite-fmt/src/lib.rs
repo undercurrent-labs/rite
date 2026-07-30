@@ -722,6 +722,12 @@ impl<'a> Formatter<'a> {
                     self.out.push_str("pub ");
                 }
                 self.out.push_str(&self.sigil("◆", "def"));
+                // The effect marker is part of the declaration's meaning, not
+                // decoration: dropping it here would silently turn a checked
+                // effectful function into one callers may call unmarked.
+                if func.is_effectful {
+                    self.out.push_str(&self.sigil("!", "!"));
+                }
                 self.out.push(' ');
                 self.out.push_str(&func.name.name);
                 self.out.push('(');

@@ -70,7 +70,7 @@ For list processing, prefer [pipelines](pipelines.md) (`→ sum`, `→ map`) ove
 
 ```rite browser
 x ← 1
-◆ demo() ⟦
+◆! demo() ⟦
   x ← 2              // shadows outer x inside demo
   ! @console.println(x)
 ⟧

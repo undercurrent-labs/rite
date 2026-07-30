@@ -64,3 +64,25 @@ fn pipeline_roundtrip() {
         format!("{:?}", pb.unwrap().items.len())
     );
 }
+
+/// The effect marker is part of a declaration's meaning, not decoration.
+///
+/// `◆! f()` says the function performs host effects, which is what makes callers
+/// mark the call. Dropping it while formatting would silently turn a checked
+/// effectful function into one anybody may call unmarked — so it has to survive a
+/// round trip in both dialects.
+#[test]
+fn the_declaration_effect_marker_survives_formatting() {
+    let glyph = rite_fmt::format_source("◆! f() ⟦ ^ 1 ⟧\n", false).expect("format glyph");
+    assert!(glyph.contains("◆!"), "glyph dropped the marker: {glyph}");
+
+    let ascii = rite_fmt::format_source("◆! f() ⟦ ^ 1 ⟧\n", true).expect("format ascii");
+    assert!(ascii.contains("def!"), "ascii dropped the marker: {ascii}");
+
+    // And a pure declaration must not grow one.
+    let pure = rite_fmt::format_source("◆ g() ⟦ ^ 1 ⟧\n", false).expect("format pure");
+    assert!(
+        !pure.contains("◆!"),
+        "pure function gained a marker: {pure}"
+    );
+}

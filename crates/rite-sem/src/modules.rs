@@ -240,6 +240,8 @@ impl<'a> ModuleLoader<'a> {
                                     arity: f.params.len(),
                                     is_pub: true,
                                     span: f.span,
+                                    effectful: false,
+                                    declares_effect: f.is_effectful,
                                 },
                             );
                         }

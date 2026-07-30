@@ -67,6 +67,8 @@ parse (rite-syntax) → module load (rite-sem::modules) → resolve (rite-sem::r
 
 The generated crate takes its `rite-*` deps from a local checkout when one is found, otherwise from git (`RITE_SOURCE_DIR` overrides; `RITE_BUILD_GIT_REF` picks the ref). Publishing to crates.io is not an option — see the `DepSource` comment in `rite-compiler/src/lib.rs` before "fixing" this.
 
+**Effects propagate.** `!` marks a host call; `◆!` / `def!` declares a function that performs one. `resolve.rs` infers effect-ness from bodies and closes it over the call graph to a fixed point, so a function calling an effectful function is itself effectful. The declaration is the contract callers see; inference only checks the contract is honest. Adding a host function means adding it to the effect table below, or it silently becomes pure.
+
 **Effects are checked in two places and cross-validated.** `rite-sem/src/resolve.rs` holds the canonical effect table (which `@host.fn` calls require a `!` / `do` marker); `rite-caps` carries an `effectful:` flag per `NativeFunctionDescriptor`. `crates/rite-caps/tests/effect_parity.rs` fails if they disagree in either direction, so a new host function must be added to both. Reads are effects: `@fs.read`, `@env.get`, `@db.query` need `!` for the same reason `@clock.now` does.
 
 **Permissions** (`rite-caps/src/permissions.rs`) default-secure: console/clock/random allowed, fs/net/env/process/db denied; any default is revocable with `--deny`. Grants are canonicalized against the CWD at *build* time for compiled binaries. `--allow net=host` gates both `@http.listen` bind addresses and outbound `@http.get` targets.

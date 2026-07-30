@@ -255,8 +255,8 @@ fn effects_reach_the_same_output() {
             r#"! @console.println("one")
 ! @console.println("two")"#,
             r#"[1, 2, 3] → each { |n| ! @console.println(str(n)) }"#,
-            r#"◆ greet(who) ⟦ ! @console.println("hi " + who) ⟧
-greet("world")"#,
+            r#"◆! greet(who) ⟦ ! @console.println("hi " + who) ⟧
+! greet("world")"#,
             r#"! @console.println(str(⟨a: 1⟩))"#,
             r#"! @console.println("a")
 x ← 1 + 1

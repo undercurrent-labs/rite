@@ -17,7 +17,7 @@ const pillars = [
   },
   {
     title: "Effects & capabilities",
-    body: "Host calls are marked where they happen (! / do), and permissions — not the marker — bound what a program can reach: FS, HTTP and process stay denied until granted.",
+    body: "Effects are marked (! / do) and travel with the call graph: a function that reaches the host says so, and so does everything that calls it. Permissions bound what it may touch — FS, HTTP and process stay denied until granted.",
     accent: "text-rite-pink",
   },
   {

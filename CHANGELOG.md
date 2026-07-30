@@ -4,6 +4,30 @@
 
 ### Changed
 
+- **Effects now travel with the call graph.** `!` marked only the place a host call was
+  written, so wrapping one in a function made it disappear: `◆ greet(n) ⟦ ! @console.println(n) ⟧`
+  was callable as `greet("x")` with no marker and `rite check` accepted it. The guarantee
+  stopped at the first function boundary, which is exactly where code goes as it grows.
+
+  A function that reaches the host now declares it — `◆! greet(name)` (ASCII `def! …`) —
+  and callers mark the call. The compiler infers effect-ness from the body and closes it
+  over the call graph, so a function calling an effectful function is effectful too,
+  through any depth and through recursion. The declaration is the contract a caller sees;
+  inference only checks the contract is honest. Declaring `◆!` on a body that happens to
+  be pure is allowed, so a function can reserve the right to perform effects later.
+
+  Passing an effectful function to another one (`each(shout)`) marks the call, since
+  nothing on that line would otherwise say I/O happens. A lambda written inline already
+  shows its own `!`, so it needs no second marker. A closure stored in a binding and
+  passed later is not tracked — that needs types Rite does not have.
+
+  Migration is one marker per effectful function and one per call. Two examples in the
+  book needed it; nothing in `examples/` or `conformance/` did.
+
+- **`print` and `println` need a marker.** They reach the terminal exactly as
+  `@console.print` does, but took no marker, which made the whole discipline optional for
+  anyone who used the short name.
+
 - **No Windows binary is published.** CI stopped testing Windows on every change in 0.3.0,
   and shipping a binary nothing exercises is worse than shipping none — every Windows
   failure so far was an unportable *test*, but a real regression would now reach a user

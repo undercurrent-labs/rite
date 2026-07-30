@@ -63,6 +63,15 @@ impl Parser {
         };
 
         self.expect(TokenKind::Def);
+        // `◆! name(…)` / `def! name(…)` — the declaration says the body performs
+        // host effects, so callers need a marker. Read straight after the `◆`,
+        // mirroring how `!` prefixes an effectful statement.
+        let is_effectful = if self.check(TokenKind::Effect) {
+            self.advance();
+            true
+        } else {
+            false
+        };
         // test decl
         if self.check(TokenKind::Test) {
             self.advance();
@@ -120,6 +129,7 @@ impl Parser {
         let span = name.span.merge(body.span);
         Item::Function(FunctionDecl {
             is_pub,
+            is_effectful,
             name,
             params,
             return_type,

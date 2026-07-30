@@ -24,12 +24,12 @@ async fn eval(src: &str) -> Value {
 async fn not_in_evaluates_each_operand_once() {
     let (v, out) = eval_with_output(
         r#"
-◆ noisy(x) ⟦
-  println("tick")
+◆! noisy(x) ⟦
+  do println("tick")
   ^ x
 ⟧
 xs ← [1, 2]
-res ← noisy(1) ∉ xs
+res ← ! noisy(1) ∉ xs
 res
 "#,
     )
@@ -42,12 +42,12 @@ res
 async fn in_evaluates_each_operand_once() {
     let (v, out) = eval_with_output(
         r#"
-◆ noisy(x) ⟦
-  println("tick")
+◆! noisy(x) ⟦
+  do println("tick")
   ^ x
 ⟧
 xs ← [1, 2]
-res ← noisy(1) ∈ xs
+res ← ! noisy(1) ∈ xs
 res
 "#,
     )
@@ -61,16 +61,16 @@ res
 async fn both_operands_of_both_operators_run_once() {
     let (v, out) = eval_with_output(
         r#"
-◆ noisy(x) ⟦
-  println("tick")
+◆! noisy(x) ⟦
+  do println("tick")
   ^ x
 ⟧
-◆ noisy_list() ⟦
-  println("list")
+◆! noisy_list() ⟦
+  do println("list")
   ^ [1, 2]
 ⟧
-a ← noisy(1) ∈ noisy_list()
-b ← noisy(9) ∉ noisy_list()
+a ← ! noisy(1) ∈ ! noisy_list()
+b ← ! noisy(9) ∉ ! noisy_list()
 res ← [a, b]
 res
 "#,

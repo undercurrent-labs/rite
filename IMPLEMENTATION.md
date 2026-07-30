@@ -37,6 +37,8 @@ Tracks implementation status for the Rite language and V1 tooling. Detailed desi
 | A typo in a qualified call passed `rite check` and failed at runtime naming `m__squre` | Checked when compiling, reported as `module \`m\` has no public \`squre\`` |
 | Colliding exports reported a duplicate at the call site, naming neither module | Named, with the qualified forms offered as the fix |
 | `item`, `room`, `world`, `test`, `ok`, `err`, `some` as parameter names bound nothing and read back as `none` | They parse as expressions wherever they can be bound |
+| `!` marked only the site of a host call, so a function wrapping one was callable unmarked | Effects propagate: `◆!` declares them, inference checks the body and closes over the call graph, callers mark the call |
+| `println("x")` reached the terminal with no marker, making the discipline optional | `print`/`println` take a marker like any host call |
 
 ### Remaining gaps (after this pass)
 
@@ -52,11 +54,10 @@ Tracks implementation status for the Rite language and V1 tooling. Detailed desi
 
 #### P1 — Quality / polish
 
-5. **Effects do not propagate** — `!` / `do` marks the site of a host call, not the
-   expression that contains one, so a function wrapping I/O is called with no marker
-   and `rite check` accepts it. Permissions still bound what a program can reach, and
-   that is the guarantee the docs now claim; inferring effect-ness through the call
-   graph would be a language change, not a fix.
+5. **Effect tracking is syntactic, not typed** — a function passed by name (`each(shout)`)
+   is caught, and a lambda written inline carries its own marker, but a closure stored in
+   a binding and passed along later is not tracked. Closing that needs types Rite does not
+   have. Permissions bound what any of it can reach regardless.
 6. **Game free-form sugar** — still prefer `@game.register_*`. The declarative
    `def item :name ⟦ … ⟧` form does not exist; `examples/text-rpg/game.ascii.rite` used to
    be written against it and is now a real transliteration of its glyph twin.

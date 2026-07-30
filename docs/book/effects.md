@@ -10,25 +10,57 @@ Statement-level host I/O uses `!` (glyph) or `do` (ASCII):
 ! @console.println("hi")
 ```
 
-### The marker is per call, not per call chain
+### Effects travel through your own functions
 
-`!` marks the place a host function is called. It does **not** propagate to
-callers, so a function that performs I/O is called like any other:
+A function that performs a host effect declares it with `◆!` (ASCII `def!`), and
+callers mark the call the same way they mark a capability:
 
 ```rite browser
-◆ greet(name) ⟦
+◆! greet(name) ⟦
   ! @console.println("hello, {name}")
 ⟧
 
-greet("world")            // no marker here
+! greet("world")
 ```
 
-That is worth knowing before you wrap host calls in helpers: reading a call site
-tells you whether *that line* touches the host, not whether the whole expression
-does. What stays true regardless is the permission set — a script that was never
-granted `fs:write` cannot write a file however deeply the call is buried, because
-permissions are enforced where the capability runs. Use the marker to find I/O in
-a file, and permissions to bound what a program can do.
+Leave the declaration off and the compiler says so, at the declaration rather
+than at every call:
+
+```text
+error[E021]: `greet` performs host effects but is not declared `◆!`
+  help: declare it `◆! greet(…)`, then callers mark the call with `!`
+```
+
+This carries through the call graph: a function that calls a `◆!` function is
+itself effectful and needs its own marker, however many layers deep the host call
+sits. Recursion and mutual recursion are fine — the check is a fixed point, not a
+walk.
+
+Declaring a function `◆!` whose body happens to be pure is allowed. It is a
+promise about the API, not a description of today's body, so a function can
+reserve the right to perform effects later without breaking its callers.
+
+### Passing an effectful function
+
+Handing an effectful function to another one runs it, so the call takes a marker
+even though the function receiving it is pure:
+
+```rite browser
+◆! shout(n) ⟦ ! @console.println(str(n)) ⟧
+
+! ([1, 2] → each(shout))
+```
+
+A lambda written inline is different — its own `!` is already visible on the same
+line, so nothing is hidden and no extra marker is asked for:
+
+```rite browser
+[1, 2] → each { |n| ! @console.println(str(n)) }
+```
+
+The rule reads what is written at the call. A closure stored in a binding and
+passed along later is not tracked; that would need a type system Rite does not
+have. Permissions still bound what any of it can reach.
 
 ```rite browser
 do host.console.println("hi")
