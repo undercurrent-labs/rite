@@ -69,10 +69,13 @@ async fn a_scoped_grant_allows_only_its_root() {
         .build()
         .expect("build");
 
+    // A raw string: on Windows the temp path is `C:\Users\RUNNER~1\...`, and in an
+    // ordinary Rite string every one of those backslashes starts an escape sequence.
+    // This is the same reason the book tells users to spell Windows paths `r"..."`.
     let got = engine
         .run_source(
             "t.rite",
-            &format!("! @fs.read(\"{}\")?\n", inside.display()),
+            &format!("! @fs.read(r\"{}\")?\n", inside.display()),
         )
         .await
         .expect("read inside the granted root");
@@ -166,7 +169,8 @@ async fn check_source_does_not_execute_effects() {
     let dir = tempfile::tempdir().expect("tempdir");
     let marker = dir.path().join("written.txt");
     let engine = RiteEngine::builder().allow_all().build().expect("build");
-    let src = format!("! @fs.write(\"{}\", \"x\")?\n", marker.display());
+    // Raw string — see `a_scoped_grant_allows_only_its_root` for why.
+    let src = format!("! @fs.write(r\"{}\", \"x\")?\n", marker.display());
     let _ = engine.check_source("t.rite", &src);
     assert!(!marker.exists(), "check_source executed the script");
 }
