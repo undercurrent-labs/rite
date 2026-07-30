@@ -23,23 +23,37 @@ Tracks implementation status for the Rite language and V1 tooling. Detailed desi
 | Format/convert source maps | **Done** — `LineSourceMap` + Studio/VS Code cursor restore |
 | Multi-file analysis | **Done** — `WorkspaceIndex` (imports on disk, workspace symbols, references); LSP wired |
 | CI release workflow | **Done** — `.github/workflows/ci.yml` (rust, wasm, studio, vsix, manifest) |
+| CI matrix | **Done** — Linux, macOS and Windows; clippy is a hard gate; `deploy` requires the Rust job; a guard fails the build if generation rewrites tracked files |
+| Outbound HTTP | **Done** — `@http.get` / `post` / `request`, gated per host by `net` |
+| Streaming output | **Done** — `RuntimeContext::sink`; `rite run` prints as the script runs |
+| Script arguments | **Done** — `@process.args`, also in compiled binaries |
 
 ### Remaining gaps (after this pass)
 
-1. **WASM host I/O** — browser run evaluates pure scripts + `@console`; FS/HTTP listen/process need native `rite studio`.
+1. **WASM host I/O** — browser run evaluates pure scripts + `@console`; FS, HTTP listen,
+   outbound HTTP, `@db` and `@process` need the native host.
 2. **Virtual HTTP request replay in hosted mode** — UI panel exists; full handler re-entry is native-local.
-3. **Scope-aware multi-file rename** — references work; rename still textual.
-4. **Semantic tokens** — still TextMate-primary.
-5. **macOS/Windows CI matrix** — Ubuntu primary; others commented in workflow.
+3. **Scope-aware multi-file rename** — rename is now token-accurate within a document
+   (skips strings, comments and substrings, and keeps locals separate from `.fields`),
+   but has no scope model and does not cross files.
+4. **Semantic tokens** — not implemented, and the capability is no longer advertised:
+   declaring it while returning an empty token list made clients drop their TextMate
+   grammar, so Rite source came back *less* highlighted. TextMate remains the highlighter.
 
 #### P1 — Quality / polish
 
-6. **Semantic tokens** — LSP returns empty; TextMate is the highlighter.  
-7. **Scope-aware rename** — currently whole-document identifier replace.  
-8. **Aliased imports** — `use m as x` injects `x__f` names, not `x.f`.  
-9. **Game free-form sugar** — still prefer `@game.register_*`.  
-10. **CI matrix** — no GitHub Actions workflow for multi-OS, VSIX, Studio e2e, Cloudflare preview.  
-11. **Incremental relexing / CST** — no rowan green tree; recovery is best-effort parse.  
+5. **Aliased imports** — `use m as x` injects `x__f` names, not `x.f`.
+6. **Game free-form sugar** — still prefer `@game.register_*`. The declarative
+   `def item :name ⟦ … ⟧` form does not exist; `examples/text-rpg/game.ascii.rite` used to
+   be written against it and is now a real transliteration of its glyph twin.
+7. **`execute_command`** — three commands were advertised with no handler; the capability
+   is withdrawn until they do something.
+8. **Formatter sugar fidelity** — comments, layout, route params, `use` middleware and
+   juxtaposed returns all survive, but a call with a single block argument still prints as
+   `keep(⟦ … ⟧)` rather than `keep ⟦ … ⟧`, and `1..=5` prints as `range_incl(1, 5)`.
+   Both need the sugar retained in the AST; the second is indistinguishable from a real
+   call to that builtin.
+9. **Incremental relexing / CST** — no rowan green tree; recovery is best-effort parse.  
 12. **Performance benchmarks** — `cargo bench -p rite-runtime` (criterion). Front end
     and interpreter are measured separately, so a parser regression and an eval
     regression cannot be mistaken for each other. Baseline, one dev machine, release:

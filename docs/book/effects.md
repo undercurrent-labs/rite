@@ -25,6 +25,17 @@ database. Note that **reads count** — `@fs.read` and `@db.query` need `!` just
 runs. The exception is state a capability owns in-process (`@game`'s world, `@store`'s
 map), where only writes are marked; reading it is like reading a local binding.
 
+Naming a host function is not a way around the marker. A capability reference is not a
+value you can pass around — mentioning it *calls* it, with no arguments — so it takes a
+marker too:
+
+```rite
+now ← ! @clock.now        // reads the clock
+```
+
+Without the `!` that is `E021`. There is no form that captures `@clock.now` as a
+function to call later.
+
 ## Capability prefix
 
 | Glyph | ASCII |
@@ -37,7 +48,7 @@ map), where only writes are marked; reading it is like reading a local binding.
 
 | Capability | Default |
 |------------|---------|
-| **console** | allowed |
+| **console** | allowed (deny with `--deny console`) |
 | **clock** | allowed |
 | **random** | allowed |
 | **fs** | denied |

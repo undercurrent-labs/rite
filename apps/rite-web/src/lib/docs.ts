@@ -19,11 +19,15 @@ export const DOC_CHAPTERS: DocChapter[] = [
   { slug: "effects", title: "Effects and capabilities", file: "effects.md" },
   { slug: "files-json", title: "Files and JSON", file: "files-json.md" },
   { slug: "http", title: "HTTP services", file: "http.md" },
+  { slug: "db", title: "Databases", file: "db.md" },
   { slug: "modules", title: "Modules", file: "modules.md" },
+  { slug: "sugar", title: "Syntax sugar", file: "sugar.md" },
+  { slug: "testing", title: "Testing", file: "testing.md" },
   { slug: "compiling", title: "Compiling to Rust", file: "compiling.md" },
   { slug: "rpg", title: "Text RPG", file: "rpg.md" },
   { slug: "embedding", title: "Embedding", file: "embedding.md" },
   { slug: "browser", title: "Browser & Studio", file: "browser.md" },
+  { slug: "agents", title: "Agents & the skill bundle", file: "agents.md" },
 ];
 
 const rawModules = import.meta.glob("../../../../docs/book/*.md", {

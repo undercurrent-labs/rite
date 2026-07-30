@@ -1,5 +1,102 @@
 # Changelog
 
+## [0.2.0] — 2026-07-30
+
+A correctness, security and honesty pass over the whole tree, from a full review.
+One behaviour change to the grammar (pipeline precedence) — see **Changed**.
+
+### Security
+
+- **Compiled binaries enforce permissions.** `rite build` hardcoded `allow_all()` into the
+  generated program, so a binary built with no `--allow` flags had full filesystem and
+  process access while the docs promised enforcement. The real `PermissionSet` is now
+  baked in and checked.
+- **`@db` no longer escapes the sandbox.** `--allow db` granted arbitrary file read *and*
+  write through DuckDB's own SQL (`read_csv`, `COPY TO`). External access is off and the
+  configuration locked, so a script cannot `SET` it back on.
+- **`@http.listen` requires `net` for non-loopback binds.** The old check substring-matched
+  the address, so `0.0.0.0:port` bound with no permission at all.
+- **`@fs.glob` is scoped.** It returned matches from anywhere regardless of the granted
+  read root, leaking paths such as `~/.ssh`.
+- **`rite studio` authenticates.** The session token was generated, printed and never
+  checked, while `/version` reported `token_required: true`. Tokens are enforced, `Host` is
+  validated against loopback (DNS rebinding), and executed scripts get restricted
+  permissions unless started with `--allow-all`.
+- **`--deny console` works.** Console calls bypass the capability host, so the permission
+  check was unreachable dead code and a denied script printed anyway.
+- **`rite update` fails closed.** Checksum verification was skipped when the sums file was
+  absent, undownloadable, or missing the archive. It also refuses to overwrite a
+  `target/debug` build artifact.
+- **Effect markers are enforced consistently.** `@db.*`, `@csv.*` and every `@fs` read
+  needed no `!`; one canonical effect table now drives `E021`, with a parity test against
+  the capability descriptors. A bare capability mention (`n ← @clock.now`) also needs the
+  marker — it calls the function.
+
+### Added
+
+- **Outbound HTTP**: `@http.get`, `@http.post`, `@http.request`, gated per host by `net` —
+  which previously granted nothing at all. The response has the same shape a handler
+  receives.
+- **`@process.args`** — a script's own arguments, replacing a `RITE_ARGV` environment
+  bridge. Needs no grant; works in compiled binaries.
+- **Record spread**: `⟨..base, k: v⟩`, defined as the `+` merge operator spelled
+  positionally, so `⟨..a, ..b⟩ = a + b` holds by construction.
+- **Streaming output** — `rite run` prints as the script runs instead of buffering to exit.
+- **Benchmarks** — `cargo bench -p rite-runtime`, front end measured separately from the
+  interpreter.
+- **`rite docs serve` / `docs open` / `describe diagnostic`** do real work; they used to
+  print success and do nothing. `--trace` is implemented.
+- Documentation for string interpolation, escapes and raw strings — previously undocumented
+  despite being used throughout the examples.
+
+### Changed
+
+- **`→` binds tighter than the operators.** `xs → count > 2` now means
+  `(xs → count) > 2`; it used to parse as `xs → (count > 2)` and fail at runtime with
+  "cannot call value of type bool". Every binary operator after a stage was affected.
+  The trade: a bare binary expression as pipeline input groups to the right, so
+  `a + b → f` is `a + (b → f)` — parenthesise to pipe the sum.
+- **Raw strings no longer interpolate.** `r"{x}"` is literal, as raw implies.
+- **`rite fmt` preserves comments and layout.** It deleted every comment, including `//!`
+  and `///`, and the LSP ran it on save. It also keeps multi-line records, lists and
+  pipelines multi-line, keeps one-line blocks inline, and no longer drops route parameter
+  lists or rewrites `use @http.log` into an internal symbol. A fail-safe refuses to write
+  if output would gain diagnostics.
+- **`rite fmt` needs an explicit path** (or `--all`); it used to default to the whole tree.
+- The LSP no longer advertises semantic tokens or `execute_command` — declaring the former
+  while returning nothing made editors drop their TextMate grammar.
+- CI: clippy is a hard gate (it had `continue-on-error` and a command cargo rejected),
+  `deploy` requires the Rust job, and the matrix covers macOS and Windows.
+
+### Fixed
+
+- **Any non-ASCII character in a comment or multi-line string panicked** the lexer, and so
+  `run`, `check`, `fmt`, the LSP and Studio. `/* résumé */` was enough.
+- **Closures were dynamically scoped** when a caller shadowed a captured name: an adder
+  built with `10` returned `1005` instead of `15` if the caller happened to bind `n`.
+- **A line starting with `(` or `[` was applied to the previous statement.** `a ← 1`
+  followed by `[9]` parsed as `a ← 1[9]` and silently bound `a` to `none`.
+- Six panics that killed the process are now errors: `i64::MIN / -1`, `idiv`, `pow`,
+  `clamp`, `range`, `repeat`.
+- `∉` evaluated both operands twice, so side effects ran twice.
+- Script output was discarded on every error path.
+- HTTP handlers could not see module scope — any top-level binding was `undefined name` at
+  request time. Mutable module state now has server lifetime.
+- The `!` marker was lost through `?`, so `! @fs.write(p, d)?` was rejected.
+- `def Name ⟨…⟩` data declarations did not resolve.
+- Doc comments were never harvested: `FunctionDecl.doc` was always `None`, so nothing read
+  `///` from real sources. Hover and completion show it now.
+- `find_references` matched inside strings and comments; rename replaced substrings
+  document-wide, corrupting `max` when renaming `x`.
+- The agent bundle could truncate its own `SKILL.md`; its capability manifest was three
+  releases stale and advertised the wrong effect flags.
+- `rite check` reported `E026` on module examples that `rite run` executed fine.
+
+### Performance
+
+- Nodes that cannot suspend are evaluated without allocating a future: arithmetic -31%,
+  pipeline map/keep -24%, record spread -21%, recursive calls -9%.
+
 ## [0.1.9] — 2026-07-29
 
 ### Fixed

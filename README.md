@@ -98,7 +98,13 @@ cd editors/vscode && npm install && npm run compile
 
 name ← "Aura"
 nums ← [1, 2, 3, 4, 5]
-! @console.println("hi " + name + " sum=" + str(nums → sum))
+total ← nums → sum
+
+! @console.println("hi {name}, total {total}")
+! @console.println(str(nums → count > 3))     // → binds tighter than >
+
+config ← ⟨host: "localhost", port: 80⟩
+prod ← ⟨..config, port: 443⟩                  // spread: later wins
 ```
 
 ASCII equivalent uses `def`, `<-`, `->`, `return`, `[[ ]]`, `host.console`, etc. Format either way with:
@@ -110,19 +116,24 @@ rite fmt --ascii script.rite  # ASCII
 
 ## Permissions
 
-Default: console, clock, and random allowed; filesystem, network, env, and process denied.
+Default: console, clock, and random allowed; filesystem, network, env, process and
+database denied. Any default can be revoked (`--deny console`).
 
 ```bash
 rite run script.rite \
   --allow fs:read=./data \
   --allow fs:write=./output \
   --allow net=api.example.com \
-  --allow env=APP_MODE
+  --allow env=APP_MODE \
+  --allow db
 
 rite run --allow-all script.rite
+rite run script.rite -- alpha beta      # read with `! @process.args`
 ```
 
-Effectful host calls must be marked with `!` (ASCII: `do`).
+Effectful host calls must be marked with `!` (ASCII: `do`) — **including reads**:
+`@fs.read` and `@db.query` need it for the same reason `@clock.now` does. `--allow net=…`
+gates both the bind address of `@http.listen` and the target of an outbound `@http.get`.
 
 ## Modules
 
@@ -175,7 +186,8 @@ async fn main() -> anyhow::Result<()> {
 ## CLI
 
 ```text
-rite run | build | check | fmt | repl | test | doc | explain | ast | ir | capabilities | version
+rite run | build | check | fmt | convert | repl | test | doc | docs | explain | ast | ir
+     | capabilities | describe | lsp | studio | skill | update | vscode | version
 ```
 
 Exit codes: 0 success, 1 runtime, 2 usage, 3 parse, 4 resolve, 5 permission, 6 compile, 7 test, 8 budget.

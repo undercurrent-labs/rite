@@ -83,6 +83,53 @@ b ← " " + "world"
 - `+` on strings concatenates
 - `str(x)` stringifies other values for embedding in messages
 
+### Interpolation
+
+`{name}` inside a double-quoted string is replaced by that binding's value:
+
+```rite
+name ← "Aura"
+n ← 3
+! @console.println("hi {name}, you have {n}")
+```
+
+A record field works too — `"{user.name}"`. Anything more involved is clearer built with
+`+` and `str(…)`.
+
+### Escapes
+
+| Escape | Means |
+|--------|-------|
+| `\n` `\t` `\r` `\0` | Newline, tab, carriage return, NUL |
+| `\\` | A backslash |
+| `\"` | A double quote |
+| `\u{1F600}` | A Unicode code point |
+| `\{` `\}` | A **literal brace** — not an interpolation hole |
+
+A doubled brace means the same thing: `{{` produces one `{`, so `"{{ mustache }}"` is the
+text `{ mustache }`. `rite fmt` prints the doubled spelling, so a `\{` you wrote comes
+back as `{{`; both mean a literal brace and both re-read identically.
+
+```rite
+! @console.println("literal \{name} stays as written")
+```
+
+### Three kinds of string literal
+
+| Form | Interpolates | Notes |
+|------|--------------|-------|
+| `"…"` | yes | Escapes as above |
+| triple-quoted | yes | Multi-line; common leading indentation is removed |
+| `r"…"` | **no** | Raw: every character is literal, including `{` and `\` |
+
+Use a raw string for anything full of braces or backslashes that should not be touched —
+a regex, a Windows path, a template:
+
+```rite
+pattern ← r"\d+"
+tpl ← r"{name} is not substituted here"
+```
+
 ## Lists
 
 ```rite
