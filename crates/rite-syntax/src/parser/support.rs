@@ -195,12 +195,26 @@ impl Parser {
                 TokenKind::BlockClose | TokenKind::RBrace if at_top => {
                     return false;
                 }
+                // A closing delimiter while already at depth zero means the scan has
+                // left the group the `?` sits inside — `id(x?)`, where the very next
+                // token closes the call. There is no `⟦` body at this level, so the
+                // `?` was postfix try.
+                //
+                // These used to `saturating_sub`, which saturates at `i32::MIN`, not at
+                // zero: the depth went to -1, the *next* `(` brought it back to 0, and a
+                // lambda's `{` on the following statement then looked top-level. So
+                // `r ← id(@json.decode(raw)?)` followed by `each(r, { |x| x })` read the
+                // `?` as a prefix `if` and failed to parse — pointing at the previous
+                // line, which is a good way to lose an afternoon.
                 TokenKind::LParen => {
                     depth_paren += 1;
                     saw_expr = true;
                 }
                 TokenKind::RParen => {
-                    depth_paren = depth_paren.saturating_sub(1);
+                    if depth_paren == 0 {
+                        return false;
+                    }
+                    depth_paren -= 1;
                     saw_expr = true;
                 }
                 TokenKind::LBracket => {
@@ -208,7 +222,10 @@ impl Parser {
                     saw_expr = true;
                 }
                 TokenKind::RBracket => {
-                    depth_bracket = depth_bracket.saturating_sub(1);
+                    if depth_bracket == 0 {
+                        return false;
+                    }
+                    depth_bracket -= 1;
                     saw_expr = true;
                 }
                 TokenKind::RecordOpen => {
@@ -216,7 +233,10 @@ impl Parser {
                     saw_expr = true;
                 }
                 TokenKind::RecordClose => {
-                    depth_brace = depth_brace.saturating_sub(1);
+                    if depth_brace == 0 {
+                        return false;
+                    }
+                    depth_brace -= 1;
                     saw_expr = true;
                 }
                 _ => saw_expr = true,

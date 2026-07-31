@@ -36,6 +36,22 @@ export const TUTORIALS: Tutorial[] = [
     needs: "nothing",
   },
   {
+    slug: "cli-tool",
+    title: "Building a CLI",
+    file: "cli-tool.md",
+    blurb: "Read your own arguments, split flags from names, and fail the way a shell expects.",
+    builds: "A command-line greeter",
+    needs: "nothing",
+  },
+  {
+    slug: "testing-what-you-built",
+    title: "Testing what you built",
+    file: "testing-what-you-built.md",
+    blurb: "Write tests for the CLI, and learn that `rite test` grants every permission.",
+    builds: "A test suite for the greeter",
+    needs: "Building a CLI",
+  },
+  {
     slug: "fs-audit",
     title: "Auditing a directory",
     file: "fs-audit.md",

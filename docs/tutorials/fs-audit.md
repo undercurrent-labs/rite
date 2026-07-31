@@ -134,6 +134,60 @@ Read access is scoped to a directory. `--allow fs:read=.` grants the working
 directory and everything under it; the tool never needs write access, so do not
 give it any.
 
+## The whole script
+
+Everything above, in one file. Save it as `audit.rite` beside a `logs/` directory:
+
+```rite
+// audit.rite — size a directory of logs and flag anything that has gone stale.
+
+◆! describe(path) ⟦
+  m ← ! @fs.metadata(path)?
+  ^ ⟨path: path, len: m.len, mtime: m.mtime⟩
+⟧
+
+◆! main() ⟦
+  cutoff ← "2026-01-01T00:00:00+00:00"
+
+  paths ← ! @fs.glob("logs/*.log")?
+  files ← map(paths, { |p| ! describe(p)? })
+
+  ! println("files   " + str(count(files)))
+  ! println("bytes   " + str(sum(map(files, { |f| f.len }))))
+
+  biggest ← first(sort(files, { |a, b| b.len - a.len }))
+  ! println("largest " + biggest.path + " (" + str(biggest.len) + ")")
+
+  stale ← keep(files, { |f| f.mtime < cutoff })
+  ! println("stale   " + str(count(stale)))
+  each(stale, { |f|
+    ! println("  " + f.path + "  " + f.mtime)
+  })
+⟧
+```
+
+```bash
+rite run audit.rite --allow fs:read=.
+```
+
+Against three logs — a 4000-byte `access.log`, a 100-byte `error.log`, and a
+2-byte `debug.log` last written in 2020:
+
+```text
+files   3
+bytes   4102
+largest logs/access.log (4000)
+stale   1
+  logs/debug.log  2020-01-01T07:00:00+00:00
+```
+
+Only `fs:read` is granted. The tool never writes, and a tool that never writes
+should not be able to.
+
+Those three files live in the repository, and CI runs this script against them on
+every build and compares the output to what is printed above — including the
+modification time, which is pinned so "stale" has something to find.
+
 ## Next
 
 - [Reshaping JSON](json-pipeline.md) — the same pipeline shape over structured data

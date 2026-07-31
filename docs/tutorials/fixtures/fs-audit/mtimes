@@ -1,0 +1,2 @@
+# debug.log is deliberately ancient so the stale check has something to find.
+logs/debug.log 1577862000

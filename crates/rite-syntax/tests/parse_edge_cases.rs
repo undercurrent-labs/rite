@@ -565,3 +565,45 @@ fn keyword_named_capability_methods_parse() {
     );
     assert!(program.is_some());
 }
+
+/// `?` inside a call argument, followed by a statement whose call takes a lambda.
+///
+/// The `?` token is also prefix `if`, so the parser looks ahead to tell them apart.
+/// That scan begins inside whatever group the `?` sits in but starts its paren depth
+/// at zero, and used `saturating_sub` on the way down — which saturates at
+/// `i32::MIN`, not at zero. The closing `)` of the enclosing call drove the depth to
+/// -1, the next statement's `(` brought it back to 0, and that statement's lambda
+/// `{` then looked like the body of a conditional. The `?` was read as prefix `if`
+/// and the file failed to parse, blaming the *previous* line.
+#[test]
+fn try_inside_a_call_is_not_stolen_by_a_later_lambda() {
+    for src in [
+        // The shape that found this: decode inside a call, then a lambda-taking call.
+        "◆! main() ⟦\n  r ← id(@json.decode(\"[]\")?)\n  each(r, { |x| x })\n⟧\n◆ id(o) ⟦ ^ o ⟧",
+        // Blank line between makes no difference — it is token-based.
+        "◆! main() ⟦\n  r ← id(@json.decode(\"[]\")?)\n\n  each(r, { |x| x })\n⟧\n◆ id(o) ⟦ ^ o ⟧",
+        // Same via brackets and records, the other two depth counters.
+        "◆! main() ⟦\n  r ← [@json.decode(\"[]\")?]\n  each(r, { |x| x })\n⟧",
+        "◆! main() ⟦\n  r ← ⟨v: @json.decode(\"[]\")?⟩\n  each(r.v, { |x| x })\n⟧",
+    ] {
+        let (program, diags, _) = parse_source("try.rite", src);
+        assert!(
+            !diags.has_errors(),
+            "should parse: {src}\n{:?}",
+            diags.into_vec()
+        );
+        assert!(program.is_some());
+    }
+
+    // The disambiguation it exists for must still work: a genuine prefix `if` on the
+    // line after a postfix `?` is a conditional, not a try on the previous expression.
+    let (_, diags, _) = parse_source(
+        "if.rite",
+        "◆! main() ⟦\n  r ← id(@json.decode(\"[]\")?)\n  ? count(r) = 0 ⟦ ! println(\"empty\") ⟧\n⟧\n◆ id(o) ⟦ ^ o ⟧",
+    );
+    assert!(
+        !diags.has_errors(),
+        "a following conditional must still parse: {:?}",
+        diags.into_vec()
+    );
+}

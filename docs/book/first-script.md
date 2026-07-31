@@ -85,7 +85,7 @@ script does not behave differently depending on which terminal typed into it —
 end of input answers the empty string rather than failing. Reading is an ordinary
 console effect, so `--deny console` stops it like the rest.
 
-For arguments rather than answers, see [`@process.args`](environment.md).
+For arguments rather than answers, see [`@process.args`](processes.md).
 
 ### Executable scripts (shebang)
 

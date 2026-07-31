@@ -83,7 +83,8 @@ watch(
       covers one topic per chapter and is meant to be read in order.
     </p>
     <p class="mt-2 max-w-prose text-sm text-rite-muted">
-      Every example was run to produce the output printed beside it.
+      Every example was run to produce the output printed beside it, and each tutorial's
+      final script is executed on every CI build and checked against the output shown.
     </p>
 
     <ul class="mt-8 space-y-3">
@@ -112,8 +113,8 @@ watch(
     </ul>
 
     <p class="mt-8 text-sm text-slate-400">
-      More are planned — an HTTP service with real routes, a CLI with argument parsing,
-      compiling to a binary, embedding Rite in a Rust program, and a DNS resolver over
+      More are planned — an HTTP service with real routes, compiling to a binary,
+      embedding Rite in a Rust program, and a DNS resolver over
       <code class="text-rite-pink">@udp</code>.
     </p>
   </div>

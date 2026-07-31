@@ -23,15 +23,16 @@ This book is a linear path. You can stop after any chapter and experiment in [St
 15. [Databases](db.md) — `@db` (DuckDB), SQL, transactions
 16. [Network: HTTP services](http.md) — `@http.listen`, routes, middleware, client calls
 17. [Network: sockets](sockets.md) — `@udp` datagrams, `@tcp` streams, bytes on the wire
-18. [Environment and processes](environment.md) — `@env`, `@process`, `@clock`, `@random`, `@store`
-19. [Modules](modules.md) — `use`, `pub`, relative paths, aliases
-20. [Compiling to Rust](compiling.md) — `rite build`, IR, parity
-21. [Text RPG](rpg.md) — `@game` tutorial
-22. [Embedding](embedding.md) — `RiteEngine` from Rust
-23. [Browser & Studio](browser.md) — hosted site, WASM limits
-24. [Agents & the skill bundle](agents.md) — skill install, self-update, VS Code extension
-25. [Testing](testing.md) — `◆ test`, `expect`, `rite test`
-26. [Contributing tests](contributing-tests.md) — suite map, HTTP I/O capture, PR checklist
+18. [Environment](environment.md) — `@env`, `@clock`, `@random`, `@store`
+19. [Processes](processes.md) — `@process`, running commands, script arguments
+20. [Modules](modules.md) — `use`, `pub`, relative paths, aliases
+21. [Compiling to Rust](compiling.md) — `rite build`, IR, parity
+22. [Text RPG](rpg.md) — `@game` tutorial
+23. [Embedding](embedding.md) — `RiteEngine` from Rust
+24. [Browser & Studio](browser.md) — hosted site, WASM limits
+25. [Agents & the skill bundle](agents.md) — skill install, self-update, VS Code extension
+26. [Testing](testing.md) — `◆ test`, `expect`, `rite test`
+27. [Contributing tests](contributing-tests.md) — suite map, HTTP I/O capture, PR checklist
 
 ## Where each capability is covered
 
@@ -44,9 +45,10 @@ This book is a linear path. You can stop after any chapter and experiment in [St
 | `@db` | [Databases](db.md) | denied |
 | `@http` | [Network: HTTP services](http.md) | denied |
 | `@udp` · `@tcp` | [Network: sockets](sockets.md) | denied |
-| `@env` · `@process` | [Environment and processes](environment.md) | denied |
-| `@clock` · `@random` | [Environment and processes](environment.md) | allowed |
-| `@store` | [Environment and processes](environment.md) | no permission |
+| `@env` | [Environment](environment.md) | denied |
+| `@process` | [Processes](processes.md) | denied |
+| `@clock` · `@random` | [Environment](environment.md) | allowed |
+| `@store` | [Environment](environment.md) | no permission |
 | `@game` | [Text RPG](rpg.md) | — |
 
 Every function of every one of them, with its arity and the permission it needs, is

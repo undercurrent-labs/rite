@@ -154,6 +154,69 @@ permission denied: fs:read permission denied for `orders.json`
 
 That is worth doing once, deliberately, so you recognise it later.
 
+## The whole script
+
+Everything above, in one file. Save it as `summary.rite` next to `orders.json`:
+
+```rite
+// summary.rite — read orders, keep what shipped, rank customers by spend.
+
+◆ summarize(orders) ⟦
+  orders
+    → { |os| keep(os, { |o| o.status = "shipped" }) }
+    → { |os| group(os, { |o| o.customer }) }
+    → { |gs| map(gs, { |g|
+        ⟨customer: first(g), orders: count(last(g)), total: sum(map(last(g), { |o| o.total }))⟩
+      }) }
+    → { |rs| sort(rs, { |a, b| b.total - a.total }) }
+⟧
+
+◆! main() ⟦
+  raw ← ! @fs.read("orders.json")?
+  report ← summarize(@json.decode(raw)?)
+
+  ! @fs.write("report.json", @json.encode_pretty(report))?
+
+  ! println("customers: " + str(count(report)))
+  each(report, { |r|
+    ! println(r.customer + "  " + str(r.orders) + " orders  " + str(r.total))
+  })
+⟧
+```
+
+```bash
+rite run summary.rite --allow fs:read=. --allow fs:write=.
+```
+
+```text
+customers: 2
+ada  2 orders  138.25
+grace  1 orders  76.25
+```
+
+and `report.json` now holds the same rows, indented by `@json.encode_pretty`
+because a file is something a person may open:
+
+```json
+[
+  {
+    "customer": "ada",
+    "orders": 2,
+    "total": 138.25
+  },
+  {
+    "customer": "grace",
+    "orders": 1,
+    "total": 76.25
+  }
+]
+```
+
+This script is executed on every CI run, against the `orders.json` printed at the
+top of this page, and the output above is compared to what it prints. If the
+language changes under it, this page fails the build rather than quietly misleading
+you.
+
 ## Next
 
 - [Files and JSON](../book/files-json.md) — the rest of `@fs`, plus CSV

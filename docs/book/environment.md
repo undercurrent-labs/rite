@@ -1,12 +1,13 @@
-# Environment and processes
+# Environment
 
-Five small capabilities connect a script to the machine it is running on:
-configuration (`@env`), other programs (`@process`), time (`@clock`), randomness
-(`@random`), and a scratch pad that outlives nothing (`@store`).
+A script does not only read files and open sockets. It also sits inside an
+*environment*: variables it was configured with, a clock, a source of randomness,
+and a scratch pad that lasts as long as the run. Four small capabilities cover it,
+and they are grouped here because they share a shape — a handful of functions each,
+[its own permission](effects.md) each, and all of them things you reach for while
+writing a tool rather than while learning the language.
 
-They are grouped here because they share a shape: each is a handful of functions,
-each is gated by [its own permission](effects.md), and each is the sort of thing you
-reach for while writing a tool rather than while learning the language.
+For running *other* programs, see [Processes](processes.md).
 
 ## Configuration (`@env`)
 
@@ -73,131 +74,6 @@ It reveals nothing `@env.get` would not answer one name at a time, so the scoped
 grant stays honest: the record has as many entries as you granted, and no more. With
 nothing granted it is a permission error rather than an empty record — a script
 asking for the environment when it may not have one should hear so.
-
-## Running programs (`@process`)
-
-```rite native_only
-◆! main() ⟦
-  r ← ! @process.run("echo", ["hello", "world"], ⟨⟩)?
-  ! @console.println(r.stdout)
-⟧
-```
-
-```text
-hello world
-```
-
-The result record is `⟨status, stdout, stderr⟩`. The third argument is an options
-record; pass `⟨⟩` when you have nothing to say.
-
-| Option | Type | Effect |
-|---|---|---|
-| `cwd` | string | The directory the child runs in |
-| `env` | record | Variables **added to** the inherited environment |
-
-```rite native_only
-◆! main() ⟦
-  a ← ! @process.run("pwd", [], ⟨cwd: "subdir"⟩)?
-  b ← ! @process.run("sh", ["-c", "echo $GREETING"], ⟨env: ⟨GREETING: "hello"⟩⟩)?
-  ! @console.println(trim(b.stdout))
-⟧
-```
-
-```text
-hello
-```
-
-`env` extends rather than replaces, because a child that loses `PATH` usually cannot
-start. Neither option needs a permission of its own: `--allow process` already lets
-the script run any binary, and setting a child's directory or environment tells the
-script nothing back.
-
-**An unrecognised key is an error**, not a default — `⟨cdw: "…"⟩` says so rather
-than silently running in the wrong directory.
-
-**There is no shell.** The command and its arguments go straight to `exec`, which is
-why the arguments are a *list* rather than one string. Nothing expands `*`, nothing
-splits on spaces, and nothing interprets `|` or `>`. That removes the entire class of
-bug where a filename with a space in it becomes two arguments — and it means if you
-genuinely want a pipeline you have to ask for a shell yourself:
-
-```rite native_only
-! @process.run("sh", ["-c", "ls | wc -l"], ⟨⟩)?
-```
-
-Doing that hands the shell a string to parse, so it is back on you to make sure
-nothing untrusted is interpolated into it.
-
-### A command that fails is not an error
-
-```rite native_only
-◆! main() ⟦
-  r ← ! @process.run("sh", ["-c", "exit 3"], ⟨⟩)?
-  ! @console.println("status " + str(r.status))
-⟧
-```
-
-```text
-status 3
-```
-
-`grep` finding nothing exits 1, and `diff` finding a difference exits 1. Those are
-answers, not failures, so a non-zero `status` still comes back as `ok` and it is your
-job to decide what it means.
-
-A command that could not be *started* is different — it raises rather than
-answering `err`, and it will end the script even inside a match:
-
-```text
-runtime error: No such file or directory (os error 2)
-```
-
-So check first if the binary might be absent, which is what `which` is for.
-
-### Finding a binary
-
-```rite native_only
-! @console.println(! @process.which("echo"))
-```
-
-```text
-ok(/usr/bin/echo)
-```
-
-Missing gives `err(not found: …)`. `which` needs **two** permissions, because
-locating a binary means reading `PATH`:
-
-```bash
-rite run t.rite --allow process --allow env=PATH
-```
-
-Ask for only one and the error says which half is missing:
-
-```text
-permission denied: process.which reads the PATH environment variable: also needs `--allow env=PATH` (or --allow env / --allow-all)
-```
-
-`@process.run` needs no `env` grant, because it never reports the environment back
-to the script.
-
-### Your own arguments
-
-```rite native_only
-! @console.println(! @process.args())
-```
-
-```bash
-rite run tool.rite -- a b
-```
-
-```text
-[a, b]
-```
-
-Everything after `--` is yours; everything before it belongs to `rite`. This is the
-one call in the capability set that **needs no permission at all** — the arguments
-are what the invoker chose to hand this program, not ambient state it went looking
-for.
 
 ## Time (`@clock`)
 
@@ -380,17 +256,14 @@ file ([Files, JSON, and CSV](files-json.md)) or use [a database](db.md).
 
 | Capability | Default | Grant |
 |---|---|---|
-| `@env` | denied | `--allow env=NAME` or `--allow env` |
-| `@process` | denied | `--allow process` (`which` also needs `env=PATH`) |
-| `@process.args` | always | — |
+| `@env` | denied | `--allow env=NAME[,NAME…]` or `--allow env` |
 | `@clock` | **allowed** | `--deny clock` to revoke |
 | `@random` | **allowed** | `--deny random` to revoke |
 | `@store` | always | — |
 
-Except for `@store`, none of these exist in the browser: Studio has no environment,
-no subprocesses and no entropy pool of its own. See
-[Browser & Studio](browser.md).
+Except for `@store`, none of these exist in the browser: Studio has no environment
+and no entropy pool of its own. See [Browser & Studio](browser.md).
 
 ## Next
 
-[Modules](modules.md) · [Effects and capabilities](effects.md) · [Compiling to Rust](compiling.md)
+[Processes](processes.md) · [Effects and capabilities](effects.md) · [Modules](modules.md)

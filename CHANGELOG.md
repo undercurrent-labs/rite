@@ -23,6 +23,23 @@
   `PATH` usually cannot start). An unrecognised key is an error rather than a
   silent default — a typo should not be indistinguishable from the default.
 
+### Fixed — parser
+
+- **`?` inside a call argument, followed by a statement taking a lambda, failed to
+  parse.** `r ← id(@json.decode(raw)?)` on one line and `each(r, { |x| x })` on the
+  next was rejected, with the error pointing at the *previous* line.
+
+  `?` is both postfix try and prefix `if`, so the parser looks ahead to tell them
+  apart. That scan begins inside whatever group the `?` sits in but starts its paren
+  depth at zero, and stepped down with `saturating_sub` — which saturates at
+  `i32::MIN`, not at zero. The closing `)` of the enclosing call took the depth to
+  -1, the next statement's `(` brought it back to 0, and that statement's lambda `{`
+  then looked like the body of a conditional. A closing delimiter at depth zero now
+  ends the scan: it means the `?` has been left behind, so it was postfix try.
+
+  This was found by writing a tutorial and running it, which is the point of running
+  them.
+
 ### Security
 
 - **A path could escape a granted root through directories that do not exist.**
@@ -99,8 +116,24 @@
   including five capabilities with no chapter at all. That is now zero, enforced
   by nothing but the audit, so it is worth re-running when a capability is added.
 
-- **New chapter: Environment and processes** (`@env`, `@process`, `@clock`,
-  `@random`, `@store`) — the five that had no home.
+- **Two new chapters where five capabilities had no home**: Environment (`@env`,
+  `@clock`, `@random`, `@store`) and Processes (`@process`). Running another program
+  is a different subject from reading a variable, and the sharpest permission in the
+  set deserves its own page rather than a section inside someone else's.
+
+- **Tutorials are executed, not just parsed.** Each one now ends with a complete
+  script, and CI runs it against fixtures and compares its output to what the page
+  prints — including a pinned modification time, so "which files are stale" has
+  something to find. Tutorial fences are `native_only`, so `rite docs check` only
+  ever proved their syntax was current; a tutorial could parse perfectly while
+  describing behaviour that no longer existed. The markdown is the only copy of the
+  script, so there is nothing to drift.
+
+- **Two new tutorials.** *Building a CLI* — `@process.args`, splitting flags from
+  positionals, and failing with a usage line on stderr and a non-zero status. And
+  *Testing what you built*, which leads with the thing that will bite someone:
+  `rite test` grants **every** permission, so a test file is as trusted as the CLI
+  itself, and a test therefore cannot prove your script asks for the right grants.
 
 - **New chapter: Network: sockets**, split out of HTTP services. `@udp` and `@tcp`
   were documented, but inside a 521-line chapter the sidebar labelled "HTTP
