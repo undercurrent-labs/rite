@@ -1,5 +1,7 @@
 # Changelog
 
+## [Unreleased]
+
 ## [0.4.1] — 2026-07-31
 
 A correctness release. Five capability functions were shipped surface that did
