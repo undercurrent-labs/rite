@@ -120,3 +120,50 @@ fn walk(dir: &PathBuf, out: &mut Vec<String>) {
         }
     }
 }
+
+/// The tutorial list exists twice — `TUTORIALS` in the site registry drives the
+/// index cards and the sidebar, `docs/tutorials/README.md` is what a reader sees
+/// on GitHub — and nothing but this test makes them agree.
+///
+/// The book already demonstrates the failure: its chapter order lives in both
+/// `DOC_CHAPTERS` and `docs/book/README.md`, they drifted, and the site showed two
+/// different numberings on one screen. Tutorials get the guard the book never had.
+#[test]
+fn the_tutorial_list_matches_the_readme() {
+    let registry = read("apps/rite-web/src/lib/tutorials.ts");
+    let readme = read("docs/tutorials/README.md");
+    assert!(
+        !registry.is_empty() && !readme.is_empty(),
+        "tutorial registry or README missing"
+    );
+
+    // `slug: "json-pipeline"` from the registry, in declaration order.
+    let slugs: Vec<String> = registry
+        .lines()
+        .filter_map(|l| l.trim().strip_prefix("slug: \"")?.split('"').next())
+        .map(str::to_string)
+        .collect();
+    assert!(!slugs.is_empty(), "no slugs parsed from the registry");
+
+    // `[Title](json-pipeline.md)` from the README table, in row order.
+    let linked: Vec<String> = readme
+        .lines()
+        .filter(|l| l.starts_with('|'))
+        .filter_map(|l| {
+            let start = l.find("](")? + 2;
+            let rest = &l[start..];
+            Some(rest.split(".md").next()?.to_string())
+        })
+        .collect();
+
+    assert_eq!(
+        slugs, linked,
+        "docs/tutorials/README.md and TUTORIALS disagree — same order, same slugs"
+    );
+
+    // Every listed tutorial must actually exist, or the site links to a 404.
+    for slug in &slugs {
+        let path = workspace().join(format!("docs/tutorials/{slug}.md"));
+        assert!(path.is_file(), "missing tutorial file {}", path.display());
+    }
+}

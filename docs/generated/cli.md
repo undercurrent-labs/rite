@@ -149,6 +149,7 @@ Run documentation doctests
 |---|---|
 | `--out` | Regenerate reference docs here first (default: <checkout>/docs/generated) |
 | `--book` | Book directory (default: <checkout>/docs/book) |
+| `--tutorials` | Tutorials directory (default: <checkout>/docs/tutorials) |
 | `--diagnostics` | Diagnostics directory (default: <checkout>/docs/diagnostics) |
 | `--skill` | Agent skill directory (default: <checkout>/skills/rite) |
 

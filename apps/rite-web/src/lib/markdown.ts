@@ -5,9 +5,44 @@ marked.setOptions({
   breaks: false,
 });
 
-/** Rewrite in-book relative links (foo.md, ./foo.md) to /docs/foo. */
-function rewriteDocLinks(html: string): string {
+/**
+ * Which section a document lives in, which decides where its *bare* relative
+ * links point.
+ *
+ * `[Effects](effects.md)` means a different page depending on who wrote it: from
+ * the book it is a chapter, from a tutorial it is a sibling tutorial. Without
+ * this the bare-slug rule below sent every tutorial-to-tutorial link into /docs/
+ * and produced a "no chapter named json-pipeline" page.
+ */
+export type DocBase = "docs" | "tutorials";
+
+/**
+ * Rewrite relative markdown links to site routes.
+ *
+ * Cross-section links are written the way they resolve on disk and in a GitHub
+ * preview — `../book/effects.md` from a tutorial — so the same file reads
+ * correctly in both places.
+ */
+function rewriteDocLinks(html: string, base: DocBase = "docs"): string {
   return html
+    // Explicit cross-section paths first: they contain a separator, so they must
+    // beat both the reference rule and the bare-slug rule.
+    .replace(
+      /href="(?:\.\.\/)?book\/([a-z0-9-]+)\.md(#[^"]*)?"/gi,
+      (_m, slug: string, hash: string = "") => `href="/docs/${slug}${hash || ""}"`
+    )
+    .replace(
+      /href="(?:\.\.\/)?tutorials\/([a-z0-9-]+)\.md(#[^"]*)?"/gi,
+      (_m, slug: string, hash: string = "") => `href="/tutorials/${slug}${hash || ""}"`
+    )
+    .replace(
+      /href="(?:\.\.\/)?book\/README\.md(#[^"]*)?"/gi,
+      (_m, hash: string = "") => `href="/docs${hash || ""}"`
+    )
+    .replace(
+      /href="(?:\.\.\/)?tutorials\/README\.md(#[^"]*)?"/gi,
+      (_m, hash: string = "") => `href="/tutorials${hash || ""}"`
+    )
     // Must precede the bare-slug rule below, which matches no path separator.
     .replace(
       /href="(?:\.\/)?reference\/([a-z0-9-]+)\.md(#[^"]*)?"/gi,
@@ -15,17 +50,17 @@ function rewriteDocLinks(html: string): string {
     )
     .replace(
       /href="(?:\.\/)?([a-z0-9-]+)\.md(#[^"]*)?"/gi,
-      (_m, slug: string, hash: string = "") => `href="/docs/${slug}${hash || ""}"`
+      (_m, slug: string, hash: string = "") => `href="/${base}/${slug}${hash || ""}"`
     )
     .replace(
       /href="README\.md(#[^"]*)?"/gi,
-      (_m, hash: string = "") => `href="/docs${hash || ""}"`
+      (_m, hash: string = "") => `href="/${base}${hash || ""}"`
     );
 }
 
-export function renderMarkdown(md: string): string {
+export function renderMarkdown(md: string, base: DocBase = "docs"): string {
   const raw = marked.parse(md, { async: false }) as string;
-  return rewriteDocLinks(raw);
+  return rewriteDocLinks(raw, base);
 }
 
 /**
@@ -54,7 +89,7 @@ function parseFenceInfo(info: string): { lang: string; mode: CodeMode } {
  * components — highlighted, with a copy button and a way to run them. Everything
  * else stays a single `v-html` chunk, which keeps prose rendering unchanged.
  */
-export function segmentMarkdown(md: string): DocSegment[] {
+export function segmentMarkdown(md: string, base: DocBase = "docs"): DocSegment[] {
   const tokens = marked.lexer(md);
   const segments: DocSegment[] = [];
   let buffer: Token[] = [];
@@ -64,7 +99,7 @@ export function segmentMarkdown(md: string): DocSegment[] {
     const chunk = buffer as Token[] & { links: Record<string, unknown> };
     // The parser needs the link reference table from the original lex.
     chunk.links = (tokens as unknown as { links: Record<string, unknown> }).links ?? {};
-    segments.push({ kind: "html", html: rewriteDocLinks(marked.parser(chunk)) });
+    segments.push({ kind: "html", html: rewriteDocLinks(marked.parser(chunk), base) });
     buffer = [];
   };
 

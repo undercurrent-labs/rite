@@ -9,6 +9,7 @@ import HomeView from "./views/HomeView.vue";
 const DocsView = () => import("./views/DocsView.vue");
 const StudioView = () => import("./views/StudioView.vue");
 const AgentsView = () => import("./views/AgentsView.vue");
+const TutorialsView = () => import("./views/TutorialsView.vue");
 const NotFoundView = () => import("./views/NotFoundView.vue");
 
 export const router = createRouter({
@@ -33,6 +34,18 @@ export const router = createRouter({
       name: "docs",
       component: DocsView,
       meta: { title: "Docs · Rite" },
+    },
+    {
+      path: "/tutorials",
+      name: "tutorials-index",
+      component: TutorialsView,
+      meta: { title: "Tutorials · Rite" },
+    },
+    {
+      path: "/tutorials/:slug",
+      name: "tutorial",
+      component: TutorialsView,
+      meta: { title: "Tutorials · Rite" },
     },
     {
       path: "/agents",

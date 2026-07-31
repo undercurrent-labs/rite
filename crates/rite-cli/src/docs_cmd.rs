@@ -152,6 +152,9 @@ pub enum DocsCmd {
         /// Book directory (default: <checkout>/docs/book)
         #[arg(long)]
         book: Option<PathBuf>,
+        /// Tutorials directory (default: <checkout>/docs/tutorials)
+        #[arg(long)]
+        tutorials: Option<PathBuf>,
         /// Diagnostics directory (default: <checkout>/docs/diagnostics)
         #[arg(long)]
         diagnostics: Option<PathBuf>,
@@ -220,9 +223,10 @@ pub async fn run(cmd: DocsCmd) -> anyhow::Result<ExitCode> {
         DocsCmd::Check {
             out,
             book,
+            tutorials,
             diagnostics,
             skill,
-        } => check(out, book, diagnostics, skill).await,
+        } => check(out, book, tutorials, diagnostics, skill).await,
         DocsCmd::Serve {
             port,
             root,
@@ -265,16 +269,21 @@ fn resolve_input(explicit: Option<PathBuf>, rel: &str, flag: &str) -> anyhow::Re
 async fn check(
     out: Option<PathBuf>,
     book: Option<PathBuf>,
+    tutorials: Option<PathBuf>,
     diagnostics: Option<PathBuf>,
     skill: Option<PathBuf>,
 ) -> anyhow::Result<ExitCode> {
     let out = resolve_out(out, "docs/generated", "--out")?;
     let book = resolve_input(book, "docs/book", "--book")?;
+    let tutorials = resolve_input(tutorials, "docs/tutorials", "--tutorials")?;
     let diagnostics = resolve_input(diagnostics, "docs/diagnostics", "--diagnostics")?;
     let skill = resolve_input(skill, "skills/rite", "--skill")?;
 
     generate_reference(None, &out)?;
-    let dirs: Vec<&Path> = vec![&book, &diagnostics, &skill];
+    // Tutorials are executable documentation on the same terms as the book: a
+    // tutorial is mostly code, and one that has drifted from the language is worse
+    // than none, because a reader trusts it enough to type it in.
+    let dirs: Vec<&Path> = vec![&book, &tutorials, &diagnostics, &skill];
     let report = rite_doc::run_doctests(&dirs).await;
     println!(
         "doctests: {} passed, {} failed",

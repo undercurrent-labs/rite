@@ -13,6 +13,7 @@ const route = useRoute();
 
 const links = [
   { to: "/docs", label: "Docs", match: /^\/docs/ },
+  { to: "/tutorials", label: "Tutorials", match: /^\/tutorials/ },
   { to: "/agents", label: "Agents", match: /^\/agents/ },
   { to: "/studio", label: "Studio", match: /^\/studio/ },
 ];
