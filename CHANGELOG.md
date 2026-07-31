@@ -1,6 +1,11 @@
 # Changelog
 
-## [Unreleased]
+## [0.4.0] — 2026-07-31
+
+Rite learns to talk to the network and to handle the bytes that come back:
+`@crypto`, `@udp` and `@tcp` arrive, `parallel` starts actually running things
+together, and strings, numbers and bytes get the operations a scripting language
+is expected to have. Everything here is additive — 0.3.1 code keeps working.
 
 ### Added
 
@@ -155,6 +160,27 @@
 
   Concurrency, not parallelism: work that never waits gains nothing and should use
   `map`. Each branch needs its own evaluator context, which `map` does not pay for.
+
+### Fixed
+
+- **The docs site stopped offering Run on examples it cannot run.** Twenty-seven
+  blocks across the book had a Run button that answered `capability `@json.encode`
+  not registered`. The site decided the button from the fence annotation alone, but
+  `rite docs check` runs *natively* — where the capabilities are compiled in — so a
+  block could pass CI and still fail in the browser. The code now gets the final say
+  over the annotation, and a block using a capability the browser lacks offers
+  **Open in Studio** instead.
+
+  The underlying gap is unchanged and recorded in `IMPLEMENTATION.md`: `rite-caps`
+  sits behind rite-wasm's `native` feature, so the WASM bundle installs no capability
+  host at all. `@console` works only because it reaches the output buffer through the
+  context rather than the host.
+
+- **`@http.listen` lost its handler block when the address was a binding.**
+  Trailing-block call sugar stayed enabled while the listen address was parsed, so
+  `@http.listen where ⟦…⟧` read as a *call to `where`* taking the block, leaving
+  `listen` with none. Every example in the book passes a string literal, which is not
+  callable, so nothing caught it.
 
 ## [0.3.1] — 2026-07-30
 
