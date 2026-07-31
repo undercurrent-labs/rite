@@ -1,0 +1,32 @@
+{
+  "$comment": [
+    "The syntax highlighting palette, in one place.",
+    "",
+    "It lived only as raw hex in apps/rite-studio/src/highlight.css, which was",
+    "fine while a stylesheet was the only thing that drew Rite. `rite render`",
+    "draws it too, and a second copy of eleven colours is a drift waiting to",
+    "happen: change one, and generated images disagree with the site with nothing",
+    "to catch it. Same one-table reasoning as grammar/aliases.json.",
+    "",
+    "`kinds` keys are the TokenKind values in highlight.css / rite-render, and the",
+    "CSS class for each is `.tok-<kind>`. Both sides are checked against this file",
+    "by crates/rite-cli/tests/palette_sync.rs, which also re-derives the contrast",
+    "figures below rather than trusting this comment."
+  ],
+  "background": "#121821",
+  "min_contrast": 4.5,
+  "kinds": {
+    "comment": { "color": "#8b9bb4", "italic": true },
+    "string": { "color": "#c3e88d" },
+    "number": { "color": "#f78c6c" },
+    "atom": { "color": "#ff7edb" },
+    "capability": { "color": "#7ee0ff" },
+    "capability-fn": { "color": "#a9e9ff" },
+    "keyword": { "color": "#c792ea" },
+    "operator": { "color": "#89ddff" },
+    "http": { "color": "#ffcb6b", "weight": 500 },
+    "punctuation": { "color": "#8b9bb4" },
+    "plain": { "color": "#e2e8f0" },
+    "sigil": { "color": "#ff7edb", "glow": "rgb(255 126 219 / 45%)" }
+  }
+}

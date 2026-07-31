@@ -2,6 +2,11 @@
  * Syntax highlighting palette, shared by the product site and the standalone
  * Studio build.
  *
+ * The colours come from grammar/palette.json, which `rite render` reads too —
+ * edit them there and here together. crates/rite-cli/tests/palette_sync.rs fails
+ * if the two disagree, if a colour appears here that the table does not have, or
+ * if any of them drops below the contrast floor claimed below.
+ *
  * Cyberpunk, but every colour is checked at 4.5:1 or better against the panel
  * background (#121821) — a neon theme that cannot be read is just a screenshot.
  * Sigils get the accent treatment because they are the language's signature;
