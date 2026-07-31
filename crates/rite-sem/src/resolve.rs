@@ -62,6 +62,15 @@ pub const HOST_EFFECTS: &[(&str, bool)] = &[
     ("fs.remove", true),
     ("fs.copy", true),
     ("fs.move", true),
+    // Open handles. Every one touches the file behind the handle — even `close`,
+    // which flushes — so every one takes a marker.
+    ("fs.open", true),
+    ("fs.read_chunk", true),
+    ("fs.read_line", true),
+    ("fs.write_chunk", true),
+    ("fs.seek", true),
+    ("fs.flush", true),
+    ("fs.close", true),
     // @json — encode/decode are pure string transforms; read/write touch disk.
     ("json.decode", false),
     ("json.encode", false),

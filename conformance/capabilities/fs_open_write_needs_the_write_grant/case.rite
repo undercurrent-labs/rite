@@ -1,0 +1,6 @@
+// `@fs.open` decides the permission from the mode it is given, before it opens
+// anything: the reads and writes that follow carry no path of their own to check,
+// so this is the only place the grant can be enforced. A read grant does not open
+// a file for writing — and the file is not created or truncated on the way to
+// finding that out.
+! @fs.open("case.rite", #write)?

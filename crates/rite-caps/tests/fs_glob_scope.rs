@@ -16,7 +16,7 @@ async fn glob(perms: &PermissionSet, pattern: &str) -> Result<Vec<String>, Strin
             "glob",
             vec![Value::string(pattern)],
             perms,
-            &rite_runtime::AtomInterner::new(),
+            &rite_runtime::RuntimeContext::new(),
         )
         .await
     {

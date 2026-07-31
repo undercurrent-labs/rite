@@ -138,7 +138,7 @@ impl CapabilityHost for HostCapabilities {
         let method = path.get(1).map(|s| s.as_str()).unwrap_or("");
         match cap {
             "console" => self.console.call(method, args, &self.perms, ctx).await,
-            "fs" => self.fs.call(method, args, &self.perms, &ctx.atoms).await,
+            "fs" => self.fs.call(method, args, &self.perms, ctx).await,
             "json" => self.json.call(method, args, &self.perms).await,
             "csv" => self.csv.call(method, args, &self.perms).await,
             // Pure value transforms, apart from `random_bytes` — nothing to await.

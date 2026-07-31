@@ -251,6 +251,13 @@ pub struct RuntimeContext {
     /// Installed by a host that wants output as it happens; see [`OutputSink`]. When
     /// set, `stdout`/`stderr` stay empty and every write goes straight to the sink.
     pub sink: Option<OutputSink>,
+    /// Host resources this run holds open — see [`HandleTable`].
+    ///
+    /// Per-context for the same reason `http_next` is: a handle must not outlive
+    /// the run that opened it, and dropping this context is what closes anything
+    /// the script left open. An embedder's process does not exit between runs, so
+    /// "the OS will clean up" is not an answer there.
+    pub handles: Arc<crate::handles::HandleTable>,
     /// Resolves a `http.next` handle for custom middleware, installed by the HTTP host
     /// on the context it builds for one request.
     ///
@@ -310,6 +317,7 @@ impl RuntimeContext {
             pending_http: None,
             http_next: None,
             sink: None,
+            handles: Arc::new(crate::handles::HandleTable::default()),
         }
     }
 
@@ -355,6 +363,10 @@ impl RuntimeContext {
             pending_http: None,
             http_next: None,
             sink: None,
+            // Shared, like the capability host: a handle opened before the fork
+            // must still work inside a branch, and one a branch opens must not
+            // vanish when that branch's context is dropped.
+            handles: Arc::clone(&self.handles),
         }
     }
 

@@ -186,7 +186,26 @@ impl Parser {
                     return false;
                 }
                 // Cannot appear in an if-condition; stop (postfix try or unrelated)
-                TokenKind::Return | TokenKind::Def | TokenKind::Match | TokenKind::Effect
+                //
+                // The loop keywords belong here for the same reason as `def` and `^`,
+                // and their absence cost a real program: `line ↢ ! @fs.read_line(h)?`
+                // followed by `while line != none ⟦ … ⟧` scanned forward, found the
+                // loop's own `⟦`, and concluded the `?` opened a conditional. The `?`
+                // was then left to start the next statement, which parsed as
+                // `? while …` and failed with "unexpected token While" — pointing at
+                // the `while`, which is not where the mistake was.
+                //
+                // Unambiguous because none of these is in `is_keyword_as_ident`: a
+                // binding cannot be called `while`, so one can never open a condition.
+                TokenKind::Return
+                | TokenKind::Def
+                | TokenKind::Match
+                | TokenKind::Effect
+                | TokenKind::While
+                | TokenKind::Loop
+                | TokenKind::For
+                | TokenKind::ForAll
+                | TokenKind::Unless
                     if at_top =>
                 {
                     return false;

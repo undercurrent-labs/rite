@@ -1,0 +1,16 @@
+// `?` and prefix `?` (if) are the same token, so the parser looks ahead to tell a
+// try-unwrap from the start of a conditional. The lookahead scanned past `while`
+// and found the *loop's* own `⟦`, concluding the `?` opened a conditional — the
+// `?` was then left to begin the next statement, which parsed as `? while …` and
+// failed with "unexpected token While", pointing at the loop rather than at the
+// line above it.
+//
+// A loop keyword can never start an if-condition, since none of them can be bound
+// as a name. Reading a line and looping on it is the ordinary shape:
+n ↢ ok(0)?
+seen ↢ []
+while n < 3 ⟦
+  seen := concat(seen, [n])
+  n := n + 1
+⟧
+^ ⟨seen: seen, n: n⟩

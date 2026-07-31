@@ -2,6 +2,46 @@
 
 ## [Unreleased]
 
+### Added — `@fs` reads and writes without holding the whole file
+
+Every `@fs` read was whole-file: `read` and `lines` are `read_to_string`,
+`read_bytes` is `read`. Peak memory was the size of the file and nothing could be
+processed as it arrived — `@fs.lines` was line-by-line as an *interface* only,
+reading everything and then splitting, so at its peak it cost more than `read`.
+
+`@fs.open(path, mode)` answers a handle: `read_line`, `read_chunk`, `write_chunk`,
+`seek`, `flush`, `close`. Modes are `#read`, `#write` (creates, truncates) and
+`#append` (creates, keeps). `read_line` reports the end of the file with `none`,
+because an empty line is `""` and the two must not collide; `read_chunk` reports it
+with an empty result, and a short read is not the end.
+
+The convention is `@tcp`'s — open, opaque handle, close, and closing twice is
+fine — with one deliberate difference. A `@tcp` connection lives in a
+process-global; these live on the run's context, so **anything left open closes
+when the run ends**. Under `rite run` that is invisible, since the process exits.
+Inside an embedder it is the difference between a guest leaking a descriptor for
+the lifetime of the host and not. One run may hold 1024 open at once; the next
+`open` is an error naming `@fs.close`, rather than the operating system's
+complaint arriving later from an unrelated call.
+
+**The mode decides the permission, at `open`.** `#read` needs `fs:read` for that
+path, `#write` and `#append` need `fs:write`, and nothing afterwards carries a path
+to check — so a refused open is refused before the file is created or truncated.
+
+`@tcp`'s sockets still use the process-global table and still outlive the run that
+opened them. That is the same leak and it is not fixed here.
+
+### Fixed — `?` on the line before a loop
+
+`line ↢ ! @fs.read_line(h)?` followed by `while line != none ⟦ … ⟧` did not parse.
+`?` and prefix `?` (if) are the same token, so the parser looks ahead to tell a
+try-unwrap from the start of a conditional; the lookahead scanned past `while` and
+found the *loop's own* `⟦`, concluded the `?` opened a conditional, and left it to
+begin the next statement — which then parsed as `? while …` and failed with
+"unexpected token While", pointing at the loop rather than at the line above it.
+`loop` and `for` had it too. None of these can be bound as a name, so none can
+open a condition, which makes the fix unambiguous.
+
 ### Fixed — an embedded script's output no longer disappears
 
 `RiteEngine::run_source` built a `RuntimeContext`, the guest's `@console` output

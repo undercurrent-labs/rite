@@ -93,8 +93,92 @@ A trailing newline does not produce a final empty element, so a three-line file 
 three elements whether or not it ends in `\n`.
 
 This still reads the **whole file into memory** first — it is a convenience over
-`@fs.read`, not a streaming reader. There is no incremental line reader yet, so a
-file bigger than you want resident is not something `@fs` can chew through today.
+`@fs.read`, not a streaming reader. At its peak it costs more than `@fs.read`
+does, since it holds the text and the list of lines at once. For a file bigger
+than you want resident, open a handle instead.
+
+### Bigger than memory: open a handle
+
+`@fs.open` answers a handle you read through, so peak memory is the chunk rather
+than the file:
+
+```rite native_only
+◆! main() ⟦
+  h ← ! @fs.open("huge.log", #read)?
+  errors ↢ 0
+  line ↢ ! @fs.read_line(h)?
+  while line != none ⟦
+    ? contains(line, "ERROR") ⟦ errors := errors + 1 ⟧
+    line := ! @fs.read_line(h)?
+  ⟧
+  ! @fs.close(h)?
+  ^ errors
+⟧
+```
+
+`read_line` answers `none` at the end of the file. An empty line is `""`, which is
+a different thing — that is why the end is reported with `none` rather than an
+empty string, and why the loop above terminates on a file full of blank lines.
+
+For bytes rather than lines, `read_chunk` takes a count and answers what it got.
+**Empty means the end**; fewer bytes than asked for just means the end is near.
+
+```rite native_only
+◆! main() ⟦
+  h ← ! @fs.open("image.png", #read)?
+  total ↢ 0
+  chunk ↢ ! @fs.read_chunk(h, 65536)?
+  while count(chunk) > 0 ⟦
+    total := total + count(chunk)
+    chunk := ! @fs.read_chunk(h, 65536)?
+  ⟧
+  ! @fs.close(h)?
+  ^ total
+⟧
+```
+
+Writing works the same way. `#write` creates and truncates; `#append` creates and
+keeps:
+
+```rite native_only
+◆! main() ⟦
+  h ← ! @fs.open("report.txt", #append)?
+  each(["one", "two"], { |line|
+    ! @fs.write_chunk(h, line + "\n")?
+  })
+  ! @fs.close(h)?
+⟧
+```
+
+Writes are buffered: `@fs.flush` pushes them out, and `@fs.close` flushes before
+closing. `@fs.seek` moves within a file — from the start, or from the end for a
+negative offset, the way a negative index works in `slice`.
+
+| Call | Answers |
+|---|---|
+| `@fs.open(path, mode)` | a handle — `#read`, `#write`, `#append` |
+| `@fs.read_line(h)` | the next line, or `none` at the end |
+| `@fs.read_chunk(h, n)` | up to `n` bytes; empty at the end |
+| `@fs.write_chunk(h, data)` | bytes written; takes text or bytes |
+| `@fs.seek(h, pos)` | the new position |
+| `@fs.flush(h)` · `@fs.close(h)` | `ok(none)` |
+
+**The permission is decided by the mode, at `open`.** `#read` needs `fs:read` for
+that path; `#write` and `#append` need `fs:write`. Nothing after it takes a path,
+so nothing after it can be checked — which is why an `open` that is refused is
+refused before the file is created or truncated.
+
+**A handle closes with the run.** Forgetting `@fs.close` is untidy rather than
+fatal: everything still open is released when the script ends. That matters most
+where the process does *not* end — a Rust host embedding Rite keeps running, and a
+guest's forgotten handle would otherwise be the host's leak. One run may hold
+1024 open at once; asking for the next one is an error naming `@fs.close`, rather
+than the operating system's complaint arriving later from an unrelated call.
+
+Closing twice is fine, deliberately: a script that closes on both the success and
+the failure path is being careful, not wrong. Reading from a closed handle is
+not — that is a mistake, and a silent empty read would be indistinguishable from
+reaching the end of a file.
 
 ### Asking whether a path is there
 

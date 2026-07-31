@@ -6,7 +6,7 @@
 
 use rite_caps::fs::FsCap;
 use rite_caps::{Permission, PermissionSet};
-use rite_runtime::{AtomInterner, Key, ResultValue, Value};
+use rite_runtime::{Key, ResultValue, Value};
 use std::path::Path;
 
 async fn metadata(perms: &PermissionSet, path: &Path) -> Vec<(Key, Value)> {
@@ -15,7 +15,7 @@ async fn metadata(perms: &PermissionSet, path: &Path) -> Vec<(Key, Value)> {
             "metadata",
             vec![Value::string(path.display().to_string())],
             perms,
-            &AtomInterner::new(),
+            &rite_runtime::RuntimeContext::new(),
         )
         .await
     {
@@ -35,7 +35,7 @@ async fn metadata_raw(perms: &PermissionSet, path: &Path) -> Result<Value, Strin
             "metadata",
             vec![Value::string(path.display().to_string())],
             perms,
-            &AtomInterner::new(),
+            &rite_runtime::RuntimeContext::new(),
         )
         .await
         .map_err(|e| e.to_string())

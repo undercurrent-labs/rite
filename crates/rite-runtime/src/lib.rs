@@ -5,6 +5,7 @@ pub mod budget;
 pub mod builtins;
 pub mod env;
 pub mod eval;
+pub mod handles;
 pub mod ops;
 pub mod patterns;
 pub mod value;
@@ -16,6 +17,7 @@ pub use eval::{
     CapabilityHost, EvalError, Evaluator, FunctionEntry, HttpNextInvoker, OutputSink, OutputStream,
     PendingHttpServer, RuntimeContext, StackFrame,
 };
+pub use handles::{HandleTable, DEFAULT_OPEN_HANDLE_LIMIT};
 pub use value::*;
 
 use rite_core::{Diagnostics, SourceFile, SourceMap};

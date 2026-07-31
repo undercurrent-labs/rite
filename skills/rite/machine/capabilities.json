@@ -328,6 +328,55 @@
       "permission": "fs:read"
     },
     {
+      "arity": 2,
+      "docs": "Open a file and answer a handle: `! @fs.open(path, #read)?`. Modes are `#read`, `#write` (creates, truncates) and `#append` (creates, keeps). The permission is decided here — `#read` needs `fs:read` for the path, the other two need `fs:write` — so the reads and writes that follow need no further grant. A handle is closed with `@fs.close`, or when the run ends; one run may hold 1024 open at once.",
+      "effectful": true,
+      "name": "open",
+      "permission": "fs:read"
+    },
+    {
+      "arity": 2,
+      "docs": "Read up to `n` bytes from an open handle, answering `ok(bytes)`. Fewer than `n` means the end of the file is near; **empty** means it has been reached. Unlike `@fs.read_bytes`, peak memory is the chunk rather than the file.",
+      "effectful": true,
+      "name": "read_chunk",
+      "permission": ""
+    },
+    {
+      "arity": 1,
+      "docs": "Read one line from an open handle, without its line ending. Answers `ok(none)` at the end of the file — an empty line is `ok(\"\")`, which is a different thing, and why this reports the end with `none` rather than an empty string.",
+      "effectful": true,
+      "name": "read_line",
+      "permission": ""
+    },
+    {
+      "arity": 2,
+      "docs": "Write text or bytes to a handle opened `#write` or `#append`, answering `ok(count)` of bytes written. Buffered: call `@fs.flush` or `@fs.close` to be sure it reached the disk.",
+      "effectful": true,
+      "name": "write_chunk",
+      "permission": ""
+    },
+    {
+      "arity": 2,
+      "docs": "Move an open handle to a byte offset from the start of the file, answering `ok(position)`. A negative offset counts back from the end, as `slice` does.",
+      "effectful": true,
+      "name": "seek",
+      "permission": ""
+    },
+    {
+      "arity": 1,
+      "docs": "Push a write handle's buffered bytes to the file. `@fs.close` flushes too; this is for when you want the bytes there and the handle still open.",
+      "effectful": true,
+      "name": "flush",
+      "permission": ""
+    },
+    {
+      "arity": 1,
+      "docs": "Close an open handle, flushing it first. Closing one that is already closed is `ok`, not an error — a script that closes on both the success and the failure path is being careful, not wrong.",
+      "effectful": true,
+      "name": "close",
+      "permission": ""
+    },
+    {
       "arity": 1,
       "docs": "Check whether a path exists.",
       "effectful": true,
