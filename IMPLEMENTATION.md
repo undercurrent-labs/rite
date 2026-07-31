@@ -43,7 +43,12 @@ Tracks implementation status for the Rite language and V1 tooling. Detailed desi
 ### Remaining gaps (after this pass)
 
 1. **WASM host I/O** — browser run evaluates pure scripts + `@console`; FS, HTTP listen,
-   outbound HTTP, `@db` and `@process` need the native host.
+   outbound HTTP, `@db` and `@process` need the native host. The wasm build installs no
+   capability host at all (`rite-caps` is behind the `native` feature), so the
+   capabilities that *are* pure value transforms — `@json`, `@csv`, and all of `@crypto`
+   except `random_bytes` — are unreachable there too, despite needing nothing the browser
+   lacks. Closing that is a packaging change in `rite-wasm`, not a change to those
+   capabilities.
 2. **Virtual HTTP request replay in hosted mode** — UI panel exists; full handler re-entry is native-local.
 3. **Scope-aware multi-file rename** — rename is now token-accurate within a document
    (skips strings, comments and substrings, and keeps locals separate from `.fields`),

@@ -224,6 +224,80 @@ Write a list of records as CSV to a file.
 - effectful: true
 - permission: fs:write
 
+## @crypto
+
+### sha256
+
+SHA-256 digest of a string, as lowercase hex.
+
+- arity: 1
+- effectful: false
+- permission: 
+
+### sha512
+
+SHA-512 digest of a string, as lowercase hex.
+
+- arity: 1
+- effectful: false
+- permission: 
+
+### hmac_sha256
+
+HMAC-SHA-256 of a message under a key, as lowercase hex.
+
+- arity: 2
+- effectful: false
+- permission: 
+
+### random_bytes
+
+n cryptographically secure random bytes, as lowercase hex.
+
+- arity: 1
+- effectful: true
+- permission: random
+
+### constant_time_eq
+
+Compare two strings in time independent of their contents.
+
+- arity: 2
+- effectful: false
+- permission: 
+
+### base64_encode
+
+Encode a string as standard base64 (RFC 4648, padded).
+
+- arity: 1
+- effectful: false
+- permission: 
+
+### base64_decode
+
+Decode standard base64 to a string. Answers a Result.
+
+- arity: 1
+- effectful: false
+- permission: 
+
+### hex_encode
+
+Encode a string as lowercase hex.
+
+- arity: 1
+- effectful: false
+- permission: 
+
+### hex_decode
+
+Decode hex to a string. Answers a Result.
+
+- arity: 1
+- effectful: false
+- permission: 
+
 ## @clock
 
 ### now

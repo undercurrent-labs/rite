@@ -441,7 +441,7 @@ Tip: each line restarts the step/time budget; idle time does not count."#
             }
         }
         ":capabilities" => {
-            println!("console fs json clock env process random http game store");
+            println!("console fs json csv crypto clock env process random http game store db");
         }
         ":allow" => {
             if let Some(spec) = parts.get(1) {

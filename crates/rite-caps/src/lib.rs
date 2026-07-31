@@ -2,6 +2,7 @@
 
 pub mod clock;
 pub mod console;
+pub mod crypto;
 pub mod csv;
 pub mod db;
 pub mod env;

@@ -24,6 +24,7 @@ export const DOC_CHAPTERS: DocChapter[] = [
   { slug: "sugar", title: "Syntax sugar", file: "sugar.md" },
   { slug: "effects", title: "Effects and capabilities", file: "effects.md" },
   { slug: "files-json", title: "Files, JSON, and CSV", file: "files-json.md" },
+  { slug: "crypto", title: "Hashing and encoding", file: "crypto.md" },
   { slug: "db", title: "Databases", file: "db.md" },
   { slug: "http", title: "HTTP services", file: "http.md" },
   { slug: "modules", title: "Modules", file: "modules.md" },

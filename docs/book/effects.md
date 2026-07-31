@@ -77,6 +77,18 @@ database. Note that **reads count** — `@fs.read` and `@db.query` need `!` just
 runs. The exception is state a capability owns in-process (`@game`'s world, `@store`'s
 map), where only writes are marked; reading it is like reading a local binding.
 
+### Not every `@` call is an effect
+
+`@json.encode`, `@csv.encode`, `@clock.format` and the whole of
+[`@crypto`](crypto.md) except `random_bytes` are functions of their arguments: same
+input, same answer, nothing outside the program touched. They take no marker and no
+grant. The `@` still tells you a host implements it — the missing `!` tells you it
+cannot surprise you.
+
+```rite browser
+! @console.println(@crypto.sha256("abc"))
+```
+
 Naming a host function is not a way around the marker. A capability reference is not a
 value you can pass around — mentioning it *calls* it, with no arguments — so it takes a
 marker too:
@@ -152,6 +164,7 @@ Lists registered host modules and related metadata.
 | `@fs` | read, write, list, … (permissioned paths) |
 | `@json` | encode, decode |
 | `@csv` | encode, decode, read, write |
+| `@crypto` | sha256/sha512, hmac_sha256, base64/hex, constant_time_eq — all pure; `random_bytes` needs `random` |
 | `@db` | DuckDB open/query/exec/prepare/transactions (native) |
 | `@clock` | now, sleep, parse, … |
 | `@random` | seed, int, … |
@@ -197,6 +210,8 @@ noise you didn't.
 
 > `@random` is allowed by default and needs no `--allow`. It is not a cryptographic
 > generator — don't use it for keys, tokens, or anything an attacker gets to guess at.
+> Use `@crypto.random_bytes(n)` for those; it draws from the operating system and
+> ignores the seed on purpose. See [Hashing and encoding](crypto.md).
 
 ## Example: files need FS
 

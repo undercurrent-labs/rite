@@ -16,6 +16,8 @@ serde_json = { workspace = true }
 indexmap = { workspace = true }
 chrono = { workspace = true }
 glob = { workspace = true }
+sha2 = { workspace = true }
+hex = { workspace = true }
 uuid = { workspace = true }
 rand = { workspace = true }
 rand_chacha = { workspace = true }

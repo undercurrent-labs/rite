@@ -314,6 +314,10 @@ fn capability_hover(word: &str) -> Option<HoverInfo> {
         ),
         ("@clock", "Clock and sleep. Nondeterministic unless faked."),
         ("@random", "Seedable RNG."),
+        (
+            "@crypto",
+            "Digests, HMAC, base64/hex. Pure except random_bytes, which needs `random`.",
+        ),
         ("@game", "Text RPG entity and event runtime."),
         ("console", "See @console"),
         ("fs", "See @fs"),
@@ -376,6 +380,7 @@ fn builtin_completions() -> Vec<CompletionItem> {
         ("@http", "capability", "@http"),
         ("@clock", "capability", "@clock"),
         ("@random", "capability", "@random"),
+        ("@crypto", "capability", "@crypto"),
         ("@game", "capability", "@game"),
         ("true", "constant", "true"),
         ("false", "constant", "false"),

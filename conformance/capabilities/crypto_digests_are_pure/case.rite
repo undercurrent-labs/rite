@@ -1,0 +1,25 @@
+// `@crypto` is a value capability. A digest, an HMAC and an encoding are
+// functions of their arguments alone, so none of them takes a `!` marker and
+// none of them needs a grant — this case runs under the default-secure set.
+//
+// `random_bytes` is the one exception, and the one marked call below: it reads
+// the operating system's entropy pool, which is state outside the program.
+digest ← @crypto.sha256("abc")
+mac ← @crypto.hmac_sha256("Jefe", "what do ya want for nothing?")
+encoded ← @crypto.base64_encode("foobar")
+token ← ! @crypto.random_bytes(16)
+
+// Known answers, not self-consistency: FIPS 180-4 for the digest, RFC 4231 for
+// the HMAC, RFC 4648 for the encoding.
+ok_digest ← digest = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+ok_mac ← mac = "5bdcc146bf60754e6a042426089575c75a003f089d2739839dec58b964ec3843"
+ok_encoded ← encoded = "Zm9vYmFy"
+ok_hex ← @crypto.hex_encode("foobar") = "666f6f626172"
+
+// Comparing a digest to a digest is what `constant_time_eq` is for.
+ok_compare ← @crypto.constant_time_eq(digest, @crypto.sha256("abc"))
+
+// n bytes come back as 2n hex characters.
+ok_token ← len(token) = 32
+
+ok_digest ∧ ok_mac ∧ ok_encoded ∧ ok_hex ∧ ok_compare ∧ ok_token
