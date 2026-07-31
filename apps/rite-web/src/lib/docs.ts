@@ -27,6 +27,8 @@ export const DOC_CHAPTERS: DocChapter[] = [
   { slug: "crypto", title: "Hashing and encoding", file: "crypto.md" },
   { slug: "db", title: "Databases", file: "db.md" },
   { slug: "http", title: "HTTP services", file: "http.md" },
+  { slug: "sockets", title: "Sockets", file: "sockets.md" },
+  { slug: "environment", title: "Environment and processes", file: "environment.md" },
   { slug: "modules", title: "Modules", file: "modules.md" },
   { slug: "compiling", title: "Compiling to Rust", file: "compiling.md" },
   { slug: "rpg", title: "Text RPG", file: "rpg.md" },

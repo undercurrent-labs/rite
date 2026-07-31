@@ -167,3 +167,53 @@ fn the_tutorial_list_matches_the_readme() {
         assert!(path.is_file(), "missing tutorial file {}", path.display());
     }
 }
+
+/// The book's chapter order lives in two places for the same reason the tutorial
+/// list does: `DOC_CHAPTERS` renders the sidebar, `docs/book/README.md` renders the
+/// `/docs` index. They have drifted before — the index said chapter 11 while the
+/// sidebar said 16, on one screen — and the fix was always "check it by eye", which
+/// is what let it drift again. This is that check, mechanised.
+#[test]
+fn the_chapter_list_matches_the_readme() {
+    let registry = read("apps/rite-web/src/lib/docs.ts");
+    let readme = read("docs/book/README.md");
+
+    // Only the DOC_CHAPTERS array: REFERENCE_PAGES below it has the same shape.
+    let body = registry
+        .split_once("DOC_CHAPTERS: DocChapter[] = [")
+        .expect("DOC_CHAPTERS not found")
+        .1
+        .split_once("];")
+        .expect("unterminated DOC_CHAPTERS")
+        .0;
+    let slugs: Vec<String> = body
+        .lines()
+        .filter_map(|l| l.trim().strip_prefix("{ slug: \"")?.split('"').next())
+        .map(str::to_string)
+        .collect();
+    assert!(!slugs.is_empty(), "no chapters parsed from DOC_CHAPTERS");
+
+    // `12. [Effects and capabilities](effects.md) — …` — the numbered list only, so
+    // the capability index and the API-reference links below it are not picked up.
+    let linked: Vec<String> = readme
+        .lines()
+        .filter(|l| {
+            l.split_once(". [")
+                .is_some_and(|(n, _)| !n.is_empty() && n.chars().all(|c| c.is_ascii_digit()))
+        })
+        .filter_map(|l| {
+            let start = l.find("](")? + 2;
+            Some(l[start..].split(".md").next()?.to_string())
+        })
+        .collect();
+
+    assert_eq!(
+        slugs, linked,
+        "docs/book/README.md and DOC_CHAPTERS disagree — same order, same slugs"
+    );
+
+    for slug in &slugs {
+        let path = workspace().join(format!("docs/book/{slug}.md"));
+        assert!(path.is_file(), "missing chapter file {}", path.display());
+    }
+}

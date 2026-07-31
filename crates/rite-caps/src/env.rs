@@ -22,7 +22,7 @@ impl EnvCap {
         },
         NativeFunctionDescriptor {
             name: "all",
-            docs: "Return allowed environment variables as a record.",
+            docs: "Return every environment variable as a record. Requires the blanket `--allow env`: a scoped grant such as `--allow env=PATH` is refused rather than filtered.",
             arity: 0,
             effectful: true,
             permission: "env",

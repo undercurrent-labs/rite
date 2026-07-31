@@ -43,7 +43,7 @@ impl ConsoleCap {
         },
         NativeFunctionDescriptor {
             name: "read_line",
-            docs: "Read a line from stdin with optional prompt.",
+            docs: "Not implemented: the interpreter answers the empty string without reading stdin or printing the prompt. There is no way to prompt for input from a script today.",
             arity: 1,
             effectful: true,
             permission: "console",

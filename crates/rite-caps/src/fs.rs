@@ -72,7 +72,7 @@ impl FsCap {
         },
         NativeFunctionDescriptor {
             name: "remove",
-            docs: "Remove a file or directory.",
+            docs: "Remove a file, or a directory and everything inside it. Recursive and irreversible, like `rm -rf`.",
             arity: 1,
             effectful: true,
             permission: "fs:write",

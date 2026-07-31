@@ -44,7 +44,7 @@ Write a debug representation to stdout.
 
 ### read_line
 
-Read a line from stdin with optional prompt.
+Not implemented: the interpreter answers the empty string without reading stdin or printing the prompt. There is no way to prompt for input from a script today.
 
 - arity: 1
 - effectful: true
@@ -126,7 +126,7 @@ Create a directory.
 
 ### remove
 
-Remove a file or directory.
+Remove a file, or a directory and everything inside it. Recursive and irreversible, like `rm -rf`.
 
 - arity: 1
 - effectful: true
@@ -318,7 +318,7 @@ Parse an ISO-8601 timestamp.
 
 ### format
 
-Format a timestamp with a pattern.
+Reserved, not implemented: the pattern is ignored and the timestamp is returned unchanged. Do not build on it.
 
 - arity: 2
 - effectful: false
@@ -334,7 +334,7 @@ Sleep for a duration in milliseconds.
 
 ### duration
 
-Normalize a duration value to milliseconds.
+Reserved, not implemented: returns the milliseconds it was given. Do not build on it.
 
 - arity: 1
 - effectful: false
@@ -360,7 +360,7 @@ Get a required environment variable as result.
 
 ### all
 
-Return allowed environment variables as a record.
+Return every environment variable as a record. Requires the blanket `--allow env`: a scoped grant such as `--allow env=PATH` is refused rather than filtered.
 
 - arity: 0
 - effectful: true
@@ -370,7 +370,7 @@ Return allowed environment variables as a record.
 
 ### run
 
-Run a command with argument array (no shell).
+Run a command with an argument list (no shell). Answers `ok(⟨status, stdout, stderr⟩)`; a non-zero exit is still `ok`, but a command that cannot be started raises. The third argument is a reserved options record and is currently ignored.
 
 - arity: 3
 - effectful: true

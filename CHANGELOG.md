@@ -2,6 +2,50 @@
 
 ## [Unreleased]
 
+### Documentation
+
+- **The book now covers every host function.** An audit against the capability
+  registry found 34 of 102 never mentioned anywhere in the book or tutorials —
+  including five capabilities with no chapter at all. That is now zero, enforced
+  by nothing but the audit, so it is worth re-running when a capability is added.
+
+- **New chapter: Environment and processes** (`@env`, `@process`, `@clock`,
+  `@random`, `@store`) — the five that had no home.
+
+- **New chapter: Sockets**, split out of HTTP services. `@udp` and `@tcp` were
+  documented, but inside a 521-line chapter the sidebar labelled "HTTP services",
+  which is a good way to look documented and read as missing.
+
+- **A capability → chapter table** in the book index, so a reader who knows the
+  sigil can find the prose without guessing which chapter adopted it.
+
+- Expanded coverage of the previously undocumented `@fs` operations (`append`,
+  `lines`, `exists`, `mkdir`, `remove`, `copy`, `move`), the `@json` file
+  shortcuts, the rest of `@console`, and roughly twenty list and record builtins
+  (`all`, `any`, `find`, `chunk`, `enumerate`, `zip`, `reduce`, `unique`,
+  `flatten`, `type_of`, …).
+
+- **Corrected two wrong claims in the book.** It said `rest` was a match pattern
+  and not a pipeline stage — `xs → rest` works — and left `flatten` as "use
+  flatten/builtin if available", which it is.
+
+### Fixed
+
+- **The generated capability reference no longer advertises functions that do not
+  work.** Four descriptors described intent rather than behaviour, and because the
+  reference is generated from them, the lie was published. `@clock.format` and
+  `@clock.duration` now say they are unimplemented placeholders (the former
+  ignores its pattern entirely); `@console.read_line` says it never reads stdin;
+  `@env.all` says it requires the blanket grant rather than filtering to a scoped
+  one; `@process.run` documents its ignored third argument and that a
+  non-startable command raises rather than answering `err`; and `@fs.remove`
+  states plainly that it is recursive on directories.
+
+- **A drift guard for the book's chapter list.** `DOC_CHAPTERS` and
+  `docs/book/README.md` have to agree, and previously nothing checked — they had
+  already drifted once into two different numberings on the same screen. The
+  tutorial list got this guard when it was added; the book now has it too.
+
 ## [0.4.0] — 2026-07-31
 
 Rite learns to talk to the network and to handle the bytes that come back:

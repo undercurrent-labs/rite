@@ -68,6 +68,35 @@ port ← cfg.port ?? 8080
 
 For **results**, prefer `?` or match — don’t confuse `none` with `err`.
 
+## Result helpers
+
+| Call | Answers |
+|---|---|
+| `is_ok(r)` / `is_err(r)` | `true` / `false` |
+| `unwrap_or(r, fallback)` | the value, or `fallback` when `err` |
+| `or_else(r, fallback)` | the same, spelled the other way round |
+| `require(r)` | the result unchanged, for asserting intent |
+
+```rite browser
+! @console.println(unwrap_or(err("bad"), 99))
+! @console.println(is_ok(ok(1)))
+```
+
+```text
+99
+true
+```
+
+Each takes a **value** as its fallback, not a function — there is no lazy variant, so
+the fallback is evaluated whether or not it is needed. Keep it cheap, and reach for
+a match when the alternative involves real work.
+
+> **`and_then` does not do what its name suggests.** It exists as a builtin and it
+> accepts a callback, but the callback is **never called** — `and_then(ok(2), { |n|
+> ok(n * 10) })` answers `ok(2)`, not `ok(20)`. Because it silently passes the result
+> through rather than failing, a chain built on it looks like it works and quietly
+> does nothing. Use `?` or a match instead; both are checked.
+
 ## HTTP handlers
 
 Request JSON is often fallible:

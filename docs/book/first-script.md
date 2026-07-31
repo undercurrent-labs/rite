@@ -26,6 +26,59 @@ rite hello.rite
 
 Console is allowed by default, so you usually do **not** need `--allow-all` for this script.
 
+### The rest of `@console`
+
+| Call | Goes to | For |
+|---|---|---|
+| `@console.println(v)` | stdout | Output, with a newline |
+| `@console.print(v)` | stdout | Output, without one |
+| `@console.warn(v)` | **stderr** | A note that is not the result |
+| `@console.error(v)` | **stderr** | A problem that is not the result |
+| `@console.inspect(v)` | stdout | Debugging, see below |
+| `@console.read_line(prompt)` | — | **Not implemented yet**, see below |
+
+The split matters the moment a script is used in a pipeline. `warn` and `error` go
+to **stderr**, so they stay visible on the terminal while `stdout` is being
+redirected into a file or piped into the next program:
+
+```rite browser
+! @console.println("the answer")
+! @console.warn("using default config")
+```
+
+```bash
+rite run t.rite > answer.txt      # the warning still reaches the terminal
+```
+
+Neither adds a prefix, a colour, or a severity label — they are the two streams,
+nothing more. All six ride the same `console` permission, so `--deny console`
+silences the lot.
+
+`inspect` prints the runtime's **internal debug form**, not a value you would show
+anyone:
+
+```text
+Some(Record({String("a"): Int(1), String("b"): List([Int(2), Int(3)])}))
+```
+
+That is the same record `println` would render as `⟨a: 1, b: [2, 3]⟩`. `inspect`
+exists for the moment you need to know what the runtime thinks it is holding — the
+`Some(…)` wrapper and the `String(…)` keys are the point, not noise. Reach for it
+while debugging and take it out afterwards; the shape it prints is not a stable
+format and is not meant to be parsed.
+
+> **`@console.read_line` does not read anything yet.** It is in the capability table
+> and it type-checks, but the interpreter answers the empty string without touching
+> stdin and without printing the prompt — piping input in changes nothing:
+>
+> ```bash
+> printf 'aura\n' | rite run ask.rite
+> # []
+> ```
+>
+> So there is no way to prompt for input from a Rite script today. A script that
+> needs input should take it from [`@process.args`](environment.md) or a file.
+
 ### Executable scripts (shebang)
 
 Put a shebang on line 1, then `chmod +x`:

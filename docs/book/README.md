@@ -21,15 +21,36 @@ This book is a linear path. You can stop after any chapter and experiment in [St
 13. [Files, JSON, and CSV](files-json.md) — `@fs`, `@json`, `@csv`
 14. [Hashing and encoding](crypto.md) — `@crypto`, digests, HMAC, base64/hex
 15. [Databases](db.md) — `@db` (DuckDB), SQL, transactions
-16. [HTTP services](http.md) — `@http.listen`, routes, middleware, `@udp` and `@tcp` sockets
-17. [Modules](modules.md) — `use`, `pub`, relative paths, aliases
-18. [Compiling to Rust](compiling.md) — `rite build`, IR, parity
-19. [Text RPG](rpg.md) — `@game` tutorial
-20. [Embedding](embedding.md) — `RiteEngine` from Rust
-21. [Browser & Studio](browser.md) — hosted site, WASM limits
-22. [Agents & the skill bundle](agents.md) — skill install, self-update, VS Code extension
-23. [Testing](testing.md) — `◆ test`, `expect`, `rite test`
-24. [Contributing tests](contributing-tests.md) — suite map, HTTP I/O capture, PR checklist
+16. [HTTP services](http.md) — `@http.listen`, routes, middleware, client calls
+17. [Sockets](sockets.md) — `@udp` datagrams, `@tcp` streams, bytes on the wire
+18. [Environment and processes](environment.md) — `@env`, `@process`, `@clock`, `@random`, `@store`
+19. [Modules](modules.md) — `use`, `pub`, relative paths, aliases
+20. [Compiling to Rust](compiling.md) — `rite build`, IR, parity
+21. [Text RPG](rpg.md) — `@game` tutorial
+22. [Embedding](embedding.md) — `RiteEngine` from Rust
+23. [Browser & Studio](browser.md) — hosted site, WASM limits
+24. [Agents & the skill bundle](agents.md) — skill install, self-update, VS Code extension
+25. [Testing](testing.md) — `◆ test`, `expect`, `rite test`
+26. [Contributing tests](contributing-tests.md) — suite map, HTTP I/O capture, PR checklist
+
+## Where each capability is covered
+
+| Capability | Chapter | Default |
+|---|---|---|
+| `@console` | [First script](first-script.md) | allowed |
+| `@fs` | [Files, JSON, and CSV](files-json.md) | denied |
+| `@json` · `@csv` | [Files, JSON, and CSV](files-json.md) | — |
+| `@crypto` | [Hashing and encoding](crypto.md) | — (`random_bytes` needs `random`) |
+| `@db` | [Databases](db.md) | denied |
+| `@http` | [HTTP services](http.md) | denied |
+| `@udp` · `@tcp` | [Sockets](sockets.md) | denied |
+| `@env` · `@process` | [Environment and processes](environment.md) | denied |
+| `@clock` · `@random` | [Environment and processes](environment.md) | allowed |
+| `@store` | [Environment and processes](environment.md) | no permission |
+| `@game` | [Text RPG](rpg.md) | — |
+
+Every function of every one of them, with its arity and the permission it needs, is
+in the generated [capability reference](reference/capabilities.md).
 
 ## Glyph ↔ ASCII at a glance
 

@@ -9,7 +9,7 @@ impl ProcessCap {
     pub const DESCRIPTORS: &'static [NativeFunctionDescriptor] = &[
         NativeFunctionDescriptor {
             name: "run",
-            docs: "Run a command with argument array (no shell).",
+            docs: "Run a command with an argument list (no shell). Answers `ok(⟨status, stdout, stderr⟩)`; a non-zero exit is still `ok`, but a command that cannot be started raises. The third argument is a reserved options record and is currently ignored.",
             arity: 3,
             effectful: true,
             permission: "process",

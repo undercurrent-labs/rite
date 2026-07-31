@@ -16,7 +16,7 @@
     },
     {
       "arity": 2,
-      "docs": "Format a timestamp with a pattern.",
+      "docs": "Reserved, not implemented: the pattern is ignored and the timestamp is returned unchanged. Do not build on it.",
       "effectful": false,
       "name": "format",
       "permission": "clock"
@@ -30,7 +30,7 @@
     },
     {
       "arity": 1,
-      "docs": "Normalize a duration value to milliseconds.",
+      "docs": "Reserved, not implemented: returns the milliseconds it was given. Do not build on it.",
       "effectful": false,
       "name": "duration",
       "permission": "clock"
@@ -74,7 +74,7 @@
     },
     {
       "arity": 1,
-      "docs": "Read a line from stdin with optional prompt.",
+      "docs": "Not implemented: the interpreter answers the empty string without reading stdin or printing the prompt. There is no way to prompt for input from a script today.",
       "effectful": true,
       "name": "read_line",
       "permission": "console"
@@ -271,7 +271,7 @@
     },
     {
       "arity": 0,
-      "docs": "Return allowed environment variables as a record.",
+      "docs": "Return every environment variable as a record. Requires the blanket `--allow env`: a scoped grant such as `--allow env=PATH` is refused rather than filtered.",
       "effectful": true,
       "name": "all",
       "permission": "env"
@@ -343,7 +343,7 @@
     },
     {
       "arity": 1,
-      "docs": "Remove a file or directory.",
+      "docs": "Remove a file, or a directory and everything inside it. Recursive and irreversible, like `rm -rf`.",
       "effectful": true,
       "name": "remove",
       "permission": "fs:write"
@@ -568,7 +568,7 @@
   "process": [
     {
       "arity": 3,
-      "docs": "Run a command with argument array (no shell).",
+      "docs": "Run a command with an argument list (no shell). Answers `ok(⟨status, stdout, stderr⟩)`; a non-zero exit is still `ok`, but a command that cannot be started raises. The third argument is a reserved options record and is currently ignored.",
       "effectful": true,
       "name": "run",
       "permission": "process"

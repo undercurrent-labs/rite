@@ -38,7 +38,7 @@ impl ClockCap {
         },
         NativeFunctionDescriptor {
             name: "format",
-            docs: "Format a timestamp with a pattern.",
+            docs: "Reserved, not implemented: the pattern is ignored and the timestamp is returned unchanged. Do not build on it.",
             arity: 2,
             effectful: false,
             permission: "clock",
@@ -52,7 +52,7 @@ impl ClockCap {
         },
         NativeFunctionDescriptor {
             name: "duration",
-            docs: "Normalize a duration value to milliseconds.",
+            docs: "Reserved, not implemented: returns the milliseconds it was given. Do not build on it.",
             arity: 1,
             effectful: false,
             permission: "clock",

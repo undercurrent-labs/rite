@@ -61,12 +61,34 @@ msgs ← @game.messages()
 
 | Call | Role |
 |------|------|
+| `@game.register_world(id, record)` | World metadata — title and the like |
+| `@game.register_room(id, record)` | Add a room |
+| `@game.register_item(id, record)` | Add an item |
 | `@game.start(room)` | Spawn player state |
 | `@game.look()` | Current room description |
+| `@game.go(exit)` | Move through a named exit |
 | `@game.command(text)` | Parse a simple command line |
 | `@game.take(item)` | Pick up if present |
-| `@game.messages()` | Recent game messages |
+| `@game.drop(item)` | Put down, into the current room |
+| `@game.inventory()` | List carried item ids |
+| `@game.reveal(id)` | Reveal a room or set a flag |
+| `@game.messages()` | Drain pending messages |
 | `@game.state()` | Snapshot of world/player |
+| `@game.save()` / `@game.load(s)` | JSON round-trip, below |
+
+`go` takes the **exit** atom rather than the destination — `@game.go(#north)` where
+`north` is a key of the room's `exits` record. It fails with `not in a room` if
+nothing has called `start` yet.
+
+`look`, `inventory`, `messages`, `state` and `save` are the unmarked ones: they read
+game state the program itself built, so they need no `!`. Everything that changes the
+world is marked.
+
+> **`@game.say` cannot be called from Rite.** `say` is a language keyword (the
+> shorthand for printing, see [Syntax sugar](sugar.md)), so `@game.say("…")` does not
+> parse as a capability call and fails at runtime with `unknown @game.`. Use
+> `@console.println` for narration, or let `@game.command` produce messages and drain
+> them with `@game.messages()`.
 
 ## Save / load
 
