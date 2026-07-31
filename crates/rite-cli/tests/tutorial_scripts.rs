@@ -253,3 +253,51 @@ fn shown_input_files_match_the_fixtures() {
         }
     }
 }
+
+/// Every fixture file must actually be committed.
+///
+/// `.gitignore` carries `*.log`, and the directory-audit tutorial globs `logs/*.log`,
+/// so its sample files were silently excluded: `git add -A` reported nothing, the
+/// suite passed locally where the files existed, and CI failed on a machine that had
+/// only what was checked in. A fixture that is not tracked is not a fixture.
+#[test]
+fn every_fixture_file_is_tracked_by_git() {
+    let root = workspace().join("docs/tutorials/fixtures");
+    if !root.is_dir() {
+        return;
+    }
+    let mut files = Vec::new();
+    fn walk(dir: &Path, out: &mut Vec<PathBuf>) {
+        for entry in std::fs::read_dir(dir).unwrap() {
+            let p = entry.unwrap().path();
+            if p.is_dir() {
+                walk(&p, out);
+            } else {
+                out.push(p);
+            }
+        }
+    }
+    walk(&root, &mut files);
+    assert!(!files.is_empty(), "no tutorial fixtures found");
+
+    for file in &files {
+        // Ask whether the file is *tracked*, not whether it matches an ignore rule.
+        // `git check-ignore` skips anything already in the index, so it answers "not
+        // ignored" for a committed file and would have passed here while the real
+        // question — will a fresh checkout have this? — went unasked.
+        let out = Command::new("git")
+            .args(["ls-files", "--error-unmatch"])
+            .arg(file)
+            .current_dir(workspace())
+            .output();
+        let Ok(out) = out else {
+            return; // no git available; nothing to assert
+        };
+        assert!(
+            out.status.success(),
+            "{} is not tracked by git, so it will not exist in a fresh checkout \
+             (a .gitignore rule may be swallowing it — `git add -A` says nothing when it does)",
+            file.strip_prefix(workspace()).unwrap_or(file).display()
+        );
+    }
+}

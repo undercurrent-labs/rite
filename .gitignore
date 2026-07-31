@@ -66,6 +66,11 @@ coverage/
 
 # Misc
 *.log
+# …except tutorial fixtures. The directory-audit tutorial globs `logs/*.log`, so its
+# sample files have to be named that way and have to be committed. `*.log` swallowed
+# them silently: `git add -A` said nothing, the suite passed locally where the files
+# existed, and CI failed on a machine that only had what was checked in.
+!/docs/tutorials/fixtures/**/*.log
 tmp/
 .temp/
 
