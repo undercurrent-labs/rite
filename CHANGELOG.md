@@ -1,6 +1,18 @@
 # Changelog
 
-## [Unreleased]
+## [0.4.1] — 2026-07-31
+
+A correctness release. Five capability functions were shipped surface that did
+nothing while the generated reference advertised them as working; a compiled binary
+never ran `main`; and a path could leave a granted root through directories that do
+not exist. Every one of them was found by writing documentation and *running* the
+examples rather than reading the code — which is now enforced, with each tutorial's
+final script executed and compared to the output printed beside it.
+
+**One upgrade note.** `@clock.format` and `@clock.duration` now answer **results**
+rather than plain values, because both can genuinely fail. They previously returned
+their input unchanged and were documented as placeholders not to build on, so this
+should affect nobody — but if you called them, add `?`.
 
 ### Added
 
