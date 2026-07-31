@@ -1,0 +1,10 @@
+// Date arithmetic did not exist: a cutoff had to be a timestamp already held, so
+// "seven days ago" was inexpressible and two tutorials had to say so. `add` takes
+// the same duration vocabulary as `@clock.duration`, including a negative one.
+t ← "2026-07-31T00:00:00+00:00"
+^ [
+  @clock.add(t, "7d")?,
+  @clock.add(t, "-1h")?,
+  @clock.diff("2026-08-07T00:00:00+00:00", t)?,
+  @clock.diff(t, "2026-08-07T00:00:00+00:00")?
+]

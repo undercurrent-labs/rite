@@ -150,6 +150,27 @@ impl<'a> Evaluator<'a> {
         Ok(acc)
     }
 
+    /// `and_then(result, f)` — call `f` with the value of an `ok`, pass an `err` through.
+    ///
+    /// This lived in the pure builtin table, which cannot invoke a closure, so it
+    /// silently ignored its function and answered its input: `and_then(ok(2), { |n|
+    /// ok(n * 10) })` gave `ok(2)`. A chain built on it looked like it worked and did
+    /// nothing, which is the worst way for a combinator to fail.
+    pub(super) async fn builtin_and_then(&mut self, args: Vec<Value>) -> Result<Value, EvalError> {
+        let mut it = args.into_iter();
+        let subject = it.next().unwrap_or(Value::None);
+        let f = it.next().unwrap_or(Value::None);
+        match subject {
+            Value::Result(crate::value::ResultValue::Ok(v)) => self.call_value(f, vec![*v]).await,
+            // `err` short-circuits, which is the whole point: the function is not called
+            // and the original error travels on unchanged.
+            other @ Value::Result(crate::value::ResultValue::Err(_)) => Ok(other),
+            // Not a result at all. Treated as the value, so `and_then` composes with
+            // functions that answer plainly rather than demanding a wrapper first.
+            other => self.call_value(f, vec![other]).await,
+        }
+    }
+
     pub(super) async fn builtin_find(&mut self, args: Vec<Value>) -> Result<Value, EvalError> {
         let mut it = args.into_iter();
         let list = match it.next() {

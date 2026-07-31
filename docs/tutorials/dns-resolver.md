@@ -23,24 +23,25 @@ something you can point at.
 A query is a 12-byte header, then the name, then two 16-bit fields.
 
 Rite strings are UTF-8 text, and a packet is not text, so payloads are the **bytes**
-type. There is no `to_bytes`; the bridge from a string is hex, which
-`@crypto.hex_encode` already speaks:
+type. `bytes` converts between them — hand it a string and you get that string's
+UTF-8 bytes:
 
 ```rite browser
-◆ text_bytes(s) ⟦ ^ from_hex(@crypto.hex_encode(s))? ⟧
-! @console.println(to_hex(text_bytes("com")))
+! @console.println(to_hex(bytes("com")))
 ```
 
 ```text
 636f6d
 ```
 
+`bytes` is the one entry point: a string becomes its UTF-8, and a list of numbers
+becomes those numbers as bytes. Both forms appear in the next block.
+
 A name is not sent with dots. Each label is preceded by its **length as one byte**,
 and the whole thing ends with a zero byte:
 
 ```rite browser
-◆ text_bytes(s) ⟦ ^ from_hex(@crypto.hex_encode(s))? ⟧
-◆ label(part) ⟦ ^ concat(bytes([len(part)]), text_bytes(part)) ⟧
+◆ label(part) ⟦ ^ concat(bytes([len(part)]), bytes(part)) ⟧
 
 ◆ qname(host) ⟦
   ^ concat(reduce(split(host, "."), { |acc, p| concat(acc, label(p)) }, bytes([])), bytes([0]))
@@ -57,10 +58,10 @@ Read that back: `07` then `example`, `03` then `com`, then `00`. It is worth
 checking a hex dump against the spec once by eye — it is the fastest way to find the
 byte you got wrong.
 
-> **`bytes([len(part)])`, not `str(len(part))`.** The length is the *value* 3, one
-> byte. Hex-encoding the string `"3"` gives `0x33`, the digit — and produces a name
-> that no server will parse. `bytes` takes a list of numbers precisely so that a byte
-> can be a number rather than a rendering of one.
+> **`bytes([len(part)])`, not `bytes(str(len(part)))`.** The length is the *value*
+> 3, one byte. Converting the string `"3"` gives `0x33`, the digit — and produces a
+> name no server will parse. `bytes` takes a list of numbers precisely so a byte can
+> be a number rather than a rendering of one.
 
 ## The header
 
@@ -149,8 +150,7 @@ something the internet decides.
 ```rite
 // resolve.rite — ask a DNS server for an A record, over @udp.
 
-◆ text_bytes(s) ⟦ ^ from_hex(@crypto.hex_encode(s))? ⟧
-◆ label(part) ⟦ ^ concat(bytes([len(part)]), text_bytes(part)) ⟧
+◆ label(part) ⟦ ^ concat(bytes([len(part)]), bytes(part)) ⟧
 
 ◆ qname(host) ⟦
   ^ concat(reduce(split(host, "."), { |acc, p| concat(acc, label(p)) }, bytes([])), bytes([0]))
@@ -219,4 +219,4 @@ into the reply. Everything else is more of the same.
 
 - [Network: sockets](../book/sockets.md) — `@udp` and `@tcp` in full
 - [Values and atoms](../book/values.md) — the byte builtins
-- [Hashing and encoding](../book/crypto.md) — `@crypto`, including the hex bridge
+- [Hashing and encoding](../book/crypto.md) — `@crypto`, digests and encodings

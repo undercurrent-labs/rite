@@ -91,11 +91,29 @@ Each takes a **value** as its fallback, not a function — there is no lazy vari
 the fallback is evaluated whether or not it is needed. Keep it cheap, and reach for
 a match when the alternative involves real work.
 
-> **`and_then` does not do what its name suggests.** It exists as a builtin and it
-> accepts a callback, but the callback is **never called** — `and_then(ok(2), { |n|
-> ok(n * 10) })` answers `ok(2)`, not `ok(20)`. Because it silently passes the result
-> through rather than failing, a chain built on it looks like it works and quietly
-> does nothing. Use `?` or a match instead; both are checked.
+## Chaining with `and_then`
+
+`and_then(result, f)` calls `f` with the value of an `ok`, and passes an `err`
+straight through without calling anything:
+
+```rite browser
+! @console.println(and_then(ok(2), { |n| ok(n * 10) }))
+! @console.println(and_then(err("bad"), { |n| ok(n * 10) }))
+! @console.println(and_then(ok(2), { |n| err("rejected") }))
+```
+
+```text
+ok(20)
+err(bad)
+err(rejected)
+```
+
+The function is expected to answer a result of its own, which is what lets steps
+chain: each one may fail, and the first failure is the one that comes out.
+
+Inside a function that can propagate, `?` says the same thing more directly —
+`b ← step_one(a)?` then `step_two(b)?`. Reach for `and_then` where `?` is not
+available: building a chain as a value, or composing steps a caller supplies.
 
 ## HTTP handlers
 

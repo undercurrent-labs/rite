@@ -188,6 +188,7 @@ impl<'a> Evaluator<'a> {
             "import" => Ok(Value::None), // module loading handled at higher layer
             "while_loop" => self.builtin_while_loop(args).await,
             "compose" => self.builtin_compose(args).await,
+            "and_then" => self.builtin_and_then(args).await,
             "print" | "println" => {
                 let s = args
                     .first()

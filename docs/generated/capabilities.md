@@ -332,6 +332,22 @@ Sleep for a duration in milliseconds.
 - effectful: true
 - permission: clock
 
+### add
+
+Shift an RFC3339 timestamp by a duration, which takes the same forms as `@clock.duration` — an integer of milliseconds or a string like `7d`, `-1h`, `30m`. Answers `ok(timestamp)` or `err`.
+
+- arity: 2
+- effectful: false
+- permission: clock
+
+### diff
+
+Milliseconds from `b` to `a`, i.e. `a - b`. Positive when `a` is later. Answers `ok(int)` or `err` if either is not RFC3339.
+
+- arity: 2
+- effectful: false
+- permission: clock
+
 ### duration
 
 Normalize a duration to whole milliseconds. Accepts an integer or float of milliseconds, or a string with a unit: `250ms`, `2s`, `5m`, `1h`, `1d`. Answers `ok(int)` or `err`.

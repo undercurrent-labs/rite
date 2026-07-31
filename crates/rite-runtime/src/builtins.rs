@@ -79,7 +79,6 @@ pub fn call_builtin(
         "to_text" => builtin_to_text(args),
         "byte_at" => builtin_byte_at(args),
         "xor" => builtin_xor(args),
-        "and_then" => builtin_and_then(args),
         "or_else" => builtin_or_else(args),
         "is_ok" => builtin_is_ok(args),
         "is_err" => builtin_is_err(args),
@@ -106,9 +105,9 @@ pub fn call_builtin(
         // says what is actually true; `while_loop`, `compose`, `print` and `println` used
         // to fall through to "unknown builtin", which was simply wrong.
         "map" | "keep" | "reject" | "reduce" | "each" | "find" | "any" | "all" | "group"
-        | "parallel" | "while_loop" | "compose" | "print" | "println" => Err(EvalError::Message(
-            format!("builtin `{}` requires evaluator dispatch", name),
-        )),
+        | "parallel" | "while_loop" | "compose" | "print" | "println" | "and_then" => Err(
+            EvalError::Message(format!("builtin `{}` requires evaluator dispatch", name)),
+        ),
         other => Err(EvalError::Message(format!("unknown builtin `{}`", other))),
     }
 }
@@ -477,16 +476,6 @@ fn builtin_xor(args: Vec<Value>) -> Result<Value, EvalError> {
     let a = it.next().map(|v| v.is_truthy()).unwrap_or(false);
     let b = it.next().map(|v| v.is_truthy()).unwrap_or(false);
     Ok(Value::Bool(a ^ b))
-}
-
-fn builtin_and_then(args: Vec<Value>) -> Result<Value, EvalError> {
-    // and_then(result, value_if_we_could_call) — without HO, pass through ok/err
-    // Prefer pipeline with function in evaluator; pure form: if ok return ok else err
-    match args.into_iter().next() {
-        Some(Value::Result(ResultValue::Ok(v))) => Ok(Value::ok(*v)),
-        Some(Value::Result(ResultValue::Err(e))) => Ok(Value::err(*e)),
-        other => Ok(other.unwrap_or(Value::None)),
-    }
 }
 
 fn builtin_or_else(args: Vec<Value>) -> Result<Value, EvalError> {

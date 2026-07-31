@@ -102,10 +102,16 @@ That works because RFC3339 in UTC sorts lexicographically — a plain string
 comparison really is a time comparison, with no parsing step. It is also why the
 format is fixed rather than configurable.
 
-**What you cannot do yet is arithmetic on those timestamps.** There is no "thirty
-days ago": Rite has no date maths, so a cutoff has to be a timestamp you already
-hold — a literal, or one your last run wrote down. Comparison is the whole
-toolkit here, and it covers more than it sounds like it should.
+A literal cutoff is fine when the date is fixed, but "anything older than thirty
+days" is the question you usually want. `@clock.add` with a negative duration says
+it directly:
+
+```rite native_only
+cutoff ← @clock.add(! @clock.now(), "-30d")?
+```
+
+That is a timestamp in the same RFC3339 spelling, so the same `<` comparison works
+against it — the arithmetic produces a value the ordering already understood.
 
 ## A wrinkle worth knowing: symlinks
 

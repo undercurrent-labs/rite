@@ -52,6 +52,20 @@ impl ClockCap {
             permission: "clock",
         },
         NativeFunctionDescriptor {
+            name: "add",
+            docs: "Shift an RFC3339 timestamp by a duration, which takes the same forms as `@clock.duration` — an integer of milliseconds or a string like `7d`, `-1h`, `30m`. Answers `ok(timestamp)` or `err`.",
+            arity: 2,
+            effectful: false,
+            permission: "clock",
+        },
+        NativeFunctionDescriptor {
+            name: "diff",
+            docs: "Milliseconds from `b` to `a`, i.e. `a - b`. Positive when `a` is later. Answers `ok(int)` or `err` if either is not RFC3339.",
+            arity: 2,
+            effectful: false,
+            permission: "clock",
+        },
+        NativeFunctionDescriptor {
             name: "duration",
             docs: "Normalize a duration to whole milliseconds. Accepts an integer or float of milliseconds, or a string with a unit: `250ms`, `2s`, `5m`, `1h`, `1d`. Answers `ok(int)` or `err`.",
             arity: 1,
@@ -125,6 +139,41 @@ impl ClockCap {
                 tokio::time::sleep(Duration::from_millis(ms)).await;
                 Ok(Value::None)
             }
+            // `add` and `diff` are the whole of date arithmetic. Without them a cutoff had
+            // to be a timestamp already held — "seven days ago" was inexpressible, which
+            // two tutorials had to apologise for.
+            "add" => {
+                let base = match parse_ts(args.first(), "add") {
+                    Ok(dt) => dt,
+                    Err(v) => return Ok(v),
+                };
+                let ms = match duration_ms(args.get(1)) {
+                    Ok(ms) => ms,
+                    Err(v) => return Ok(v),
+                };
+                match base.checked_add_signed(chrono::TimeDelta::milliseconds(ms)) {
+                    Some(dt) => Ok(Value::ok(Value::string(dt.to_rfc3339()))),
+                    // Reachable with a large enough shift; an out-of-range date is an
+                    // ordinary `err` rather than a panic.
+                    None => Ok(clock_err(
+                        "clock.range",
+                        "the shifted timestamp is out of range",
+                    )),
+                }
+            }
+            "diff" => {
+                let a = match parse_ts(args.first(), "diff") {
+                    Ok(dt) => dt,
+                    Err(v) => return Ok(v),
+                };
+                let b = match parse_ts(args.get(1), "diff") {
+                    Ok(dt) => dt,
+                    Err(v) => return Ok(v),
+                };
+                Ok(Value::ok(Value::Int(
+                    a.signed_duration_since(b).num_milliseconds(),
+                )))
+            }
             // Normalize "how long" into milliseconds, so `@clock.sleep` and the socket
             // timeouts can all be fed the same way: `@clock.sleep(@clock.duration("2s")?)`.
             "duration" => Ok(match args.first() {
@@ -144,6 +193,44 @@ impl ClockCap {
 impl Default for ClockCap {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+fn clock_err(kind: &str, message: &str) -> Value {
+    Value::err(Value::record(vec![
+        (Key::String("kind".into()), Value::string(kind)),
+        (Key::String("message".into()), Value::string(message)),
+    ]))
+}
+
+/// Read an argument as an RFC3339 timestamp, or hand back the `err` to return.
+fn parse_ts(v: Option<&Value>, who: &str) -> Result<DateTime<Utc>, Value> {
+    let s = v.and_then(|v| v.as_str()).unwrap_or("");
+    DateTime::parse_from_rfc3339(s)
+        .map(|dt| dt.with_timezone(&Utc))
+        .map_err(|e| {
+            clock_err(
+                "clock.parse",
+                &format!("{who}: not an RFC3339 timestamp: {e}"),
+            )
+        })
+}
+
+/// The same duration vocabulary `@clock.duration` accepts, reused so "7d" means the
+/// same thing everywhere rather than only where it was first implemented.
+fn duration_ms(v: Option<&Value>) -> Result<i64, Value> {
+    let normalized = match v {
+        Some(Value::Int(ms)) => Value::ok(Value::Int(*ms)),
+        Some(Value::Float(f)) => Value::ok(Value::Int(f.round() as i64)),
+        Some(other) => match other.as_str() {
+            Some(s) => parse_duration(s),
+            None => duration_err(&format!("cannot read `{other}` as a duration")),
+        },
+        None => duration_err("expects a duration"),
+    };
+    match normalized {
+        Value::Result(rite_runtime::ResultValue::Ok(inner)) => Ok(inner.as_int().unwrap_or(0)),
+        other => Err(other),
     }
 }
 

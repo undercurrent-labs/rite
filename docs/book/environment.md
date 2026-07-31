@@ -158,9 +158,38 @@ written the way it is said out loud:
 A bare number is milliseconds, so the integer and string forms agree. An unknown unit
 is an `err` naming the ones that exist.
 
-**There is no date arithmetic.** No "thirty days ago", no adding an hour. A cutoff
-has to be a timestamp you already hold — a literal, or one a previous run wrote
-down. Comparison is the whole toolkit.
+### Moving a timestamp
+
+`@clock.add` shifts a timestamp by a duration, in the same vocabulary:
+
+```rite native_only
+now ← ! @clock.now()
+! @console.println(@clock.add(now, "7d")?)
+! @console.println(@clock.add(now, "-1h")?)
+```
+
+A negative duration goes backwards, which is how you say "thirty days ago" without
+a second function:
+
+```rite native_only
+cutoff ← @clock.add(! @clock.now(), "-30d")?
+```
+
+`@clock.diff(a, b)` answers the milliseconds from `b` to `a` — positive when `a` is
+later:
+
+```rite native_only
+! @console.println(@clock.diff("2026-08-07T00:00:00+00:00", "2026-07-31T00:00:00+00:00")?)
+```
+
+```text
+604800000
+```
+
+Both answer results, because a string that is not a timestamp and a duration with an
+unknown unit are both things a caller can get wrong. Both are unmarked: shifting a
+timestamp you already hold observes nothing outside the program. Only *getting* the
+current time is an effect.
 
 ## Randomness (`@random`)
 

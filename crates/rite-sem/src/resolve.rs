@@ -91,6 +91,8 @@ pub const HOST_EFFECTS: &[(&str, bool)] = &[
     ("clock.now", true),
     ("clock.parse", false),
     ("clock.format", false),
+    ("clock.add", false),
+    ("clock.diff", false),
     ("clock.sleep", true),
     ("clock.duration", false),
     // @env — the process environment.

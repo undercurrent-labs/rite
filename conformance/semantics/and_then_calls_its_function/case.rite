@@ -1,0 +1,8 @@
+// `and_then` lived in the pure builtin table, which cannot invoke a closure, so it
+// ignored its function and answered its input — `and_then(ok(2), …)` gave `ok(2)`.
+// A chain built on it looked like it worked and did nothing.
+^ [
+  and_then(ok(2), { |n| ok(n * 10) }),
+  and_then(err("bad"), { |n| ok(n * 10) }),
+  and_then(ok(2), { |n| err("rejected") })
+]
