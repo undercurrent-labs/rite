@@ -51,7 +51,7 @@ impl FsCap {
         },
         NativeFunctionDescriptor {
             name: "metadata",
-            docs: "Return file metadata record.",
+            docs: "Return a file metadata record: `len`, `is_file`, `is_dir`, `is_symlink`, and `mtime` as an RFC3339 UTC string (comparable against `@clock.now`). Follows symlinks, so every field but `is_symlink` describes the target.",
             arity: 1,
             effectful: true,
             permission: "fs:read",
@@ -162,13 +162,26 @@ impl FsCap {
                 Ok(Value::Bool(path.exists()))
             }
             "metadata" => {
-                let path = path_arg(&args, 0)?;
-                let path = perms.check_fs_read(&path).map_err(EvalError::Permission)?;
+                let requested = path_arg(&args, 0)?;
+                let path = perms
+                    .check_fs_read(&requested)
+                    .map_err(EvalError::Permission)?;
                 match std::fs::metadata(&path) {
                     Ok(m) => Ok(Value::ok(Value::record(vec![
                         (Key::String("len".into()), Value::Int(m.len() as i64)),
                         (Key::String("is_file".into()), Value::Bool(m.is_file())),
                         (Key::String("is_dir".into()), Value::Bool(m.is_dir())),
+                        (
+                            Key::String("is_symlink".into()),
+                            // Deliberately the path as written, not the checked one:
+                            // `check_fs_read` canonicalizes, which *resolves* links, so
+                            // asking the returned path is always false. Safe because the
+                            // canonical target was already permission-checked above — this
+                            // only asks whether the requested spelling was a link, and
+                            // reads nothing the grant does not already cover.
+                            Value::Bool(is_symlink(&requested)),
+                        ),
+                        (Key::String("mtime".into()), mtime(&m)),
                     ]))),
                     Err(e) => Ok(io_err("fs.metadata", &path, e)),
                 }
@@ -272,6 +285,47 @@ fn path_arg(args: &[Value], i: usize) -> Result<PathBuf, EvalError> {
         .and_then(|v| v.as_str())
         .map(PathBuf::from)
         .ok_or_else(|| EvalError::Message("expected path string".into()))
+}
+
+/// Modification time as an RFC3339 UTC string, or `none` where the platform or
+/// filesystem does not record one.
+///
+/// Rite has exactly one spelling of a timestamp and this is it: the same
+/// `to_rfc3339()` rendering `@clock.now` produces, so an mtime round-trips
+/// through `@clock.parse` and can be compared against `@clock.now` directly.
+///
+/// That comparison is the point, and it is why the *rendering* matters and not
+/// merely the format. chrono writes a UTC offset as `+00:00`, and mixed
+/// sub-second precision still orders correctly under plain string comparison
+/// (`…:00+00:00` < `…:00.5+00:00`, because `+` sorts below `.`). Switching to
+/// the `Z` spelling would silently break it — `Z` sorts *above* both — so a
+/// file modified at the same second as `@clock.now` would compare as later.
+/// Rite has no date arithmetic, so ordering is the only tool a script has here.
+fn mtime(m: &std::fs::Metadata) -> Value {
+    match m.modified() {
+        Ok(t) => Value::string(chrono::DateTime::<chrono::Utc>::from(t).to_rfc3339()),
+        Err(_) => Value::None,
+    }
+}
+
+/// Whether the path itself is a symbolic link.
+///
+/// Every other field in the record describes what the path *resolves to* —
+/// `std::fs::metadata` follows links, so a symlink to a file reports
+/// `is_file: true` with the target's length. That is the split `ls -l` shows,
+/// and telling them apart needs the second, non-following stat.
+///
+/// Must be given the path as the script wrote it. `check_fs_read` canonicalizes,
+/// and canonicalization resolves links — which is exactly how a symlink is stopped
+/// from escaping a granted root, so that behaviour stays. It does mean the checked
+/// path can never answer `true` here.
+///
+/// A broken link answers `false` only because `metadata` already failed and this is
+/// never reached; see the note in the Files chapter.
+fn is_symlink(path: &std::path::Path) -> bool {
+    std::fs::symlink_metadata(path)
+        .map(|l| l.file_type().is_symlink())
+        .unwrap_or(false)
 }
 
 fn io_err(op: &str, path: &std::path::Path, e: std::io::Error) -> Value {

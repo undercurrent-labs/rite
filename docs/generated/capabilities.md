@@ -102,7 +102,7 @@ Check whether a path exists.
 
 ### metadata
 
-Return file metadata record.
+Return a file metadata record: `len`, `is_file`, `is_dir`, `is_symlink`, and `mtime` as an RFC3339 UTC string (comparable against `@clock.now`). Follows symlinks, so every field but `is_symlink` describes the target.
 
 - arity: 1
 - effectful: true

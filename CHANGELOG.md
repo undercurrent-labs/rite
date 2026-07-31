@@ -4,6 +4,23 @@
 
 ### Added
 
+- **`@fs.metadata` reports modification time and symlink-ness.** The record carried
+  `len`, `is_file` and `is_dir` and nothing else, which made "which files changed
+  since Tuesday" — the most common reason to call it — inexpressible.
+
+  `mtime` is an RFC3339 UTC string, deliberately the same rendering `@clock.now`
+  produces, so the two compare directly: `m.mtime > cutoff` is a real time
+  comparison, because RFC3339 in UTC sorts lexicographically. `@clock.parse`
+  accepts it unchanged. It is `none` where the filesystem records no such time.
+  Date *arithmetic* still does not exist — a cutoff has to be a timestamp you
+  already hold, not "seven days ago".
+
+  `is_symlink` describes the path itself, while every other field describes what
+  the path resolves to — `@fs.metadata` follows links, so a symlink to a file
+  reports `is_file: true` with the target's length, as `ls -l` does. A broken link
+  still answers `err(⟨kind: "io.not_found", …⟩)`: following it fails before
+  anything can report on it, so a dangling symlink cannot be detected.
+
 - **Bytes can be authored, not only relayed.** `Value::Bytes` could be counted and
   compared and nothing else, so a program could echo a datagram but not build one —
   the DNS query that motivated `@udp` was unwritable in Rite.

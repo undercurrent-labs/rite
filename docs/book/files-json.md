@@ -138,13 +138,67 @@ Or linear style:
 text ← ! @fs.read("missing.txt")?   // propagates err
 ```
 
-## Listing and other FS ops
+## Listing and inspecting
 
-Depending on the installed `@fs` surface (see `rite docs build` / `rite capabilities`):
+`@fs.glob` expands a pattern; `@fs.metadata` describes what it found. Both are
+reads, so both need `fs:read` covering the path.
 
-- read / write text  
-- list directories  
-- existence helpers  
+```rite native_only
+paths ← ! @fs.glob("logs/*.log")?
+```
+
+The pattern must point inside a granted read root — one aimed outside is a
+permission error rather than an empty list, since the script asked for something
+it may not have. Individual matches that fall outside a root are dropped quietly,
+because `**` legitimately walks into places a narrower grant excludes.
+
+`@fs.metadata` answers a record:
+
+```rite native_only
+m ← ! @fs.metadata("notes.txt")?
+// ⟨len: 17, is_file: true, is_dir: false, is_symlink: false,
+//  mtime: 2026-07-31T02:59:58.656493400+00:00⟩
+```
+
+| Field | |
+|---|---|
+| `len` | Size in bytes |
+| `is_file`, `is_dir` | What the path resolves to |
+| `is_symlink` | Whether the path *itself* is a symbolic link |
+| `mtime` | Last modification, as an RFC3339 UTC string — or `none` if the filesystem does not record one |
+
+**`is_symlink` is the odd one out**, deliberately: every other field describes
+what the path *resolves to*, because `@fs.metadata` follows links. A symlink to a
+file reports `is_file: true` with the target's length, the same split `ls -l`
+shows. Only `is_symlink` describes the path you asked about.
+
+One consequence worth knowing: a **broken** link cannot be detected. Following it
+fails before anything can report on it, so `@fs.metadata` on a dangling symlink
+returns `err(⟨kind: "io.not_found", …⟩)` rather than a record saying
+`is_symlink: true`.
+
+### Finding what changed
+
+`mtime` is a string, and specifically the same string `@clock.now` produces, so
+the two compare directly:
+
+```rite native_only
+◆! changed_since(dir, cutoff) ⟦
+  paths ← ! @fs.glob(dir + "/*.log")?
+  each(paths, { |p|
+    m ← ! @fs.metadata(p)?
+    ? m.mtime > cutoff ⟦ ! println(p) ⟧
+  })
+⟧
+```
+
+RFC3339 timestamps in UTC sort lexicographically, so `>` on the raw strings is a
+real time comparison — no parsing step required. `@clock.parse` accepts an
+`mtime` unchanged if you want one.
+
+What you **cannot** do yet is arithmetic on them. There is no "seven days ago":
+Rite has no date maths, so a cutoff has to be a timestamp you already hold —
+one recorded on the last run, or a literal. Comparison is the whole toolkit.
 
 Always assume **permissioned** access.
 
