@@ -78,3 +78,7 @@ tmp/
 /dist/skill-check/
 /dist/vscode/
 *.vsix
+
+# Working notes: roadmaps, naming, half-formed plans. Deliberately not published —
+# IMPLEMENTATION.md is the public status page.
+/.internal/
