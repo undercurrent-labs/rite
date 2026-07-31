@@ -4,6 +4,23 @@
 
 ### Added
 
+- **Bytes can be authored, not only relayed.** `Value::Bytes` could be counted and
+  compared and nothing else, so a program could echo a datagram but not build one —
+  the DNS query that motivated `@udp` was unwritable in Rite.
+
+  `from_hex` (a Result — any byte, not only text-safe ones), `bytes` (from a list of
+  `0`–`255` or a string's UTF-8), `to_hex`, `to_text` (a Result — bytes are not always
+  text), and `byte_at`. `concat`, `slice` and `count` understand bytes now too, so a
+  packet can be assembled from a header and a body and read back field by field.
+
+  `count` measures bytes here rather than characters, which is the distinction the type
+  exists to make. Out-of-range numbers are refused rather than truncated: a silently
+  wrapped `0x1ff` is a packet that goes out wrong and gets debugged at the far end.
+
+  `@crypto.hex_decode` is deliberately not this — it answers a string and rejects
+  anything that is not valid UTF-8, which is right for hex-encoded *text* and useless
+  for a DNS header.
+
 - **`@crypto` — hashing, HMAC and the encodings that travel with them.**
   `@crypto.sha256(s)`, `@crypto.sha512(s)`, `@crypto.hmac_sha256(key, message)`,
   `@crypto.constant_time_eq(a, b)`, `@crypto.base64_encode` / `base64_decode`,

@@ -1,0 +1,6 @@
+// A DNS query header is not valid UTF-8 anywhere in it, which is exactly why the
+// byte builtins exist: `@crypto.hex_decode` answers a string and would refuse it.
+header ← from_hex("abcd01000001000000000000")?
+packet ← concat(header, bytes([0, 1, 0, 1]))
+
+count(packet) + byte_at(packet, 0)

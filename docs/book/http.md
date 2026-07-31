@@ -337,11 +337,22 @@ the same one `@fs.read_bytes` returns and `@http` puts in `resp.body`.
 
 Anything else — a record, an int — is an error rather than a silent stringification.
 
-Bytes received can be sent again unchanged, which is enough to relay or echo. It is not
-yet enough to *author* a binary packet: bytes are opaque in Rite today, with no builtin
-that converts a hex string to bytes or back, so a DNS query cannot be built from source.
-That gap is recorded in `IMPLEMENTATION.md`; when it closes it will close for `@fs` and
-`@http` at the same time, because all three name the same type.
+Payloads are built with the byte builtins — `from_hex`, `bytes`, `to_hex`, `to_text`,
+`byte_at`, and `concat` / `slice` / `count`, which understand bytes as well as lists and
+strings. A DNS query header, which is not valid UTF-8 anywhere:
+
+```rite browser
+header ← from_hex("abcd01000001000000000000")?
+question ← bytes([0, 1, 0, 1])
+packet ← concat(header, question)
+
+! @console.println(to_hex(packet))
+! @console.println("id " + to_hex(slice(packet, 0, 2)))
+```
+
+They name the same type as `@fs.read_bytes` and `@http`'s `resp.body`, so a payload read
+from one can be sent by another without conversion. See
+[Values and atoms](values.md) for the full set.
 
 ### Permissions
 

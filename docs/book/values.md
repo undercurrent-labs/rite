@@ -198,6 +198,41 @@ n ← parse_int("41")?
 ! @console.println(str(parse_int("nope")))
 ```
 
+### Bytes
+
+Some things are not text: a datagram, a file read with `@fs.read_bytes`, an HTTP
+body. Those are **bytes**, and they are built and inspected with their own set
+rather than by pretending they are strings.
+
+```rite browser
+packet ← concat(from_hex("abcd0100")?, bytes([0, 1, 255]))
+! @console.println(to_hex(packet))
+! @console.println("first byte " + str(byte_at(packet, 0)))
+! @console.println(str(count(packet)) + " bytes")
+```
+
+| Call | Answers |
+|------|---------|
+| `from_hex(s)` | a **Result** of bytes — any byte, not only text-safe ones |
+| `bytes(x)` | bytes from a list of `0`–`255`, from a string's UTF-8, or bytes unchanged |
+| `to_hex(b)` | the hex spelling |
+| `to_text(b)` | a **Result** of a string — bytes are not always text |
+| `byte_at(b, i)` | the byte as a number, or `none` past the end; negative counts from the end |
+| `concat` · `slice` · `count` | as for lists and strings, staying bytes |
+
+`count` measures **bytes** here, not characters — `count(bytes("é"))` is `2` while
+`count("é")` is `1`. That is the distinction the type exists to make.
+
+Both conversions admit when they cannot: `from_hex` rejects odd lengths and
+non-hex digits, and `to_text` rejects bytes that are not valid UTF-8, rather than
+substituting replacement characters. Out-of-range numbers are refused rather than
+truncated, since a silently wrapped `0x1ff` is a packet that goes out wrong and
+gets debugged at the far end.
+
+**`@crypto.hex_decode` is not this.** It answers a *string* and rejects anything
+that is not valid UTF-8, which is right for decoding text that happens to be hex
+encoded, and useless for a DNS header. Use `from_hex` for bytes.
+
 ## Lists
 
 ```rite browser

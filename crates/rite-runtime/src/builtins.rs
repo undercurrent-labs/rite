@@ -73,6 +73,11 @@ pub fn call_builtin(
         "sqrt" => builtin_sqrt(args),
         "parse_int" => builtin_parse_number(args, true),
         "parse_float" => builtin_parse_number(args, false),
+        "bytes" => builtin_bytes(args),
+        "from_hex" => builtin_from_hex(args),
+        "to_hex" => builtin_to_hex(args),
+        "to_text" => builtin_to_text(args),
+        "byte_at" => builtin_byte_at(args),
         "xor" => builtin_xor(args),
         "and_then" => builtin_and_then(args),
         "or_else" => builtin_or_else(args),
@@ -188,6 +193,21 @@ fn builtin_reverse(args: Vec<Value>) -> Result<Value, EvalError> {
 }
 
 fn builtin_concat(args: Vec<Value>) -> Result<Value, EvalError> {
+    // Bytes concatenate into bytes. Assembling a packet from a header and a body
+    // is most of what authoring bytes is for, and collecting them into a list of
+    // two byte strings would be useless.
+    if matches!(args.first(), Some(Value::Bytes(_))) {
+        let mut out: Vec<u8> = Vec::new();
+        for (i, a) in args.iter().enumerate() {
+            out.extend_from_slice(&bytes_arg(Some(a), "concat").map_err(|_| {
+                EvalError::Message(format!(
+                    "concat started with bytes, so argument {i} must be bytes or a string, got {}",
+                    a.type_name()
+                ))
+            })?);
+        }
+        return Ok(Value::Bytes(out.into()));
+    }
     let mut out = im::Vector::new();
     for a in args {
         match a {
@@ -822,6 +842,14 @@ fn builtin_slice(args: Vec<Value>) -> Result<Value, EvalError> {
         }
         return Ok(Value::List(out));
     }
+    if let Some(Value::Bytes(b)) = &first {
+        let len = b.len() as i64;
+        let start = resolve_index(it.next().and_then(|v| v.as_int()).unwrap_or(0), len);
+        let end = resolve_index(it.next().and_then(|v| v.as_int()).unwrap_or(len), len);
+        return Ok(Value::Bytes(
+            b[start as usize..end.max(start) as usize].into(),
+        ));
+    }
     let s = str_arg(first, "slice")?;
     let chars: Vec<char> = s.chars().collect();
     let len = chars.len() as i64;
@@ -921,4 +949,133 @@ fn builtin_parse_number(args: Vec<Value>, int: bool) -> Result<Value, EvalError>
             Err(_) => Ok(Value::err(Value::string(format!("`{t}` is not a number")))),
         }
     }
+}
+
+// ── Bytes ────────────────────────────────────────────────────────────────────
+//
+// `Value::Bytes` existed but could only be counted and compared: `@udp.recv_from`
+// and `@fs.read_bytes` handed one back and nothing could look inside it or build
+// one. A program could relay bytes and not author them, which is the difference
+// between echoing a datagram and writing a DNS query.
+//
+// `@crypto.hex_decode` looks like the way in and is not — it answers a *string*
+// and rejects anything that is not valid UTF-8, which most binary is. These are
+// the byte-oriented pair, and they close the gap for `@udp`, `@fs.read_bytes` and
+// `@http` bodies at once rather than three times.
+
+fn bytes_arg(v: Option<&Value>, what: &str) -> Result<std::sync::Arc<[u8]>, EvalError> {
+    match v {
+        Some(Value::Bytes(b)) => Ok(b.clone()),
+        // A string is bytes with an encoding; taking its UTF-8 is the obvious reading.
+        Some(Value::String(s)) => Ok(s.as_bytes().into()),
+        Some(other) => Err(EvalError::Message(format!(
+            "{what} expects bytes, got {}",
+            other.type_name()
+        ))),
+        None => Err(EvalError::Message(format!("{what} expects bytes"))),
+    }
+}
+
+/// `bytes(x)` — from a list of 0..=255, from a string's UTF-8, or bytes unchanged.
+fn builtin_bytes(args: Vec<Value>) -> Result<Value, EvalError> {
+    match args.into_iter().next() {
+        Some(Value::Bytes(b)) => Ok(Value::Bytes(b)),
+        Some(Value::String(s)) => Ok(Value::Bytes(s.as_bytes().into())),
+        Some(Value::List(xs)) => {
+            let mut out = Vec::with_capacity(xs.len());
+            for (i, v) in xs.iter().enumerate() {
+                let n = v.as_int().ok_or_else(|| {
+                    EvalError::Message(format!(
+                        "bytes expects whole numbers, but element {i} is {}",
+                        v.type_name()
+                    ))
+                })?;
+                // Refuse rather than truncate: a silently wrapped 0x1ff is a packet
+                // that goes out wrong and is debugged at the far end.
+                if !(0..=255).contains(&n) {
+                    return Err(EvalError::Message(format!(
+                        "bytes expects 0 to 255, but element {i} is {n}"
+                    )));
+                }
+                out.push(n as u8);
+            }
+            Ok(Value::Bytes(out.into()))
+        }
+        Some(other) => Err(EvalError::Message(format!(
+            "bytes expects a list, string or bytes, got {}",
+            other.type_name()
+        ))),
+        None => Ok(Value::Bytes(Vec::new().into())),
+    }
+}
+
+/// `from_hex(s)` — a Result, because the input is usually untrusted.
+///
+/// Unlike `@crypto.hex_decode` this places no constraint on what the bytes mean,
+/// so `from_hex("ff")` is a byte rather than an error.
+fn builtin_from_hex(args: Vec<Value>) -> Result<Value, EvalError> {
+    let s = str_arg(args.into_iter().next(), "from_hex")?;
+    let cleaned: String = s.chars().filter(|c| !c.is_whitespace()).collect();
+    if !cleaned.len().is_multiple_of(2) {
+        return Ok(Value::err(Value::string(format!(
+            "hex needs an even number of digits, got {}",
+            cleaned.len()
+        ))));
+    }
+    let mut out = Vec::with_capacity(cleaned.len() / 2);
+    let chars: Vec<char> = cleaned.chars().collect();
+    for pair in chars.chunks(2) {
+        let hi = pair[0].to_digit(16);
+        let lo = pair[1].to_digit(16);
+        match (hi, lo) {
+            (Some(h), Some(l)) => out.push((h * 16 + l) as u8),
+            _ => {
+                return Ok(Value::err(Value::string(format!(
+                    "`{}{}` is not a hex byte",
+                    pair[0], pair[1]
+                ))))
+            }
+        }
+    }
+    Ok(Value::ok(Value::Bytes(out.into())))
+}
+
+fn builtin_to_hex(args: Vec<Value>) -> Result<Value, EvalError> {
+    let b = bytes_arg(args.first(), "to_hex")?;
+    let mut s = String::with_capacity(b.len() * 2);
+    for byte in b.iter() {
+        s.push_str(&format!("{byte:02x}"));
+    }
+    Ok(Value::string(s))
+}
+
+/// `to_text(b)` — a Result: arbitrary bytes are not always text, and pretending
+/// otherwise is how replacement characters end up in a database.
+fn builtin_to_text(args: Vec<Value>) -> Result<Value, EvalError> {
+    let b = bytes_arg(args.first(), "to_text")?;
+    Ok(match std::str::from_utf8(&b) {
+        Ok(s) => Value::ok(Value::string(s)),
+        Err(e) => Value::err(Value::string(format!(
+            "bytes are not valid UTF-8 at offset {}",
+            e.valid_up_to()
+        ))),
+    })
+}
+
+/// `byte_at(b, i)` — the byte as an int, or `none` past the end. Negative counts
+/// from the end, matching `slice`.
+fn builtin_byte_at(args: Vec<Value>) -> Result<Value, EvalError> {
+    let mut it = args.into_iter();
+    let first = it.next();
+    let b = bytes_arg(first.as_ref(), "byte_at")?;
+    let i = it
+        .next()
+        .and_then(|v| v.as_int())
+        .ok_or_else(|| EvalError::Message("byte_at expects an index".into()))?;
+    let len = b.len() as i64;
+    let idx = if i < 0 { len + i } else { i };
+    Ok(match (0..len).contains(&idx) {
+        true => Value::Int(b[idx as usize] as i64),
+        false => Value::None,
+    })
 }
