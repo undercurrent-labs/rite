@@ -459,3 +459,67 @@ fn contextual_keywords_parse_as_expressions() {
         );
     }
 }
+
+/// `@tcp.listen addr ⟦ |conn| … ⟧` is sugar, not a new node: it must arrive as the
+/// ordinary call `@tcp.listen(addr, block)`, so everything downstream — desugar's
+/// block-to-closure rule, effect discipline, the compiler — sees a capability call
+/// it already knows how to handle. If it ever grew its own AST node, this fails.
+#[test]
+fn tcp_listen_is_sugar_for_a_capability_call() {
+    for src in [
+        "! @tcp.listen \"127.0.0.1:0\" ⟦ |conn| conn ⟧",
+        "do host.tcp.listen \"127.0.0.1:0\" [[ |conn| conn ]]",
+    ] {
+        let (program, diags, _) = parse_source("tcp.rite", src);
+        assert!(!diags.has_errors(), "{src}: {:?}", diags.into_vec());
+        let program = program.expect("program");
+        let Some(rite_syntax::Item::Statement(rite_syntax::Stmt::Expr(rite_syntax::Expr::Unary(
+            u,
+        )))) = program.items.last()
+        else {
+            panic!("{src}: expected `!` applied to something");
+        };
+        let rite_syntax::Expr::Call(call) = u.expr.as_ref() else {
+            panic!("{src}: expected a call, got {:?}", u.expr);
+        };
+        assert!(
+            matches!(call.callee.as_ref(), rite_syntax::Expr::Capability(c) if c.path == ["tcp", "listen"]),
+            "{src}: callee should be the @tcp.listen capability"
+        );
+        assert_eq!(call.args.len(), 2, "{src}: address and handler block");
+        let rite_syntax::Expr::Block(b) = &call.args[1] else {
+            panic!("{src}: the handler must be a block");
+        };
+        // The parameter is what binds the accepted connection. Dropping it would
+        // make the block a plain block rather than a closure, and `conn` would
+        // resolve to nothing.
+        assert_eq!(b.params.len(), 1, "{src}: the block binds one parameter");
+        assert_eq!(b.params[0].name.name, "conn");
+    }
+}
+
+/// The handler block belongs to `listen`, even when the address is a binding.
+///
+/// Trailing-block call sugar makes `f ⟦…⟧` a call to `f`, and an identifier is
+/// callable — so with the sugar left on, `@tcp.listen where ⟦ |conn| … ⟧` parsed as
+/// `@tcp.listen(where(⟦…⟧))` and `listen` was handed no block at all. Every example
+/// in the book uses a string literal, which is *not* callable, so nothing caught it.
+#[test]
+fn a_listen_address_in_a_binding_does_not_eat_the_block() {
+    let cases = [
+        "where ← \"127.0.0.1:0\"\n! @tcp.listen where ⟦ |conn| conn ⟧",
+        "where ← \"127.0.0.1:0\"\n@http.listen where ⟦ GET \"/\" ⟦ ^ 200 ⟧ ⟧",
+    ];
+    for src in cases {
+        let (program, diags, _) = parse_source("listen.rite", src);
+        assert!(!diags.has_errors(), "{src}: {:?}", diags.into_vec());
+        let program = program.expect("program");
+        let rendered = format!("{:?}", program.items.last().expect("statement"));
+        // The address stays the identifier. A call whose callee is an identifier is
+        // the bug: it can only be `where(block)`.
+        assert!(
+            !rendered.contains("callee: Ident"),
+            "the handler block was swallowed as a call to the address: {rendered}"
+        );
+    }
+}

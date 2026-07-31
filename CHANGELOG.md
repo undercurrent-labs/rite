@@ -4,6 +4,38 @@
 
 ### Added
 
+- **`@tcp` — byte streams, both ends.** `connect`, `send`, `recv`, `close`, and a
+  server: `! @tcp.listen "127.0.0.1:9000" ⟦ |conn| … ⟧`. A connection is an opaque
+  handle, the representation `@udp` sockets and `@db` connections already have, and
+  `close` on an already-closed one is fine.
+
+  `recv(conn, max_bytes, timeout_ms)` distinguishes the two ways to get no bytes,
+  because conflating them is how read loops go wrong: a peer that **closed cleanly**
+  answers `ok` with **zero bytes** (end of stream — reading again says the same),
+  while **nothing arriving in time** answers `err(⟨kind: "tcp.timeout", …⟩)` and
+  leaves the connection open. Neither is a raise. Transport failures are
+  `kind: "tcp.error"`.
+
+  The server is callback-shaped, like `@http.listen`, and there is deliberately no
+  `accept`: the block runs once per accepted connection in its own task, receives the
+  connection, and **the connection is closed when the block returns**. A connection
+  handed back to the script would need a lifetime the language cannot express — Rite
+  has no destructors and no scope-bound resources — so `@tcp` reuses the one shape it
+  already has instead of inventing rules for one it does not. `listen` blocks until
+  Ctrl-C and prints the address it bound, so port `0` is usable.
+
+  Payloads are the `bytes` type and the byte builtins (`from_hex`, `bytes`, `to_hex`,
+  `to_text`, `concat`, `slice`, `byte_at`) — `send` takes a string (sent as UTF-8) or
+  bytes (verbatim), and `recv` answers bytes. No `@tcp`-local encoding.
+
+  Permissions are the two `@http` already applies, through the same code: the
+  **listen address** allows loopback by default and needs `--allow net=<host>` for
+  anything else; the **connect destination** is checked per host like an outbound
+  `@http.get`, **including loopback**. A client that dials its own machine needs
+  `--allow net=127.0.0.1`.
+
+  Native only: the browser runtime has no socket layer and says so, as `@udp` does.
+
 - **Bytes can be authored, not only relayed.** `Value::Bytes` could be counted and
   compared and nothing else, so a program could echo a datagram but not build one —
   the DNS query that motivated `@udp` was unwritable in Rite.

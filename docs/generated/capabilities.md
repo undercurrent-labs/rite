@@ -542,6 +542,48 @@ Close a socket handle. Closing an unknown or already-closed handle answers ok(no
 - effectful: true
 - permission: net
 
+## @tcp
+
+### connect
+
+Open a TCP connection to "host:port" and return ok(handle). Needs --allow net=<host> for the destination, including loopback. Gives up after 30 seconds with err(⟨kind: "tcp.timeout", …⟩).
+
+- arity: 1
+- effectful: true
+- permission: net
+
+### send
+
+Write the whole payload to a connection. The payload is a string (sent as UTF-8) or a bytes value (sent verbatim). Returns ok(bytes sent).
+
+- arity: 2
+- effectful: true
+- permission: net
+
+### recv
+
+Read up to max_bytes (default 65536), waiting at most timeout_ms (default 1000). Returns ok(bytes) — **empty** when the peer closed the stream cleanly — or err(⟨kind: "tcp.timeout", …⟩) when nothing arrived in time. Neither is a raise.
+
+- arity: 3
+- effectful: true
+- permission: net
+
+### close
+
+Close a connection handle. Closing an unknown or already-closed handle answers ok(none).
+
+- arity: 1
+- effectful: true
+- permission: net
+
+### listen
+
+Accept TCP connections and run a block per connection: `! @tcp.listen "127.0.0.1:9000" ⟦ |conn| … ⟧`. Blocks until shutdown (Ctrl-C), like @http.listen; the connection is closed when the block returns. Loopback binds by default; any other interface — including the wildcards 0.0.0.0 and [::] — needs --allow net=<host>.
+
+- arity: 2
+- effectful: true
+- permission: net
+
 ## @game
 
 ### register_item

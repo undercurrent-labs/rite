@@ -1,0 +1,13 @@
+// The other half of the gate: with `net=127.0.0.1` the call is allowed to happen,
+// and what comes back is a *value*. Nothing listens on port 9 (discard), so the
+// connection is refused — and a refused connection is an `err` record the script
+// can branch on, not a raise that ends it. Note the missing `?`.
+//
+// The answer is printed rather than returned: `expected.stdout` is compared
+// exactly, while `expected.value.json` is matched loosely enough that two
+// non-numeric values always agree.
+kind ← ~ ! @tcp.connect("127.0.0.1:9") ⟦
+  ok _  → "connected"
+  err e → e.kind
+⟧
+! @console.println(kind)

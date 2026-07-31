@@ -790,7 +790,10 @@ struct NextContinuation {
 /// what it saw lexically. `ctx.functions` is still populated because the call path
 /// consults it; a function only gets a synthetic closure here if the module scope
 /// somehow lacks one (a `legacy listen` route table has no module env at all).
-fn install_module_scope(
+///
+/// Shared with `@tcp.listen`, whose per-connection handler has exactly the same
+/// requirement: a fresh context that still resolves the names the script defined.
+pub(crate) fn install_module_scope(
     ctx: &mut RuntimeContext,
     module_env: &rite_runtime::Environment,
     functions: &HashMap<String, FunctionEntry>,
@@ -858,7 +861,10 @@ fn next_invoker(conts: Continuations) -> rite_runtime::HttpNextInvoker {
 }
 
 /// Emit buffered handler stdout/stderr to the real process streams (and optional test sink).
-fn flush_handler_io(ctx: &RuntimeContext) {
+///
+/// Shared with `@tcp.listen`, so a connection handler's `! @console.println` reaches
+/// the server process — and the test capture — the same way a request handler's does.
+pub(crate) fn flush_handler_io(ctx: &RuntimeContext) {
     if !ctx.stdout.is_empty() {
         for line in &ctx.stdout {
             emit_process_stdout(line);
@@ -879,7 +885,7 @@ fn emit_process_stdout(s: &str) {
     }
 }
 
-fn emit_process_stderr(s: &str) {
+pub(crate) fn emit_process_stderr(s: &str) {
     eprint!("{s}");
     let _ = std::io::Write::flush(&mut std::io::stderr());
     if let Some(cap) = TEST_IO.lock().as_mut() {

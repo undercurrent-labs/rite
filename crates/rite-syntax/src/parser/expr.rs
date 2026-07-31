@@ -770,7 +770,7 @@ impl Parser {
 
         // @http.listen addr block
         if path.len() >= 2 && path[0] == "http" && path[1] == "listen" {
-            let addr = self.parse_expression();
+            let addr = self.parse_listen_addr();
             let body = self.parse_block();
             let span = start.merge(body.span);
             return Expr::HttpListen(HttpListenExpr {
@@ -780,11 +780,46 @@ impl Parser {
             });
         }
 
+        // `@tcp.listen addr ⟦ |conn| … ⟧` — the same juxtaposed shape, but it is
+        // *only* sugar: it becomes the ordinary call `@tcp.listen(addr, ⟦|conn| …⟧)`,
+        // whose block argument desugars to a closure like any other. No new AST node,
+        // no new IR, and effect discipline still applies — the call needs its `!`,
+        // unlike `@http.listen`, which bypasses the check by not being a call at all.
+        if path.len() >= 2 && path[0] == "tcp" && path[1] == "listen" {
+            let addr = self.parse_listen_addr();
+            let block = self.parse_block();
+            let span = start.merge(block.span);
+            return Expr::Call(CallExpr {
+                callee: Box::new(Expr::Capability(CapabilityRef {
+                    path,
+                    span: start.merge(self.prev_span()),
+                })),
+                args: vec![addr, Expr::Block(block)],
+                span,
+            });
+        }
+
         let end = self.prev_span();
         Expr::Capability(CapabilityRef {
             path,
             span: start.merge(end),
         })
+    }
+
+    /// The address in `@http.listen addr ⟦…⟧` / `@tcp.listen addr ⟦…⟧`.
+    ///
+    /// The handler block belongs to `listen`, never to the address — so
+    /// trailing-block call sugar is switched off while the address is read. It is
+    /// only inert for a string literal, which is not callable; with the address in a
+    /// binding (`where ← "127.0.0.1:9000"`) the sugar would otherwise read
+    /// `where ⟦…⟧` as a *call to `where`* and leave `listen` with no block at all.
+    /// Match scrutinees turn it off for exactly the same reason.
+    fn parse_listen_addr(&mut self) -> Expr {
+        let prev = self.allow_trailing_block;
+        self.allow_trailing_block = false;
+        let addr = self.parse_expression();
+        self.allow_trailing_block = prev;
+        addr
     }
 
     pub(super) fn parse_route(&mut self) -> RouteExpr {

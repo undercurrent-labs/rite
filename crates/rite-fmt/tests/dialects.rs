@@ -86,3 +86,48 @@ fn the_declaration_effect_marker_survives_formatting() {
         "pure function gained a marker: {pure}"
     );
 }
+
+/// `@tcp.listen addr ⟦ |conn| … ⟧` must come back out of the formatter as it went
+/// in, in both dialects.
+///
+/// The juxtaposed form is sugar for the call `@tcp.listen(addr, block)`, and the
+/// formatter walks the *desugared* tree — so without a case for it, `rite fmt`
+/// would silently rewrite every server in the corpus into the parenthesised call
+/// the book does not teach. That still runs, which is exactly why it would go
+/// unnoticed. The handler's parameter has to survive too: dropping `|conn|` turns
+/// the block from a closure into a plain block and the handler stops being one.
+#[test]
+fn the_tcp_listen_block_form_survives_formatting() {
+    let glyph = rite_fmt::format_source("! @tcp.listen \"127.0.0.1:0\" ⟦ |conn| conn ⟧\n", false)
+        .expect("format glyph");
+    assert!(
+        glyph.contains("@tcp.listen \"127.0.0.1:0\" ⟦"),
+        "glyph lost the juxtaposed form: {glyph}"
+    );
+    assert!(
+        glyph.contains("|conn|"),
+        "glyph dropped the parameter: {glyph}"
+    );
+
+    let ascii = rite_fmt::format_source("! @tcp.listen \"127.0.0.1:0\" ⟦ |conn| conn ⟧\n", true)
+        .expect("format ascii");
+    assert!(
+        ascii.contains("host.tcp.listen \"127.0.0.1:0\" [["),
+        "ascii lost the juxtaposed form: {ascii}"
+    );
+    assert!(
+        ascii.contains("|conn|"),
+        "ascii dropped the parameter: {ascii}"
+    );
+
+    // Idempotent, and it must not turn some *other* @tcp call into the block form.
+    for once in [glyph, ascii] {
+        let twice = rite_fmt::format_source(&once, once.contains("host.")).expect("reformat");
+        assert_eq!(once, twice, "second pass changed the output");
+    }
+    let ordinary = rite_fmt::format_source("! @tcp.close(conn)\n", false).expect("format call");
+    assert!(
+        ordinary.contains("@tcp.close(conn)"),
+        "an ordinary @tcp call must stay a call: {ordinary}"
+    );
+}

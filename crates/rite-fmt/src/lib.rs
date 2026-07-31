@@ -1067,6 +1067,25 @@ impl<'a> Formatter<'a> {
                         return;
                     }
                 }
+                // `@tcp.listen addr ⟦ |conn| … ⟧` is parsed as this call. Printing it
+                // as `@tcp.listen(addr, ⟦…⟧)` would still run, but `rite fmt` would
+                // rewrite every server in the corpus into a shape the book does not
+                // teach — so the sugar is printed back the way it was written.
+                if let Expr::Capability(cap) = c.callee.as_ref() {
+                    if cap.path.len() >= 2
+                        && cap.path[0] == "tcp"
+                        && cap.path[1] == "listen"
+                        && c.args.len() == 2
+                        && matches!(c.args[1], Expr::Block(_))
+                    {
+                        self.expr(&c.callee);
+                        self.out.push(' ');
+                        self.expr(&c.args[0]);
+                        self.out.push(' ');
+                        self.expr(&c.args[1]);
+                        return;
+                    }
+                }
                 self.expr(&c.callee);
                 self.out.push('(');
                 for (i, a) in c.args.iter().enumerate() {

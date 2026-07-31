@@ -129,6 +129,14 @@ pub const HOST_EFFECTS: &[(&str, bool)] = &[
     ("udp.send_to", true),
     ("udp.recv_from", true),
     ("udp.close", true),
+    // @tcp — byte streams. `connect` dials out, `listen` claims a port and then
+    // serves, and the two transfers move bytes on and off the wire. `close` releases
+    // a file descriptor. There is nothing pure here.
+    ("tcp.connect", true),
+    ("tcp.send", true),
+    ("tcp.recv", true),
+    ("tcp.close", true),
+    ("tcp.listen", true),
     // @game — in-process world state: writes marked, reads not.
     ("game.register_item", true),
     ("game.register_room", true),
