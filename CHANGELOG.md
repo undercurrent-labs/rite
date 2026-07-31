@@ -1,8 +1,37 @@
 # Changelog
 
-## [Unreleased]
+## [0.3.1] — 2026-07-30
+
+Effects stop leaking through function boundaries, modules become a real module
+system, and seven ordinary names stop silently evaluating to nothing.
+
+### Fixed
+
+- **Seven reserved words bound nothing as parameters.** `item`, `room`, `world`, `test`,
+  `ok`, `err` and `some` could be *bound* but not *read*: `◆ f(item) ⟦ ^ item ⟧` returned
+  `none`, and `map { |item| item * 2 }` returned a constant regardless of input — wrong
+  answers, no diagnostic, `rite check` clean. Of the 31 reserved words these were the only
+  silent ones. They now parse as expressions wherever they can be bound, and the
+  declaration forms that need them (`◆ item :key ⟦ … ⟧`, `◆ test "…" ⟦ … ⟧`) are unchanged.
+
+- **A module could not use another module.** Only the entry file's imports were brought
+  into scope, so a function in one module calling into another reported an undefined name.
+  The graph could only be an entry plus self-contained leaves. Modules import modules now,
+  and a module's own imports stay private to it.
+
+- **`compose` was never an ASCII spelling of `∘`.** The alias table advertised it, but no
+  such keyword exists: `f compose g` evaluated to `f` and returned a wrong number instead
+  of failing. The working form is the builtin call `compose(f, g)`, which is what the table
+  now records — including in the agent skill bundle, which had been teaching the broken one.
 
 ### Changed
+
+- **Every import binds a qualifier.** `use math` now gives `math.square` as well as
+  `square`; an alias still keeps the module behind its own name. Two modules exporting the
+  same name no longer make either unusable — the clash is reported only if you call the
+  bare name, and it names both modules. Qualified calls are checked when you compile:
+  `m.squre(9)` used to pass `rite check` and fail at runtime as `undefined name m__squre`,
+  leaking the internal mangling at the reader.
 
 - **Effects now travel with the call graph.** `!` marked only the place a host call was
   written, so wrapping one in a function made it disappear: `◆ greet(n) ⟦ ! @console.println(n) ⟧`

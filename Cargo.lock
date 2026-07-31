@@ -2266,7 +2266,7 @@ dependencies = [
 
 [[package]]
 name = "rite"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2284,7 +2284,7 @@ dependencies = [
 
 [[package]]
 name = "rite-analysis"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "rite-core",
  "rite-sem",
@@ -2296,7 +2296,7 @@ dependencies = [
 
 [[package]]
 name = "rite-caps"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "async-trait",
  "axum",
@@ -2332,7 +2332,7 @@ dependencies = [
 
 [[package]]
 name = "rite-cli"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "anyhow",
  "axum",
@@ -2364,7 +2364,7 @@ dependencies = [
 
 [[package]]
 name = "rite-compiler"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "anyhow",
  "hex",
@@ -2382,7 +2382,7 @@ dependencies = [
 
 [[package]]
 name = "rite-core"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "serde",
  "serde_json",
@@ -2393,7 +2393,7 @@ dependencies = [
 
 [[package]]
 name = "rite-doc"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "anyhow",
  "rite-caps",
@@ -2409,7 +2409,7 @@ dependencies = [
 
 [[package]]
 name = "rite-fmt"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "proptest",
  "rite-core",
@@ -2421,7 +2421,7 @@ dependencies = [
 
 [[package]]
 name = "rite-lsp"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "dashmap 6.2.1",
  "rite-analysis",
@@ -2440,7 +2440,7 @@ dependencies = [
 
 [[package]]
 name = "rite-repl"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "anyhow",
  "rite-caps",
@@ -2455,7 +2455,7 @@ dependencies = [
 
 [[package]]
 name = "rite-runtime"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "async-trait",
  "criterion",
@@ -2475,7 +2475,7 @@ dependencies = [
 
 [[package]]
 name = "rite-sem"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "indexmap",
  "rite-core",
@@ -2487,7 +2487,7 @@ dependencies = [
 
 [[package]]
 name = "rite-syntax"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "insta",
  "proptest",
@@ -2499,7 +2499,7 @@ dependencies = [
 
 [[package]]
 name = "rite-test"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "anyhow",
  "rite-caps",
@@ -2516,7 +2516,7 @@ dependencies = [
 
 [[package]]
 name = "rite-wasm"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "console_error_panic_hook",
  "getrandom 0.2.17",
@@ -3770,7 +3770,7 @@ dependencies = [
 
 [[package]]
 name = "xtask"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "anyhow",
 ]
