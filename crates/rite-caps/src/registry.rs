@@ -11,6 +11,7 @@ use crate::permissions::PermissionSet;
 use crate::process::ProcessCap;
 use crate::random::RandomCap;
 use crate::store::StoreCap;
+use crate::udp::UdpCap;
 use async_trait::async_trait;
 use parking_lot::RwLock;
 use rite_runtime::{CapabilityHost, EvalError, RuntimeContext, Value};
@@ -46,6 +47,7 @@ pub struct HostCapabilities {
     pub process: ProcessCap,
     pub random: Arc<RwLock<RandomCap>>,
     pub http: HttpCap,
+    pub udp: UdpCap,
     pub game: Arc<RwLock<GameCap>>,
     pub store: Arc<RwLock<StoreCap>>,
     pub db: Arc<RwLock<DbCap>>,
@@ -63,6 +65,7 @@ impl HostCapabilities {
             process: ProcessCap,
             random: Arc::new(RwLock::new(RandomCap::from_entropy())),
             http: HttpCap::new(),
+            udp: UdpCap::new(),
             game: Arc::new(RwLock::new(GameCap::new())),
             store: Arc::new(RwLock::new(StoreCap::new())),
             db: Arc::new(RwLock::new(DbCap::new())),
@@ -81,6 +84,7 @@ impl HostCapabilities {
             ("process", ProcessCap::DESCRIPTORS),
             ("random", RandomCap::DESCRIPTORS),
             ("http", HttpCap::DESCRIPTORS),
+            ("udp", UdpCap::DESCRIPTORS),
             ("game", GameCap::DESCRIPTORS),
             ("store", StoreCap::DESCRIPTORS),
             ("db", DbCap::DESCRIPTORS),
@@ -137,6 +141,7 @@ impl CapabilityHost for HostCapabilities {
                 rng.call(method, args, &self.perms)
             }
             "http" => self.http.call(method, args, &self.perms, ctx).await,
+            "udp" => self.udp.call(method, args, &self.perms).await,
             "game" => {
                 let args = resolve_atom_args(args, ctx);
                 let mut game = self.game.write();

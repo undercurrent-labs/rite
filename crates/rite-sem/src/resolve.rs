@@ -107,6 +107,14 @@ pub const HOST_EFFECTS: &[(&str, bool)] = &[
     ("http.response", false),
     ("http.log", false),
     ("http.recover", false),
+    // @udp — datagram sockets. Every one of these touches the socket: `bind` claims
+    // a port, `local_addr` asks the OS which one it got, and the two transfers move
+    // bytes on and off the wire.
+    ("udp.bind", true),
+    ("udp.local_addr", true),
+    ("udp.send_to", true),
+    ("udp.recv_from", true),
+    ("udp.close", true),
     // @game — in-process world state: writes marked, reads not.
     ("game.register_item", true),
     ("game.register_room", true),

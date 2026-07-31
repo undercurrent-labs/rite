@@ -14,6 +14,7 @@ pub mod process;
 pub mod random;
 pub mod registry;
 pub mod store;
+pub mod udp;
 
 pub use permissions::{Permission, PermissionSet};
 pub use registry::{CapabilityRegistry, HostCapabilities};

@@ -224,17 +224,26 @@ pub async fn run(source: &str, options: RunOptions) -> ExecutionResult {
         };
     }
 
-    if browser && (source.contains("@process") || source.contains("host.process")) {
-        return ExecutionResult {
-            ok: false,
-            value: serde_json::Value::Null,
-            stdout: String::new(),
-            stderr: String::new(),
-            error: Some(
-                "capability @process is native-only and unavailable in the browser runtime".into(),
-            ),
-            virtual_http: None,
-        };
+    if browser {
+        // Capabilities with no browser answer at all. `@http` is not here: the
+        // browser gets a *virtual* listener below, which is a real (if limited)
+        // answer. These have none — there is no subprocess and no socket layer —
+        // so say so before the script runs rather than failing mid-way.
+        if let Some(cap) = ["process", "udp"]
+            .into_iter()
+            .find(|c| source.contains(&format!("@{c}")) || source.contains(&format!("host.{c}")))
+        {
+            return ExecutionResult {
+                ok: false,
+                value: serde_json::Value::Null,
+                stdout: String::new(),
+                stderr: String::new(),
+                error: Some(format!(
+                    "capability @{cap} is native-only and unavailable in the browser runtime"
+                )),
+                virtual_http: None,
+            };
+        }
     }
 
     let virtual_http = if source.contains("@http.listen") || source.contains("host.http.listen") {
@@ -470,6 +479,31 @@ mod tests {
             },
         );
         assert!(!r.ok);
+    }
+
+    /// There are no datagram sockets in a browser tab, in either dialect, and
+    /// `--allow-all` does not conjure one.
+    #[test]
+    fn udp_denied_browser() {
+        for src in [
+            "! @udp.bind(\"127.0.0.1:0\")",
+            "do host.udp.bind(\"127.0.0.1:0\")",
+        ] {
+            let r = run_blocking(
+                src,
+                RunOptions {
+                    allow_all: true,
+                    browser_safe: true,
+                    ..Default::default()
+                },
+            );
+            assert!(!r.ok, "`{src}` must not run in the browser runtime");
+            let e = r.error.unwrap_or_default();
+            assert!(
+                e.contains("@udp") && e.contains("native-only"),
+                "error should name the capability and why: {e}"
+            );
+        }
     }
 
     #[test]

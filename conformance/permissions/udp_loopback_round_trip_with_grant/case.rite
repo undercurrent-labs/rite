@@ -1,0 +1,9 @@
+// A datagram to itself, both paths. Loopback binds without a grant, but the
+// *destination* is gated per host exactly as an outbound `@http.get` is — hence
+// `net=127.0.0.1`. Port 0 means no fixed port to collide over.
+sock ← ! @udp.bind("127.0.0.1:0")?
+here ← ! @udp.local_addr(sock)?
+! @udp.send_to(sock, here, "hello")?
+got ← ! @udp.recv_from(sock, 5000)?
+! @udp.close(sock)?
+^ got.text

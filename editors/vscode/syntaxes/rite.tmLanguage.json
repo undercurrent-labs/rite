@@ -53,7 +53,7 @@
       "patterns": [
         {
           "name": "support.module.capability.rite",
-          "match": "(@|host\\.)(clock|console|csv|db|env|fs|game|http|json|process|random|store)\\b"
+          "match": "(@|host\\.)(clock|console|csv|db|env|fs|game|http|json|process|random|store|udp)\\b"
         },
         {
           "name": "support.function.capability.rite",

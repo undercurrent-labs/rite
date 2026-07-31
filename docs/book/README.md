@@ -20,7 +20,7 @@ This book is a linear path. You can stop after any chapter and experiment in [St
 12. [Effects and capabilities](effects.md) — `!` / `do`, permissions
 13. [Files, JSON, and CSV](files-json.md) — `@fs`, `@json`, `@csv`
 14. [Databases](db.md) — `@db` (DuckDB), SQL, transactions
-15. [HTTP services](http.md) — `@http.listen`, routes, middleware
+15. [HTTP services](http.md) — `@http.listen`, routes, middleware, `@udp` datagrams
 16. [Modules](modules.md) — `use`, `pub`, relative paths, aliases
 17. [Compiling to Rust](compiling.md) — `rite build`, IR, parity
 18. [Text RPG](rpg.md) — `@game` tutorial

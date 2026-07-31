@@ -4,6 +4,30 @@
 
 ### Added
 
+- **`@udp` — datagram sockets.** `bind`, `local_addr`, `send_to`, `recv_from`, `close`.
+  A socket is an opaque handle, the same representation a `@db` connection already has,
+  and there is no connection state to manage: bind, exchange datagrams, close. Closing
+  twice is fine, because a script closes on the way out and should not have to remember
+  whether it already did.
+
+  `recv_from(sock, timeout_ms)` answers `ok(⟨from, data, text⟩)`, or
+  `err(⟨kind: "udp.timeout", …⟩)` when nothing arrives — **a timeout is a value, not a
+  raise**. Waiting for a datagram that never comes is ordinary, so the script decides
+  what it means; `?` on that line would hand it to the caller instead.
+
+  Payloads are a string (sent as UTF-8) or a `bytes` value (sent verbatim) — the type
+  `@fs.read_bytes` and `@http` response bodies already use. Received datagrams come back
+  as `data` (bytes) plus `text` (lossy UTF-8). Bytes are still opaque in Rite, so a
+  program can relay them but cannot yet build a binary packet from source; see the gap
+  recorded in `IMPLEMENTATION.md`.
+
+  Permissions are the two `@http` already applies, reached through the same code: the
+  **bind address** allows loopback by default and needs `--allow net=<host>` for anything
+  else, and the **destination** of every `send_to` is checked per host like an outbound
+  `@http.get` — including loopback. Talking to yourself needs `--allow net=127.0.0.1`.
+
+  Native only: the browser runtime has no socket layer and says so, as `@process` does.
+
 - **Strings and numbers can be worked on.** Rite is pitched at tools and pipelines,
   where handling text is most of the job, and it had `lines`, `words` and `join` —
   nothing to split, trim, case, pad or slice with.

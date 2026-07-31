@@ -270,6 +270,95 @@ change which host is checked.
 Not available in the browser (hosted Studio): there is no socket layer there, so these
 return a capability error, the same as `@db`.
 
+## Datagrams (`@udp`)
+
+Below HTTP is the other half of the network host: UDP. There is no connection, so there
+is no lifetime to manage beyond the socket itself — `bind`, then `send_to` / `recv_from`
+as often as you like, then `close`.
+
+```rite native_only
+peer ← ! @udp.bind("127.0.0.1:0")?
+sock ← ! @udp.bind("127.0.0.1:0")?
+
+! @udp.send_to(sock, ! @udp.local_addr(peer)?, "ping")?
+
+got ← ! @udp.recv_from(peer, 1000)?
+! @console.println("{got.from} said {got.text}")
+
+! @udp.close(sock)?
+! @udp.close(peer)?
+```
+
+```bash
+rite run ping.rite --allow net=127.0.0.1
+```
+
+| Call | Answers |
+|------|---------|
+| `@udp.bind(addr)` | `ok(socket)` — an opaque handle, like a `@db` connection |
+| `@udp.local_addr(sock)` | `ok("127.0.0.1:54321")` — the address actually bound |
+| `@udp.send_to(sock, addr, data)` | `ok(n)`, the number of bytes sent |
+| `@udp.recv_from(sock, timeout_ms)` | `ok(⟨from, data, text⟩)` or `err(…)` |
+| `@udp.close(sock)` | `ok(none)`, also for an already-closed handle |
+
+Port `0` asks the OS for a free port, so `@udp.local_addr` is how you learn where you
+ended up — the same reason `@http.listen` prints its bound address.
+
+### Waiting, and giving up
+
+`recv_from` waits up to `timeout_ms` (default 1000). **A timeout is an `err` value, not a
+raise** — waiting for a datagram that never comes is ordinary, so the script keeps going
+and decides for itself:
+
+```rite native_only
+sock ← ! @udp.bind("127.0.0.1:0")?
+~ ! @udp.recv_from(sock, 250) ⟦
+  ok msg → ! @console.println(msg.text)
+  err e → ! @console.println("nothing arrived ({e.kind})")
+⟧
+! @udp.close(sock)?
+```
+
+The error record is `⟨kind: "udp.timeout", operation, message, timeout_ms⟩`. Transport
+failures use `kind: "udp.error"` and carry `address` instead — so `e.kind` tells the two
+apart. Note the missing `?` on the `recv_from` line: `?` would hand the timeout straight
+back to the caller, which is exactly what you do *not* want here.
+
+### Bytes on the wire
+
+Rite strings are UTF-8 and a datagram is not, so payloads use the **bytes** type —
+the same one `@fs.read_bytes` returns and `@http` puts in `resp.body`.
+
+| Direction | Representation |
+|-----------|----------------|
+| `send_to` payload | a **string** (sent as its UTF-8 bytes) or a **bytes** value (verbatim) |
+| `recv_from` `data` | **bytes** — `len(data)` counts bytes, not characters |
+| `recv_from` `text` | the same payload decoded as UTF-8, invalid sequences replaced |
+
+Anything else — a record, an int — is an error rather than a silent stringification.
+
+Bytes received can be sent again unchanged, which is enough to relay or echo. It is not
+yet enough to *author* a binary packet: bytes are opaque in Rite today, with no builtin
+that converts a hex string to bytes or back, so a DNS query cannot be built from source.
+That gap is recorded in `IMPLEMENTATION.md`; when it closes it will close for `@fs` and
+`@http` at the same time, because all three name the same type.
+
+### Permissions
+
+Two different checks, and they are the ones `@http` already makes:
+
+| Gate | Rule |
+|------|------|
+| `bind` address | Loopback binds by default; `0.0.0.0`, `[::]` or a LAN IP needs `--allow net=<host>` — the same policy as `@http.listen` |
+| `send_to` destination | Always per host, like an outbound `@http.get` — **including loopback** |
+
+So a script that only talks to itself still needs `--allow net=127.0.0.1`. Binding a
+socket grants nothing about where it may send, and a grant for one host never covers
+another. The destination is matched as written, before any name is resolved.
+
+Native only: the browser runtime has no socket layer, so `@udp` there is a clear
+capability error rather than a stub, the same as `@process`.
+
 ## Next
 
 [Modules](modules.md) · [One-liners & REPL](one-liners.md) · [Browser & Studio](browser.md)

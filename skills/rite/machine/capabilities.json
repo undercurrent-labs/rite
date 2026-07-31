@@ -589,5 +589,42 @@
       "name": "delete",
       "permission": ""
     }
+  ],
+  "udp": [
+    {
+      "arity": 1,
+      "docs": "Bind a UDP socket and return ok(handle). Loopback (127.0.0.0/8, ::1, localhost) binds by default; any other interface — including the wildcards 0.0.0.0 and [::] — needs --allow net=<host>. Port 0 picks a free port; read it back with @udp.local_addr.",
+      "effectful": true,
+      "name": "bind",
+      "permission": "net"
+    },
+    {
+      "arity": 1,
+      "docs": "The address a socket is actually bound to, as \"host:port\". Returns ok(string).",
+      "effectful": true,
+      "name": "local_addr",
+      "permission": "net"
+    },
+    {
+      "arity": 3,
+      "docs": "Send one datagram to \"host:port\". The payload is a string (sent as UTF-8) or a bytes value (sent verbatim). Returns ok(bytes sent). Needs --allow net=<host> for the destination.",
+      "effectful": true,
+      "name": "send_to",
+      "permission": "net"
+    },
+    {
+      "arity": 2,
+      "docs": "Wait up to timeout_ms (default 1000) for one datagram. Returns ok(⟨from, data, text⟩) — `data` is bytes, `text` is the same payload as lossy UTF-8 — or err(⟨kind: \"udp.timeout\", …⟩) when nothing arrives. A timeout is a value, not a raise.",
+      "effectful": true,
+      "name": "recv_from",
+      "permission": "net"
+    },
+    {
+      "arity": 1,
+      "docs": "Close a socket handle. Closing an unknown or already-closed handle answers ok(none).",
+      "effectful": true,
+      "name": "close",
+      "permission": "net"
+    }
   ]
 }
