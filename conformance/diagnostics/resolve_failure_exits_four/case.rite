@@ -1,0 +1,8 @@
+// Rite's published table says 3 means the source would not parse and 4 means it
+// parsed but would not resolve. The binary did not do that: every rejection with
+// an error in it exited 3 from `rite run`, and 4 from `rite check`, so the number
+// told you which command had complained rather than what was wrong.
+//
+// This file is syntactically fine. `nowhere` is simply not defined (E020), which
+// is a resolve failure and exits 4.
+^ nowhere(1)

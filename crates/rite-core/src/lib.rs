@@ -65,6 +65,29 @@ impl Diagnostics {
         self.items.iter().filter(|d| d.severity == Severity::Error)
     }
 
+    /// The exit status a rejected source ends with: **3** if it could not be
+    /// parsed, **4** if it parsed but did not resolve.
+    ///
+    /// Rite's published contract has always read "3 parse, 4 resolve", and the
+    /// binary did not do that: `rite run` answered 3 for both, `rite check`
+    /// answered 4 for both, so the number said which *command* had rejected the
+    /// file rather than what was wrong with it. Codes are grouped by phase
+    /// (E00x lex, E01x parse, E02x resolve/module), so the answer was always
+    /// available — nothing was reading it.
+    ///
+    /// Lexing counts as parsing: an unterminated string is a source that could not
+    /// be read, which is what 3 means to anyone acting on it.
+    ///
+    /// A source with no errors at all still answers 4, since a caller only asks
+    /// this about a rejection.
+    pub fn rejection_exit_code(&self) -> u8 {
+        if self.errors().any(|d| d.code.0 < 20) {
+            3
+        } else {
+            4
+        }
+    }
+
     pub fn render_all(&self, sources: &SourceMap) -> String {
         self.items
             .iter()

@@ -277,16 +277,18 @@ against the binary, not against intent:
 | 0 | Success | The script finished |
 | 1 | Runtime error | `fail`, `panic`, an unhandled capability error |
 | 2 | Usage error | The `rite` command line itself was wrong |
-| 3 | Source rejected at run time | `rite run` (and `rite ast`) on a file that will not compile |
-| 4 | Source rejected at check time | `rite check`, `rite semantic-ir`, `rite emit-rust` |
+| 3 | Would not parse | A syntax or lexical error — `E00x`, `E01x` |
+| 4 | Would not resolve | It parsed; a name, effect marker or import was wrong — `E02x` |
 | 5 | Permission denied | A capability call without the grant it needs |
 | 6 | Build failed | `rite build` |
 | 7 | A test failed | `rite test` |
 | 8 | Budget exceeded | `--max-steps` or the execution timeout |
 
-Codes 3 and 4 are about *when* a source was rejected, not about which phase found the
-problem: `rite run` exits 3 whether the file failed to parse or failed to resolve, and
-`rite check` exits 4 for both.
+Codes 3 and 4 describe **what was wrong with the source**, not which command
+noticed: `rite run`, `rite check` and `rite semantic-ir` all answer 3 for a file
+that will not parse and 4 for one that parses but does not resolve. A wrapper can
+act on that — 3 means the text is not Rite, 4 means it is Rite that refers to
+something that is not there.
 
 ### Choosing your own status
 

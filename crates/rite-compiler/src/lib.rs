@@ -507,9 +507,12 @@ pub async fn run_ir_mode(
 ) -> Result<rite_runtime::Value, RunFailure> {
     let (ir, diags, _) = compile_path(file);
     if diags.has_errors() {
-        // 3 is what `rite run` exits with for a source it cannot compile.
+        // 3 if it would not parse, 4 if it parsed and would not resolve — the same
+        // classification the interpreted path makes. This was a hardcoded 3, which
+        // the conformance runner caught the moment resolve failures started
+        // answering 4: the two paths disagreed about the same file.
         return Err(RunFailure::harness(
-            3,
+            diags.rejection_exit_code(),
             format!("compile errors: {}", diags.len()),
         ));
     }

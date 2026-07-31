@@ -596,7 +596,7 @@ async fn run(cli: Cli) -> anyhow::Result<ExitCode> {
             let (program, diags, sources) = parse_source(&file.display().to_string(), &text);
             if diags.has_errors() {
                 eprint!("{}", diags.render_all(&sources));
-                return Ok(ExitCode::from(3));
+                return Ok(ExitCode::from(diags.rejection_exit_code()));
             }
             let program = program.expect("program");
             if json {
@@ -617,7 +617,7 @@ async fn run(cli: Cli) -> anyhow::Result<ExitCode> {
             let (ir, diags) = compile_to_ir(&sf);
             if diags.has_errors() {
                 eprint!("{}", diags.render_all(&sources));
-                return Ok(ExitCode::from(4));
+                return Ok(ExitCode::from(diags.rejection_exit_code()));
             }
             let ir = ir.expect("ir");
             if json {
@@ -630,7 +630,7 @@ async fn run(cli: Cli) -> anyhow::Result<ExitCode> {
         Commands::EmitRust { file } => {
             let (ir, diags, _) = rite_sem::compile_path(&file);
             if diags.has_errors() {
-                return Ok(ExitCode::from(4));
+                return Ok(ExitCode::from(diags.rejection_exit_code()));
             }
             let ir = ir.ok_or_else(|| anyhow::anyhow!("no ir"))?;
             let code =
@@ -652,7 +652,7 @@ async fn run(cli: Cli) -> anyhow::Result<ExitCode> {
                 eprint!("{}", diags.render_all(&sources));
             }
             if diags.has_errors() {
-                Ok(ExitCode::from(4))
+                Ok(ExitCode::from(diags.rejection_exit_code()))
             } else {
                 let _ = ir;
                 println!("ok");
@@ -664,7 +664,7 @@ async fn run(cli: Cli) -> anyhow::Result<ExitCode> {
             let (program, diags, sources) = parse_source(&file.display().to_string(), &text);
             if diags.has_errors() {
                 eprint!("{}", diags.render_all(&sources));
-                return Ok(ExitCode::from(3));
+                return Ok(ExitCode::from(diags.rejection_exit_code()));
             }
             let program = program.expect("program");
             if json {
@@ -685,7 +685,7 @@ async fn run(cli: Cli) -> anyhow::Result<ExitCode> {
             let (ir, diags) = compile_to_ir(&sf);
             if diags.has_errors() {
                 eprint!("{}", diags.render_all(&sources));
-                return Ok(ExitCode::from(4));
+                return Ok(ExitCode::from(diags.rejection_exit_code()));
             }
             let ir = ir.expect("ir");
             if json {
@@ -703,7 +703,7 @@ async fn run(cli: Cli) -> anyhow::Result<ExitCode> {
             let (ir, diags) = compile_to_ir(&sf);
             if diags.has_errors() {
                 eprint!("{}", diags.render_all(&sources));
-                return Ok(ExitCode::from(4));
+                return Ok(ExitCode::from(diags.rejection_exit_code()));
             }
             println!("# Desugared IR for {}", file.display());
             println!("{:#?}", ir);

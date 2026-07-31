@@ -121,13 +121,12 @@ impl EvalError {
     pub fn exit_code(&self) -> u8 {
         match self {
             EvalError::Exit(c) => *c,
-            EvalError::Compile(d) => {
-                if d.has_errors() {
-                    3
-                } else {
-                    4
-                }
-            }
+            // 3 for a source that would not parse, 4 for one that parsed and would
+            // not resolve — which is what the table has always claimed and what the
+            // binary did not do: this arm used to answer 3 for every rejection with
+            // an error in it, so an undefined name exited 3 where the contract
+            // promised 4.
+            EvalError::Compile(d) => d.rejection_exit_code(),
             EvalError::Permission(_) => 5,
             EvalError::Budget(_) => 8,
             EvalError::Message(_)

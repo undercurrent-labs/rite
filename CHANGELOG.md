@@ -2,6 +2,28 @@
 
 ## [Unreleased]
 
+### Changed — exit codes 3 and 4 mean what the table always said
+
+Rite's published contract reads "3 parse, 4 resolve". The binary did not do that:
+`rite run` answered **3** for every rejected source and `rite check` answered
+**4**, so the number said which command had complained rather than what was wrong
+with the file. Diagnostic codes are grouped by phase (`E00x` lex, `E01x` parse,
+`E02x` resolve), so the answer was there and nothing read it.
+
+`rite run`, `rite check`, `rite semantic-ir` and `rite emit-rust` now all answer 3
+for a source that would not parse and 4 for one that parsed and would not resolve.
+A wrapper can act on the difference: 3 means the text is not Rite, 4 means it is
+Rite referring to something that is not there.
+
+**This changes an observable status.** A script with an undefined name or a
+missing `!` marker exits 4 from `rite run` where it exited 3 before, and a file
+that will not parse exits 3 from `rite check` where it exited 4. Anything matching
+on the old numbers needs a look.
+
+The differential runner caught its own inconsistency here: the IR path had 3
+hardcoded, so the two execution paths disagreed about the same file the moment
+resolve failures started answering 4.
+
 ### Changed — `@tcp` connections close with the run
 
 `@tcp` kept its connections in a process-global map, so a socket outlived the run

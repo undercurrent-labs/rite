@@ -1,0 +1,3 @@
+// The other half of the same contract: this is not Rite at all (E010), so it
+// never reaches the resolver and exits 3.
+◆ ⟧⟧ ←
