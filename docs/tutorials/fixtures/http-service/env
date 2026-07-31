@@ -1,0 +1,5 @@
+# @http.listen blocks until it is stopped. These make it stop on its own, which is
+# how the script can be run unattended at all; a reader running it by hand hits
+# Ctrl-C instead.
+RITE_HTTP_TEST=1
+RITE_HTTP_TEST_SECS=3

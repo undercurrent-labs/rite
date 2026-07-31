@@ -93,7 +93,31 @@ pub fn generate_from_ir(ir: &ProgramIr, source_path: &Path) -> Result<String, St
     }
     out.push_str("        Ok(__last)\n    }.await;\n");
     // A `^` at the top level is the script's value, not an error.
-    out.push_str("    match __r { Err(EvalError::Return(v)) => Ok(v), other => other }\n");
+    out.push_str(
+        "    let __value = match __r {\n\
+         \x20       Err(EvalError::Return(v)) => v,\n\
+         \x20       Err(e) => return Err(e),\n\
+         \x20       Ok(v) => v,\n\
+         \x20   };\n",
+    );
+    // The interpreter calls `main` after the top-level statements when the program
+    // declares one (see `EntryPoint::Main` in rite-runtime's IR evaluator). The
+    // generated code ran the top level and stopped, so every `◆! main()` script —
+    // which is how the book writes almost all of them — compiled to a binary that
+    // did nothing and exited 0. Nothing caught it because conformance fixtures are
+    // written as top-level statements, where the two paths did agree.
+    //
+    // Dispatched through the registry rather than calling the generated
+    // `rite_fn_main` directly, so a `main` the backend could not lower still runs
+    // via the interpreter fallback, exactly as its callers already do.
+    out.push_str(
+        "    if matches!(__ir.entry, rite_sem::EntryPoint::Main { .. }) {\n\
+         \x20       let __main = rite_runtime::lookup_global(ctx, \"main\")?;\n\
+         \x20       let mut __ev = rite_runtime::Evaluator::new(ctx);\n\
+         \x20       return __ev.call_value_public(__main, vec![Value::list(Vec::<Value>::new())]).await;\n\
+         \x20   }\n",
+    );
+    out.push_str("    Ok(__value)\n");
     out.push_str("}\n\n");
 
     // Closure bodies hoisted during lowering, then the compiled functions. Emitted after

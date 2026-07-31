@@ -23,6 +23,25 @@
   `PATH` usually cannot start). An unrecognised key is an error rather than a
   silent default — a typo should not be indistinguishable from the default.
 
+### Fixed — compiler
+
+- **A compiled binary never ran `main`.** `rite build` emitted a `rite_main` that
+  ran the module's top-level statements and stopped, never consulting `ir.entry`,
+  so the generated `rite_fn_main` sitting directly below it was never called. Since
+  the book writes almost every example as `◆! main() ⟦ … ⟧`, essentially every
+  compiled binary printed nothing and exited `0`.
+
+  Nothing caught it, and each near-miss is worth recording: conformance fixtures are
+  written as top-level statements, where both paths already agreed; `run_ir` handles
+  the entry point correctly, so the in-process parity gate agreed too; and
+  `codegen_is_valid_rust` only asks whether the generated Rust *parses*. The
+  disagreement lived solely in generated Rust, so only building and running could
+  see it — which is what the new `#[ignore]`d test does.
+
+  Dispatched through the function registry rather than calling `rite_fn_main`
+  directly, so a `main` the backend could not lower still runs via the interpreter
+  fallback, exactly as its callers already do.
+
 ### Fixed — parser
 
 - **`?` inside a call argument, followed by a statement taking a lambda, failed to
@@ -129,11 +148,23 @@
   describing behaviour that no longer existed. The markdown is the only copy of the
   script, so there is nothing to drift.
 
-- **Two new tutorials.** *Building a CLI* — `@process.args`, splitting flags from
-  positionals, and failing with a usage line on stderr and a non-zero status. And
+- **Five new tutorials.** *Building a CLI* — `@process.args`, splitting flags from
+  positionals, and failing with a usage line on stderr and a non-zero status.
   *Testing what you built*, which leads with the thing that will bite someone:
   `rite test` grants **every** permission, so a test file is as trusted as the CLI
-  itself, and a test therefore cannot prove your script asks for the right grants.
+  itself. *An HTTP service with real routes*, whose client lives in the same file so
+  the script proves its own routes — and which documents that `@store` does not
+  persist across requests. *A DNS resolver over `@udp`*, the tutorial byte authoring
+  exists for. And *Compiling to a binary*, on what happens to permissions when you
+  ship one.
+
+  Three of those cannot run in a CI gate for reasons no flag fixes — a server
+  blocks, a cold `rite build` costs minutes, a DNS query needs the network — so they
+  carry an explicit `local-only` marker and run under
+  `cargo test -p rite-cli --test tutorial_scripts -- --ignored`. The marker is not a
+  silent skip: a test requires the page to *tell the reader* it is not CI-verified,
+  because the value of the gate is that printed output can be trusted, and an
+  unmarked exception spends that trust.
 
 - **New chapter: Network: sockets**, split out of HTTP services. `@udp` and `@tcp`
   were documented, but inside a 521-line chapter the sidebar labelled "HTTP

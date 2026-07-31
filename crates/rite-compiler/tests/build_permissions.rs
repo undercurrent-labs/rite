@@ -252,3 +252,60 @@ fn builds_outside_a_checkout_via_git_deps() {
     );
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// A compiled binary must run `main`, because the interpreter does.
+///
+/// `rite build` emitted a `rite_main` that ran the module's top-level statements and
+/// stopped, never consulting `ir.entry` — so a program written the way the book
+/// writes almost all of them, with the work inside `◆! main()`, compiled to a binary
+/// that printed nothing and exited 0. The generated `rite_fn_main` sat right below,
+/// never called.
+///
+/// Nothing caught it. Conformance fixtures are top-level statements, where both paths
+/// already agreed; `run_ir` handles the entry point correctly, so the in-process
+/// parity gate agreed too; and `codegen_is_valid_rust` only asks whether the output
+/// parses. The disagreement existed solely in generated Rust, so only building and
+/// running it can see it.
+#[test]
+#[ignore = "cold cargo build; run with -- --ignored"]
+fn compiled_binary_runs_main_like_the_interpreter() {
+    let dir = scratch("entry_main");
+    let script = dir.join("entry.rite");
+    std::fs::write(
+        &script,
+        "! @console.println(\"top-level ran\")\n\
+         def! main() [[\n  do @console.println(\"main ran\")\n]]\n",
+    )
+    .unwrap();
+
+    std::env::set_var("RITE_SOURCE_DIR", repo_root());
+    std::env::set_var("RITE_BUILD_DIR", dir.join("build"));
+    std::env::remove_var("CARGO_TARGET_DIR");
+    let prev_cwd = std::env::current_dir().unwrap();
+    std::env::set_current_dir(&dir).unwrap();
+
+    let bin = dir.join("entry");
+    rite_compiler::build_script(
+        &script,
+        false,
+        false,
+        Some(&bin),
+        &PermissionSet::allow_all(),
+    )
+    .expect("build");
+
+    std::env::set_current_dir(&prev_cwd).unwrap();
+    std::env::remove_var("RITE_SOURCE_DIR");
+    std::env::remove_var("RITE_BUILD_DIR");
+
+    let out = run_in(&bin, &dir);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.contains("top-level ran"),
+        "top level did not run: {stdout:?}"
+    );
+    assert!(
+        stdout.contains("main ran"),
+        "compiled binary never called main — it ran the top level and exited: {stdout:?}"
+    );
+}

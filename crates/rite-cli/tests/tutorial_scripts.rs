@@ -31,6 +31,24 @@ fn rite_bin() -> PathBuf {
 /// loudly rather than silently — see `every_tutorial_has_a_runnable_script`.
 const SECTION: &str = "## The whole script";
 
+/// Marks a tutorial whose script CI does not run.
+///
+/// Some scripts cannot go in a CI gate for reasons no flag will fix: a server that
+/// blocks until it is stopped, a `rite build` that costs minutes of cold cargo, a
+/// Rust host program that is not a `.rite` script at all, a query that needs the
+/// network. Those are still written by running them — locally, with
+/// `cargo test -p rite-cli --test tutorial_scripts -- --ignored`, which is the same
+/// convention the compiler's cold-build tests use.
+///
+/// The marker is deliberately not a silent skip: `local_only_tutorials_say_so`
+/// requires the page to tell the reader, because the whole value of the gate is that
+/// a reader can trust printed output, and an unmarked exception spends that trust.
+const LOCAL_ONLY: &str = "<!-- ci: local-only -->";
+
+/// The sentence a local-only page must carry, so the exception is visible to a
+/// reader rather than only to whoever greps the markdown.
+const LOCAL_ONLY_NOTICE: &str = "not run in CI";
+
 struct Runnable {
     /// The complete script, from the section's ```rite fence.
     script: String,
@@ -177,12 +195,44 @@ fn every_tutorial_has_a_runnable_script() {
     }
 }
 
+/// A page that opts out of the CI gate has to say so where a reader will see it.
+#[test]
+fn local_only_tutorials_say_so() {
+    for (slug, md) in tutorials() {
+        if !md.contains(LOCAL_ONLY) {
+            continue;
+        }
+        assert!(
+            md.contains(LOCAL_ONLY_NOTICE),
+            "docs/tutorials/{slug}.md is marked `{LOCAL_ONLY}` but never tells the reader — \
+             the page must contain the words \"{LOCAL_ONLY_NOTICE}\""
+        );
+    }
+}
+
 #[test]
 fn every_tutorial_script_runs_and_prints_what_it_claims() {
+    run_tutorial_scripts(false);
+}
+
+/// The ones CI cannot run. Kept out of the default run for the reasons in
+/// `LOCAL_ONLY`, and run on demand with `-- --ignored`.
+#[test]
+#[ignore]
+fn local_only_tutorial_scripts_run_and_print_what_they_claim() {
+    run_tutorial_scripts(true);
+}
+
+fn run_tutorial_scripts(local_only: bool) {
+    let mut ran = 0;
     for (slug, md) in tutorials() {
+        if md.contains(LOCAL_ONLY) != local_only {
+            continue;
+        }
         let Some(run) = parse_section(&md) else {
             continue; // reported by the test above
         };
+        ran += 1;
 
         let dir = std::env::temp_dir().join(format!("rite_tutorial_{slug}"));
         let _ = std::fs::remove_dir_all(&dir);
@@ -197,6 +247,7 @@ fn every_tutorial_script_runs_and_prints_what_it_claims() {
 
         let out = Command::new(rite_bin())
             .args(&run.args)
+            .envs(fixture_env(&dir))
             .current_dir(&dir)
             .output()
             .expect("spawn rite");
@@ -216,6 +267,34 @@ fn every_tutorial_script_runs_and_prints_what_it_claims() {
 
         let _ = std::fs::remove_dir_all(&dir);
     }
+    assert!(
+        ran > 0,
+        "no {} tutorials ran — a filter that matches nothing is a pass that proves nothing",
+        if local_only { "local-only" } else { "CI" }
+    );
+}
+
+/// `env` in a fixture directory sets environment variables for the run, one
+/// `KEY=VALUE` per line. `@http.listen` blocks until it is stopped, and honours
+/// `RITE_HTTP_TEST=1` with `RITE_HTTP_TEST_SECS`, which is what lets a server
+/// tutorial terminate at all.
+fn fixture_env(dir: &Path) -> Vec<(String, String)> {
+    let spec = dir.join("env");
+    let Ok(text) = std::fs::read_to_string(&spec) else {
+        return Vec::new();
+    };
+    let mut out = Vec::new();
+    for line in text.lines() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        let (k, v) = line.split_once('=').expect("`KEY=VALUE`");
+        out.push((k.trim().to_string(), v.trim().to_string()));
+    }
+    // Removed so it cannot show up in a glob the tutorial runs.
+    let _ = std::fs::remove_file(&spec);
+    out
 }
 
 /// The data a tutorial shows and the data its test runs on must be the same bytes,

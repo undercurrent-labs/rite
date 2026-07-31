@@ -15,10 +15,12 @@ says it prints. A tutorial that stops being true fails the build.
 | 1 | [Reshaping JSON](json-pipeline.md) | A report generator: read orders, filter, group, rank, write | nothing |
 | 2 | [Building a CLI](cli-tool.md) | A command-line greeter: arguments, flags, usage errors | nothing |
 | 3 | [Testing what you built](testing-what-you-built.md) | A test suite, and the permission posture of `rite test` | Building a CLI |
-| 4 | [Auditing a directory](fs-audit.md) | A CLI tool that sizes a directory and flags stale files | nothing |
+| 4 | [An HTTP service with real routes](http-service.md) | A JSON API with routes, a body, and a client that proves it | nothing |
+| 5 | [A DNS resolver over `@udp`](dns-resolver.md) | A DNS client: wire-format bytes, one datagram, an address | a nameserver |
+| 6 | [Compiling to a binary](compiling-a-binary.md) | A native executable, and permissions baked in at build time | a Rust toolchain |
+| 7 | [Auditing a directory](fs-audit.md) | A CLI tool that sizes a directory and flags stale files | nothing |
 
-More are planned — an HTTP service with real routes, compiling to a binary,
-embedding Rite in a Rust program, and a DNS resolver over `@udp`.
+More are planned — embedding Rite in a Rust program.
 
 ## Before you start
 
