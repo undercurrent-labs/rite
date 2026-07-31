@@ -49,6 +49,15 @@ Tracks implementation status for the Rite language and V1 tooling. Detailed desi
    except `random_bytes` — are unreachable there too, despite needing nothing the browser
    lacks. Closing that is a packaging change in `rite-wasm`, not a change to those
    capabilities.
+   outbound HTTP, `@db`, `@udp` and `@process` need the native host.
+1a. **Bytes are opaque in the language.** `@fs.read_bytes`, `@http` response bodies and
+   `@udp.recv_from` all answer a `bytes` value, and `bytes` supports exactly `len` and
+   equality. Nothing converts a hex (or base64) string to bytes, or bytes back to either,
+   so a script can *relay* bytes it was given but cannot author a binary payload — a DNS
+   query over `@udp` is not writable in Rite today. The fix is a pair of general builtins
+   (`bytes`/`hex` or similar) in `rite-runtime`, benefiting all three capabilities at
+   once; a per-capability hex spelling would be a second, incompatible convention and was
+   deliberately not added.
 2. **Virtual HTTP request replay in hosted mode** — UI panel exists; full handler re-entry is native-local.
 3. **Scope-aware multi-file rename** — rename is now token-accurate within a document
    (skips strings, comments and substrings, and keeps locals separate from `.fields`),

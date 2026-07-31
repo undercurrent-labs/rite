@@ -1,0 +1,4 @@
+// Binding a datagram socket beyond loopback is the `@http.listen` policy: the
+// wildcard `0.0.0.0` serves the whole network, so it needs an explicit grant.
+// This must fail with a permission error rather than opening the socket.
+! @udp.bind("0.0.0.0:0")?

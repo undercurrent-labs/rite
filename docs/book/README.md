@@ -21,7 +21,7 @@ This book is a linear path. You can stop after any chapter and experiment in [St
 13. [Files, JSON, and CSV](files-json.md) — `@fs`, `@json`, `@csv`
 14. [Hashing and encoding](crypto.md) — `@crypto`, digests, HMAC, base64/hex
 15. [Databases](db.md) — `@db` (DuckDB), SQL, transactions
-16. [HTTP services](http.md) — `@http.listen`, routes, middleware
+16. [HTTP services](http.md) — `@http.listen`, routes, middleware, `@udp` datagrams
 17. [Modules](modules.md) — `use`, `pub`, relative paths, aliases
 18. [Compiling to Rust](compiling.md) — `rite build`, IR, parity
 19. [Text RPG](rpg.md) — `@game` tutorial

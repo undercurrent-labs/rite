@@ -1002,10 +1002,17 @@ fn json_response(status: u16, v: &Value, ctx: &RuntimeContext) -> Response {
 /// by default. The host is parsed, never substring-matched: a hostname such as
 /// `evil-127.0.0.1.example.com` is not loopback.
 pub fn check_listen_perm(addr_str: &str, perms: &PermissionSet) -> Result<(), EvalError> {
+    check_bind_perm(addr_str, perms, "listen")
+}
+
+/// The same policy, for any capability that binds a socket — `@http.listen` and
+/// `@udp.bind`. `op` names the operation in the message and nothing else: a second
+/// copy of the loopback rules is exactly how the two would drift apart.
+pub fn check_bind_perm(addr_str: &str, perms: &PermissionSet, op: &str) -> Result<(), EvalError> {
     if perms.allow_all {
         return Ok(());
     }
-    let host = listen_host(addr_str);
+    let host = addr_host(addr_str);
     if is_loopback_host(&host) {
         return Ok(());
     }
@@ -1015,16 +1022,20 @@ pub fn check_listen_perm(addr_str: &str, perms: &PermissionSet) -> Result<(), Ev
         return Ok(());
     }
     Err(EvalError::Permission(format!(
-        "net permission denied for listen on `{addr_str}`: binding `{host}` exposes the server \
+        "net permission denied for {op} on `{addr_str}`: binding `{host}` exposes it \
          beyond loopback (only 127.0.0.0/8, ::1 and localhost are allowed by default). \
          Re-run with `--allow net={host}` (or `--allow net=*` / `--allow-all`), \
-         or listen on `127.0.0.1:<port>`."
+         or bind `127.0.0.1:<port>`."
     )))
 }
 
-/// Host part of a listen address: `"0.0.0.0:8080"` → `"0.0.0.0"`,
+/// Host part of a socket address: `"0.0.0.0:8080"` → `"0.0.0.0"`,
 /// `"[::1]:8080"` → `"::1"`, `"localhost"` → `"localhost"`.
-fn listen_host(addr_str: &str) -> String {
+///
+/// Shared with `@udp`, which matches a datagram destination against `net` grants
+/// the same way. Note the difference from [`host_of`], which takes a *URL*: this
+/// one unwraps IPv6 brackets, because `--allow net=::1` is spelled without them.
+pub(crate) fn addr_host(addr_str: &str) -> String {
     use std::net::{IpAddr, SocketAddr};
     let addr = addr_str.trim();
     if let Ok(sa) = addr.parse::<SocketAddr>() {

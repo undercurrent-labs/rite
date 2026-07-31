@@ -500,6 +500,48 @@ Middleware: convert handler panics/errors into JSON 500 responses. Enable with `
 - effectful: false
 - permission: 
 
+## @udp
+
+### bind
+
+Bind a UDP socket and return ok(handle). Loopback (127.0.0.0/8, ::1, localhost) binds by default; any other interface — including the wildcards 0.0.0.0 and [::] — needs --allow net=<host>. Port 0 picks a free port; read it back with @udp.local_addr.
+
+- arity: 1
+- effectful: true
+- permission: net
+
+### local_addr
+
+The address a socket is actually bound to, as "host:port". Returns ok(string).
+
+- arity: 1
+- effectful: true
+- permission: net
+
+### send_to
+
+Send one datagram to "host:port". The payload is a string (sent as UTF-8) or a bytes value (sent verbatim). Returns ok(bytes sent). Needs --allow net=<host> for the destination.
+
+- arity: 3
+- effectful: true
+- permission: net
+
+### recv_from
+
+Wait up to timeout_ms (default 1000) for one datagram. Returns ok(⟨from, data, text⟩) — `data` is bytes, `text` is the same payload as lossy UTF-8 — or err(⟨kind: "udp.timeout", …⟩) when nothing arrives. A timeout is a value, not a raise.
+
+- arity: 2
+- effectful: true
+- permission: net
+
+### close
+
+Close a socket handle. Closing an unknown or already-closed handle answers ok(none).
+
+- arity: 1
+- effectful: true
+- permission: net
+
 ## @game
 
 ### register_item
