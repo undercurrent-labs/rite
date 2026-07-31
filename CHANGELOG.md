@@ -2,6 +2,24 @@
 
 ## [Unreleased]
 
+### Added
+
+- **Strings and numbers can be worked on.** Rite is pitched at tools and pipelines,
+  where handling text is most of the job, and it had `lines`, `words` and `join` —
+  nothing to split, trim, case, pad or slice with.
+
+  Strings: `split`, `trim` / `trim_start` / `trim_end`, `replace`, `starts_with`,
+  `ends_with`, `upper`, `lower`, `pad_start` / `pad_end`, `slice`, `index_of`.
+  Numbers: `round`, `floor`, `ceil`, `sqrt`, `parse_int`, `parse_float`.
+
+  Everything is character-indexed, matching `count` — `count("δ")` was already 1, and
+  an API counting characters in one place and bytes in another only goes wrong on
+  non-ASCII input. Indices may be negative, and out-of-range values clamp rather than
+  fail so `slice` is safe on input you did not choose. `index_of` answers `none`
+  rather than `-1`, because a sentinel that is also a valid index is how off-by-one
+  bugs get written. `parse_int` and `parse_float` answer with a Result, so `?` handles
+  bad input like anything else that can fail.
+
 ### Changed
 
 - **`parallel` actually runs things together.** It dispatched straight to `map`,

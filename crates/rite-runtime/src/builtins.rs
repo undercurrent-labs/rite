@@ -54,6 +54,25 @@ pub fn call_builtin(
         "clamp" => builtin_clamp(args),
         "pow" => builtin_pow(args),
         "idiv" => builtin_idiv(args),
+        "split" => builtin_split(args),
+        "trim" => builtin_trim(args, true, true),
+        "trim_start" => builtin_trim(args, true, false),
+        "trim_end" => builtin_trim(args, false, true),
+        "replace" => builtin_replace(args),
+        "starts_with" => builtin_affix(args, true),
+        "ends_with" => builtin_affix(args, false),
+        "upper" => builtin_case(args, true),
+        "lower" => builtin_case(args, false),
+        "pad_start" => builtin_pad(args, true),
+        "pad_end" => builtin_pad(args, false),
+        "slice" => builtin_slice(args),
+        "index_of" => builtin_index_of(args),
+        "round" => builtin_round_family(args, 0),
+        "floor" => builtin_round_family(args, 1),
+        "ceil" => builtin_round_family(args, 2),
+        "sqrt" => builtin_sqrt(args),
+        "parse_int" => builtin_parse_number(args, true),
+        "parse_float" => builtin_parse_number(args, false),
         "xor" => builtin_xor(args),
         "and_then" => builtin_and_then(args),
         "or_else" => builtin_or_else(args),
@@ -675,5 +694,231 @@ pub fn membership(item: &Value, container: &Value) -> bool {
         },
         Value::String(s) => item.as_str().map(|sub| s.contains(sub)).unwrap_or(false),
         _ => false,
+    }
+}
+
+// ── Strings ──────────────────────────────────────────────────────────────────
+//
+// Every one of these is character-indexed, not byte-indexed, because `count`
+// already counts characters — `count("δ")` is 1. A byte-indexed `slice` next to
+// a character-counting `count` would be a trap that only shows up on non-ASCII
+// input, which is exactly when it is hardest to debug.
+
+fn str_arg(v: Option<Value>, what: &str) -> Result<String, EvalError> {
+    match v {
+        Some(Value::String(s)) => Ok(s.to_string()),
+        Some(other) => Err(EvalError::Message(format!(
+            "{what} expects a string, got {}",
+            other.type_name()
+        ))),
+        None => Err(EvalError::Message(format!("{what} expects a string"))),
+    }
+}
+
+fn builtin_split(args: Vec<Value>) -> Result<Value, EvalError> {
+    let mut it = args.into_iter();
+    let s = str_arg(it.next(), "split")?;
+    let sep = it.next().and_then(|v| v.as_str().map(|s| s.to_string()));
+    let parts: Vec<Value> = match sep.as_deref() {
+        // Splitting on "" yields the characters, which is the useful reading and
+        // avoids Rust's empty-string behaviour of emitting leading/trailing "".
+        None | Some("") => s.chars().map(|c| Value::string(c.to_string())).collect(),
+        Some(sep) => s.split(sep).map(Value::string).collect(),
+    };
+    Ok(Value::list(parts))
+}
+
+fn builtin_trim(args: Vec<Value>, start: bool, end: bool) -> Result<Value, EvalError> {
+    let s = str_arg(args.into_iter().next(), "trim")?;
+    let out = match (start, end) {
+        (true, true) => s.trim(),
+        (true, false) => s.trim_start(),
+        (false, true) => s.trim_end(),
+        (false, false) => &s[..],
+    };
+    Ok(Value::string(out))
+}
+
+fn builtin_replace(args: Vec<Value>) -> Result<Value, EvalError> {
+    let mut it = args.into_iter();
+    let s = str_arg(it.next(), "replace")?;
+    let from = str_arg(it.next(), "replace")?;
+    let to = str_arg(it.next(), "replace")?;
+    if from.is_empty() {
+        // Rust would splice `to` between every character; refuse instead of
+        // quietly producing something nobody asked for.
+        return Err(EvalError::Message(
+            "replace needs a non-empty string to look for".into(),
+        ));
+    }
+    Ok(Value::string(s.replace(&from, &to)))
+}
+
+fn builtin_affix(args: Vec<Value>, start: bool) -> Result<Value, EvalError> {
+    let mut it = args.into_iter();
+    let name = if start { "starts_with" } else { "ends_with" };
+    let s = str_arg(it.next(), name)?;
+    let part = str_arg(it.next(), name)?;
+    Ok(Value::Bool(if start {
+        s.starts_with(&part)
+    } else {
+        s.ends_with(&part)
+    }))
+}
+
+fn builtin_case(args: Vec<Value>, upper: bool) -> Result<Value, EvalError> {
+    let s = str_arg(
+        args.into_iter().next(),
+        if upper { "upper" } else { "lower" },
+    )?;
+    Ok(Value::string(if upper {
+        s.to_uppercase()
+    } else {
+        s.to_lowercase()
+    }))
+}
+
+fn builtin_pad(args: Vec<Value>, start: bool) -> Result<Value, EvalError> {
+    let mut it = args.into_iter();
+    let name = if start { "pad_start" } else { "pad_end" };
+    let s = str_arg(it.next(), name)?;
+    let width = it
+        .next()
+        .and_then(|v| v.as_int())
+        .ok_or_else(|| EvalError::Message(format!("{name} expects a width")))?;
+    let fill = it
+        .next()
+        .and_then(|v| v.as_str().map(|s| s.to_string()))
+        .unwrap_or_else(|| " ".into());
+    let fill_char = fill.chars().next().unwrap_or(' ');
+    let len = s.chars().count() as i64;
+    if width <= len {
+        return Ok(Value::string(s));
+    }
+    let pad: String = std::iter::repeat_n(fill_char, (width - len) as usize).collect();
+    Ok(Value::string(if start {
+        format!("{pad}{s}")
+    } else {
+        format!("{s}{pad}")
+    }))
+}
+
+/// `slice(s, start)` or `slice(s, start, end)` — character indices, end exclusive.
+/// A negative index counts from the end; out-of-range clamps rather than failing,
+/// which keeps it usable on untrusted input.
+fn builtin_slice(args: Vec<Value>) -> Result<Value, EvalError> {
+    let mut it = args.into_iter();
+    let first = it.next();
+    // Lists slice too — the same operation, and refusing would be arbitrary.
+    if let Some(Value::List(xs)) = &first {
+        let len = xs.len() as i64;
+        let start = resolve_index(it.next().and_then(|v| v.as_int()).unwrap_or(0), len);
+        let end = resolve_index(it.next().and_then(|v| v.as_int()).unwrap_or(len), len);
+        let mut out = im::Vector::new();
+        for i in start..end.max(start) {
+            if let Some(v) = xs.get(i as usize) {
+                out.push_back(v.clone());
+            }
+        }
+        return Ok(Value::List(out));
+    }
+    let s = str_arg(first, "slice")?;
+    let chars: Vec<char> = s.chars().collect();
+    let len = chars.len() as i64;
+    let start = resolve_index(it.next().and_then(|v| v.as_int()).unwrap_or(0), len);
+    let end = resolve_index(it.next().and_then(|v| v.as_int()).unwrap_or(len), len);
+    Ok(Value::string(
+        chars[start as usize..end.max(start) as usize]
+            .iter()
+            .collect::<String>(),
+    ))
+}
+
+fn resolve_index(i: i64, len: i64) -> i64 {
+    if i < 0 {
+        (len + i).clamp(0, len)
+    } else {
+        i.clamp(0, len)
+    }
+}
+
+/// Character index of the first occurrence, or `none` when absent.
+///
+/// `none` rather than `-1`: a sentinel that is also a valid index is how
+/// off-by-one bugs get written, and `??` already handles the absent case.
+fn builtin_index_of(args: Vec<Value>) -> Result<Value, EvalError> {
+    let mut it = args.into_iter();
+    let s = str_arg(it.next(), "index_of")?;
+    let needle = str_arg(it.next(), "index_of")?;
+    Ok(match s.find(&needle) {
+        Some(byte_idx) => Value::Int(s[..byte_idx].chars().count() as i64),
+        None => Value::None,
+    })
+}
+
+// ── Numbers ──────────────────────────────────────────────────────────────────
+
+fn num_arg(v: Option<Value>, what: &str) -> Result<f64, EvalError> {
+    match v {
+        Some(Value::Int(i)) => Ok(i as f64),
+        Some(Value::Float(f)) => Ok(f),
+        Some(other) => Err(EvalError::Message(format!(
+            "{what} expects a number, got {}",
+            other.type_name()
+        ))),
+        None => Err(EvalError::Message(format!("{what} expects a number"))),
+    }
+}
+
+/// `round`, `floor` and `ceil` answer with an `int`, because that is what the
+/// caller wanted one for. `round` is half-away-from-zero, so `round(-0.5)` is
+/// `-1` rather than Rust's `-0`.
+fn builtin_round_family(args: Vec<Value>, mode: u8) -> Result<Value, EvalError> {
+    let name = match mode {
+        0 => "round",
+        1 => "floor",
+        _ => "ceil",
+    };
+    let n = num_arg(args.into_iter().next(), name)?;
+    let out = match mode {
+        0 => n.round(),
+        1 => n.floor(),
+        _ => n.ceil(),
+    };
+    if out.is_finite() && out.abs() < i64::MAX as f64 {
+        Ok(Value::Int(out as i64))
+    } else {
+        Ok(Value::Float(out))
+    }
+}
+
+fn builtin_sqrt(args: Vec<Value>) -> Result<Value, EvalError> {
+    let n = num_arg(args.into_iter().next(), "sqrt")?;
+    if n < 0.0 {
+        return Err(EvalError::Message(
+            "sqrt of a negative number is not a number".into(),
+        ));
+    }
+    Ok(Value::Float(n.sqrt()))
+}
+
+/// Parsing answers with a Result, because the input is usually untrusted and
+/// `?` is how the rest of the language handles that.
+fn builtin_parse_number(args: Vec<Value>, int: bool) -> Result<Value, EvalError> {
+    let name = if int { "parse_int" } else { "parse_float" };
+    let s = str_arg(args.into_iter().next(), name)?;
+    let t = s.trim();
+    if int {
+        match t.parse::<i64>() {
+            Ok(i) => Ok(Value::ok(Value::Int(i))),
+            Err(_) => Ok(Value::err(Value::string(format!(
+                "`{t}` is not a whole number"
+            )))),
+        }
+    } else {
+        match t.parse::<f64>() {
+            Ok(f) => Ok(Value::ok(Value::Float(f))),
+            Err(_) => Ok(Value::err(Value::string(format!("`{t}` is not a number")))),
+        }
     }
 }

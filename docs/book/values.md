@@ -130,6 +130,74 @@ pattern ← r"\d+"
 tpl ← r"{name} is not substituted here"
 ```
 
+### Working on strings
+
+```rite browser
+parts ← "name, age , city" → split(",") → map { |p| trim(p) }
+! @console.println(str(parts))
+
+! @console.println(upper("héllo") + " / " + lower("HÉLLO"))
+! @console.println(replace("a-b-c", "-", "+"))
+! @console.println(pad_start("7", 3, "0"))
+```
+
+| Call | Answers |
+|------|---------|
+| `split(s, sep)` | a list; an empty or missing separator splits into characters |
+| `trim(s)` · `trim_start` · `trim_end` | whitespace removed |
+| `replace(s, from, to)` | every occurrence replaced |
+| `starts_with(s, part)` · `ends_with` | `true` / `false` |
+| `upper(s)` · `lower(s)` | case changed |
+| `pad_start(s, width, fill)` · `pad_end` | padded to `width`, unchanged if already longer |
+| `slice(s, start)` · `slice(s, start, end)` | a substring, end exclusive |
+| `index_of(s, part)` | the position, or **`none`** when absent |
+| `count(s)` | how many characters |
+| `lines(s)` · `words(s)` · `join(xs, sep)` | split and rejoin |
+
+**Everything counts characters, not bytes.** `count("δ")` is `1`, and `slice`,
+`index_of` and `pad_*` agree with it — an API that counted characters in one
+place and bytes in another would only go wrong on non-ASCII input, which is the
+worst time to find out.
+
+Indices may be negative to count from the end, and out-of-range values clamp
+rather than fail, so `slice` is safe on input you did not choose:
+
+```rite browser
+! @console.println(slice("abcdef", -2))
+! @console.println("[" + slice("abc", 5, 9) + "]")
+```
+
+`index_of` answers `none` rather than `-1` — a sentinel that is also a valid
+index is how off-by-one bugs get written. Pair it with `??`:
+
+```rite browser
+at ← index_of("hello", "z") ?? (0 - 1)
+! @console.println(str(at))
+```
+
+### Numbers
+
+```rite browser
+! @console.println(str(round(2.5)) + " " + str(floor(2.9)) + " " + str(ceil(2.1)))
+! @console.println(str(sqrt(16)))
+```
+
+`round`, `floor` and `ceil` answer with an **int**, since that is what you wanted
+one for; `round` goes half away from zero, so `round(-0.5)` is `-1`. Also
+available: `abs`, `clamp`, `pow`, `idiv`, `min`, `max`, `sum`.
+
+Parsing untrusted text answers with a **Result**, so `?` handles it like anything
+else that can fail:
+
+```rite browser
+n ← parse_int("41")?
+! @console.println(str(n + 1))
+```
+
+```rite browser
+! @console.println(str(parse_int("nope")))
+```
+
 ## Lists
 
 ```rite browser
