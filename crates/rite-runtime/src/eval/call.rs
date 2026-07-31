@@ -184,8 +184,8 @@ impl<'a> Evaluator<'a> {
             "any" => self.builtin_any_all(args, true).await,
             "all" => self.builtin_any_all(args, false).await,
             "group" => self.builtin_group(args).await,
-            "parallel" => self.builtin_map(args).await, // sequential fallback with same semantics for pure
-            "import" => Ok(Value::None),                // module loading handled at higher layer
+            "parallel" => self.builtin_parallel(args).await,
+            "import" => Ok(Value::None), // module loading handled at higher layer
             "while_loop" => self.builtin_while_loop(args).await,
             "compose" => self.builtin_compose(args).await,
             "print" | "println" => {

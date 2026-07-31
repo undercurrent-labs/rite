@@ -174,7 +174,9 @@ pub struct StackFrame {
 
 pub struct RuntimeContext {
     pub env: Environment,
-    pub atoms: AtomInterner,
+    /// Shared, so a forked task interns into the same table. Every method takes
+    /// `&self` (there is an `RwLock` inside), so call sites are unaffected.
+    pub atoms: Arc<AtomInterner>,
     pub budget: ExecutionBudget,
     pub sources: SourceMap,
     pub stdout: Vec<String>,
@@ -251,7 +253,7 @@ impl RuntimeContext {
     pub fn new() -> Self {
         Self {
             env: Environment::new(),
-            atoms: AtomInterner::new(),
+            atoms: Arc::new(AtomInterner::new()),
             budget: ExecutionBudget::new(),
             sources: SourceMap::new(),
             stdout: Vec::new(),
@@ -271,6 +273,61 @@ impl RuntimeContext {
             pending_http: None,
             http_next: None,
             sink: None,
+        }
+    }
+
+    /// A context for running one branch of `parallel` concurrently with others.
+    ///
+    /// The evaluator holds `&mut RuntimeContext`, so two closures cannot run at
+    /// once against one context — each branch needs its own. What must be shared
+    /// is shared by construction rather than copied:
+    ///
+    /// * `capabilities` — an `Arc`, so host state (`@store`, `@game`, open `@db`
+    ///   handles) is the same object every branch sees.
+    /// * `budget` — counts through an `Arc`, so branches spend from one allowance
+    ///   instead of each getting a fresh one.
+    /// * `atoms` — one interner, so an atom created in a branch resolves in the
+    ///   parent afterwards.
+    /// * `env` — frames are `Arc<RwLock<_>>`; the branch shares the globals it was
+    ///   defined against, and the callee pushes its own frame for locals.
+    ///
+    /// Output is *not* shared. Each branch buffers its own, and `parallel` splices
+    /// them back in input order, so output does not interleave by scheduling
+    /// accident — the same program prints the same thing twice running.
+    ///
+    /// A sink, if one is installed, is deliberately dropped: streaming
+    /// concurrently would produce exactly the interleaving the buffering avoids.
+    pub fn fork(&self) -> Self {
+        Self {
+            env: self.env.clone(),
+            atoms: Arc::clone(&self.atoms),
+            budget: self.budget.clone(),
+            sources: self.sources.clone(),
+            stdout: Vec::new(),
+            stderr: Vec::new(),
+            capabilities: Arc::clone(&self.capabilities),
+            functions: self.functions.clone(),
+            call_depth: self.call_depth,
+            rng_seed: self.rng_seed,
+            call_stack: self.call_stack.clone(),
+            module_roots: self.module_roots.clone(),
+            script_dir: self.script_dir.clone(),
+            allow_all: self.allow_all,
+            console_allowed: self.console_allowed,
+            script_args: self.script_args.clone(),
+            pending_http: None,
+            http_next: None,
+            sink: None,
+        }
+    }
+
+    /// Take a finished branch's output back into this context, in order.
+    pub fn absorb(&mut self, branch: Self) {
+        for line in branch.stdout {
+            self.print(line);
+        }
+        for line in branch.stderr {
+            self.print_err(line);
         }
     }
 

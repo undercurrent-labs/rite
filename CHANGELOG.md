@@ -1,5 +1,23 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+
+- **`parallel` actually runs things together.** It dispatched straight to `map`,
+  running every branch in sequence while the name promised otherwise — a comment in
+  the source called it a "sequential fallback". Branches now overlap wherever they
+  wait: eight 100 ms sleeps finish in about 100 ms rather than 800.
+
+  It answers as if it had not. Results come back in input order however the branches
+  finish, output is spliced in input order, and when several branches fail the one
+  reported is the first in input order — so the same program prints the same thing
+  twice running. Branches share the host, so a `@store` or `@db` write in one is
+  visible to the others and to the parent.
+
+  Concurrency, not parallelism: work that never waits gains nothing and should use
+  `map`. Each branch needs its own evaluator context, which `map` does not pay for.
+
 ## [0.3.1] — 2026-07-30
 
 Effects stop leaking through function boundaries, modules become a real module

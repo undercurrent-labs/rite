@@ -222,3 +222,71 @@ impl<'a> Evaluator<'a> {
         Ok(Value::list(out))
     }
 }
+
+impl Evaluator<'_> {
+    /// `parallel(xs, f)` — like `map`, but the branches make progress together.
+    ///
+    /// This is concurrency, not parallelism: branches interleave whenever one
+    /// awaits, which is where the time goes for the work worth doing this way —
+    /// several HTTP requests, several file reads. Pure arithmetic gains nothing
+    /// and should use `map`, which does not pay for forked contexts.
+    ///
+    /// Two properties hold regardless of how the branches happen to schedule:
+    /// results come back in input order, and each branch's output is spliced in
+    /// input order. Running the same program twice prints the same thing.
+    ///
+    /// The first failure in *input* order is the one reported, not the first to
+    /// occur in time — for the same reason.
+    pub(super) async fn builtin_parallel(&mut self, args: Vec<Value>) -> Result<Value, EvalError> {
+        let mut it = args.into_iter();
+        let list = match it.next() {
+            Some(Value::List(xs)) => xs,
+            Some(other) => {
+                return Err(EvalError::Message(format!(
+                    "parallel expects list, got {}",
+                    other.type_name()
+                )))
+            }
+            None => return Ok(Value::list(Vec::<Value>::new())),
+        };
+        let f = it.next().unwrap_or(Value::None);
+        if !f.is_callable() {
+            return Err(EvalError::Message(format!(
+                "parallel expects function, got {}",
+                f.type_name()
+            )));
+        }
+
+        // One context per branch: the evaluator borrows the context mutably, so
+        // sharing one would serialise them again. `fork` shares the host, the
+        // budget and the atom table; only output is kept apart.
+        let mut branches: Vec<RuntimeContext> = (0..list.len()).map(|_| self.ctx.fork()).collect();
+
+        let futures: Vec<_> = list
+            .into_iter()
+            .zip(branches.iter_mut())
+            .map(|(item, branch)| {
+                let f = f.clone();
+                async move {
+                    Evaluator::new(branch)
+                        .call_value_public(f, vec![item])
+                        .await
+                }
+            })
+            .collect();
+
+        let results = futures::future::join_all(futures).await;
+
+        // Splice output back before reporting a failure, so what a branch printed
+        // before it failed is not lost.
+        for branch in branches {
+            self.ctx.absorb(branch);
+        }
+
+        let mut out = im::Vector::new();
+        for r in results {
+            out.push_back(r?);
+        }
+        Ok(Value::List(out))
+    }
+}

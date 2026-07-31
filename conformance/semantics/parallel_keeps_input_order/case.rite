@@ -1,0 +1,8 @@
+// `parallel` runs the branches together but answers as if it had not: results
+// come back in input order however the branches happen to finish.
+◆! doubled(n) ⟦
+  ! @clock.sleep((4 - n) * 10)
+  ^ n * 2
+⟧
+
+! parallel([1, 2, 3], doubled) → sum

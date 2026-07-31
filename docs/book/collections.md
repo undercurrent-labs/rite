@@ -160,6 +160,45 @@ rite run examples/02-pipelines/main.rite --allow-all
 rite run examples/03-files-and-json/main.rite --allow-all
 ```
 
+## Doing the slow parts together
+
+`map` visits one item at a time. When each item means waiting — a request, a
+file, a query — `parallel` runs the branches together instead:
+
+```rite native_only
+◆! fetch_one(url) ⟦
+  ^ ! @http.get(url)?
+⟧
+
+pages ← ! parallel(urls, fetch_one)
+```
+
+It answers as if it had not. Results come back in **input order** however the
+branches finish, anything a branch prints is spliced in input order too, and if
+several fail the one reported is the first in input order — so the same program
+prints the same thing twice running.
+
+```rite browser
+◆! step(n) ⟦
+  ! @console.println("step " + str(n))
+  ^ n * 2
+⟧
+
+! parallel([1, 2, 3], step)
+```
+
+Three things worth knowing:
+
+- **It is concurrency, not parallelism.** Branches interleave whenever one waits.
+  Work that never waits — arithmetic, string building — gains nothing and should
+  use `map`, which does not pay for the extra machinery.
+- **Branches share the host.** A write to `@store` or `@db` in one branch is
+  visible to the others and to the parent, because they share one host, not a
+  copy of it.
+- **Passing an effectful function marks the call** — `! parallel(urls, fetch_one)`
+  — for the same reason `each(shout)` does. See
+  [Effects and capabilities](effects.md).
+
 ## Next
 
 [Pattern matching](matching.md) — destructure lists, records, atoms, and results.
