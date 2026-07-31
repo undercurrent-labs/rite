@@ -96,6 +96,36 @@ if (typeof location !== "undefined" && location.hash.startsWith("#s=")) {
   }
 }
 
+/**
+ * Switching dialect rewrites the editor.
+ *
+ * The selector used to change only what the *next* Format produced, so picking
+ * "ascii" left glyphs on screen and looked broken — the one thing the control is
+ * named for was the one thing it did not do. Rite has a single AST and two
+ * spellings, so converting is the honest reading of the choice.
+ *
+ * Registered after the share-fragment hydration above, which runs at setup, so
+ * restoring `#s=…` with `dialect: "ascii"` does not fire a conversion of source
+ * that is already ASCII.
+ */
+watch(dialect, async (to) => {
+  if (!source.value.trim()) return;
+  busy.value = true;
+  try {
+    const mapped = await convertWithMap(apiBase.value, source.value, to, cursor.value);
+    source.value = mapped.text;
+    cursor.value = { line: mapped.line, character: mapped.character };
+  } catch (e) {
+    // Leave the editor exactly as it was: silently replacing what someone typed
+    // with a half-converted version is worse than not converting. Source that does
+    // not parse cannot be converted, and that is the usual reason to land here.
+    panel.value = "diag";
+    content.diag = `Could not convert to ${to}: ${e instanceof Error ? e.message : String(e)}`;
+  } finally {
+    busy.value = false;
+  }
+});
+
 watch([source, dialect], () => {
   const frag = encodeShare({ source: source.value, dialect: dialect.value });
   if (typeof history !== "undefined" && typeof location !== "undefined") {

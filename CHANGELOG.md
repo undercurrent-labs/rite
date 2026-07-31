@@ -23,6 +23,16 @@
   `PATH` usually cannot start). An unrecognised key is an error rather than a
   silent default — a typo should not be indistinguishable from the default.
 
+### Fixed — Studio
+
+- **Switching dialect rewrites the editor.** The selector changed only what the
+  *next* Format produced, so picking "ascii" left glyphs on screen — the one thing
+  the control is named for was the one thing it did not do. Rite has one AST and two
+  spellings, so converting is the honest reading of the choice. Source that cannot
+  be parsed is left exactly as typed, with the reason in the diagnostics pane;
+  silently replacing what someone wrote with a half-converted version would be worse
+  than not converting.
+
 ### Fixed — compiler
 
 - **A compiled binary never ran `main`.** `rite build` emitted a `rite_main` that
