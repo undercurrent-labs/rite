@@ -84,11 +84,21 @@ nothing has called `start` yet.
 game state the program itself built, so they need no `!`. Everything that changes the
 world is marked.
 
-> **`@game.say` cannot be called from Rite.** `say` is a language keyword (the
-> shorthand for printing, see [Syntax sugar](sugar.md)), so `@game.say("…")` does not
-> parse as a capability call and fails at runtime with `unknown @game.`. Use
-> `@console.println` for narration, or let `@game.command` produce messages and drain
-> them with `@game.messages()`.
+`@game.say` queues narration for the player:
+
+```rite browser
+! @game.register_room(#hall, ⟨name: "Hall", desc: "A hall."⟩)
+! @game.start(#hall)
+! @game.say("A bell rings.")
+! @console.println(@game.messages())
+```
+
+Note that `say` is also a language keyword — the shorthand for printing, see
+[Syntax sugar](sugar.md) — but after a `.` it is just a method name, so the two do
+not collide. `@game.say` queues a message; the bare `say` statement prints one.
+
+`@game.messages()` **drains** the queue, so a second call returns what has arrived
+since the first, not the same list again.
 
 ## Save / load
 

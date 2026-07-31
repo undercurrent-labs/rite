@@ -1,0 +1,5 @@
+// The options record was accepted and discarded, so `⟨env: …⟩` looked applied and
+// did nothing. `sh -c` is used deliberately here: the variable has to be expanded by
+// the child, which is the only way to observe that the option reached it.
+r ← ! @process.run("sh", ["-c", "echo $GREETING"], ⟨env: ⟨GREETING: "hello"⟩⟩)?
+^ trim(r.stdout)

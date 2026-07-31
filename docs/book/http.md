@@ -1,4 +1,4 @@
-# HTTP services
+# Network: HTTP services
 
 Rite can serve HTTP with a small Sinatra-style DSL under `@http.listen`. Handlers are ordinary Rite blocks; they return a **status** and a **JSON body** via multi-value return: `^ 200 ⟨…⟩` (juxta status + body on one return).
 
@@ -288,5 +288,5 @@ return a capability error, the same as `@db`.
 
 ## Next
 
-[Sockets](sockets.md) — the raw `@udp` and `@tcp` layer under all of this ·
+[Network: sockets](sockets.md) — the raw `@udp` and `@tcp` layer under all of this ·
 [Modules](modules.md) · [Browser & Studio](browser.md)

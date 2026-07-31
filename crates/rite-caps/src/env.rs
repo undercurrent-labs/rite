@@ -22,7 +22,7 @@ impl EnvCap {
         },
         NativeFunctionDescriptor {
             name: "all",
-            docs: "Return every environment variable as a record. Requires the blanket `--allow env`: a scoped grant such as `--allow env=PATH` is refused rather than filtered.",
+            docs: "Return the environment variables this script may read, as a record. With `--allow env` that is everything; with `--allow env=NAME,…` it is exactly the names granted. Denied when nothing is granted.",
             arity: 0,
             effectful: true,
             permission: "env",
@@ -65,9 +65,15 @@ impl EnvCap {
                 }
             }
             "all" => {
-                if !perms.allow_all && !perms.env_all {
+                // A scoped grant answers the scoped subset rather than being refused.
+                // The filter below already said that was the intent, but the guard made
+                // it unreachable, so `--allow env=PATH` failed outright on a call that
+                // could only ever have returned PATH. Nothing is revealed that
+                // `@env.get` would not already answer one name at a time; a grant of
+                // nothing is still a denial.
+                if !perms.allow_all && !perms.env_all && perms.env_vars.is_empty() {
                     return Err(EvalError::Permission(
-                        "env.all requires env permission".into(),
+                        "env.all requires env permission: grant `--allow env` for everything, or `--allow env=NAME,…` for a subset".into(),
                     ));
                 }
                 let mut rec = indexmap::IndexMap::new();

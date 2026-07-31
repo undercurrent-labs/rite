@@ -1,0 +1,8 @@
+// `say` is a statement keyword, so `@game.say(…)` used to parse as `@game.` plus a
+// stray `say "…"` — the capability call vanished and the string went to stdout via
+// println instead. The narration must reach the game's message queue, which is the
+// difference this case measures.
+! @game.register_room(#hall, ⟨name: "Hall", desc: "A hall."⟩)
+! @game.start(#hall)
+! @game.say("A bell rings.")
+^ contains(@game.messages(), "A bell rings.")

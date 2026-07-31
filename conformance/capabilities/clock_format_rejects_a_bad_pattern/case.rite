@@ -1,0 +1,12 @@
+// chrono panics when asked to format with an unknown specifier, and a script must
+// not be able to abort the host by writing one. Both failures are ordinary `err`
+// values instead: an unparseable timestamp and an invalid pattern.
+bad_time ← ~ @clock.format("not a time", "%Y") ⟦
+  ok _ → "unexpected"
+  err e → e.kind
+⟧
+bad_pattern ← ~ @clock.format("2026-07-31T00:00:00+00:00", "%Q") ⟦
+  ok _ → "unexpected"
+  err e → e.kind
+⟧
+^ bad_time + "/" + bad_pattern

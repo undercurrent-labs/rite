@@ -128,8 +128,8 @@ impl HttpCap {
         },
         NativeFunctionDescriptor {
             name: "response",
-            docs: "Build an explicit HTTP response record.",
-            arity: 1,
+            docs: "Build an explicit response record `⟨status, body⟩`. The body is optional and defaults to `none`.",
+            arity: 2,
             effectful: false,
             permission: "",
         },

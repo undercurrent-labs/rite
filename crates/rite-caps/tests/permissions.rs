@@ -147,3 +147,87 @@ async fn console_allowed_by_default() {
         .expect("console is allowed under the default policy");
     assert_eq!(ctx.stdout.join(""), "fine\n");
 }
+
+/// `--allow env=PATH,HOME` reads as two names, and used to be stored as the single
+/// variable `"PATH,HOME"` — a name no environment can have. The grant was accepted
+/// and granted nothing, which is the worst shape for a permission bug: it looks
+/// applied and denies at the point of use.
+#[test]
+fn env_grants_accept_a_comma_separated_list() {
+    let mut p = PermissionSet::default_secure();
+    p.grant(Permission::Env("PATH,HOME".into()));
+    assert!(p.check_env("PATH").is_ok(), "PATH should be granted");
+    assert!(p.check_env("HOME").is_ok(), "HOME should be granted");
+    assert!(
+        p.check_env("SECRET").is_err(),
+        "only the listed names are granted"
+    );
+    assert!(
+        p.check_env("PATH,HOME").is_err(),
+        "the literal joined string must not become a variable name"
+    );
+}
+
+/// Whitespace around the separator is what a person types, so it must not decide
+/// whether the grant works.
+#[test]
+fn env_grant_list_tolerates_spaces() {
+    let mut p = PermissionSet::default_secure();
+    p.grant(Permission::Env("PATH, HOME".into()));
+    assert!(p.check_env("PATH").is_ok());
+    assert!(p.check_env("HOME").is_ok());
+}
+
+/// Denial takes the same list form, or `--deny` could not undo what `--allow` did.
+#[test]
+fn env_denial_accepts_the_same_list() {
+    let mut p = PermissionSet::default_secure();
+    p.grant(Permission::Env("PATH,HOME,LANG".into()));
+    p.deny(Permission::Env("HOME,LANG".into()));
+    assert!(p.check_env("PATH").is_ok());
+    assert!(p.check_env("HOME").is_err());
+    assert!(p.check_env("LANG").is_err());
+}
+
+/// Creating a directory two levels deep is the ordinary case for `@fs.mkdir`, and it
+/// was refused: only one missing path component was resolved, so `a/b` with neither
+/// present stayed relative and matched no granted root. A grant of the working
+/// directory would not let a script create a directory inside the working directory.
+#[test]
+fn a_path_several_levels_from_anything_that_exists_is_still_under_its_root() {
+    let dir = std::env::temp_dir().join("rite_perm_deep_root");
+    std::fs::create_dir_all(&dir).unwrap();
+    let mut p = PermissionSet::default_secure();
+    p.grant(Permission::FsWrite(dir.clone()));
+
+    for rel in ["one", "one/two", "one/two/three"] {
+        assert!(
+            p.check_fs_write(&dir.join(rel)).is_ok(),
+            "`{rel}` is inside the granted root and must be writable"
+        );
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// Resolving the missing tail must not hand `..` to a textual prefix check: a path
+/// that walks up through components which do not exist still escapes the root, and
+/// `granted/missing/../..` must not read as "starts with granted".
+#[test]
+fn a_missing_path_cannot_climb_out_of_its_root() {
+    let dir = std::env::temp_dir().join("rite_perm_deep_escape");
+    std::fs::create_dir_all(&dir).unwrap();
+    let mut p = PermissionSet::default_secure();
+    p.grant(Permission::FsWrite(dir.clone()));
+
+    for rel in [
+        "missing/../../escaped.txt",
+        "../escaped.txt",
+        "a/b/../../../x",
+    ] {
+        assert!(
+            p.check_fs_write(&dir.join(rel)).is_err(),
+            "`{rel}` leaves the granted root and must be denied"
+        );
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}

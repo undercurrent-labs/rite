@@ -56,17 +56,23 @@ Environment variables are where secrets live, so the default is to deny and the
 useful grant is the narrow one. A script that reads `HOME` should not be handed
 `AWS_SECRET_ACCESS_KEY` as well.
 
-**`@env.all` is the exception, and it surprises people.** It needs the *blanket*
-grant — a scoped one is refused outright rather than answering the subset you
-granted:
+`@env.all` answers a record of **everything the script may read** — which is the whole
+environment under `--allow env`, and exactly the names you listed under a scoped
+grant:
 
-```bash
-rite run dump.rite --allow env=PATH
-# permission denied: env.all requires env permission
+```rite native_only
+! @console.println(keys(! @env.all()?))
 ```
 
-That is deliberate: "give me everything you have" is a different request from "give
-me PATH", and the narrow grant is not evidence for the broad one.
+```bash
+rite run dump.rite --allow env=PATH,HOME
+# [HOME, PATH]
+```
+
+It reveals nothing `@env.get` would not answer one name at a time, so the scoped
+grant stays honest: the record has as many entries as you granted, and no more. With
+nothing granted it is a permission error rather than an empty record — a script
+asking for the environment when it may not have one should hear so.
 
 ## Running programs (`@process`)
 
@@ -82,7 +88,32 @@ hello world
 ```
 
 The result record is `⟨status, stdout, stderr⟩`. The third argument is an options
-record, reserved — it is accepted and currently ignored, so pass `⟨⟩`.
+record; pass `⟨⟩` when you have nothing to say.
+
+| Option | Type | Effect |
+|---|---|---|
+| `cwd` | string | The directory the child runs in |
+| `env` | record | Variables **added to** the inherited environment |
+
+```rite native_only
+◆! main() ⟦
+  a ← ! @process.run("pwd", [], ⟨cwd: "subdir"⟩)?
+  b ← ! @process.run("sh", ["-c", "echo $GREETING"], ⟨env: ⟨GREETING: "hello"⟩⟩)?
+  ! @console.println(trim(b.stdout))
+⟧
+```
+
+```text
+hello
+```
+
+`env` extends rather than replaces, because a child that loses `PATH` usually cannot
+start. Neither option needs a permission of its own: `--allow process` already lets
+the script run any binary, and setting a child's directory or environment tells the
+script nothing back.
+
+**An unrecognised key is an error**, not a default — `⟨cdw: "…"⟩` says so rather
+than silently running in the wrong directory.
 
 **There is no shell.** The command and its arguments go straight to `exec`, which is
 why the arguments are a *list* rather than one string. Nothing expands `*`, nothing
@@ -189,8 +220,8 @@ see [Auditing a directory](../tutorials/fs-audit.md).
 | `@clock.now()` | RFC3339 UTC string | **yes** |
 | `@clock.sleep(ms)` | `none`, after waiting | **yes** |
 | `@clock.parse(s)` | `ok(normalized)` or `err(message)` | no |
-| `@clock.format(t, pattern)` | see below | no |
-| `@clock.duration(ms)` | see below | no |
+| `@clock.format(t, pattern)` | `ok(string)` or `err` | no |
+| `@clock.duration(v)` | `ok(milliseconds)` or `err` | no |
 
 `parse` normalizes to UTC and validates, which is the way to check that a string you
 were given is a timestamp at all:
@@ -209,10 +240,47 @@ ok(2026-01-01T00:00:00+00:00)
 ! @clock.sleep(250)
 ```
 
-> **`format` and `duration` are placeholders.** `@clock.format` ignores its pattern
-> and returns the timestamp unchanged; `@clock.duration` returns the milliseconds it
-> was given. They are in the capability table so the shape is reserved, but neither
-> does anything yet — do not build on them.
+### Formatting
+
+`@clock.format` takes a strftime pattern:
+
+```rite native_only
+t ← "2026-07-31T16:31:13.680626617+00:00"
+! @console.println(@clock.format(t, "%Y-%m-%d")?)
+! @console.println(@clock.format(t, "%A, %d %B %Y")?)
+```
+
+```text
+2026-07-31
+Friday, 31 July 2026
+```
+
+It answers a **result**, because both of its arguments can be wrong: a string that is
+not a timestamp gives `err(⟨kind: "clock.parse", …⟩)`, and an unknown specifier gives
+`err(⟨kind: "clock.pattern", …⟩)` rather than taking the process down with it.
+
+Formatting is one-way and for people. Anything a program will read back should stay
+in the RFC3339 form, which is the only one that still sorts.
+
+### Saying how long
+
+`@clock.duration` normalizes a duration to whole milliseconds, so a timeout can be
+written the way it is said out loud:
+
+```rite native_only
+! @clock.sleep(@clock.duration("1.5s")?)
+```
+
+| Written | Milliseconds |
+|---|---|
+| `1500` or `"1500"` or `"1500ms"` | 1500 |
+| `"2s"` | 2000 |
+| `"5m"` | 300000 |
+| `"1h"` | 3600000 |
+| `"1d"` | 86400000 |
+
+A bare number is milliseconds, so the integer and string forms agree. An unknown unit
+is an `err` naming the ones that exist.
 
 **There is no date arithmetic.** No "thirty days ago", no adding an hour. A cutoff
 has to be a timestamp you already hold — a literal, or one a previous run wrote

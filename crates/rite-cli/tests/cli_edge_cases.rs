@@ -370,3 +370,61 @@ bomb(0)
         out.status.code()
     );
 }
+
+/// `@console.read_line` answered the empty string without touching stdin: a shim in
+/// the interpreter shadowed the working implementation in `rite-caps`, so there was
+/// no way to read input from a script at all. The prompt is printed by the runtime
+/// (it owns the output sink) and the read is done by the capability, so this covers
+/// both halves — a prompt on stdout and the typed line coming back.
+#[test]
+fn read_line_reads_stdin_and_prints_its_prompt() {
+    use std::io::Write;
+    let script = write_temp(
+        "read_line",
+        "name ← ! @console.read_line(\"name? \")\n! @console.println(\"[\" + name + \"]\")\n",
+    );
+    let mut child = Command::new(rite_bin())
+        .args(["run", script.to_str().unwrap()])
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .expect("spawn rite");
+    // CRLF: the line ending a Windows terminal sends must not survive into the value.
+    child
+        .stdin
+        .as_mut()
+        .unwrap()
+        .write_all(b"aura\r\n")
+        .unwrap();
+    let out = child.wait_with_output().expect("wait");
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.contains("name? "),
+        "prompt missing from stdout: {stdout:?}"
+    );
+    assert!(
+        stdout.contains("[aura]"),
+        "line not read back: {stdout:?} (empty brackets means the shim is back)"
+    );
+}
+
+/// Reading is still an ordinary console effect, so revoking console must stop it
+/// rather than quietly answering the empty string.
+#[test]
+fn read_line_respects_deny_console() {
+    let script = write_temp(
+        "read_line_denied",
+        "name ← ! @console.read_line(\"\")\n! @console.println(name)\n",
+    );
+    let out = run_rite(&["run", script.to_str().unwrap(), "--deny", "console"]);
+    let combined = format!(
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(
+        combined.contains("console permission denied"),
+        "expected a permission denial, got: {combined:?}"
+    );
+}

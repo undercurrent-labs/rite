@@ -1,4 +1,4 @@
-# Sockets
+# Network: sockets
 
 `@http` is the polite layer. Underneath it are the two raw ones: **`@udp`**, which
 sends datagrams and forgets them, and **`@tcp`**, which opens a connection and keeps
@@ -6,7 +6,7 @@ it. Reach for these when you are speaking a protocol that is not HTTP — a line
 protocol, a game tick, a health probe, a DNS query.
 
 Both are native-only, both are gated by the same `net` permission as
-[HTTP services](http.md), and both hand you an **opaque handle** the same way `@db`
+[Network: HTTP services](http.md), and both hand you an **opaque handle** the same way `@db`
 does: you get a value back, you pass it to the next call, and you close it when done.
 
 > **CLI only.** The browser runtime has no socket layer, so every call here is a
@@ -261,4 +261,4 @@ capability error rather than a stub, the same as `@udp` and `@process`.
 
 ## Next
 
-[Modules](modules.md) · [HTTP services](http.md) · [Effects and capabilities](effects.md)
+[Modules](modules.md) · [Network: HTTP services](http.md) · [Effects and capabilities](effects.md)

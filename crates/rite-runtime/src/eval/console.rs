@@ -34,7 +34,24 @@ impl<'a> Evaluator<'a> {
                 self.ctx.print(format!("{:?}\n", args.first()));
                 Ok(Value::None)
             }
-            "read_line" => Ok(Value::string("")),
+            // Split deliberately: the prompt is *output*, and only this side can route
+            // it correctly (to the host's sink, or the buffer, and only when console is
+            // allowed). The read itself is host I/O and stays in the capability. So the
+            // prompt is printed here and the capability is called with no argument,
+            // which is what stops it printing the prompt a second time.
+            //
+            // This used to answer `Value::string("")` outright, which shadowed the
+            // working implementation in `rite-caps` and made `@console.read_line`
+            // silently unable to read anything at all.
+            "read_line" => {
+                if !msg.is_empty() {
+                    self.ctx.print(msg);
+                }
+                self.ctx
+                    .capabilities
+                    .call(path, Vec::new(), true, self.ctx)
+                    .await
+            }
             _ => self.ctx.capabilities.call(path, args, true, self.ctx).await,
         }
     }

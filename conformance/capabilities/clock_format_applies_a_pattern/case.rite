@@ -1,0 +1,6 @@
+// `@clock.format` used to ignore its pattern and hand back the timestamp it was
+// given, so this case is the difference between formatting and not. A fixed
+// timestamp keeps it independent of the clock; `clock` is a default-allowed
+// permission, which is why `allow` is empty.
+t ← "2026-07-31T16:31:13.680626617+00:00"
+^ @clock.format(t, "%Y-%m-%d")? + " " + @clock.format(t, "%H:%M:%S")?

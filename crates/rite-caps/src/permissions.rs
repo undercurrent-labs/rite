@@ -169,8 +169,17 @@ impl PermissionSet {
             Permission::Random => self.random = true,
             Permission::Process => self.process = true,
             Permission::EnvAll => self.env_all = true,
+            // `--allow env=PATH,HOME` reads as two names. It used to be stored as the
+            // single variable `"PATH,HOME"`, which can never exist, so the grant looked
+            // accepted and silently granted nothing. An environment variable name
+            // cannot contain a comma, so splitting here is unambiguous.
             Permission::Env(v) => {
-                self.env_vars.insert(v);
+                for name in v.split(',') {
+                    let name = name.trim();
+                    if !name.is_empty() {
+                        self.env_vars.insert(name.to_string());
+                    }
+                }
             }
             Permission::FsRead(p) => self.fs_read.push(canonicalize_loose(&p)),
             Permission::FsWrite(p) => self.fs_write.push(canonicalize_loose(&p)),
@@ -214,7 +223,10 @@ impl PermissionSet {
             }
             Permission::Env(v) => {
                 self.allow_all = false;
-                self.env_vars.remove(&v);
+                // Same list form as the grant, so `--deny env=A,B` revokes both.
+                for name in v.split(',') {
+                    self.env_vars.remove(name.trim());
+                }
             }
             Permission::FsRead(_) => {
                 self.allow_all = false;
@@ -323,23 +335,49 @@ impl PermissionSet {
     }
 }
 
+/// Resolve `path` to an absolute, symlink-free form, even when it does not exist yet.
+///
+/// Only **one** missing level used to be handled: the parent was canonicalized and
+/// the final component re-attached. When the parent was missing too — `a/b` with
+/// neither present, which is exactly `@fs.mkdir("a/b")` — canonicalizing it failed,
+/// the relative path was kept, and it then sat under no granted root. A grant of the
+/// working directory refused to create a directory inside the working directory.
+///
+/// So walk up to the deepest ancestor that *does* exist, canonicalize that, and
+/// re-apply the missing tail. The tail cannot contain symlinks, because it does not
+/// exist, which is what makes it safe to resolve `..` in it lexically here — leaving
+/// it for `path_under`'s prefix test would let `granted/missing/../../etc` look like
+/// it starts with `granted`.
 fn canonicalize_loose(path: &Path) -> PathBuf {
-    if path.exists() {
-        path.canonicalize().unwrap_or_else(|_| path.to_path_buf())
-    } else if let Some(parent) = path.parent() {
-        if parent.as_os_str().is_empty() {
-            std::env::current_dir()
-                .unwrap_or_else(|_| PathBuf::from("."))
-                .join(path)
-        } else {
-            let parent_c = parent
-                .canonicalize()
-                .unwrap_or_else(|_| parent.to_path_buf());
-            parent_c.join(path.file_name().unwrap_or_default())
-        }
-    } else {
-        path.to_path_buf()
+    if let Ok(c) = path.canonicalize() {
+        return c;
     }
+    let abs = if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        std::env::current_dir()
+            .unwrap_or_else(|_| PathBuf::from("."))
+            .join(path)
+    };
+    // Ancestors run longest-first, so the first that canonicalizes is the deepest
+    // real directory. Everything past it is folded on by hand.
+    for ancestor in abs.ancestors() {
+        let Ok(mut out) = ancestor.canonicalize() else {
+            continue;
+        };
+        let rest = abs.strip_prefix(ancestor).unwrap_or_else(|_| Path::new(""));
+        for part in rest.components() {
+            match part {
+                std::path::Component::ParentDir => {
+                    out.pop();
+                }
+                std::path::Component::CurDir => {}
+                other => out.push(other.as_os_str()),
+            }
+        }
+        return out;
+    }
+    abs
 }
 
 fn path_under(path: &Path, root: &Path) -> bool {

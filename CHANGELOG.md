@@ -2,6 +2,96 @@
 
 ## [Unreleased]
 
+### Added
+
+- **`@clock.format` formats.** It took a pattern and ignored it, returning the
+  timestamp unchanged. It now applies a strftime pattern — `%Y-%m-%d`,
+  `%A, %d %B %Y` — and answers a result, because both arguments can be wrong: an
+  unparseable timestamp gives `err(⟨kind: "clock.parse", …⟩)` and an unknown
+  specifier gives `err(⟨kind: "clock.pattern", …⟩)`. The pattern is validated
+  before use rather than handed straight to chrono, which panics on `%Q` — a
+  script must not be able to abort its host by writing a bad format string.
+
+- **`@clock.duration` normalizes durations.** It returned the integer it was
+  given. It now reads a unit — `250ms`, `2s`, `5m`, `1h`, `1d`, and fractions like
+  `1.5s` — and answers whole milliseconds, so `@clock.sleep(@clock.duration("2s")?)`
+  says what it means. A bare number is still milliseconds, so both forms agree.
+
+- **`@process.run` honours its third argument.** The options record was accepted
+  and discarded, so `⟨cwd: "…"⟩` looked applied and did nothing. It now understands
+  `cwd` and `env` (added to the inherited environment, since a child that loses
+  `PATH` usually cannot start). An unrecognised key is an error rather than a
+  silent default — a typo should not be indistinguishable from the default.
+
+### Security
+
+- **A path could escape a granted root through directories that do not exist.**
+  Permission checks resolve a path before testing containment, but only one missing
+  component was ever resolved: with more than one, the path was kept as written and
+  the containment test fell back to a textual prefix comparison. An absolute path
+  like `<granted>/missing/../../secret` therefore *starts with* the granted root as
+  a string while landing two levels above it, and was allowed.
+
+  Resolution now walks up to the deepest directory that exists, canonicalizes that
+  — so symlinks in it are followed — and folds the remaining components on by hand,
+  resolving `..` as it goes. The tail cannot contain symlinks, because it does not
+  exist, which is what makes resolving it lexically sound.
+
+  The same fix removes a wrong denial: `@fs.mkdir("a/b")` where neither level exists
+  was refused even with a grant covering the parent, because the unresolved relative
+  path matched no root. Creating a directory inside a directory you were granted now
+  works.
+
+### Fixed
+
+- **`@console.read_line` reads stdin.** A shim in the interpreter answered the
+  empty string and shadowed the working implementation in `rite-caps`, so there was
+  no way to prompt for input from a Rite script at all. The prompt is now printed by
+  the runtime — which owns the output sink, and so can respect `--deny console` and
+  keep ordering with buffered output — and the read is done by the capability. Line
+  terminators are stripped for both `\n` and `\r\n`; end of input answers `""`.
+
+- **`@game.say` can be called.** `say` is a keyword token, so `@game.say("…")`
+  parsed as `@game.` followed by a bare `say` statement: the capability call
+  vanished, the string went to stdout via `println`, and the runtime failed with
+  `unknown @game.`. Keyword-spelled capability methods are now ordinary names after
+  a `.`, which is what the surrounding cases already assumed.
+
+- **`--allow env=PATH,HOME` grants two variables.** The list was stored as the
+  single variable `"PATH,HOME"`, a name no environment can have, so the grant was
+  accepted and granted nothing — and then denied at the point of use. `--deny`
+  takes the same list form.
+
+- **`@env.all` answers a scoped grant instead of refusing it.** It demanded the
+  blanket `--allow env` even though the filter for the scoped case was already
+  written, just unreachable. It now returns exactly the names granted, which
+  reveals nothing `@env.get` would not answer one at a time. Granting nothing is
+  still a denial.
+
+- **Conformance `expected.value.json` was unchecked for every non-numeric case.**
+  The comparison ended in `expected.parse::<i64>().ok() != value.as_int()`, which
+  is `None != None` — false — whenever neither side was an integer, so a wrong
+  string expectation reported nothing. Comparison is now by JSON value. The first
+  thing this caught was a fixture asserting `"matched"` against `"#?0"`: atoms were
+  being rendered with a fresh interner that could not name them, so
+  `run_interpreted` now returns the interner alongside the value.
+
+- `@http.response` declared arity 1 but takes a status *and* a body. Arity is a
+  documentation field only, so this was wrong in the published reference rather
+  than in behaviour.
+
+- **The generated capability reference describes behaviour, not intent.** Several
+  descriptors promised things the code did not do, and because the reference is
+  generated from them, the promise was published. Those functions are now
+  implemented (above) and their text matches; `@process.run` also documents that a
+  non-startable command raises rather than answering `err`, and `@fs.remove` states
+  plainly that it is recursive on directories.
+
+- **A drift guard for the book's chapter list.** `DOC_CHAPTERS` and
+  `docs/book/README.md` have to agree, and previously nothing checked — they had
+  already drifted once into two different numberings on the same screen. The
+  tutorial list got this guard when it was added; the book now has it too.
+
 ### Documentation
 
 - **The book now covers every host function.** An audit against the capability
@@ -12,9 +102,10 @@
 - **New chapter: Environment and processes** (`@env`, `@process`, `@clock`,
   `@random`, `@store`) — the five that had no home.
 
-- **New chapter: Sockets**, split out of HTTP services. `@udp` and `@tcp` were
-  documented, but inside a 521-line chapter the sidebar labelled "HTTP services",
-  which is a good way to look documented and read as missing.
+- **New chapter: Network: sockets**, split out of HTTP services. `@udp` and `@tcp`
+  were documented, but inside a 521-line chapter the sidebar labelled "HTTP
+  services", which is a good way to look documented and read as missing. Both
+  chapters now share a `Network:` prefix so they group in the sidebar.
 
 - **A capability → chapter table** in the book index, so a reader who knows the
   sigil can find the prose without guessing which chapter adopted it.
@@ -28,23 +119,6 @@
 - **Corrected two wrong claims in the book.** It said `rest` was a match pattern
   and not a pipeline stage — `xs → rest` works — and left `flatten` as "use
   flatten/builtin if available", which it is.
-
-### Fixed
-
-- **The generated capability reference no longer advertises functions that do not
-  work.** Four descriptors described intent rather than behaviour, and because the
-  reference is generated from them, the lie was published. `@clock.format` and
-  `@clock.duration` now say they are unimplemented placeholders (the former
-  ignores its pattern entirely); `@console.read_line` says it never reads stdin;
-  `@env.all` says it requires the blanket grant rather than filtering to a scoped
-  one; `@process.run` documents its ignored third argument and that a
-  non-startable command raises rather than answering `err`; and `@fs.remove`
-  states plainly that it is recursive on directories.
-
-- **A drift guard for the book's chapter list.** `DOC_CHAPTERS` and
-  `docs/book/README.md` have to agree, and previously nothing checked — they had
-  already drifted once into two different numberings on the same screen. The
-  tutorial list got this guard when it was added; the book now has it too.
 
 ## [0.4.0] — 2026-07-31
 

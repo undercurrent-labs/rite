@@ -21,8 +21,8 @@ This book is a linear path. You can stop after any chapter and experiment in [St
 13. [Files, JSON, and CSV](files-json.md) — `@fs`, `@json`, `@csv`
 14. [Hashing and encoding](crypto.md) — `@crypto`, digests, HMAC, base64/hex
 15. [Databases](db.md) — `@db` (DuckDB), SQL, transactions
-16. [HTTP services](http.md) — `@http.listen`, routes, middleware, client calls
-17. [Sockets](sockets.md) — `@udp` datagrams, `@tcp` streams, bytes on the wire
+16. [Network: HTTP services](http.md) — `@http.listen`, routes, middleware, client calls
+17. [Network: sockets](sockets.md) — `@udp` datagrams, `@tcp` streams, bytes on the wire
 18. [Environment and processes](environment.md) — `@env`, `@process`, `@clock`, `@random`, `@store`
 19. [Modules](modules.md) — `use`, `pub`, relative paths, aliases
 20. [Compiling to Rust](compiling.md) — `rite build`, IR, parity
@@ -42,8 +42,8 @@ This book is a linear path. You can stop after any chapter and experiment in [St
 | `@json` · `@csv` | [Files, JSON, and CSV](files-json.md) | — |
 | `@crypto` | [Hashing and encoding](crypto.md) | — (`random_bytes` needs `random`) |
 | `@db` | [Databases](db.md) | denied |
-| `@http` | [HTTP services](http.md) | denied |
-| `@udp` · `@tcp` | [Sockets](sockets.md) | denied |
+| `@http` | [Network: HTTP services](http.md) | denied |
+| `@udp` · `@tcp` | [Network: sockets](sockets.md) | denied |
 | `@env` · `@process` | [Environment and processes](environment.md) | denied |
 | `@clock` · `@random` | [Environment and processes](environment.md) | allowed |
 | `@store` | [Environment and processes](environment.md) | no permission |

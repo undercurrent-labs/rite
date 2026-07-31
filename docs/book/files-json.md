@@ -154,16 +154,16 @@ Neither call creates missing parent directories; see `@fs.mkdir` below.
 > the narrowest possible `--allow fs:write=…` is the thing that limits the blast
 > radius.
 
-`@fs.mkdir` creates missing parents, but there is a wrinkle: the **permission check**
-resolves the path first, and a path whose parents do not exist yet cannot be
-resolved. So creating two levels at once is refused even when the grant covers it:
+`@fs.mkdir` creates missing parents, so one call is enough for a whole branch:
 
-```bash
-rite run t.rite --allow fs:write=.
-# permission denied: fs:write permission denied for `deep/nested`
+```rite native_only
+! @fs.mkdir("deep/nested/further")?
 ```
 
-Create the levels one at a time, and each call succeeds.
+A path is resolved before it is permission-checked, and resolution copes with a
+destination several levels away from anything that exists yet — but the *resolved*
+location is what has to be inside the grant. `../outside` still fails, and so does a
+path that climbs out through directories that were never created.
 
 ## Typical pipeline
 

@@ -243,6 +243,14 @@ impl Parser {
             ))
     }
 
+    /// Keywords that are still ordinary names after a `.`.
+    ///
+    /// A capability method shares its spelling with whatever the lexer happens to
+    /// have promoted to a keyword, and the two do not otherwise interact: `@game.say`
+    /// is a call, not the `say` statement. Leaving `Say` out of this set made that
+    /// call unwritable — it parsed as `@game.` followed by a keyword and failed at
+    /// runtime with `unknown @game.`, so one capability function could not be reached
+    /// from Rite at all.
     pub(super) fn is_keyword_as_ident(&self) -> bool {
         matches!(
             self.peek_kind(),
@@ -253,6 +261,7 @@ impl Parser {
                 | TokenKind::Ok
                 | TokenKind::Err
                 | TokenKind::Some
+                | TokenKind::Say
                 | TokenKind::Get
                 | TokenKind::Post
                 | TokenKind::Put

@@ -43,7 +43,7 @@ impl ConsoleCap {
         },
         NativeFunctionDescriptor {
             name: "read_line",
-            docs: "Not implemented: the interpreter answers the empty string without reading stdin or printing the prompt. There is no way to prompt for input from a script today.",
+            docs: "Read one line from stdin, after writing the optional prompt without a trailing newline. The line comes back without its terminator (`\\n` or `\\r\\n`); end of input answers the empty string. The prompt is written by the runtime, which owns the output sink, so this is called with no argument from there.",
             arity: 1,
             effectful: true,
             permission: "console",

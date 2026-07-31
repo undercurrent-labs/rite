@@ -44,7 +44,7 @@ Write a debug representation to stdout.
 
 ### read_line
 
-Not implemented: the interpreter answers the empty string without reading stdin or printing the prompt. There is no way to prompt for input from a script today.
+Read one line from stdin, after writing the optional prompt without a trailing newline. The line comes back without its terminator (`\n` or `\r\n`); end of input answers the empty string. The prompt is written by the runtime, which owns the output sink, so this is called with no argument from there.
 
 - arity: 1
 - effectful: true
@@ -318,7 +318,7 @@ Parse an ISO-8601 timestamp.
 
 ### format
 
-Reserved, not implemented: the pattern is ignored and the timestamp is returned unchanged. Do not build on it.
+Format an RFC3339 timestamp with a strftime pattern, e.g. `%Y-%m-%d`. Answers `ok(string)`, or `err` if the timestamp or the pattern is not valid.
 
 - arity: 2
 - effectful: false
@@ -334,7 +334,7 @@ Sleep for a duration in milliseconds.
 
 ### duration
 
-Reserved, not implemented: returns the milliseconds it was given. Do not build on it.
+Normalize a duration to whole milliseconds. Accepts an integer or float of milliseconds, or a string with a unit: `250ms`, `2s`, `5m`, `1h`, `1d`. Answers `ok(int)` or `err`.
 
 - arity: 1
 - effectful: false
@@ -360,7 +360,7 @@ Get a required environment variable as result.
 
 ### all
 
-Return every environment variable as a record. Requires the blanket `--allow env`: a scoped grant such as `--allow env=PATH` is refused rather than filtered.
+Return the environment variables this script may read, as a record. With `--allow env` that is everything; with `--allow env=NAME,…` it is exactly the names granted. Denied when nothing is granted.
 
 - arity: 0
 - effectful: true
@@ -370,7 +370,7 @@ Return every environment variable as a record. Requires the blanket `--allow env
 
 ### run
 
-Run a command with an argument list (no shell). Answers `ok(⟨status, stdout, stderr⟩)`; a non-zero exit is still `ok`, but a command that cannot be started raises. The third argument is a reserved options record and is currently ignored.
+Run a command with an argument list (no shell). Answers `ok(⟨status, stdout, stderr⟩)`; a non-zero exit is still `ok`, but a command that cannot be started raises. The third argument is an options record understanding `cwd` (string) and `env` (record, added to the inherited environment); any other key is an error.
 
 - arity: 3
 - effectful: true
@@ -478,9 +478,9 @@ Send a request described by a record: <<method, url, headers, body, timeout_ms>>
 
 ### response
 
-Build an explicit HTTP response record.
+Build an explicit response record `⟨status, body⟩`. The body is optional and defaults to `none`.
 
-- arity: 1
+- arity: 2
 - effectful: false
 - permission: 
 

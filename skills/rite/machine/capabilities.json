@@ -16,7 +16,7 @@
     },
     {
       "arity": 2,
-      "docs": "Reserved, not implemented: the pattern is ignored and the timestamp is returned unchanged. Do not build on it.",
+      "docs": "Format an RFC3339 timestamp with a strftime pattern, e.g. `%Y-%m-%d`. Answers `ok(string)`, or `err` if the timestamp or the pattern is not valid.",
       "effectful": false,
       "name": "format",
       "permission": "clock"
@@ -30,7 +30,7 @@
     },
     {
       "arity": 1,
-      "docs": "Reserved, not implemented: returns the milliseconds it was given. Do not build on it.",
+      "docs": "Normalize a duration to whole milliseconds. Accepts an integer or float of milliseconds, or a string with a unit: `250ms`, `2s`, `5m`, `1h`, `1d`. Answers `ok(int)` or `err`.",
       "effectful": false,
       "name": "duration",
       "permission": "clock"
@@ -74,7 +74,7 @@
     },
     {
       "arity": 1,
-      "docs": "Not implemented: the interpreter answers the empty string without reading stdin or printing the prompt. There is no way to prompt for input from a script today.",
+      "docs": "Read one line from stdin, after writing the optional prompt without a trailing newline. The line comes back without its terminator (`\\n` or `\\r\\n`); end of input answers the empty string. The prompt is written by the runtime, which owns the output sink, so this is called with no argument from there.",
       "effectful": true,
       "name": "read_line",
       "permission": "console"
@@ -271,7 +271,7 @@
     },
     {
       "arity": 0,
-      "docs": "Return every environment variable as a record. Requires the blanket `--allow env`: a scoped grant such as `--allow env=PATH` is refused rather than filtered.",
+      "docs": "Return the environment variables this script may read, as a record. With `--allow env` that is everything; with `--allow env=NAME,…` it is exactly the names granted. Denied when nothing is granted.",
       "effectful": true,
       "name": "all",
       "permission": "env"
@@ -507,8 +507,8 @@
       "permission": "net"
     },
     {
-      "arity": 1,
-      "docs": "Build an explicit HTTP response record.",
+      "arity": 2,
+      "docs": "Build an explicit response record `⟨status, body⟩`. The body is optional and defaults to `none`.",
       "effectful": false,
       "name": "response",
       "permission": ""
@@ -568,7 +568,7 @@
   "process": [
     {
       "arity": 3,
-      "docs": "Run a command with an argument list (no shell). Answers `ok(⟨status, stdout, stderr⟩)`; a non-zero exit is still `ok`, but a command that cannot be started raises. The third argument is a reserved options record and is currently ignored.",
+      "docs": "Run a command with an argument list (no shell). Answers `ok(⟨status, stdout, stderr⟩)`; a non-zero exit is still `ok`, but a command that cannot be started raises. The third argument is an options record understanding `cwd` (string) and `env` (record, added to the inherited environment); any other key is an error.",
       "effectful": true,
       "name": "run",
       "permission": "process"

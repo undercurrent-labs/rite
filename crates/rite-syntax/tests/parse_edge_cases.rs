@@ -523,3 +523,45 @@ fn a_listen_address_in_a_binding_does_not_eat_the_block() {
         );
     }
 }
+
+/// A capability method keeps its name even when the lexer has promoted that word to
+/// a keyword. `say` is the shorthand for printing, and leaving it out of
+/// `is_keyword_as_ident` made `@game.say(…)` parse as `@game.` plus a stray keyword:
+/// it reached the runtime as an empty method and died with `unknown @game.`, so one
+/// capability function could not be called from Rite at all.
+///
+/// Both dialects, because `host.game.say` has to survive the same way.
+#[test]
+fn keyword_named_capability_methods_parse() {
+    // The method name has to be *in the tree*. Asserting only that the source parses
+    // is not enough: the path loop simply stops at the unexpected token, so a dropped
+    // segment produces no diagnostic at all and fails later at runtime with
+    // `unknown @game.` — which is exactly how this survived.
+    for (src, method) in [
+        ("! @game.say(\"hi\")", "say"),
+        ("do host.game.say(\"hi\")", "say"),
+        ("! @game.take(#coin)", "take"),
+    ] {
+        let (program, diags, _) = parse_source("cap.rite", src);
+        assert!(
+            !diags.has_errors(),
+            "`{src}` should parse: {:?}",
+            diags.into_vec()
+        );
+        let rendered = format!("{:?}", program.expect("program"));
+        assert!(
+            rendered.contains(&format!("\"{method}\"")),
+            "`{src}` dropped the method segment `{method}`: {rendered}"
+        );
+    }
+
+    // …and `say` is still a statement keyword, which is the thing that made this a
+    // collision in the first place.
+    let (program, diags, _) = parse_source("say.rite", "say \"hello\"");
+    assert!(
+        !diags.has_errors(),
+        "the say statement must still parse: {:?}",
+        diags.into_vec()
+    );
+    assert!(program.is_some());
+}

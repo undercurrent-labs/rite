@@ -481,11 +481,25 @@ pub async fn run_ir_mode(file: &Path, perms: PermissionSet) -> Result<rite_runti
         .map_err(|e| e.to_string())
 }
 
-/// Interpreted mode for differential tests.
+/// Interpreted mode for differential tests: `(value, stdout, stderr, atoms)`.
+///
+/// The interner comes back with the value because an atom is only a number until
+/// something can name it. Rendering a returned `#matched` without it produced
+/// `"#?0"`, which is what let a conformance fixture expecting `"matched"` pass
+/// against the wrong value for as long as the comparison was loose enough to ignore
+/// it.
 pub async fn run_interpreted(
     file: &Path,
     perms: PermissionSet,
-) -> Result<(rite_runtime::Value, String, String), String> {
+) -> Result<
+    (
+        rite_runtime::Value,
+        String,
+        String,
+        std::sync::Arc<rite_runtime::AtomInterner>,
+    ),
+    String,
+> {
     let mut ctx = rite_runtime::RuntimeContext::new();
     rite_caps::install_defaults(&mut ctx, perms);
     if let Some(parent) = file.parent() {
@@ -499,7 +513,12 @@ pub async fn run_interpreted(
     let v = rite_runtime::run_file(&sf, &mut ctx)
         .await
         .map_err(|e| e.to_string())?;
-    Ok((v, ctx.stdout.join(""), ctx.stderr.join("")))
+    Ok((
+        v,
+        ctx.stdout.join(""),
+        ctx.stderr.join(""),
+        ctx.atoms.clone(),
+    ))
 }
 
 #[cfg(test)]

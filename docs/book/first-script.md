@@ -35,7 +35,7 @@ Console is allowed by default, so you usually do **not** need `--allow-all` for 
 | `@console.warn(v)` | **stderr** | A note that is not the result |
 | `@console.error(v)` | **stderr** | A problem that is not the result |
 | `@console.inspect(v)` | stdout | Debugging, see below |
-| `@console.read_line(prompt)` | — | **Not implemented yet**, see below |
+| `@console.read_line(prompt)` | reads stdin | Asking the user something |
 
 The split matters the moment a script is used in a pipeline. `warn` and `error` go
 to **stderr**, so they stay visible on the terminal while `stdout` is being
@@ -67,17 +67,25 @@ exists for the moment you need to know what the runtime thinks it is holding —
 while debugging and take it out afterwards; the shape it prints is not a stable
 format and is not meant to be parsed.
 
-> **`@console.read_line` does not read anything yet.** It is in the capability table
-> and it type-checks, but the interpreter answers the empty string without touching
-> stdin and without printing the prompt — piping input in changes nothing:
->
-> ```bash
-> printf 'aura\n' | rite run ask.rite
-> # []
-> ```
->
-> So there is no way to prompt for input from a Rite script today. A script that
-> needs input should take it from [`@process.args`](environment.md) or a file.
+### Asking for input
+
+```rite native_only
+name ← ! @console.read_line("name? ")
+! @console.println("hello, " + name)
+```
+
+```bash
+printf 'aura\n' | rite run ask.rite
+# name? hello, aura
+```
+
+The prompt is written without a trailing newline and flushed, so the cursor waits on
+the same line. The line comes back **without its terminator** — `\n` or `\r\n`, so a
+script does not behave differently depending on which terminal typed into it — and
+end of input answers the empty string rather than failing. Reading is an ordinary
+console effect, so `--deny console` stops it like the rest.
+
+For arguments rather than answers, see [`@process.args`](environment.md).
 
 ### Executable scripts (shebang)
 

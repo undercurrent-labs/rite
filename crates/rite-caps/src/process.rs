@@ -9,7 +9,7 @@ impl ProcessCap {
     pub const DESCRIPTORS: &'static [NativeFunctionDescriptor] = &[
         NativeFunctionDescriptor {
             name: "run",
-            docs: "Run a command with an argument list (no shell). Answers `ok(⟨status, stdout, stderr⟩)`; a non-zero exit is still `ok`, but a command that cannot be started raises. The third argument is a reserved options record and is currently ignored.",
+            docs: "Run a command with an argument list (no shell). Answers `ok(⟨status, stdout, stderr⟩)`; a non-zero exit is still `ok`, but a command that cannot be started raises. The third argument is an options record understanding `cwd` (string) and `env` (record, added to the inherited environment); any other key is an error.",
             arity: 3,
             effectful: true,
             permission: "process",
@@ -67,10 +67,70 @@ impl ProcessCap {
                         }
                     }
                 }
-                let output = tokio::process::Command::new(&cmd)
+                let mut command = tokio::process::Command::new(&cmd);
+                command
                     .args(&argv)
                     .stdout(Stdio::piped())
-                    .stderr(Stdio::piped())
+                    .stderr(Stdio::piped());
+
+                // The third argument was accepted and thrown away, so `⟨cwd: "…"⟩`
+                // looked like it worked and silently did nothing. Unknown keys are an
+                // error rather than ignored, for the same reason: a typo in an options
+                // record should not be indistinguishable from the default.
+                //
+                // Neither key needs a permission of its own. `--allow process` already
+                // permits running an arbitrary binary, and setting a child's directory
+                // or environment reveals nothing back to the script.
+                match args.get(2) {
+                    None | Some(Value::None) => {}
+                    Some(Value::Record(opts)) => {
+                        for (key, value) in opts {
+                            match key {
+                                Key::String(k) if k == "cwd" => {
+                                    let dir = value.as_str().ok_or_else(|| {
+                                        EvalError::Message(
+                                            "process.run: `cwd` must be a string".into(),
+                                        )
+                                    })?;
+                                    command.current_dir(dir);
+                                }
+                                Key::String(k) if k == "env" => {
+                                    let Value::Record(vars) = value else {
+                                        return Err(EvalError::Message(
+                                            "process.run: `env` must be a record".into(),
+                                        ));
+                                    };
+                                    // Added to the inherited environment rather than
+                                    // replacing it: a child that loses PATH usually
+                                    // cannot start.
+                                    for (name, v) in vars {
+                                        let Key::String(name) = name else {
+                                            return Err(EvalError::Message(
+                                                "process.run: `env` names must be strings".into(),
+                                            ));
+                                        };
+                                        match v.as_str() {
+                                            Some(s) => command.env(name, s),
+                                            None => command.env(name, format!("{}", v)),
+                                        };
+                                    }
+                                }
+                                other => {
+                                    return Err(EvalError::Message(format!(
+                                        "process.run: unknown option `{other}` — expected `cwd` or `env`"
+                                    )));
+                                }
+                            }
+                        }
+                    }
+                    Some(other) => {
+                        return Err(EvalError::Message(format!(
+                            "process.run: options must be a record, got `{other}`"
+                        )));
+                    }
+                }
+
+                let output = command
                     .output()
                     .await
                     .map_err(|e| EvalError::Capability(e.to_string()))?;

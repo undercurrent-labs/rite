@@ -60,23 +60,33 @@ pub async fn run_conformance_suite(root: &Path) -> anyhow::Result<ConformanceRep
         let mut msg = String::new();
 
         match (&interp, &ir) {
-            (Ok((v_i, out_i, _)), Ok(v_c)) => {
+            (Ok((v_i, out_i, _, atoms_i)), Ok(v_c)) => {
                 if !v_i.structural_eq(v_c) {
                     ok = false;
                     msg.push_str(&format!("value mismatch: interp={:?} ir={:?}; ", v_i, v_c));
                 }
+                // Compare as JSON when both sides parse as JSON, so formatting and key
+                // order do not decide a case; fall back to the rendered forms otherwise.
+                //
+                // The chain this replaces ended in `exp.parse::<i64>().ok() != v.as_int()`,
+                // which is `None != None` — false — whenever neither side was an integer.
+                // A mismatched *string* expectation therefore reported nothing at all, so
+                // `expected.value.json` was unchecked for every non-numeric fixture.
                 if let Some(ref exp) = expected_value {
-                    let got = format!("{}", v_i);
-                    // compare loosely via display or JSON
                     let exp_clean = exp.trim();
-                    let matches = got == exp_clean
-                        || v_i.to_json(&rite_runtime::AtomInterner::new()) == exp_clean;
-                    if !matches && exp_clean.parse::<i64>().ok() != v_i.as_int() {
-                        // try int equality
-                        if v_i.as_int().map(|n| n.to_string()) != Some(exp_clean.to_string()) {
-                            ok = false;
-                            msg.push_str(&format!("expected value {} got {}; ", exp_clean, got));
-                        }
+                    let got_display = format!("{}", v_i);
+                    let got_json = v_i.to_json(atoms_i);
+                    let matches = match serde_json::from_str::<serde_json::Value>(exp_clean) {
+                        Ok(want) => want == got_json,
+                        // Not JSON: the fixture is written as the rendered form.
+                        Err(_) => got_display == exp_clean,
+                    };
+                    if !matches {
+                        ok = false;
+                        msg.push_str(&format!(
+                            "expected value {} got {} (json {}); ",
+                            exp_clean, got_display, got_json
+                        ));
                     }
                 }
                 if let Some(ref exp_out) = expected_stdout {

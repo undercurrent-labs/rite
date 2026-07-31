@@ -1,0 +1,10 @@
+// `@clock.duration` used to return whatever integer it was handed. It now reads a
+// unit suffix so a timeout can be written the way it is said out loud, and answers
+// whole milliseconds either way.
+^ [
+  @clock.duration(1500)?,
+  @clock.duration("2s")?,
+  @clock.duration("1.5s")?,
+  @clock.duration("5m")?,
+  @clock.duration("1h")?
+]
