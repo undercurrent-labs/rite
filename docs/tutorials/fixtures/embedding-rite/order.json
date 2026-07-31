@@ -1,0 +1,10 @@
+{
+  "id": "A-1042",
+  "customer": "orbital-supply",
+  "express": true,
+  "items": [
+    { "sku": "bolt-m6", "qty": 400, "unit": 0.30 },
+    { "sku": "flange-90", "qty": 12, "unit": 8.00 },
+    { "sku": "gasket-xl", "qty": 4, "unit": 21.00 }
+  ]
+}

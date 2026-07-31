@@ -19,8 +19,7 @@ says it prints. A tutorial that stops being true fails the build.
 | 5 | [A DNS resolver over `@udp`](dns-resolver.md) | A DNS client: wire-format bytes, one datagram, an address | a nameserver |
 | 6 | [Compiling to a binary](compiling-a-binary.md) | A native executable, and permissions baked in at build time | a Rust toolchain |
 | 7 | [Auditing a directory](fs-audit.md) | A CLI tool that sizes a directory and flags stale files | nothing |
-
-More are planned — embedding Rite in a Rust program.
+| 8 | [Embedding Rite in Rust](embedding-rite.md) | A Rust program whose pricing rules are a Rite file it does not trust | a Rust toolchain |
 
 ## Before you start
 

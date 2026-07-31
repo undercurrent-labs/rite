@@ -2,6 +2,36 @@
 
 ## [Unreleased]
 
+### Fixed — an embedded script's output no longer disappears
+
+`RiteEngine::run_source` built a `RuntimeContext`, the guest's `@console` output
+buffered into it, and the context was dropped when the run returned. An embedded
+`! @console.println("…")` therefore printed nothing and said nothing about it —
+the host had no way to know the script had spoken at all.
+
+Guest output now goes to the host's own stdout and stderr by default, as under
+`rite run`, and `RiteEngineBuilder::with_output(sink)` redirects it to a log, a
+buffer or a UI instead. The sink is called as the script writes, so a
+long-running guest streams rather than holding everything until it finishes.
+
+`with_default_builtins()` is deprecated: it has always been a no-op — builtins are
+installed unconditionally — and a builder method that selects nothing is a trap.
+It still compiles.
+
+### Added — a tutorial for embedding
+
+[Embedding Rite in a Rust program](docs/tutorials/embedding-rite.md): a host whose
+pricing rules are a Rite file it does not trust, with grants in code, a budget,
+and a record coming back. Its rules script runs in CI against a fixture; the Rust
+half is compiled and run by hand, which the page says out loud.
+
+`docs/book/embedding.md` was rewritten against the actual crate. It had been
+hedging — "exact builder methods follow the crate API in your tree (`allow`,
+`deny`, capability install)" — and `deny` and "capability install" do not exist,
+while `run_path` was listed as "if exposed" when it has always been there. Every
+snippet in the chapter now compiles; they were compiled together, as one program,
+to check it.
+
 ### Fixed — a zero-argument closure is a function
 
 `{ || 42 }` evaluated to `42`. `type_of` said `int`, and calling it failed with

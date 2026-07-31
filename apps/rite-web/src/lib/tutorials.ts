@@ -83,6 +83,15 @@ export const TUTORIALS: Tutorial[] = [
     builds: "A directory-sizing CLI tool",
     needs: "nothing",
   },
+  {
+    slug: "embedding-rite",
+    title: "Embedding Rite in Rust",
+    file: "embedding-rite.md",
+    blurb:
+      "Put your rules in a Rite file the host does not trust: grants in code, a budget, and a value back.",
+    builds: "A Rust program with scriptable pricing rules",
+    needs: "a Rust toolchain",
+  },
 ];
 
 /**

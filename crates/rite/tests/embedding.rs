@@ -219,3 +219,91 @@ async fn run_file_allow_all_is_a_working_shortcut() {
     let out = rite::run_file_allow_all(&script).await.expect("run");
     assert_eq!(out, Value::Int(42));
 }
+
+/// A guest's console output must not vanish.
+///
+/// It did: `run_source` built a `RuntimeContext`, the script's output buffered
+/// into it, and the context was dropped when the run returned. An embedded
+/// `! @console.println("…")` printed nothing and reported nothing — the host had
+/// no way to know the script had said anything at all.
+#[tokio::test]
+async fn guest_output_reaches_the_host() {
+    use std::sync::{Arc, Mutex};
+
+    let seen = Arc::new(Mutex::new(Vec::new()));
+    let sink = seen.clone();
+    let engine = RiteEngine::builder()
+        .allow_all()
+        .with_output(move |_stream, text| sink.lock().unwrap().push(text.to_string()))
+        .build()
+        .expect("build");
+
+    engine
+        .run_source(
+            "t.rite",
+            "! @console.println(\"one\")\n! @console.println(\"two\")\n",
+        )
+        .await
+        .expect("run");
+
+    let lines = seen.lock().unwrap().concat();
+    assert!(lines.contains("one") && lines.contains("two"), "{lines:?}");
+}
+
+/// The sink is called as the script writes, not once at the end: a guest that
+/// runs for a long time should reach the host as it goes, and one that never
+/// finishes should not take all of its output with it.
+#[tokio::test]
+async fn guest_output_streams_rather_than_accumulating() {
+    use std::sync::{Arc, Mutex};
+
+    // Each write is recorded separately, so one call carrying everything — which
+    // is what flushing at the end of the run would look like — fails here.
+    let calls = Arc::new(Mutex::new(0usize));
+    let counter = calls.clone();
+    let engine = RiteEngine::builder()
+        .allow_all()
+        .with_output(move |_stream, _text| *counter.lock().unwrap() += 1)
+        .build()
+        .expect("build");
+
+    engine
+        .run_source(
+            "t.rite",
+            "for n in range(0, 3) ⟦\n  ! @console.println(str(n))\n⟧\n",
+        )
+        .await
+        .expect("run");
+
+    assert_eq!(
+        *calls.lock().unwrap(),
+        3,
+        "output was not written as it went"
+    );
+}
+
+/// stderr stays stderr on the way to the host: a host routing guest output into a
+/// log has to be able to tell a script's diagnostics from its results.
+#[tokio::test]
+async fn the_stream_is_reported_to_the_sink() {
+    use std::sync::{Arc, Mutex};
+
+    let streams = Arc::new(Mutex::new(Vec::new()));
+    let sink = streams.clone();
+    let engine = RiteEngine::builder()
+        .allow_all()
+        .with_output(move |stream, _text| sink.lock().unwrap().push(format!("{stream:?}")))
+        .build()
+        .expect("build");
+
+    engine
+        .run_source(
+            "t.rite",
+            "! @console.println(\"out\")\n! @console.error(\"err\")\n",
+        )
+        .await
+        .expect("run");
+
+    let seen = streams.lock().unwrap().clone();
+    assert_eq!(seen, vec!["Stdout".to_string(), "Stderr".to_string()]);
+}
