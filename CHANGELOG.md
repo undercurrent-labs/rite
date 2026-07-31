@@ -1,5 +1,7 @@
 # Changelog
 
+## [Unreleased]
+
 ## [0.4.0] — 2026-07-31
 
 Rite learns to talk to the network and to handle the bytes that come back:
