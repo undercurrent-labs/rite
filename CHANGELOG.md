@@ -2,6 +2,22 @@
 
 ## [Unreleased]
 
+### Fixed — a zero-argument closure is a function
+
+`{ || 42 }` evaluated to `42`. `type_of` said `int`, and calling it failed with
+`cannot call value of type int`. The only record of the `|…|` was the parameters
+it named, and an empty list of them is indistinguishable from never having written
+one — so desugar read a thunk as a bare block and gave back its body. Named
+`◆ f()` was unaffected, which is how it went unnoticed.
+
+The AST now records whether a parameter list was written, and a block with one
+becomes a closure however many names it contains.
+
+The formatter had the same blind spot and was the more dangerous half: it printed
+the parameter list only when there were parameters to name, so `{ || 42 }` came
+back as `⟦ 42 ⟧`. Formatting a correct program turned a function into its own
+body, silently, and the failure showed up later at the call site.
+
 ### Changed — builtins read strings and bytes
 
 **The sequence builtins were half a family.** `count`, `slice`, `reverse`,

@@ -1,0 +1,7 @@
+{
+  "kind": "function",
+  "called": 42,
+  "again": 42,
+  "block_is_a_value": 42,
+  "block_kind": "int"
+}

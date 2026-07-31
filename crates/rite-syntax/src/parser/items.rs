@@ -438,6 +438,7 @@ impl Parser {
                 span,
             })),
             args: vec![Expr::Block(Block {
+                has_param_list: true,
                 params: vec![Param {
                     name: var,
                     ty: None,
@@ -475,6 +476,7 @@ impl Parser {
             args: vec![
                 // Dummy param forces closure (not bare block value).
                 Expr::Block(Block {
+                    has_param_list: true,
                     params: vec![Param {
                         name: Ident {
                             name: "__".into(),
@@ -487,6 +489,7 @@ impl Parser {
                     span,
                 }),
                 Expr::Block(Block {
+                    has_param_list: true,
                     params: vec![Param {
                         name: Ident {
                             name: "__".into(),
@@ -529,6 +532,7 @@ impl Parser {
                 span,
             })),
             args: vec![Expr::Block(Block {
+                has_param_list: true,
                 params: vec![Param {
                     name: Ident {
                         name: "_".into(),

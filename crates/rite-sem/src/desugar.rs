@@ -609,8 +609,13 @@ impl Desugar {
                 span: m.span,
             },
             Expr::Block(b) => {
-                // Block as expression = closure if has params, else seq
-                if !b.params.is_empty() {
+                // Block as expression = closure if a `|…|` was written, else a
+                // sequence. The test used to be `!params.is_empty()`, which cannot
+                // see the difference between `⟦ 42 ⟧` and `{ || 42 }` — so a
+                // zero-argument closure evaluated to its body instead of becoming a
+                // function, and calling it failed with `cannot call value of type
+                // int`. Named `◆ f()` was unaffected, which is why this survived.
+                if b.has_param_list {
                     let body = self.desugar_block(b);
                     let mut params = Vec::new();
                     let mut names = Vec::new();

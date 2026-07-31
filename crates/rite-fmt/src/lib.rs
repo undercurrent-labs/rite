@@ -866,7 +866,11 @@ impl<'a> Formatter<'a> {
 
     fn block(&mut self, block: &Block) {
         self.out.push_str(&self.sigil("⟦", "[["));
-        if !block.params.is_empty() {
+        // The empty `||` of a zero-argument closure has to survive formatting.
+        // Printing on `!params.is_empty()` dropped it, and `{ || 42 }` came back as
+        // `⟦ 42 ⟧` — a formatter quietly turning a function into its own body, which
+        // then failed at the call site with `cannot call value of type int`.
+        if block.has_param_list {
             self.out.push_str(" |");
             for (i, p) in block.params.iter().enumerate() {
                 if i > 0 {

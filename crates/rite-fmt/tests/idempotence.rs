@@ -64,3 +64,37 @@ fn dialect_roundtrip_keeps_comments() {
     assert!(ascii.contains("def f(n) [["), "{ascii}");
     assert!(back.contains("◆ f(n) ⟦"), "{back}");
 }
+
+/// The empty `||` of a zero-argument closure has to survive formatting.
+///
+/// It did not: the printer emitted a parameter list only when there were
+/// parameters to name, so `{ || 42 }` came back as `⟦ 42 ⟧` — the formatter
+/// turning a function into its own body. Nothing failed at format time; the
+/// script failed later, at the call, with `cannot call value of type int`.
+#[test]
+fn zero_argument_closure_keeps_its_pipes() {
+    let src = "f ← ⟦ || 42 ⟧\n";
+    let once = format_source(src, false).unwrap();
+    assert!(
+        once.contains("||"),
+        "formatter dropped the empty parameter list: {once:?}"
+    );
+    assert_eq!(once, format_source(&once, false).unwrap());
+
+    // And through a dialect conversion, where the delimiters change but the
+    // parameter list must not.
+    let ascii = format_with_dialect(src, Dialect::Ascii).unwrap().text;
+    assert!(
+        ascii.contains("||"),
+        "dialect conversion dropped it: {ascii:?}"
+    );
+}
+
+/// The other half of the same distinction: a block with no `|…|` is a value, and
+/// formatting must not invent a parameter list for it either.
+#[test]
+fn a_bare_block_gains_no_parameter_list() {
+    let src = "x ← ⟦ 42 ⟧\n";
+    let once = format_source(src, false).unwrap();
+    assert!(!once.contains('|'), "formatter added pipes: {once:?}");
+}

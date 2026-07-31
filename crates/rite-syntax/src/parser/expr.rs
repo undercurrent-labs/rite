@@ -948,12 +948,18 @@ impl Parser {
             self.error_expected("block");
             return Block {
                 params: vec![],
+                has_param_list: false,
                 body: vec![],
                 span: start,
             };
         }
         self.advance();
-        let params = if self.check(TokenKind::Pipe) {
+        // Whether the `|…|` was written, not whether it named anything: `{ || 42 }`
+        // is a function of no arguments, and `⟦ 42 ⟧` is a block that evaluates to
+        // 42. Both have an empty `params`, so the distinction has to be recorded
+        // here or it is gone by the time desugar has to make it.
+        let has_param_list = self.check(TokenKind::Pipe);
+        let params = if has_param_list {
             self.parse_block_params()
         } else {
             vec![]
@@ -1013,6 +1019,7 @@ impl Parser {
         let end = self.prev_span();
         Block {
             params,
+            has_param_list,
             body,
             span: start.merge(end),
         }

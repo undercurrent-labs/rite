@@ -78,6 +78,30 @@ ys ← xs → map { |n| n * n }
 
 The `{ |args| body }` form is the small anonymous function used by `map`, `keep`, and friends.
 
+### No arguments is still a function
+
+The `|…|` is what makes a block a function, not the names inside it. Write `||`
+for a function that takes nothing — a thunk, for deferring work rather than doing
+it now:
+
+```rite browser
+answer ← ⟦ 6 * 7 ⟧          // a block: runs now, `answer` is 42
+later ← { || 6 * 7 }        // a function: runs when called
+! @console.println(str(answer))
+! @console.println(str(later()))
+! @console.println(type_of(later))
+```
+
+```text
+42
+42
+function
+```
+
+The two look almost the same and mean quite different things, which is the reason
+to write `||` deliberately rather than let it be inferred from an empty list of
+names.
+
 ## Local helpers
 
 Non-exported helpers are just functions without `pub` (modules) or **nested defs** inside a function body. Nested `◆` / `def` bind in the enclosing block and close over outer parameters:

@@ -607,3 +607,41 @@ fn try_inside_a_call_is_not_stolen_by_a_later_lambda() {
         diags.into_vec()
     );
 }
+
+/// `⟦ || 42 ⟧` is a function of no arguments; `⟦ 42 ⟧` is a block that evaluates
+/// to 42. Both have an empty parameter list, so the parser has to record whether
+/// the `|…|` was written at all — with only `params` to go on, desugar read the
+/// thunk as a bare block and it evaluated to `42` instead of becoming callable.
+#[test]
+fn an_empty_parameter_list_is_still_a_parameter_list() {
+    use rite_syntax::ast::{Expr, Item, Stmt};
+
+    fn block_of(src: &str) -> rite_syntax::ast::Block {
+        let (program, diags, _) = parse_source("t.rite", src);
+        assert!(!diags.has_errors(), "parse errors for `{src}`");
+        let program = program.expect("program");
+        for item in &program.items {
+            if let Item::Statement(Stmt::Binding(b)) = item {
+                if let Expr::Block(block) = &b.value {
+                    return block.clone();
+                }
+            }
+        }
+        panic!("no block binding in `{src}`");
+    }
+
+    let thunk = block_of("f ← ⟦ || 42 ⟧\n");
+    assert!(thunk.params.is_empty());
+    assert!(thunk.has_param_list, "empty `||` was not recorded");
+
+    let plain = block_of("x ← ⟦ 42 ⟧\n");
+    assert!(plain.params.is_empty());
+    assert!(
+        !plain.has_param_list,
+        "a bare block gained a parameter list"
+    );
+
+    // Both dialects agree, since `||` is not a token of its own in either.
+    let ascii = block_of("f <- [[ || 42 ]]\n");
+    assert!(ascii.has_param_list);
+}

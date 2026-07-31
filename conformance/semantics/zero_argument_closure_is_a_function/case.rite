@@ -1,0 +1,18 @@
+// `{ || … }` is a function of no arguments — a thunk. It used to evaluate to its
+// own body: `type_of` said `int` and calling it failed with `cannot call value of
+// type int`, because the only record of the `|…|` was the parameters it named, and
+// an empty list of them is indistinguishable from never having written it.
+//
+// A block without `||` is still a value, which is the distinction being kept.
+thunk ← { || 6 * 7 }
+plain ← ⟦ 6 * 7 ⟧
+
+// Called twice on purpose: a thunk re-runs its body, so a closure that captured
+// its answer once would show up here.
+^ ⟨
+  kind: type_of(thunk),
+  called: thunk(),
+  again: thunk(),
+  block_is_a_value: plain,
+  block_kind: type_of(plain)
+⟩

@@ -94,6 +94,15 @@ pub struct Ident {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Block {
     pub params: Vec<Param>,
+    /// Whether a `|…|` parameter list was written at all.
+    ///
+    /// `params` alone cannot tell `⟦ 42 ⟧` from `{ || 42 }`: both have none. The
+    /// first is a block that evaluates to 42; the second is a function of no
+    /// arguments that *answers* 42 when called. Without this flag `{ || 42 }`
+    /// evaluated to `42` — `type_of` said `int`, and calling it failed with
+    /// `cannot call value of type int`.
+    #[serde(default)]
+    pub has_param_list: bool,
     pub body: Vec<Item>,
     pub span: Span,
 }
