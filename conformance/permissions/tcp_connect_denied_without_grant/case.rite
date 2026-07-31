@@ -1,0 +1,5 @@
+// Dialling out is gated per host like an outbound `@http.get`, and loopback is
+// *not* exempt the way a bind address is — `127.0.0.1` is where the interesting
+// local services live. This must fail with a permission error rather than opening
+// the connection.
+! @tcp.connect("127.0.0.1:9")?

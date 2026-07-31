@@ -172,6 +172,7 @@ Lists registered host modules and related metadata.
 | `@process` | `args` (this script's own arguments, no grant needed); `run`/`which` spawn or probe, and need `process` |
 | `@http` | `listen` + middleware helpers; `get`/`post`/`request` for outbound calls (all need `net`) |
 | `@udp` | `bind`/`send_to`/`recv_from`/`close` datagram sockets (native, needs `net`) |
+| `@tcp` | `connect`/`send`/`recv`/`close` byte streams, and `listen` with a per-connection block (native, needs `net`) |
 | `@game` | text adventure helpers |
 
 Details and signatures: `rite docs build` → `docs/generated/`.

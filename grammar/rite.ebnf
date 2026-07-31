@@ -71,11 +71,16 @@ primary          = literal
                  | capability_ref
                  | placeholder
                  | http_listen
+                 | tcp_listen
                  | route_decl ;
 
 capability_ref   = host_kw identifier { "." identifier } ;
 
 http_listen      = host_kw "http" "." "listen" expression block ;
+(* Sugar only: parses to the call `@tcp.listen(expression, block)`, whose block
+   argument is a closure like any other. The block's parameter binds the accepted
+   connection. *)
+tcp_listen       = host_kw "tcp" "." "listen" expression block ;
 route_decl       = http_method string_literal [ parameter_header ] block ;
 http_method      = "GET" | "POST" | "PUT" | "PATCH" | "DELETE" | "HEAD" | "OPTIONS" ;
 

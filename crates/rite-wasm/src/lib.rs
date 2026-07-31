@@ -229,7 +229,7 @@ pub async fn run(source: &str, options: RunOptions) -> ExecutionResult {
         // browser gets a *virtual* listener below, which is a real (if limited)
         // answer. These have none — there is no subprocess and no socket layer —
         // so say so before the script runs rather than failing mid-way.
-        if let Some(cap) = ["process", "udp"]
+        if let Some(cap) = ["process", "udp", "tcp"]
             .into_iter()
             .find(|c| source.contains(&format!("@{c}")) || source.contains(&format!("host.{c}")))
         {
@@ -501,6 +501,32 @@ mod tests {
             let e = r.error.unwrap_or_default();
             assert!(
                 e.contains("@udp") && e.contains("native-only"),
+                "error should name the capability and why: {e}"
+            );
+        }
+    }
+
+    /// Nor are there stream sockets — including the `@tcp.listen` server shape,
+    /// which the browser must refuse before it starts rather than mid-connection.
+    #[test]
+    fn tcp_denied_browser() {
+        for src in [
+            "! @tcp.connect(\"127.0.0.1:9\")",
+            "do host.tcp.connect(\"127.0.0.1:9\")",
+            "! @tcp.listen \"127.0.0.1:0\" ⟦ |conn| conn ⟧",
+        ] {
+            let r = run_blocking(
+                src,
+                RunOptions {
+                    allow_all: true,
+                    browser_safe: true,
+                    ..Default::default()
+                },
+            );
+            assert!(!r.ok, "`{src}` must not run in the browser runtime");
+            let e = r.error.unwrap_or_default();
+            assert!(
+                e.contains("@tcp") && e.contains("native-only"),
                 "error should name the capability and why: {e}"
             );
         }

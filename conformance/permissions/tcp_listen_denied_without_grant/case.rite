@@ -1,0 +1,7 @@
+// Binding a listener beyond loopback is the `@http.listen` policy, reached through
+// the same function: the wildcard `0.0.0.0` serves the whole network, so it needs
+// an explicit grant. The check runs before the socket is bound, so this never
+// reaches the blocking accept loop.
+! @tcp.listen "0.0.0.0:0" ⟦ |conn|
+  ! @tcp.close(conn)?
+⟧

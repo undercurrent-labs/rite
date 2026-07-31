@@ -655,6 +655,43 @@
       "permission": ""
     }
   ],
+  "tcp": [
+    {
+      "arity": 1,
+      "docs": "Open a TCP connection to \"host:port\" and return ok(handle). Needs --allow net=<host> for the destination, including loopback. Gives up after 30 seconds with err(⟨kind: \"tcp.timeout\", …⟩).",
+      "effectful": true,
+      "name": "connect",
+      "permission": "net"
+    },
+    {
+      "arity": 2,
+      "docs": "Write the whole payload to a connection. The payload is a string (sent as UTF-8) or a bytes value (sent verbatim). Returns ok(bytes sent).",
+      "effectful": true,
+      "name": "send",
+      "permission": "net"
+    },
+    {
+      "arity": 3,
+      "docs": "Read up to max_bytes (default 65536), waiting at most timeout_ms (default 1000). Returns ok(bytes) — **empty** when the peer closed the stream cleanly — or err(⟨kind: \"tcp.timeout\", …⟩) when nothing arrived in time. Neither is a raise.",
+      "effectful": true,
+      "name": "recv",
+      "permission": "net"
+    },
+    {
+      "arity": 1,
+      "docs": "Close a connection handle. Closing an unknown or already-closed handle answers ok(none).",
+      "effectful": true,
+      "name": "close",
+      "permission": "net"
+    },
+    {
+      "arity": 2,
+      "docs": "Accept TCP connections and run a block per connection: `! @tcp.listen \"127.0.0.1:9000\" ⟦ |conn| … ⟧`. Blocks until shutdown (Ctrl-C), like @http.listen; the connection is closed when the block returns. Loopback binds by default; any other interface — including the wildcards 0.0.0.0 and [::] — needs --allow net=<host>.",
+      "effectful": true,
+      "name": "listen",
+      "permission": "net"
+    }
+  ],
   "udp": [
     {
       "arity": 1,

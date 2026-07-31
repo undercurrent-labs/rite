@@ -12,6 +12,7 @@ use crate::permissions::PermissionSet;
 use crate::process::ProcessCap;
 use crate::random::RandomCap;
 use crate::store::StoreCap;
+use crate::tcp::TcpCap;
 use crate::udp::UdpCap;
 use async_trait::async_trait;
 use parking_lot::RwLock;
@@ -50,6 +51,7 @@ pub struct HostCapabilities {
     pub random: Arc<RwLock<RandomCap>>,
     pub http: HttpCap,
     pub udp: UdpCap,
+    pub tcp: TcpCap,
     pub game: Arc<RwLock<GameCap>>,
     pub store: Arc<RwLock<StoreCap>>,
     pub db: Arc<RwLock<DbCap>>,
@@ -69,6 +71,7 @@ impl HostCapabilities {
             random: Arc::new(RwLock::new(RandomCap::from_entropy())),
             http: HttpCap::new(),
             udp: UdpCap::new(),
+            tcp: TcpCap::new(),
             game: Arc::new(RwLock::new(GameCap::new())),
             store: Arc::new(RwLock::new(StoreCap::new())),
             db: Arc::new(RwLock::new(DbCap::new())),
@@ -89,6 +92,7 @@ impl HostCapabilities {
             ("random", RandomCap::DESCRIPTORS),
             ("http", HttpCap::DESCRIPTORS),
             ("udp", UdpCap::DESCRIPTORS),
+            ("tcp", TcpCap::DESCRIPTORS),
             ("game", GameCap::DESCRIPTORS),
             ("store", StoreCap::DESCRIPTORS),
             ("db", DbCap::DESCRIPTORS),
@@ -148,6 +152,9 @@ impl CapabilityHost for HostCapabilities {
             }
             "http" => self.http.call(method, args, &self.perms, ctx).await,
             "udp" => self.udp.call(method, args, &self.perms).await,
+            // `listen` needs the context: its handler block is a closure that must
+            // resolve the module scope it was written in, exactly as `@http` does.
+            "tcp" => self.tcp.call(method, args, &self.perms, ctx).await,
             "game" => {
                 let args = resolve_atom_args(args, ctx);
                 let mut game = self.game.write();
