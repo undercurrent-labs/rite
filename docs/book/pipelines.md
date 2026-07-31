@@ -38,9 +38,9 @@ These names are available as pipeline-friendly builtins (collection-oriented):
 | `keep { \|x\| … }` | Filter (predicate true → keep) |
 | `sum` | Sum numbers |
 | `count` | Length |
-| `first` / `last` | Ends of a list |
+| `first` / `last` | Ends of a list, string or bytes |
 | `sort` / related | Ordering helpers where implemented |
-| `flatten` | Nested lists → flat |
+| `flatten` | Nested lists → flat (lists only) |
 
 ```rite browser
 words ← ["alpha", "beta", "gamma"]

@@ -1,0 +1,12 @@
+// `sum`, `min`, `max` and `join` read the same three kinds as the rest of the
+// family. Summing bytes is a checksum, and `min` uses the ordering `sort` uses, so
+// `min("cba")` and `first(sort("cba"))` agree — they did not before, because
+// `min` of a string was `none`.
+^ ⟨
+  sum_of_bytes: sum(bytes("ab")),
+  min_of_a_string: min("cba"),
+  max_of_a_string: max("cba"),
+  min_agrees_with_sort: min("cba") = first(sort("cba")),
+  join_characters: join("abc", "-"),
+  empty_has_no_minimum: min([]) ?? "none"
+⟩

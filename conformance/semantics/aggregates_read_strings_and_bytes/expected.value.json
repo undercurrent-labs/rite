@@ -1,0 +1,8 @@
+{
+  "sum_of_bytes": 195,
+  "min_of_a_string": "a",
+  "max_of_a_string": "c",
+  "min_agrees_with_sort": true,
+  "join_characters": "a-b-c",
+  "empty_has_no_minimum": "none"
+}

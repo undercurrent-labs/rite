@@ -1,0 +1,3 @@
+// Same reasoning as `zip`: there is no nested structure in a string to remove one
+// level of. `[]` was the wrong answer; saying so is the right one.
+^ flatten("abc")

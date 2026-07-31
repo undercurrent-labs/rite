@@ -1,0 +1,4 @@
+// `none` is not an empty sequence. Answering `none` for `first(none)` made a
+// missing value indistinguishable from a present but empty one, which is how a
+// wrong lookup travels several frames before anything notices.
+^ first(none)

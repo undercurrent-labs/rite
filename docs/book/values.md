@@ -153,11 +153,13 @@ parts ← "name, age , city" → split(",") → map { |p| trim(p) }
 | `index_of(s, part)` | the position, or **`none`** when absent |
 | `count(s)` | how many characters |
 | `lines(s)` · `words(s)` · `join(xs, sep)` | split and rejoin |
+| `take(s, n)` · `drop(s, n)` · `first(s)` · `last(s)` · `rest` · `init` | as for lists, answering a string |
+| `reverse(s)` · `sort(s)` · `unique(s)` · `chunk(s, n)` | the sequence family, by character |
 
 **Everything counts characters, not bytes.** `count("δ")` is `1`, and `slice`,
-`index_of` and `pad_*` agree with it — an API that counted characters in one
-place and bytes in another would only go wrong on non-ASCII input, which is the
-worst time to find out.
+`index_of`, `pad_*`, `take` and `drop` agree with it — an API that counted
+characters in one place and bytes in another would only go wrong on non-ASCII
+input, which is the worst time to find out.
 
 Indices may be negative to count from the end, and out-of-range values clamp
 rather than fail, so `slice` is safe on input you did not choose:
@@ -219,6 +221,8 @@ packet ← concat(from_hex("abcd0100")?, bytes([0, 1, 255]))
 | `to_text(b)` | a **Result** of a string — bytes are not always text |
 | `byte_at(b, i)` | the byte as a number, or `none` past the end; negative counts from the end |
 | `concat` · `slice` · `count` | as for lists and strings, staying bytes |
+| `take` · `drop` · `rest` · `init` · `reverse` · `chunk` | the sequence family, staying bytes |
+| `first` · `last` · `index_of` | a single byte as a number; `index_of` takes one too |
 
 `count` measures **bytes** here, not characters — `count(bytes("é"))` is `2` while
 `count("é")` is `1`. That is the distinction the type exists to make.

@@ -1,0 +1,4 @@
+// `sum` skipped anything that was not a number, so a list of numeric *strings*
+// answered 0 — the same 0 an empty list correctly gives, which is the one wrong
+// answer that cannot be told from a right one.
+^ sum(["1", "2"])

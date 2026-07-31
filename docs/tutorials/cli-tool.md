@@ -92,10 +92,15 @@ rite run greet.rite -- --greeting=a=b ada
 a=b, ada
 ```
 
-> **`drop` is not the answer here.** `drop(hit, len(prefix))` looks like it should
-> work and silently answers `[]` — an empty *list*, because `drop` counts elements
-> of a list, and a string is not one. The error surfaces later and somewhere else,
-> as `upper expects a string, got list`. Reach for `slice` on strings.
+> **`drop` also works here.** `drop(hit, len(prefix))` gives the same answer —
+> `take`, `drop`, `first` and the rest of that family read strings by character,
+> like `slice` and `count` always have. `slice` is used above because it says
+> "from here to there" outright, which is what this line means; `drop` says it as
+> "not the first n". Either is fine.
+>
+> This was not always true: those builtins used to count list elements only, and
+> answered an empty *list* for a string. The error then surfaced somewhere else
+> entirely, as `upper expects a string, got list`.
 
 ## Failing properly
 

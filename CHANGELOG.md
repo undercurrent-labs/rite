@@ -2,6 +2,38 @@
 
 ## [Unreleased]
 
+### Changed — builtins read strings and bytes
+
+**The sequence builtins were half a family.** `count`, `slice`, `reverse`,
+`index_of`, `contains` and `repeat` read a string as a sequence of characters. The
+rest counted list elements and answered an empty *list* for anything else, so
+`drop("abcde", 2)` was `[]` and the mistake surfaced somewhere else entirely as
+`upper expects a string, got list`. Measured rather than assumed, that was twelve
+builtins silently answering the wrong type, not the two on record.
+
+`take`, `drop`, `first`, `last`, `rest`, `init`, `reverse`, `sort`, `unique`,
+`chunk` and `enumerate` now read lists, strings and bytes, and give back the kind
+they were handed — `take("abcde", 2)` is `"ab"`, `take(bytes, 2)` is bytes.
+Characters mean characters, so `take("héllo", 2)` is `"hé"`, agreeing with `slice`
+and `count`. A byte is an int, which is what `byte_at` already answered.
+`index_of` accepts lists and bytes, where it used to raise while `contains`
+answered the same question about the same list happily. `sum`, `min`, `max` and
+`join` read all three too: summing bytes is a checksum, and `min` uses the
+ordering `sort` uses, so `min("cba")` and `first(sort("cba"))` finally agree.
+
+**Where there is no sensible reading, they now say so instead of answering.**
+`zip` and `flatten` are about the structure of a list of lists, which a string does
+not have. `keys` and `values` want a record. `lines` and `words` want a string.
+`collect_results` wants a list — it answered `ok([])`, which claims every result
+succeeded, about a thing that was never a list of results. `sum` refuses
+non-numbers rather than skipping them: `sum(["1", "2"])` was `0`, the same `0` a
+correct empty list gives, which is the one wrong answer indistinguishable from a
+right one.
+
+The one deliberate hole left: `concat` still wraps a non-list argument as a single
+element, because that is what a spread of plain values means and it is documented
+that way.
+
 ### Added
 
 - **`@process.exit(code)` ends a run with a chosen status.** `fail` meant exit 1

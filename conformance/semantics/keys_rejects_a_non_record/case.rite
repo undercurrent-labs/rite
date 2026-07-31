@@ -1,0 +1,3 @@
+// A string has no keys. `[]` claimed it had none, which is what a record with no
+// fields answers.
+^ keys("abc")

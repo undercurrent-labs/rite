@@ -1,0 +1,13 @@
+// Bytes are a sequence too, and a byte is an int — the same reading `byte_at`
+// already gives. Every one of these answered an empty list before, including for
+// bytes read off a socket, which is where it would have cost the most.
+b ← bytes("abcde")
+^ ⟨
+  first: first(b),
+  last: last(b),
+  count_after_take: count(take(b, 2)),
+  take_is_still_bytes: to_hex(take(b, 2)),
+  drop_is_still_bytes: to_hex(drop(b, 3)),
+  reverse: to_hex(reverse(bytes("ab"))),
+  chunked: count(chunk(b, 2))
+⟩

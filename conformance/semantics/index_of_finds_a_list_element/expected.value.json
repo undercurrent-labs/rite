@@ -1,0 +1,6 @@
+{
+  "in_a_list": 1,
+  "missing_is_none": "absent",
+  "substring_in_a_string": 2,
+  "in_bytes": 1
+}

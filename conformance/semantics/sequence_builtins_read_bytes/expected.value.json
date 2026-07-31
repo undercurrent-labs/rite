@@ -1,0 +1,9 @@
+{
+  "first": 97,
+  "last": 101,
+  "count_after_take": 2,
+  "take_is_still_bytes": "6162",
+  "drop_is_still_bytes": "6465",
+  "reverse": "6261",
+  "chunked": 3
+}

@@ -124,71 +124,139 @@ fn builtin_count(args: Vec<Value>) -> Result<Value, EvalError> {
     Ok(Value::Int(n))
 }
 
-fn builtin_first(args: Vec<Value>) -> Result<Value, EvalError> {
-    match args.into_iter().next() {
-        Some(Value::List(xs)) => Ok(xs.front().cloned().unwrap_or(Value::None)),
-        _ => Ok(Value::None),
+/// Which kind of sequence a value is, so a result can be rebuilt as the same kind.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum SeqKind {
+    List,
+    Str,
+    Bytes,
+}
+
+/// A value viewed as a sequence of elements.
+///
+/// `count`, `slice`, `reverse`, `index_of`, `contains` and `repeat` already read a
+/// string as a sequence of characters, but the rest of the family only understood
+/// lists — and answered an empty *list* for anything else. `drop("abc", 1)` gave
+/// `[]`, and the mistake surfaced later and somewhere else as
+/// `upper expects a string, got list`. Every sequence builtin goes through this,
+/// so a string is a sequence everywhere or nowhere.
+///
+/// Elements are ordinary values: a character is a one-character string, a byte is
+/// an int, which is what `byte_at` already answers.
+struct Seq {
+    kind: SeqKind,
+    items: Vec<Value>,
+}
+
+impl Seq {
+    /// View a value as a sequence, or say so if it is not one.
+    ///
+    /// `who` names the builtin, because the message a caller sees has to point at
+    /// the call they wrote rather than at some later victim of a wrong type.
+    fn of(v: Option<Value>, who: &str) -> Result<Seq, EvalError> {
+        match v {
+            Some(Value::List(xs)) => Ok(Seq {
+                kind: SeqKind::List,
+                items: xs.into_iter().collect(),
+            }),
+            Some(Value::String(s)) => Ok(Seq {
+                kind: SeqKind::Str,
+                items: s.chars().map(|c| Value::string(c.to_string())).collect(),
+            }),
+            Some(Value::Bytes(b)) => Ok(Seq {
+                kind: SeqKind::Bytes,
+                items: b.iter().map(|byte| Value::Int(*byte as i64)).collect(),
+            }),
+            other => Err(EvalError::Message(format!(
+                "{who} expects a list, string or bytes, got {}",
+                other
+                    .map(|v| v.type_name().to_string())
+                    .unwrap_or_else(|| "none".into())
+            ))),
+        }
     }
+
+    /// Rebuild a sequence of the same kind from elements taken out of this one.
+    ///
+    /// Bytes only accept ints in 0–255, which holds for anything that came from a
+    /// byte sequence; a sort or a filter cannot invent a value outside it.
+    fn rebuild(kind: SeqKind, items: Vec<Value>) -> Value {
+        match kind {
+            SeqKind::List => Value::list(items),
+            SeqKind::Str => Value::string(
+                items
+                    .iter()
+                    .map(|v| match v {
+                        Value::String(s) => s.to_string(),
+                        other => format!("{other}"),
+                    })
+                    .collect::<String>(),
+            ),
+            SeqKind::Bytes => Value::Bytes(
+                items
+                    .iter()
+                    .filter_map(|v| v.as_int())
+                    .map(|n| n.clamp(0, 255) as u8)
+                    .collect::<Vec<u8>>()
+                    .into(),
+            ),
+        }
+    }
+
+    fn same(&self, items: Vec<Value>) -> Value {
+        Seq::rebuild(self.kind, items)
+    }
+
+    /// An empty sequence of this kind — `""` for a string, not `[]`.
+    fn empty(&self) -> Value {
+        Seq::rebuild(self.kind, Vec::new())
+    }
+}
+
+fn builtin_first(args: Vec<Value>) -> Result<Value, EvalError> {
+    let seq = Seq::of(args.into_iter().next(), "first")?;
+    Ok(seq.items.first().cloned().unwrap_or(Value::None))
 }
 
 fn builtin_last(args: Vec<Value>) -> Result<Value, EvalError> {
-    match args.into_iter().next() {
-        Some(Value::List(xs)) => Ok(xs.back().cloned().unwrap_or(Value::None)),
-        _ => Ok(Value::None),
-    }
+    let seq = Seq::of(args.into_iter().next(), "last")?;
+    Ok(seq.items.last().cloned().unwrap_or(Value::None))
 }
 
 fn builtin_rest(args: Vec<Value>) -> Result<Value, EvalError> {
-    match args.into_iter().next() {
-        Some(Value::List(xs)) if !xs.is_empty() => {
-            let mut out = xs;
-            out.pop_front();
-            Ok(Value::List(out))
-        }
-        Some(Value::List(_)) => Ok(Value::list(Vec::<Value>::new())),
-        _ => Ok(Value::list(Vec::<Value>::new())),
+    let seq = Seq::of(args.into_iter().next(), "rest")?;
+    if seq.items.is_empty() {
+        return Ok(seq.empty());
     }
+    Ok(seq.same(seq.items[1..].to_vec()))
 }
 
 fn builtin_init(args: Vec<Value>) -> Result<Value, EvalError> {
-    match args.into_iter().next() {
-        Some(Value::List(xs)) if !xs.is_empty() => {
-            let mut out = xs;
-            out.pop_back();
-            Ok(Value::List(out))
-        }
-        Some(Value::List(_)) => Ok(Value::list(Vec::<Value>::new())),
-        _ => Ok(Value::list(Vec::<Value>::new())),
+    let seq = Seq::of(args.into_iter().next(), "init")?;
+    if seq.items.is_empty() {
+        return Ok(seq.empty());
     }
+    Ok(seq.same(seq.items[..seq.items.len() - 1].to_vec()))
 }
 
 fn builtin_take(args: Vec<Value>) -> Result<Value, EvalError> {
     let mut it = args.into_iter();
-    let list = match it.next() {
-        Some(Value::List(xs)) => xs,
-        _ => return Ok(Value::list(Vec::<Value>::new())),
-    };
-    // pipeline: xs → take(n) passes list first then n from stage args
+    let seq = Seq::of(it.next(), "take")?;
+    // pipeline: xs → take(n) passes the sequence first, then n from the stage args
     let n = it.next().and_then(|v| v.as_int()).unwrap_or(0).max(0) as usize;
-    Ok(Value::list(list.into_iter().take(n).collect::<Vec<_>>()))
+    Ok(seq.same(seq.items.iter().take(n).cloned().collect()))
 }
 
 fn builtin_drop(args: Vec<Value>) -> Result<Value, EvalError> {
     let mut it = args.into_iter();
-    let list = match it.next() {
-        Some(Value::List(xs)) => xs,
-        _ => return Ok(Value::list(Vec::<Value>::new())),
-    };
+    let seq = Seq::of(it.next(), "drop")?;
     let n = it.next().and_then(|v| v.as_int()).unwrap_or(0).max(0) as usize;
-    Ok(Value::list(list.into_iter().skip(n).collect::<Vec<_>>()))
+    Ok(seq.same(seq.items.iter().skip(n).cloned().collect()))
 }
 
 fn builtin_reverse(args: Vec<Value>) -> Result<Value, EvalError> {
-    match args.into_iter().next() {
-        Some(Value::List(xs)) => Ok(Value::list(xs.into_iter().rev().collect::<Vec<_>>())),
-        Some(Value::String(s)) => Ok(Value::string(s.chars().rev().collect::<String>())),
-        _ => Ok(Value::list(Vec::<Value>::new())),
-    }
+    let seq = Seq::of(args.into_iter().next(), "reverse")?;
+    Ok(seq.same(seq.items.iter().rev().cloned().collect()))
 }
 
 fn builtin_concat(args: Vec<Value>) -> Result<Value, EvalError> {
@@ -218,35 +286,45 @@ fn builtin_concat(args: Vec<Value>) -> Result<Value, EvalError> {
 }
 
 fn builtin_flatten(args: Vec<Value>) -> Result<Value, EvalError> {
+    let xs = list_arg(args.into_iter().next(), "flatten")?;
     let mut out = im::Vector::new();
-    if let Some(Value::List(xs)) = args.into_iter().next() {
-        for x in xs {
-            match x {
-                Value::List(inner) => out.extend(inner),
-                other => out.push_back(other),
-            }
+    for x in xs {
+        match x {
+            Value::List(inner) => out.extend(inner),
+            other => out.push_back(other),
         }
     }
     Ok(Value::List(out))
 }
 
+/// Sums a list of numbers, or bytes — a byte is a number, so a checksum is just
+/// `sum`.
+///
+/// Non-numbers are refused rather than skipped. `sum(["1", "2"])` used to answer
+/// `0`, and so did `sum("abc")`, `sum(none)` and `sum(⟨a: 1⟩)` — the same zero a
+/// correct empty list gives, which is the one answer that cannot be told apart
+/// from a right one.
 fn builtin_sum(args: Vec<Value>) -> Result<Value, EvalError> {
+    let seq = Seq::of(args.into_iter().next(), "sum")?;
     let mut sum_i: i64 = 0;
     let mut sum_f: f64 = 0.0;
     let mut used_float = false;
-    if let Some(Value::List(xs)) = args.into_iter().next() {
-        for x in xs {
-            match x {
-                Value::Int(n) => {
-                    sum_i = sum_i
-                        .checked_add(n)
-                        .ok_or_else(|| EvalError::Message("integer overflow in sum".into()))?;
-                }
-                Value::Float(f) => {
-                    used_float = true;
-                    sum_f += f;
-                }
-                _ => {}
+    for x in &seq.items {
+        match x {
+            Value::Int(n) => {
+                sum_i = sum_i
+                    .checked_add(*n)
+                    .ok_or_else(|| EvalError::Message("integer overflow in sum".into()))?;
+            }
+            Value::Float(f) => {
+                used_float = true;
+                sum_f += f;
+            }
+            other => {
+                return Err(EvalError::Message(format!(
+                    "sum expects numbers, got {}",
+                    other.type_name()
+                )));
             }
         }
     }
@@ -257,12 +335,13 @@ fn builtin_sum(args: Vec<Value>) -> Result<Value, EvalError> {
     }
 }
 
+/// The smallest or largest element, by the same ordering `sort` uses — so
+/// `min("cba")` is `"a"` and `min` of bytes is the smallest byte.
 fn builtin_min_max(args: Vec<Value>, is_min: bool) -> Result<Value, EvalError> {
-    let Some(Value::List(xs)) = args.into_iter().next() else {
-        return Ok(Value::None);
-    };
+    let who = if is_min { "min" } else { "max" };
+    let seq = Seq::of(args.into_iter().next(), who)?;
     let mut best: Option<Value> = None;
-    for x in xs {
+    for x in seq.items {
         match &best {
             None => best = Some(x),
             Some(b) => {
@@ -273,29 +352,27 @@ fn builtin_min_max(args: Vec<Value>, is_min: bool) -> Result<Value, EvalError> {
             }
         }
     }
+    // Empty is still `none`: there is no smallest element of nothing, and that is
+    // a different situation from being handed the wrong type, which now raises.
     Ok(best.unwrap_or(Value::None))
 }
 
 fn builtin_sort(args: Vec<Value>) -> Result<Value, EvalError> {
-    let Some(Value::List(xs)) = args.into_iter().next() else {
-        return Ok(Value::list(Vec::<Value>::new()));
-    };
-    let mut v: Vec<Value> = xs.into_iter().collect();
+    let seq = Seq::of(args.into_iter().next(), "sort")?;
+    let mut v = seq.items.clone();
     v.sort_by(|a, b| compare_values(a, b).cmp(&0));
-    Ok(Value::list(v))
+    Ok(seq.same(v))
 }
 
 fn builtin_unique(args: Vec<Value>) -> Result<Value, EvalError> {
-    let Some(Value::List(xs)) = args.into_iter().next() else {
-        return Ok(Value::list(Vec::<Value>::new()));
-    };
-    let mut out = Vec::new();
-    for x in xs {
-        if !out.iter().any(|y: &Value| y.structural_eq(&x)) {
-            out.push(x);
+    let seq = Seq::of(args.into_iter().next(), "unique")?;
+    let mut out: Vec<Value> = Vec::new();
+    for x in &seq.items {
+        if !out.iter().any(|y: &Value| y.structural_eq(x)) {
+            out.push(x.clone());
         }
     }
-    Ok(Value::list(out))
+    Ok(seq.same(out))
 }
 
 fn builtin_range(args: Vec<Value>) -> Result<Value, EvalError> {
@@ -339,57 +416,58 @@ fn builtin_range_incl(args: Vec<Value>) -> Result<Value, EvalError> {
     Ok(Value::List(xs))
 }
 
+/// Splitting text is a string operation, and a non-string is a mistake rather than
+/// an empty document: both of these answered `[]` for a list, which reads exactly
+/// like a file that happened to be empty.
 fn builtin_lines(args: Vec<Value>) -> Result<Value, EvalError> {
-    let s = args
-        .first()
-        .and_then(|v| v.as_str())
-        .unwrap_or("")
-        .to_string();
+    let s = str_arg(args.into_iter().next(), "lines")?;
     let lines: Vec<Value> = s.lines().map(Value::string).collect();
     Ok(Value::list(lines))
 }
 
 fn builtin_words(args: Vec<Value>) -> Result<Value, EvalError> {
-    let s = args
-        .first()
-        .and_then(|v| v.as_str())
-        .unwrap_or("")
-        .to_string();
+    let s = str_arg(args.into_iter().next(), "words")?;
     let words: Vec<Value> = s.split_whitespace().map(Value::string).collect();
     Ok(Value::list(words))
 }
 
 fn builtin_join(args: Vec<Value>, atoms: &AtomInterner) -> Result<Value, EvalError> {
     let mut it = args.into_iter();
-    let list = match it.next() {
-        Some(Value::List(xs)) => xs,
-        Some(Value::String(s)) => return Ok(Value::String(s)),
-        _ => return Ok(Value::string("")),
-    };
+    let seq = Seq::of(it.next(), "join")?;
     let sep = it
         .next()
         .and_then(|v| v.as_str().map(|s| s.to_string()))
         .unwrap_or_else(|| "".into());
-    let parts: Vec<String> = list.iter().map(|v| v.to_display(atoms)).collect();
+    let parts: Vec<String> = seq.items.iter().map(|v| v.to_display(atoms)).collect();
     Ok(Value::string(parts.join(&sep)))
 }
 
-fn builtin_keys(args: Vec<Value>) -> Result<Value, EvalError> {
-    match args.into_iter().next() {
-        Some(Value::Record(r)) => Ok(Value::list(
-            r.keys()
-                .map(|k| Value::string(k.as_str()))
-                .collect::<Vec<_>>(),
-        )),
-        _ => Ok(Value::list(Vec::<Value>::new())),
+/// Records only. `keys("abc")` answered `[]` — a string has no keys, and an empty
+/// list is indistinguishable from a record that has none.
+fn record_arg(v: Option<Value>, who: &str) -> Result<IndexMap<Key, Value>, EvalError> {
+    match v {
+        Some(Value::Record(r)) => Ok(r),
+        other => Err(EvalError::Message(format!(
+            "{who} expects a record, got {}",
+            other
+                .map(|v| v.type_name().to_string())
+                .unwrap_or_else(|| "none".into())
+        ))),
     }
 }
 
+fn builtin_keys(args: Vec<Value>) -> Result<Value, EvalError> {
+    let r = record_arg(args.into_iter().next(), "keys")?;
+    Ok(Value::list(
+        r.keys()
+            .map(|k| Value::string(k.as_str()))
+            .collect::<Vec<_>>(),
+    ))
+}
+
 fn builtin_values(args: Vec<Value>) -> Result<Value, EvalError> {
-    match args.into_iter().next() {
-        Some(Value::Record(r)) => Ok(Value::list(r.values().cloned().collect::<Vec<_>>())),
-        _ => Ok(Value::list(Vec::<Value>::new())),
-    }
+    let r = record_arg(args.into_iter().next(), "values")?;
+    Ok(Value::list(r.values().cloned().collect::<Vec<_>>()))
 }
 
 fn builtin_abs(args: Vec<Value>) -> Result<Value, EvalError> {
@@ -554,29 +632,40 @@ fn builtin_contains(args: Vec<Value>) -> Result<Value, EvalError> {
 }
 
 fn builtin_enumerate(args: Vec<Value>) -> Result<Value, EvalError> {
-    match args.into_iter().next() {
-        Some(Value::List(xs)) => {
-            let out: Vec<Value> = xs
-                .into_iter()
-                .enumerate()
-                .map(|(i, x)| Value::list(vec![Value::Int(i as i64), x]))
-                .collect();
-            Ok(Value::list(out))
-        }
-        _ => Ok(Value::list(Vec::<Value>::new())),
+    let seq = Seq::of(args.into_iter().next(), "enumerate")?;
+    // Always a list of pairs, whatever went in: the pairs are not characters, so
+    // there is no string to rebuild.
+    let out: Vec<Value> = seq
+        .items
+        .into_iter()
+        .enumerate()
+        .map(|(i, x)| Value::list(vec![Value::Int(i as i64), x]))
+        .collect();
+    Ok(Value::list(out))
+}
+
+/// Lists only, and it says so.
+///
+/// `zip` and `flatten` are about the *structure* of a list of lists, which a string
+/// does not have — pairing two strings character by character is a different
+/// operation wearing the same name. They used to answer `[]` for a string, which is
+/// the wrong answer rather than a refusal.
+fn list_arg(v: Option<Value>, who: &str) -> Result<im::Vector<Value>, EvalError> {
+    match v {
+        Some(Value::List(xs)) => Ok(xs),
+        other => Err(EvalError::Message(format!(
+            "{who} expects a list, got {}",
+            other
+                .map(|v| v.type_name().to_string())
+                .unwrap_or_else(|| "none".into())
+        ))),
     }
 }
 
 fn builtin_zip(args: Vec<Value>) -> Result<Value, EvalError> {
     let mut it = args.into_iter();
-    let a = match it.next() {
-        Some(Value::List(xs)) => xs,
-        _ => return Ok(Value::list(Vec::<Value>::new())),
-    };
-    let b = match it.next() {
-        Some(Value::List(xs)) => xs,
-        _ => return Ok(Value::list(Vec::<Value>::new())),
-    };
+    let a = list_arg(it.next(), "zip")?;
+    let b = list_arg(it.next(), "zip")?;
     let out: Vec<Value> = a
         .into_iter()
         .zip(b)
@@ -587,29 +676,28 @@ fn builtin_zip(args: Vec<Value>) -> Result<Value, EvalError> {
 
 fn builtin_chunk(args: Vec<Value>) -> Result<Value, EvalError> {
     let mut it = args.into_iter();
-    let list = match it.next() {
-        Some(Value::List(xs)) => xs,
-        _ => return Ok(Value::list(Vec::<Value>::new())),
-    };
+    let seq = Seq::of(it.next(), "chunk")?;
     let size = it.next().and_then(|v| v.as_int()).unwrap_or(1).max(1) as usize;
+    // The pieces keep the kind they came from — chunking a string gives strings —
+    // but the chunks themselves are a list, since a list of strings is not a string.
     let mut out = Vec::new();
     let mut cur = Vec::new();
-    for x in list {
-        cur.push(x);
+    for x in seq.items.iter() {
+        cur.push(x.clone());
         if cur.len() == size {
-            out.push(Value::list(std::mem::take(&mut cur)));
+            out.push(seq.same(std::mem::take(&mut cur)));
         }
     }
     if !cur.is_empty() {
-        out.push(Value::list(cur));
+        out.push(seq.same(cur));
     }
     Ok(Value::list(out))
 }
 
 fn builtin_collect_results(args: Vec<Value>) -> Result<Value, EvalError> {
-    let Some(Value::List(xs)) = args.into_iter().next() else {
-        return Ok(Value::ok(Value::list(Vec::<Value>::new())));
-    };
+    // `ok([])` for a non-list said "every one of your results succeeded" about a
+    // thing that was never a list of results.
+    let xs = list_arg(args.into_iter().next(), "collect_results")?;
     let mut out = Vec::new();
     for x in xs {
         match x {
@@ -865,12 +953,30 @@ fn resolve_index(i: i64, len: i64) -> i64 {
 /// off-by-one bugs get written, and `??` already handles the absent case.
 fn builtin_index_of(args: Vec<Value>) -> Result<Value, EvalError> {
     let mut it = args.into_iter();
-    let s = str_arg(it.next(), "index_of")?;
-    let needle = str_arg(it.next(), "index_of")?;
-    Ok(match s.find(&needle) {
-        Some(byte_idx) => Value::Int(s[..byte_idx].chars().count() as i64),
-        None => Value::None,
-    })
+    let haystack = it.next();
+    let needle = it.next().unwrap_or(Value::None);
+
+    // A string keeps looking for a *substring*, which is not the same question as
+    // "where is this element" — `index_of("abc", "bc")` is 1, and reading the
+    // string as a sequence of characters would make that a miss.
+    if let Some(Value::String(s)) = &haystack {
+        let needle = str_arg(Some(needle), "index_of")?;
+        return Ok(match s.find(&needle) {
+            Some(byte_idx) => Value::Int(s[..byte_idx].chars().count() as i64),
+            None => Value::None,
+        });
+    }
+
+    // Lists and bytes look for an element. This used to raise
+    // `index_of expects a string, got list` — the one member of the family that
+    // refused a list, while `contains` answered the same question happily.
+    let seq = Seq::of(haystack, "index_of")?;
+    Ok(
+        match seq.items.iter().position(|x| x.structural_eq(&needle)) {
+            Some(i) => Value::Int(i as i64),
+            None => Value::None,
+        },
+    )
 }
 
 // ── Numbers ──────────────────────────────────────────────────────────────────

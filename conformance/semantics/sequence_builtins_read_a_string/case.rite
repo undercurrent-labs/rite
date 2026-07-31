@@ -1,0 +1,21 @@
+// A string is a sequence of characters everywhere, not only in the half of the
+// family that happened to implement it. `count`, `slice` and `reverse` always read
+// strings; `take`, `drop`, `first`, `last`, `rest`, `init`, `sort`, `unique` and
+// `chunk` answered an empty *list*, so the mistake surfaced later and somewhere
+// else as `upper expects a string, got list`.
+//
+// Each result keeps the kind it started with: a string in, a string out.
+^ ⟨
+  take: take("abcde", 2),
+  drop: drop("abcde", 2),
+  first: first("abcde"),
+  last: last("abcde"),
+  rest: rest("abcde"),
+  init: init("abcde"),
+  reverse: reverse("abcde"),
+  sort: sort("cba"),
+  unique: unique("aabbc"),
+  chunk: chunk("abcdef", 2),
+  empty_stays_a_string: drop("ab", 9),
+  unicode_by_character: take("héllo", 2)
+⟩

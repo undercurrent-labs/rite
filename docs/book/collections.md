@@ -48,6 +48,46 @@ n ← xs → count
 `init` is another name for `butlast`, and `tail` another for `rest`; they behave
 identically, so pick one spelling and keep to it.
 
+### These read strings and bytes too
+
+A string is a sequence of characters and bytes are a sequence of numbers, so the
+whole family works on all three and gives you back the kind you handed it:
+
+```rite browser
+! @console.println(take("abcde", 2))
+! @console.println(drop("abcde", 2))
+! @console.println(sort("cba"))
+! @console.println(chunk("abcdef", 2))
+! @console.println(str(first(bytes("abc"))))
+```
+
+```text
+ab
+cde
+abc
+[ab, cd, ef]
+97
+```
+
+`take`, `drop`, `first`, `last`, `rest`, `init`, `reverse`, `sort`, `unique`,
+`chunk` and `enumerate` all read strings and bytes, alongside `count`, `slice`,
+`index_of`, `contains` and `repeat`, which always did. Characters mean characters,
+not bytes — `take("héllo", 2)` is `"hé"`. A byte comes back as an int, which is
+what `byte_at` answers.
+
+`zip` and `flatten` are the exceptions, and they say so rather than answering
+something: both are about the structure of a *list of lists*, which a string does
+not have.
+
+`sum`, `min`, `max` and `join` read all three kinds too — summing bytes is a
+checksum, and `min` uses the ordering `sort` uses, so `min("cba")` is `"a"`.
+
+**Handed the wrong kind, these raise.** `sum` of a list of strings, `keys` of
+anything but a record, `lines` of a list, `flatten` of a string: each says so at
+the call. They used to answer `0`, `[]` or `ok([])` — the same answers a correct
+empty input gives, so the mistake became visible frames later, wearing a different
+type's name.
+
 ```rite browser
 pair ← [10, 20, 30]
 head ← pair → first

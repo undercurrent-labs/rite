@@ -1,0 +1,4 @@
+// `zip` is about the structure of two lists, which a string does not have —
+// pairing two strings character by character is a different operation wearing the
+// same name. It used to answer `[]`, which is a wrong answer rather than a refusal.
+^ zip("ab", "cd")

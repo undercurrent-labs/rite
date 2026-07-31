@@ -81,8 +81,11 @@ the same one `@fs.read_bytes` returns and `@http` puts in `resp.body`.
 Anything else — a record, an int — is an error rather than a silent stringification.
 
 Payloads are built with the byte builtins — `from_hex`, `bytes`, `to_hex`, `to_text`,
-`byte_at`, and `concat` / `slice` / `count`, which understand bytes as well as lists and
-strings. A DNS query header, which is not valid UTF-8 anywhere:
+`byte_at` — plus the sequence family, which reads bytes as well as lists and strings:
+`concat`, `slice`, `count`, `take`, `drop`, `first`, `last`, `rest`, `init`,
+`reverse`, `chunk`, `index_of`. Slicing a header off a packet gives you bytes back,
+not a list, and a single byte is an int. A DNS query header, which is not valid UTF-8
+anywhere:
 
 ```rite browser
 header ← from_hex("abcd01000001000000000000")?

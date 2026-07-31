@@ -1,0 +1,10 @@
+// `index_of` was the one member of the family that refused a list — it raised
+// `index_of expects a string, got list` while `contains` answered the same
+// question about the same list happily. A string still looks for a *substring*,
+// which is a different question from "where is this element" and has to stay.
+^ ⟨
+  in_a_list: index_of([10, 20, 30], 20),
+  missing_is_none: index_of([10, 20], 99) ?? "absent",
+  substring_in_a_string: index_of("abcde", "cd"),
+  in_bytes: index_of(bytes("abc"), 98)
+⟩

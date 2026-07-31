@@ -1,0 +1,14 @@
+{
+  "take": "ab",
+  "drop": "cde",
+  "first": "a",
+  "last": "e",
+  "rest": "bcde",
+  "init": "abcd",
+  "reverse": "edcba",
+  "sort": "abc",
+  "unique": "abc",
+  "chunk": ["ab", "cd", "ef"],
+  "empty_stays_a_string": "",
+  "unicode_by_character": "hé"
+}
