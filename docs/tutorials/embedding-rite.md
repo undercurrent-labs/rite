@@ -197,17 +197,52 @@ The first line is the guest printing; the second is the host printing the record
 the script returned. A whole record comes back, not a string to parse — the
 script's final `^` is the interface between the two languages.
 
-## What the host cannot do yet
+## Calling the rules per order
 
-**There is no way to call a function inside the guest from Rust.** The engine runs
-a script and gives you its value. That is why the rules below read their input
-from a file the host controls rather than taking an argument: passing data in
-means putting it somewhere the guest can reach, and a path grant is the honest
-version of that.
+Reading the order from a file works, and it is how the script below runs standalone
+under the CLI. But a service prices *many* orders, and re-running the whole file
+once per order — writing each one to disk first — is a strange way to pass an
+argument.
 
-If you need per-item evaluation today, run the script once per item — it is a tree
-walk over an already-parsed program, not a process spawn — or have the script
-return a record of parameters and apply them in Rust.
+`load` runs the script and keeps it, so its functions stay callable:
+
+```rust
+use rite::runtime::{Key, Value};
+
+let mut script = engine.load("rules.rite", &rules).await?;
+
+for (total, express) in [(80, false), (300, true), (900, false)] {
+    let order = Value::record(vec![
+        (Key::String("total".into()), Value::Int(total)),
+        (Key::String("express".into()), Value::Bool(express)),
+    ]);
+    let priced = script.call("price", vec![order]).await?;
+    println!("{total} express={express} -> {}", script.display(&priced));
+}
+```
+
+```text
+80 express=false -> ⟨tier: #bronze, total: 80⟩
+300 express=true -> ⟨tier: #silver, total: 325⟩
+900 express=false -> ⟨tier: #gold, total: 900⟩
+```
+
+Note `script.display(&priced)` rather than `{priced}`. An atom is an index into an
+interner and `Display` has none to ask, so plain formatting prints `#0` where you
+wanted `#bronze`.
+
+The top level still runs once, at `load` — that is what defines the functions —
+and for a script with a `main`, that includes running `main`. Which is why the
+first line of that output is the guest's own `order A-1042 is #silver`: loading
+the file ran it, once, before any of the three calls. A rules file meant only to
+be called into should not have a `main` at all.
+
+Holding the script holds that run, so a top-level `↢` binding keeps its value
+between calls — useful for a cache, and dangerous if you hand one `LoadedScript`
+to two tenants.
+
+Permissions and the budget apply to every call, not just to the load, so a rules
+file cannot reach the filesystem inside a function it exported either.
 
 ## The whole script
 
@@ -237,6 +272,13 @@ And the rules beside it, as `rules.rite`:
 
 ◆ tier(subtotal) ⟦
   ^ ? subtotal >= 500 ⟦ #gold ⟧ : ⟦ ? subtotal >= 100 ⟦ #silver ⟧ : ⟦ #bronze ⟧ ⟧
+⟧
+
+// What the host calls per order. Takes the order rather than reading one, so it
+// works the same whether a Rust program or the CLI is driving it.
+◆ price(order) ⟦
+  fee ← ? order.express ⟦ 25 ⟧ : ⟦ 0 ⟧
+  ^ ⟨tier: tier(order.total), total: order.total + fee⟩
 ⟧
 
 ◆ discount_rate(t) ⟦

@@ -6,6 +6,7 @@ use rite_runtime::{check_source, run_file, EvalError, RuntimeContext, Value};
 use rite_sem::{compile_to_ir, ir_to_json, ProgramIr};
 use rite_syntax::{parse_source, Program};
 use std::path::Path;
+use std::sync::Arc;
 
 pub use rite_caps as caps;
 pub use rite_core as core;
@@ -17,6 +18,15 @@ pub use rite_syntax as syntax;
 pub struct RiteEngine {
     pub perms: PermissionSet,
     pub budget: rite_runtime::ExecutionBudget,
+    /// One atom table for every run this engine makes.
+    ///
+    /// An atom is an index into an interner, and `Display for Value` cannot
+    /// resolve one — it renders `#0`. Each run used to intern into a table that
+    /// was dropped with its context, so a script returning `#gold` handed the host
+    /// a number it had no way to turn back into a name. Sharing the table means
+    /// [`RiteEngine::display`] can name it, and that the same atom from two runs
+    /// is the same value.
+    atoms: Arc<rite_runtime::AtomInterner>,
     /// Where a guest script's `@console` output goes.
     ///
     /// `None` means the host's own stdout and stderr, which is what `rite run`
@@ -61,8 +71,16 @@ impl RiteEngine {
         }
     }
 
+    /// Render a value the way `rite run` would — the only way to see an atom's
+    /// name rather than its index. `format!("{value}")` cannot: `Display` has no
+    /// interner to ask.
+    pub fn display(&self, value: &Value) -> String {
+        value.to_display(&self.atoms)
+    }
+
     pub async fn run_source(&self, name: &str, source: &str) -> Result<Value, EvalError> {
         let mut ctx = RuntimeContext::new();
+        ctx.atoms = Arc::clone(&self.atoms);
         ctx.budget = self.budget.clone();
         // Installed before the run, not flushed after it, so a script that prints
         // as it goes reaches the host as it goes — a server or a long loop should
@@ -87,6 +105,30 @@ impl RiteEngine {
         self.run_source(name, &text).await
     }
 
+    /// Run a script and keep it, so its functions can be called from Rust.
+    ///
+    /// `run_source` evaluates a script and hands back its value; the functions it
+    /// defined go when the context does, so a host had no way to *call* into a
+    /// guest. The workaround was to put the input somewhere the script could read
+    /// it and run the whole thing again per item, which means a file and a grant
+    /// for what should have been an argument.
+    ///
+    /// The top level runs once, here — that is what defines the functions, so it
+    /// cannot be skipped — and its value is kept as [`LoadedScript::value`].
+    pub async fn load(&self, name: &str, source: &str) -> Result<LoadedScript, EvalError> {
+        let mut ctx = RuntimeContext::new();
+        ctx.atoms = Arc::clone(&self.atoms);
+        ctx.budget = self.budget.clone();
+        ctx.sink = Some(self.output.clone().unwrap_or_else(inherit_output));
+        install_defaults(&mut ctx, self.perms.clone());
+        let value = run_file(
+            &SourceFile::new(rite_core::FileId(0), name, source),
+            &mut ctx,
+        )
+        .await?;
+        Ok(LoadedScript { ctx, value })
+    }
+
     pub fn check_source(&self, name: &str, source: &str) -> Diagnostics {
         check_source(name, source)
     }
@@ -105,6 +147,78 @@ impl RiteEngine {
             return Err(d);
         }
         p.ok_or(d)
+    }
+}
+
+/// A script that has been run, with its functions still callable.
+///
+/// Holding it holds the run: top-level bindings keep their values between calls,
+/// and anything the script left open — a file handle — stays open until this is
+/// dropped. That is deliberate. A rules script that opens a database connection at
+/// the top and uses it in every function needs the two to share a lifetime, and
+/// the alternative (a fresh context per call) would silently re-run the top level
+/// each time.
+///
+/// It also means a `LoadedScript` is *state*: two callers sharing one are sharing
+/// a mutable script. Give each tenant their own.
+pub struct LoadedScript {
+    ctx: RuntimeContext,
+    /// What the top level evaluated to when the script was loaded.
+    pub value: Value,
+}
+
+impl LoadedScript {
+    /// Names of the functions this script defines, in no particular order.
+    pub fn function_names(&self) -> Vec<&str> {
+        self.ctx.functions.keys().map(|k| k.as_str()).collect()
+    }
+
+    pub fn has_function(&self, name: &str) -> bool {
+        self.ctx.functions.contains_key(name)
+    }
+
+    /// Call one of the script's functions.
+    ///
+    /// `&mut self` because the call can change the script's state — that is what a
+    /// mutable top-level binding is for — and because two calls into one script
+    /// must not interleave.
+    ///
+    /// Arity is checked here rather than left to the evaluator's padding: a host
+    /// passing two arguments to a three-parameter function has made a mistake, and
+    /// silently binding `none` to the third would surface it somewhere else.
+    pub async fn call(&mut self, name: &str, args: Vec<Value>) -> Result<Value, EvalError> {
+        let entry = self.ctx.functions.get(name).cloned().ok_or_else(|| {
+            let mut known = self.function_names();
+            known.sort_unstable();
+            EvalError::Message(format!(
+                "no function `{name}` in this script (defines: {})",
+                if known.is_empty() {
+                    "none".to_string()
+                } else {
+                    known.join(", ")
+                }
+            ))
+        })?;
+        if entry.params.len() != args.len() {
+            return Err(EvalError::Message(format!(
+                "`{name}` takes {} argument(s), got {}",
+                entry.params.len(),
+                args.len()
+            )));
+        }
+        let mut eval = rite_runtime::Evaluator::new(&mut self.ctx);
+        eval.call_block_public(&entry.body, &entry.params, args)
+            .await
+    }
+
+    /// Render a value with atom names resolved — see [`RiteEngine::display`].
+    pub fn display(&self, value: &Value) -> String {
+        value.to_display(&self.ctx.atoms)
+    }
+
+    /// The interner, for a host that needs to read an atom the script returned.
+    pub fn atoms(&self) -> &rite_runtime::AtomInterner {
+        &self.ctx.atoms
     }
 }
 
@@ -159,6 +273,7 @@ impl RiteEngineBuilder {
             perms: self.perms,
             budget: self.budget,
             output: self.output,
+            atoms: Arc::new(rite_runtime::AtomInterner::new()),
         })
     }
 }

@@ -77,6 +77,7 @@ thought of every case.
 |---|---|---|
 | `run_source(name, src)` | source text | the script's value |
 | `run_path(path)` | a file | the script's value |
+| `load(name, src)` | source text | a `LoadedScript` whose functions you can call |
 | `check_source(name, src)` | source text | `Diagnostics` — no execution |
 | `compile_ir(name, src)` | source text | `ProgramIr`, for caching a parse |
 | `parse(name, src)` | source text | the AST, for tooling |
@@ -127,12 +128,43 @@ match engine.run_source("rules.rite", src).await {
 `Permission`, `Budget`, `Compile` — and `EvalError::exit_code()` gives the status
 `rite run` would have exited with, if you are wrapping Rite in a CLI of your own.
 
-## What is not there yet
+## Calling a function in the guest
 
-**A host cannot call a function inside a guest script.** The engine runs a script
-and hands back its value. To evaluate per item, run the script once per item — a
-tree walk over an already-parsed program, not a process spawn — or have the script
-return parameters the host applies.
+`load` runs a script and keeps it, so the functions it defined stay callable:
+
+```rust
+use rite::runtime::{Key, Value};
+
+let mut script = engine.load("rules.rite", &rules).await?;
+
+let order = Value::record(vec![
+    (Key::String("total".into()), Value::Int(300)),
+    (Key::String("express".into()), Value::Bool(true)),
+]);
+let priced = script.call("price", vec![order]).await?;
+println!("{}", script.display(&priced));
+```
+
+The top level runs once, at `load` — that is what defines the functions. Holding
+the script holds that run, so a mutable top-level binding keeps its value between
+calls and anything the script opened stays open until you drop it. Two callers
+sharing one `LoadedScript` are sharing mutable state; give each tenant their own.
+
+Permissions and budget apply to every call, not only to the load. A missing
+function or the wrong number of arguments is an error naming both, rather than a
+`none` bound to a missing parameter that fails somewhere else later.
+
+`function_names()` and `has_function(name)` say what a script offers, which is
+what to check before trusting a file to have the entry point you expect.
+
+## Atoms need the engine to print
+
+An atom is an index into an interner and `Display` has none to ask, so
+`format!("{value}")` renders `#0`. `engine.display(&value)` and
+`script.display(&value)` resolve it. Every run of one engine shares a table, so
+the same atom from two runs is the same value.
+
+## What is not there yet
 
 **`with_default_builtins()` does nothing.** Builtins are always installed. It is
 deprecated and kept only so existing hosts still compile.

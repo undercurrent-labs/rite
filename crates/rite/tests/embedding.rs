@@ -307,3 +307,120 @@ async fn the_stream_is_reported_to_the_sink() {
     let seen = streams.lock().unwrap().clone();
     assert_eq!(seen, vec!["Stdout".to_string(), "Stderr".to_string()]);
 }
+
+// ── Calling into a loaded script ─────────────────────────────────────────────
+//
+// `run_source` runs a script and hands back its value; the functions it defined
+// go when the context does. A host therefore had no way to *call* a guest, and
+// the workaround was to put the input somewhere the script could read it and run
+// the whole file again per item — a file and a grant standing in for an argument.
+
+#[tokio::test]
+async fn a_loaded_script_can_be_called_per_item() {
+    use rite_runtime::Key;
+
+    let engine = RiteEngine::builder().build().expect("build");
+    let mut script = engine
+        .load(
+            "rules.rite",
+            "◆ price(order) ⟦\n  fee ← ? order.express ⟦ 25 ⟧ : ⟦ 0 ⟧\n  ^ order.total + fee\n⟧\n",
+        )
+        .await
+        .expect("load");
+
+    let order = |total: i64, express: bool| {
+        Value::record(vec![
+            (Key::String("total".into()), Value::Int(total)),
+            (Key::String("express".into()), Value::Bool(express)),
+        ])
+    };
+
+    // The point: many items, one load, no file and no grant.
+    assert_eq!(
+        script.call("price", vec![order(100, false)]).await.unwrap(),
+        Value::Int(100)
+    );
+    assert_eq!(
+        script.call("price", vec![order(100, true)]).await.unwrap(),
+        Value::Int(125)
+    );
+}
+
+/// Holding the script holds the run, so a mutable top-level binding is state the
+/// host can accumulate into rather than something reset on every call.
+#[tokio::test]
+async fn top_level_state_survives_between_calls() {
+    let engine = RiteEngine::builder().build().expect("build");
+    let mut script = engine
+        .load(
+            "counter.rite",
+            "seen ↢ 0\n◆ bump() ⟦\n  seen := seen + 1\n  ^ seen\n⟧\n",
+        )
+        .await
+        .expect("load");
+
+    assert_eq!(script.call("bump", vec![]).await.unwrap(), Value::Int(1));
+    assert_eq!(script.call("bump", vec![]).await.unwrap(), Value::Int(2));
+    assert_eq!(script.call("bump", vec![]).await.unwrap(), Value::Int(3));
+}
+
+/// A host's mistake is named where the host made it, rather than becoming a
+/// `none` bound to a missing parameter and surfacing somewhere else.
+#[tokio::test]
+async fn a_bad_call_says_what_was_wrong() {
+    let engine = RiteEngine::builder().build().expect("build");
+    let mut script = engine
+        .load("rules.rite", "◆ price(order) ⟦ ^ order ⟧\n")
+        .await
+        .expect("load");
+
+    let missing = script.call("nope", vec![]).await.unwrap_err().to_string();
+    assert!(missing.contains("no function `nope`"), "{missing}");
+    // The message lists what there is, since a typo is the likely cause.
+    assert!(missing.contains("price"), "{missing}");
+
+    let arity = script.call("price", vec![]).await.unwrap_err().to_string();
+    assert!(arity.contains("takes 1 argument"), "{arity}");
+}
+
+/// Permissions and budget still apply to a call, not just to the load.
+#[tokio::test]
+async fn a_called_function_is_still_sandboxed() {
+    let engine = RiteEngine::builder().build().expect("build");
+    let mut script = engine
+        .load("rules.rite", "◆! peek(path) ⟦ ^ ! @fs.read(path)? ⟧\n")
+        .await
+        .expect("load");
+
+    let denied = script
+        .call("peek", vec![Value::string("/etc/passwd")])
+        .await;
+    assert!(
+        matches!(denied, Err(rite_runtime::EvalError::Permission(_))),
+        "a call escaped the engine's permissions: {denied:?}"
+    );
+}
+
+/// An atom is an index into an interner, and `Display` has none to ask — so a
+/// script returning `#gold` handed the host `#0` and no way to resolve it. Every
+/// run of one engine now shares a table, and `display` reads it.
+#[tokio::test]
+async fn an_atom_comes_back_with_its_name() {
+    let engine = RiteEngine::builder().build().expect("build");
+
+    let v = engine.run_source("t.rite", "^ #gold").await.expect("run");
+    // The exact rendering is not the point and is not asserted; that `Display`
+    // cannot produce the *name* is.
+    assert!(
+        !format!("{v}").contains("gold"),
+        "Display resolved an atom, so this test is obsolete rather than wrong"
+    );
+    assert_eq!(engine.display(&v), "#gold");
+
+    // Interning is shared, so the same atom from a later run is the same value.
+    let again = engine.run_source("t2.rite", "^ #gold").await.expect("run");
+    assert!(
+        again.structural_eq(&v),
+        "the same atom differed between runs"
+    );
+}

@@ -2,6 +2,30 @@
 
 ## [Unreleased]
 
+### Added — a host can call a function inside a guest script
+
+`RiteEngine::load(name, src)` runs a script and keeps it, so the functions it
+defined stay callable: `script.call("price", vec![order])`. Until now the engine
+ran a script and handed back its value, and the functions went when the context
+did — so passing data in meant writing it somewhere the guest could read and
+running the whole file again per item, a file and a path grant standing in for an
+argument. The embedding tutorial had to teach that workaround; it now teaches the
+call.
+
+The top level runs once, at `load` — that is what defines the functions, and for a
+script with a `main` it runs `main` too. Holding the script holds that run, so a
+mutable top-level binding keeps its value between calls and anything the script
+opened stays open until it is dropped. Permissions and the budget apply to every
+call, not only to the load. A missing function or the wrong number of arguments is
+an error naming both, rather than `none` bound to a missing parameter that fails
+somewhere else later.
+
+**Atoms come back with their names.** An atom is an index into an interner and
+`Display` has none to ask, so `format!("{value}")` renders `#0`. Every run of one
+engine now shares an interner, and `engine.display(&value)` /
+`script.display(&value)` resolve it — which also makes the same atom from two runs
+the same value.
+
 ### Changed — exit codes 3 and 4 mean what the table always said
 
 Rite's published contract reads "3 parse, 4 resolve". The binary did not do that:
