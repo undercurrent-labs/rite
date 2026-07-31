@@ -400,6 +400,14 @@ Arguments passed to this script after `--`, as a list of strings. Needs no permi
 - effectful: true
 - permission: 
 
+### exit
+
+End the run immediately with a chosen exit status, 0–255. Nothing after the call runs, and the status cannot be caught or overridden. Buffered output is still flushed. Needs no permission: choosing your own exit status is the invoker's own business, like reading `@process.args`. Note that 1–8 are also the statuses the runtime itself uses (1 runtime error, 5 permission denied, 8 budget); a script that picks one takes over that meaning for its own process.
+
+- arity: 1
+- effectful: true
+- permission: 
+
 ### which
 
 Locate an executable on PATH. Reads the PATH environment variable and probes the filesystem, so it is effectful (`!`) and needs process *and* env access to PATH (--allow process --allow env=PATH).

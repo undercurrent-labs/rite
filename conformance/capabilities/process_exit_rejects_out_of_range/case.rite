@@ -1,0 +1,4 @@
+// A status outside 0–255 is an error at the call, not a silent truncation: POSIX
+// would turn 300 into 44, and a wrong status is worse than a stopped script. The
+// check is deterministic, unlike the status itself, which is often a subprocess's.
+! @process.exit(300)

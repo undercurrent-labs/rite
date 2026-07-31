@@ -1,0 +1,18 @@
+// A script picks its own exit status, and nothing after the call runs.
+// The status reaches the process even though the call sits inside a function
+// three frames down: an exit is not a `^ return`, so no boundary swallows it.
+◆! bail(code) ⟦
+  ! @process.exit(code)
+  ! @console.println("unreachable: exit returned")
+⟧
+
+◆! step() ⟦
+  ! @console.println("working")
+  ! bail(42)
+  ! @console.println("unreachable: bail returned")
+⟧
+
+◆! main() ⟦
+  ! step()
+  ! @console.println("unreachable: step returned")
+⟧

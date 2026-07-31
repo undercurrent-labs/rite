@@ -266,6 +266,67 @@ reason `@clock.now` does. Spawning something new (`@process.run`) is a different
 privilege and does need `--allow process`. A compiled binary reads its own argv, with
 no `--` to strip.
 
+## Exit codes
+
+The status a run ends with is part of Rite's contract, so a shell script or a CI job
+can tell what happened without parsing any output. Every code below was checked
+against the binary, not against intent:
+
+| Code | Means | Comes from |
+|---|---|---|
+| 0 | Success | The script finished |
+| 1 | Runtime error | `fail`, `panic`, an unhandled capability error |
+| 2 | Usage error | The `rite` command line itself was wrong |
+| 3 | Source rejected at run time | `rite run` (and `rite ast`) on a file that will not compile |
+| 4 | Source rejected at check time | `rite check`, `rite semantic-ir`, `rite emit-rust` |
+| 5 | Permission denied | A capability call without the grant it needs |
+| 6 | Build failed | `rite build` |
+| 7 | A test failed | `rite test` |
+| 8 | Budget exceeded | `--max-steps` or the execution timeout |
+
+Codes 3 and 4 are about *when* a source was rejected, not about which phase found the
+problem: `rite run` exits 3 whether the file failed to parse or failed to resolve, and
+`rite check` exits 4 for both.
+
+### Choosing your own status
+
+`@process.exit(code)` ends the run with any status from 0 to 255:
+
+```rite native_only
+◆! main() ⟦
+  ! @console.error("usage: greet NAME...")
+  ! @process.exit(2)
+⟧
+```
+
+Nothing after the call runs, no `^` or middleware can catch it, and buffered output
+is still flushed. It needs **no permission**, for the same reason `@process.args`
+does not: what status you end with is your own business, not ambient authority. A
+status outside 0–255 is an error at the call rather than a silent truncation.
+
+Most often the status is not one you chose but one you are passing on:
+
+```rite native_only
+◆! main() ⟦
+  r ← ! @process.run("git", ["push"], ⟨⟩)?
+  ! @process.exit(r.status)
+⟧
+```
+
+That is why the range is not restricted to codes the runtime does not use. A
+subprocess can hand you any status, and a `@process.exit` that rejected some of them
+would fail only for the ones a child happened to return — long after your tests
+passed. The cost of allowing it is that **1–8 mean two things**: the table above when
+the runtime ended the run, and whatever you decided when your script did. If a
+wrapper has to tell those apart, read stderr — the runtime always says `permission
+denied:` or `budget exceeded:` when it is the one stopping you, and says nothing at
+all about a status you chose.
+
+Inside an `@http` or `@tcp` handler, an exit ends the **process**, not the request:
+the server stops accepting, the request in flight gets a `503`, and `@http.listen`
+ends the script with the status. `use @http.recover` does not intercept it — it turns
+handler *failures* into described 500s, and an exit is not a failure.
+
 ## Next
 
 [Files and JSON](files-json.md) — practical `@fs` and `@json` patterns.

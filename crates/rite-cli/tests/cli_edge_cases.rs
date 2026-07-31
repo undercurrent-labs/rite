@@ -428,3 +428,61 @@ fn read_line_respects_deny_console() {
         "expected a permission denial, got: {combined:?}"
     );
 }
+
+/// `@process.exit` has to reach the *process*, not just the evaluator: the whole
+/// point is the number a shell reads back. Nothing in-process can prove that, so
+/// this one spawns the real binary and asks the OS.
+#[test]
+fn process_exit_sets_the_real_exit_status() {
+    let script = write_temp(
+        "exit_status",
+        "! @console.println(\"before\")\n! @process.exit(42)\n! @console.println(\"after\")\n",
+    );
+    let out = run_rite(&["run", script.to_str().unwrap()]);
+    assert_eq!(out.status.code(), Some(42), "wrong status");
+
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    // Printed before the exit survives; printed after it never happens.
+    assert!(
+        stdout.contains("before"),
+        "lost buffered output: {stdout:?}"
+    );
+    assert!(
+        !stdout.contains("after"),
+        "statements after the exit ran: {stdout:?}"
+    );
+    // The runtime does not editorialise over a status the script chose.
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        !stderr.contains("runtime error"),
+        "a chosen exit reported as an error: {stderr:?}"
+    );
+}
+
+/// Exiting 0 is a successful early stop, and needs no grant — `--deny process`
+/// revokes running subprocesses, not the right to say how this run ended.
+#[test]
+fn process_exit_zero_succeeds_without_the_process_grant() {
+    let script = write_temp(
+        "exit_zero",
+        "! @console.println(\"done\")\n! @process.exit(0)\n! @console.println(\"unreachable\")\n",
+    );
+    let out = run_rite(&["run", script.to_str().unwrap(), "--deny", "process"]);
+    assert_eq!(out.status.code(), Some(0), "exit 0 is not a failure");
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains("done"), "{stdout:?}");
+    assert!(!stdout.contains("unreachable"), "{stdout:?}");
+}
+
+/// A status outside 0–255 fails at the call, with the ordinary runtime status.
+#[test]
+fn process_exit_rejects_a_status_out_of_range() {
+    let script = write_temp("exit_range", "! @process.exit(300)\n");
+    let out = run_rite(&["run", script.to_str().unwrap()]);
+    assert_eq!(out.status.code(), Some(1), "should be a runtime error");
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains("out of range"),
+        "expected a range complaint, got: {stderr:?}"
+    );
+}

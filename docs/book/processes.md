@@ -127,10 +127,57 @@ rite run tool.rite -- a b
 [a, b]
 ```
 
-Everything after `--` is yours; everything before it belongs to `rite`. This is the
-one call in the capability set that **needs no permission at all** — the arguments
-are what the invoker chose to hand this program, not ambient state it went looking
-for.
+Everything after `--` is yours; everything before it belongs to `rite`. This is one
+of two calls here that **need no permission at all** — the arguments are what the
+invoker chose to hand this program, not ambient state it went looking for.
+
+### Ending with a status
+
+```rite native_only
+◆! main() ⟦
+  ! @console.println("checking")
+  ! @process.exit(2)
+  ! @console.println("never printed")
+⟧
+```
+
+```bash
+rite run check.rite
+echo $?
+```
+
+```text
+checking
+2
+```
+
+The status is any number from 0 to 255. Nothing after the call runs, no `^` catches
+it, and what the script already printed is still flushed. Exiting `0` is a perfectly
+ordinary early stop, not a failure. Out of range — `@process.exit(300)` — is an error
+at the call rather than a wrap-around to 44.
+
+This is the other call needing no permission: the status you end with is a message to
+whoever ran you, not authority over anything. `--deny process` stops you spawning
+`git`; it does not stop you saying you are done.
+
+Passing on a child's status is the usual case, and the reason the range is not
+restricted to codes the runtime does not itself use:
+
+```rite native_only
+◆! main() ⟦
+  r ← ! @process.run("git", ["push"], ⟨⟩)?
+  ! @process.exit(r.status)
+⟧
+```
+
+The cost is that `1`–`8` mean two things: the [runtime's own
+table](effects.md#exit-codes) when the runtime ended the run, and whatever you
+decided when your script did. A wrapper that must tell them apart should read
+stderr, where the runtime always announces itself.
+
+Inside an `@http` or `@tcp` handler, exiting ends the **process**: the server stops
+accepting, the caller in flight gets `503`, and `@http.listen` ends the script with
+your status. `use @http.recover` does not intercept it.
 
 ## Permissions
 
@@ -139,6 +186,7 @@ for.
 | `@process.run` | `--allow process` |
 | `@process.which` | `--allow process` **and** `--allow env=PATH` |
 | `@process.args` | nothing |
+| `@process.exit` | nothing |
 
 Native only: the browser has no subprocesses, so every call here is a clear
 capability error in Studio. See [Browser & Studio](browser.md).

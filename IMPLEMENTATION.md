@@ -27,6 +27,7 @@ Tracks implementation status for the Rite language and V1 tooling. Detailed desi
 | Outbound HTTP | **Done** — `@http.get` / `post` / `request`, gated per host by `net` |
 | Streaming output | **Done** — `RuntimeContext::sink`; `rite run` prints as the script runs |
 | Script arguments | **Done** — `@process.args`, also in compiled binaries |
+| Script exit codes | **Done** — `@process.exit(code)`, 0–255, no permission; same status from `rite run` and a compiled binary |
 
 ### Resolved since (this pass)
 

@@ -913,25 +913,28 @@ async fn run(cli: Cli) -> anyhow::Result<ExitCode> {
                     }
                     Ok(ExitCode::SUCCESS)
                 }
-                Err(EvalError::Compile(d)) => {
-                    if json_errors {
-                        println!("{}", serde_json::to_string_pretty(&d.to_json())?);
-                    } else {
-                        eprint!("{}", d.render_all(&sources));
-                    }
-                    Ok(ExitCode::from(if d.has_errors() { 3 } else { 4 }))
-                }
-                Err(EvalError::Permission(m)) => {
-                    eprintln!("permission denied: {}", m);
-                    Ok(ExitCode::from(5))
-                }
-                Err(EvalError::Budget(b)) => {
-                    eprintln!("budget exceeded: {}", b);
-                    Ok(ExitCode::from(8))
-                }
+                // What each failure *says* is decided here; what it *exits with* is
+                // `EvalError::exit_code`, so `rite run` and a compiled binary cannot
+                // disagree about the same error.
                 Err(e) => {
-                    eprintln!("runtime error: {}", e);
-                    Ok(ExitCode::from(1))
+                    match &e {
+                        EvalError::Compile(d) => {
+                            if json_errors {
+                                println!("{}", serde_json::to_string_pretty(&d.to_json())?);
+                            } else {
+                                eprint!("{}", d.render_all(&sources));
+                            }
+                        }
+                        // The script chose its own status, so the runtime says
+                        // nothing: printing "runtime error: exit 2" would be the CLI
+                        // editorialising over a deliberate decision. Output was
+                        // already flushed above.
+                        EvalError::Exit(_) => {}
+                        EvalError::Permission(m) => eprintln!("permission denied: {}", m),
+                        EvalError::Budget(b) => eprintln!("budget exceeded: {}", b),
+                        other => eprintln!("runtime error: {}", other),
+                    }
+                    Ok(ExitCode::from(e.exit_code()))
                 }
             }
         }

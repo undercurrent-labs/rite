@@ -2,6 +2,67 @@
 
 ## [Unreleased]
 
+### Added
+
+- **`@process.exit(code)` ends a run with a chosen status.** `fail` meant exit 1
+  and nothing else could be said, which every CLI eventually needs. The status is
+  any number from 0 to 255; nothing after the call runs; no `^` and no middleware
+  can intercept it; buffered output is still flushed. It needs **no permission**,
+  for the reason `@process.args` needs none — the status you end with is a message
+  to whoever ran you, not authority over anything, and gating it behind the grant
+  that also permits running arbitrary binaries would be backwards.
+
+  The range is deliberately not restricted to the codes the runtime does not use.
+  Forwarding a child's status — `! @process.exit(r.status)` — is the most common
+  reason to call it, and a rule that rejected 3–8 would fail only on the runs where
+  a subprocess happened to return one, long after the tests passed. So `1`–`8` now
+  mean two things: the runtime's own table when the runtime stopped the run, and
+  whatever the script decided when it did. The runtime always announces itself on
+  stderr, which is what a wrapper should read if it must tell them apart. A status
+  outside 0–255 is an error at the call rather than a silent wrap to `code % 256`.
+
+  Inside an `@http` or `@tcp` handler it ends the *process*: the server stops
+  accepting, the request in flight gets `503`, and `@http.listen` ends the script
+  with the status. `use @http.recover` does not intercept it — recover turns
+  handler failures into described 500s, and an exit is not a failure.
+
+### Fixed
+
+- **`@process.run` rejects arguments that are not a list.** Anything else was
+  silently treated as "no arguments", so `@process.run("sh", ⟦"-c", "…"⟧, ⟨⟩)` — a
+  block where a list belongs — ran a bare `sh`, which read stdin to EOF and
+  answered `ok(⟨status: 0⟩)`. A command that never did what was asked, reporting
+  success. Same treatment the options record already had.
+
+- **Two concurrent servers no longer share one stop switch.** Introduced while
+  adding handler exits and caught by the isolation tests: a second `@http.listen`
+  in a process dropped the first server's shutdown sender, which its accept loop
+  reads as "shut down", so starting server two silently stopped server one.
+
+### Changed
+
+- **`expected.exit` in a conformance fixture is checked, on both paths.** It meant
+  only "zero or not", tested interpreted-only: a fixture declaring `5` passed on any
+  failure at all, and the IR path was never consulted for a case expected to fail.
+  The status now has to be the declared one, and the two paths have to agree on it.
+  Fixtures can also now expect a *successful* early exit, and `expected.stdout` is
+  compared for a run that ended by failing — which is what tests the promise that
+  output is flushed on every path.
+
+- **One definition of the exit-code table.** `EvalError::exit_code` is now the only
+  copy; `rite run`, the `main` generated for a compiled binary, and the conformance
+  runner all call it, so a compiled program cannot reach a different conclusion
+  about a failure than the interpreter did.
+
+### Documentation
+
+- **The exit-code table exists.** `cli-tool.md` linked to "the full exit-code table"
+  in `effects.md`, which had no such table — and the codes as described elsewhere
+  were not what the binary does. Every code in the new table was checked by running
+  it: `3` and `4` turn out to distinguish *when* a source was rejected (`rite run`
+  exits 3 whether a file failed to parse or to resolve; `rite check` exits 4 for
+  both), not which phase found the problem.
+
 ## [0.4.1] — 2026-07-31
 
 A correctness release. Five capability functions were shipped surface that did

@@ -121,11 +121,58 @@ runtime error: no names given
 1
 ```
 
-There is no `exit(code)` builtin. A script signals failure by failing, and the
-runtime maps that to exit code **1**. The [full exit-code
-table](../book/effects.md) is part of Rite's contract — `5` for a permission
-denial, `3` for a parse error — so a wrapper can tell "your script was wrong" from
-"your script said no".
+That works, but it says two things at once: `runtime error: no names given` reads
+like the program broke, when in fact it worked correctly and the *caller* got it
+wrong. And `fail` is blunt — it always means **1**. `@process.exit` lets you say
+which:
+
+```rite
+? count(names) = 0 ⟦
+  ! @console.error("usage: greet [--upper] [--greeting=WORD] NAME...")
+  ! @process.exit(2)      // 2 is the shell's conventional "you used it wrong"
+⟧
+```
+
+```bash
+rite run greet.rite --
+echo $?
+```
+
+```text
+usage: greet [--upper] [--greeting=WORD] NAME...
+2
+```
+
+The usage line is the whole message now — no runtime-error noise on top of it —
+and `2` tells a wrapper this was a misuse rather than a crash. Nothing after the
+call runs, and the status cannot be caught. It needs no permission: saying how your
+own program ended is not the same privilege as running another one. This is what
+the finished script below uses.
+
+The [full exit-code table](../book/effects.md#exit-codes) is part of Rite's
+contract — `5` for a permission denial, `8` for a blown budget — so a wrapper can
+tell "your script was wrong" from "your script said no". Those codes are not
+off-limits to you, though. `@process.exit` accepts anything from 0 to 255, because
+the most common thing to do with an exit status is pass on the one you were handed:
+
+```rite
+◆! main() ⟦
+  r ← ! @process.run("sh", ["-c", "exit 17"], ⟨⟩)?
+  ! @process.exit(r.status)
+⟧
+```
+
+```bash
+rite run forward.rite --allow process
+echo $?
+```
+
+```text
+17
+```
+
+A `@process.exit` that refused the runtime's own codes would fail on exactly this —
+and only for the runs where the child happened to return one.
 
 ## The whole script
 
@@ -150,7 +197,7 @@ Save it as `greet.rite`:
 
   ? count(names) = 0 ⟦
     ! @console.error("usage: greet [--upper] [--greeting=WORD] NAME...")
-    ^ fail("no names given")
+    ! @process.exit(2)
   ⟧
 
   word ← option(argv, "greeting", "hello")

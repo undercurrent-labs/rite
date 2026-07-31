@@ -59,6 +59,68 @@ pub async fn run_conformance_suite(root: &Path) -> anyhow::Result<ConformanceRep
         let mut ok = true;
         let mut msg = String::new();
 
+        // `expected.exit` is a status, and the status is checked on *both* paths.
+        // It used to mean only "zero or not", tested interpreted-only: a fixture
+        // declaring 5 passed on any failure at all, and the IR path was never
+        // consulted on a case that was supposed to fail. Both are now real.
+        let want_exit: Option<u8> = match expected_exit.parse::<u8>() {
+            Ok(c) => Some(c),
+            Err(_) => {
+                ok = false;
+                msg.push_str(&format!(
+                    "expected.exit is not a status 0–255: {:?}; ",
+                    expected_exit
+                ));
+                None
+            }
+        };
+        fn code_of<T>(r: &Result<T, rite_compiler::RunFailure>) -> u8 {
+            match r {
+                Ok(_) => 0,
+                Err(e) => e.code,
+            }
+        }
+        let (interp_exit, ir_exit) = (code_of(&interp), code_of(&ir));
+        if interp_exit != ir_exit {
+            ok = false;
+            msg.push_str(&format!(
+                "exit mismatch: interp={} ir={}; ",
+                interp_exit, ir_exit
+            ));
+        }
+        if let Some(want) = want_exit {
+            if interp_exit != want {
+                ok = false;
+                msg.push_str(&format!(
+                    "expected exit {} got {}{}; ",
+                    want,
+                    interp_exit,
+                    match &interp {
+                        Err(e) => format!(" ({})", e.message),
+                        Ok(_) => String::new(),
+                    }
+                ));
+            }
+        }
+        // A script that ends by exiting produces no value, so a fixture cannot make
+        // a claim about one. Saying so is better than letting `expected.value.json`
+        // sit there unread — an expectation nothing checks is worse than none.
+        if interp.is_err() && expected_value.is_some() {
+            ok = false;
+            msg.push_str("expected.value.json on a case that does not return a value; ");
+        }
+        // Output is compared on the failing path too: both runners promise to flush
+        // what a script printed before it stopped, and this is what tests it.
+        if let (Err(e), Some(exp_out)) = (&interp, &expected_stdout) {
+            if e.stdout.trim() != exp_out.trim() {
+                ok = false;
+                msg.push_str(&format!(
+                    "stdout mismatch: expected {:?} got {:?}; ",
+                    exp_out, e.stdout
+                ));
+            }
+        }
+
         match (&interp, &ir) {
             (Ok((v_i, out_i, _, atoms_i)), Ok(v_c)) => {
                 if !v_i.structural_eq(v_c) {
@@ -98,22 +160,11 @@ pub async fn run_conformance_suite(root: &Path) -> anyhow::Result<ConformanceRep
                         ));
                     }
                 }
-                if expected_exit != "0" {
-                    ok = false;
-                    msg.push_str("expected non-zero exit but succeeded; ");
-                }
             }
-            (Err(e), _) if expected_exit != "0" => {
-                // expected failure
-                ok = true;
-                msg.push_str(&format!("expected failure: {}", e));
-            }
-            (Err(e), _) => {
-                ok = false;
-                msg.push_str(&format!("interp error: {}", e));
-            }
+            // The exit codes above already decided whether a failing case is the
+            // failure it declared; these arms only report what happened.
+            (Err(e), _) => msg.push_str(&format!("failed with exit {}: {}", e.code, e.message)),
             (Ok(_), Err(e)) => {
-                ok = false;
                 msg.push_str(&format!("ir mode error: {}", e));
             }
         }

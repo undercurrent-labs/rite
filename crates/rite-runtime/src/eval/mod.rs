@@ -81,6 +81,15 @@ pub enum EvalError {
     Return(Value),
     Permission(String),
     Capability(String),
+    /// The script asked to end the process with a chosen status, via `@process.exit`.
+    ///
+    /// This is a control-flow signal, not a failure: it carries no message and must
+    /// reach the top of the call stack untouched. Nothing may convert it to a value
+    /// or swallow it the way `Return` is swallowed at a function boundary — an exit
+    /// that can be caught is not an exit. It is an `EvalError` rather than a direct
+    /// `std::process::exit` so that an embedder hosting `RiteEngine` sees a variant
+    /// it can decide about, instead of having its own process killed by a guest.
+    Exit(u8),
 }
 
 impl std::fmt::Display for EvalError {
@@ -93,6 +102,7 @@ impl std::fmt::Display for EvalError {
             EvalError::Compile(d) => write!(f, "compile error ({} diagnostics)", d.len()),
             EvalError::Budget(b) => write!(f, "{}", b),
             EvalError::Return(_) => write!(f, "return"),
+            EvalError::Exit(c) => write!(f, "exit {}", c),
         }
     }
 }
@@ -100,6 +110,33 @@ impl std::fmt::Display for EvalError {
 impl std::error::Error for EvalError {}
 
 impl EvalError {
+    /// The process exit status this failure ends a run with.
+    ///
+    /// Rite's published contract: 0 success, 1 runtime, 2 usage, 3 parse, 4 resolve,
+    /// 5 permission, 6 compile, 7 test, 8 budget — with `@process.exit` handing the
+    /// choice to the script. This is the single definition of that mapping: `rite
+    /// run`, the `main` generated for a compiled binary, and the conformance runner
+    /// all call it, so a compiled program cannot come to a different conclusion
+    /// about the same failure than the interpreter did.
+    pub fn exit_code(&self) -> u8 {
+        match self {
+            EvalError::Exit(c) => *c,
+            EvalError::Compile(d) => {
+                if d.has_errors() {
+                    3
+                } else {
+                    4
+                }
+            }
+            EvalError::Permission(_) => 5,
+            EvalError::Budget(_) => 8,
+            EvalError::Message(_)
+            | EvalError::Panic(_)
+            | EvalError::Capability(_)
+            | EvalError::Return(_) => 1,
+        }
+    }
+
     pub fn with_stack(self, ctx: &RuntimeContext) -> Self {
         let trace = ctx.format_stack_trace();
         if trace.is_empty() {

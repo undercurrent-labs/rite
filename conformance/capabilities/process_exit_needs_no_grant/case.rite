@@ -1,0 +1,5 @@
+// `exit` carries no permission: with every grant withheld — including `process`,
+// which `@process.run` and `@process.which` both require — a script can still
+// choose the status it ends with. Saying "I am done, status 7" to whoever ran you
+// is not the same privilege as running arbitrary binaries.
+! @process.exit(7)

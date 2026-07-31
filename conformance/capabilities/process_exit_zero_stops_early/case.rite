@@ -1,0 +1,5 @@
+// Exiting 0 is a *successful* early stop, not a failure: the script ends where it
+// says to, with the status of a run that went fine. What it printed first survives.
+! @console.println("before")
+! @process.exit(0)
+! @console.println("after")

@@ -22,6 +22,13 @@ impl ProcessCap {
             permission: "",
         },
         NativeFunctionDescriptor {
+            name: "exit",
+            docs: "End the run immediately with a chosen exit status, 0–255. Nothing after the call runs, and the status cannot be caught or overridden. Buffered output is still flushed. Needs no permission: choosing your own exit status is the invoker's own business, like reading `@process.args`. Note that 1–8 are also the statuses the runtime itself uses (1 runtime error, 5 permission denied, 8 budget); a script that picks one takes over that meaning for its own process.",
+            arity: 1,
+            effectful: true,
+            permission: "",
+        },
+        NativeFunctionDescriptor {
             name: "which",
             docs: "Locate an executable on PATH. Reads the PATH environment variable and probes the filesystem, so it is effectful (`!`) and needs process *and* env access to PATH (--allow process --allow env=PATH).",
             arity: 1,
@@ -49,6 +56,35 @@ impl ProcessCap {
                     .collect::<Vec<_>>(),
             ));
         }
+        // `exit` is exempt for the same reason as `args`, and for one more: an exit
+        // status is what a script says to whoever ran it. Gating it behind the grant
+        // that also permits running arbitrary binaries would mean a script had to be
+        // trusted with subprocesses in order to say "I am done, status 2".
+        if method == "exit" {
+            let code = match args.first() {
+                Some(Value::Int(n)) => *n,
+                Some(other) => {
+                    return Err(EvalError::Message(format!(
+                        "process.exit expects an integer status 0–255, got `{other}`"
+                    )));
+                }
+                None => {
+                    return Err(EvalError::Message(
+                        "process.exit expects an integer status 0–255".into(),
+                    ));
+                }
+            };
+            // Out of range is an error rather than a silent truncation: exiting 300
+            // would otherwise become 44 on POSIX, which is a wrong answer dressed as
+            // a right one. Unlike the status itself, this check is deterministic —
+            // it cannot fire only for the value some subprocess happened to return.
+            let code = u8::try_from(code).map_err(|_| {
+                EvalError::Message(format!(
+                    "process.exit: status {code} is out of range — must be 0–255"
+                ))
+            })?;
+            return Err(EvalError::Exit(code));
+        }
         perms.check_process().map_err(EvalError::Permission)?;
         match method {
             "run" => {
@@ -57,14 +93,29 @@ impl ProcessCap {
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| EvalError::Message("process.run expects command".into()))?
                     .to_string();
+                // Anything that is not a list was silently treated as "no arguments",
+                // so `@process.run("sh", ⟦"-c", "…"⟧, ⟨⟩)` — a block where a list
+                // belongs, an easy thing to type — ran a bare `sh` that read stdin
+                // to EOF and reported success. The command *did* run and *did*
+                // answer `ok`, which is the worst way to be wrong. Same reasoning as
+                // the options record below: a mistake here must not be
+                // indistinguishable from the default.
                 let mut argv: Vec<String> = Vec::new();
-                if let Some(Value::List(xs)) = args.get(1) {
-                    for x in xs {
-                        if let Some(s) = x.as_str() {
-                            argv.push(s.to_string());
-                        } else {
-                            argv.push(format!("{}", x));
+                match args.get(1) {
+                    None | Some(Value::None) => {}
+                    Some(Value::List(xs)) => {
+                        for x in xs {
+                            if let Some(s) = x.as_str() {
+                                argv.push(s.to_string());
+                            } else {
+                                argv.push(format!("{}", x));
+                            }
                         }
+                    }
+                    Some(other) => {
+                        return Err(EvalError::Message(format!(
+                            "process.run: arguments must be a list, got `{other}`"
+                        )));
                     }
                 }
                 let mut command = tokio::process::Command::new(&cmd);

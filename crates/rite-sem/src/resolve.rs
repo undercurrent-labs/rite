@@ -105,6 +105,8 @@ pub const HOST_EFFECTS: &[(&str, bool)] = &[
     // `args` observes what the invoker typed — outside the program, and different
     // between runs, so it takes a marker for the same reason `@clock.now` does.
     ("process.args", true),
+    // `exit` ends the process. Nothing is more effectful than that.
+    ("process.exit", true),
     // @random — the entropy source (`seed` mutates it).
     ("random.int", true),
     ("random.float", true),

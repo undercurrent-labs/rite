@@ -203,28 +203,19 @@ async fn main() {
         }
         Err(e) => {
             match &e {
+                // A chosen exit status is not an error to report — the compiled
+                // binary must be as silent about it as `rite run` is.
+                EvalError::Exit(_) => {}
                 EvalError::Permission(m) => eprintln!("permission denied: {}", m),
                 EvalError::Budget(_) => eprintln!("execution budget exceeded"),
                 other => eprintln!("runtime error: {}", other),
             }
-            std::process::exit(exit_code(&e));
+            // The status comes from `EvalError::exit_code` — the same function
+            // `rite run` uses — rather than a copy of the table living here, which
+            // is how a compiled binary would quietly start disagreeing with the
+            // interpreter about what a failure means.
+            std::process::exit(e.exit_code() as i32);
         }
-    }
-}
-
-/// Same exit codes as `rite run`: 3/4 compile, 5 permission, 8 budget, 1 otherwise.
-fn exit_code(e: &EvalError) -> i32 {
-    match e {
-        EvalError::Compile(d) => {
-            if d.has_errors() {
-                3
-            } else {
-                4
-            }
-        }
-        EvalError::Permission(_) => 5,
-        EvalError::Budget(_) => 8,
-        _ => 1,
     }
 }
 "#;
@@ -464,13 +455,65 @@ fn absolute(path: PathBuf) -> PathBuf {
     }
 }
 
+/// A failed differential run: what went wrong, and the status the CLI would have
+/// exited with.
+///
+/// The status travels with the message because a conformance fixture declaring
+/// `expected.exit = 5` is making a claim about the *code*, and comparing rendered
+/// error text instead would let a permission denial and a runtime error satisfy
+/// the same fixture.
+#[derive(Debug, Clone)]
+pub struct RunFailure {
+    pub code: u8,
+    pub message: String,
+    /// What the script printed before it stopped.
+    ///
+    /// Both runners flush buffered output on the failure path, and that is a
+    /// documented promise — a script that prints and then fails must not lose what
+    /// it printed. Carrying it here is what lets a fixture check the promise; while
+    /// the error was a bare `String` there was nothing to compare against.
+    pub stdout: String,
+}
+
+impl std::fmt::Display for RunFailure {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.message)
+    }
+}
+
+impl RunFailure {
+    fn from_eval(e: rite_runtime::EvalError, stdout: String) -> Self {
+        RunFailure {
+            code: e.exit_code(),
+            message: e.to_string(),
+            stdout,
+        }
+    }
+
+    /// A failure raised by the harness itself rather than by the script.
+    fn harness(code: u8, message: impl Into<String>) -> Self {
+        RunFailure {
+            code,
+            message: message.into(),
+            stdout: String::new(),
+        }
+    }
+}
+
 /// Differential helper: run IR in-process (same as compiled path).
-pub async fn run_ir_mode(file: &Path, perms: PermissionSet) -> Result<rite_runtime::Value, String> {
+pub async fn run_ir_mode(
+    file: &Path,
+    perms: PermissionSet,
+) -> Result<rite_runtime::Value, RunFailure> {
     let (ir, diags, _) = compile_path(file);
     if diags.has_errors() {
-        return Err(format!("compile errors: {}", diags.len()));
+        // 3 is what `rite run` exits with for a source it cannot compile.
+        return Err(RunFailure::harness(
+            3,
+            format!("compile errors: {}", diags.len()),
+        ));
     }
-    let ir = ir.ok_or_else(|| "no IR".to_string())?;
+    let ir = ir.ok_or_else(|| RunFailure::harness(3, "no IR"))?;
     let mut ctx = rite_runtime::RuntimeContext::new();
     rite_caps::install_defaults(&mut ctx, perms);
     if let Some(parent) = file.parent() {
@@ -478,7 +521,7 @@ pub async fn run_ir_mode(file: &Path, perms: PermissionSet) -> Result<rite_runti
     }
     rite_runtime::run_ir(&ir, &mut ctx)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(|e| RunFailure::from_eval(e, ctx.stdout.join("")))
 }
 
 /// Interpreted mode for differential tests: `(value, stdout, stderr, atoms)`.
@@ -498,7 +541,7 @@ pub async fn run_interpreted(
         String,
         std::sync::Arc<rite_runtime::AtomInterner>,
     ),
-    String,
+    RunFailure,
 > {
     let mut ctx = rite_runtime::RuntimeContext::new();
     rite_caps::install_defaults(&mut ctx, perms);
@@ -507,12 +550,17 @@ pub async fn run_interpreted(
         ctx.module_roots.push(parent.to_path_buf());
     }
     let mut sources = SourceMap::new();
-    let id = sources.add_path(file).map_err(|e| e.to_string())?;
+    // An unreadable case file is the harness's problem, not the script's: 2, the
+    // usage code, rather than something a fixture could claim to expect.
+    let id = sources
+        .add_path(file)
+        .map_err(|e| RunFailure::harness(2, e.to_string()))?;
     let sf = sources.get(id).unwrap().clone();
     ctx.sources = sources;
-    let v = rite_runtime::run_file(&sf, &mut ctx)
-        .await
-        .map_err(|e| e.to_string())?;
+    let v = match rite_runtime::run_file(&sf, &mut ctx).await {
+        Ok(v) => v,
+        Err(e) => return Err(RunFailure::from_eval(e, ctx.stdout.join(""))),
+    };
     Ok((
         v,
         ctx.stdout.join(""),
@@ -560,7 +608,16 @@ mod tests {
             "output must be flushed on both paths:\n{}",
             src
         );
-        assert!(src.contains("EvalError::Permission(_) => 5"), "{}", src);
+        // The status comes from the runtime's own table rather than a copy pasted
+        // into the generated program. The copy was the risk: `rite run` and a
+        // compiled binary could then answer differently for the same failure, and
+        // nothing would notice until someone compared two shells.
+        assert!(src.contains("e.exit_code()"), "{}", src);
+        assert!(
+            !src.contains("=> 5"),
+            "generated main re-states the table:\n{}",
+            src
+        );
         assert!(!src.contains("std::process::exit(1)"), "{}", src);
     }
 

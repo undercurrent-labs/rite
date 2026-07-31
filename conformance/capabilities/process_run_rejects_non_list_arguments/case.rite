@@ -1,0 +1,5 @@
+// Arguments that are not a list are an error, not silently "no arguments". This
+// spelling — a block where a list belongs — used to run a bare `sh`, which read
+// stdin to EOF and answered `ok(⟨status: 0⟩)`: a command that never did what was
+// asked, reporting success.
+! @process.run("sh", ⟦"-c", "exit 17"⟧, ⟨⟩)?

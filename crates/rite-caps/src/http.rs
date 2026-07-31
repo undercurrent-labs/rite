@@ -399,28 +399,23 @@ impl HttpCap {
         // Always block until shutdown so background accepts stay alive for the process.
         // Port 0 still exposes the bound address via last_addr and the return value after stop;
         // while running, last_addr is already set for tests.
-        let shutdown_tx = Arc::new(Mutex::new(Some(shutdown_tx)));
-        let stx = shutdown_tx.clone();
-        let _ = ctrlc::set_handler(move || {
-            if let Some(tx) = stx.lock().take() {
-                let _ = tx.send(());
-            }
-        });
+        let stop = Arc::new(arm_server_stop(shutdown_tx));
+        let _ = ctrlc::set_handler(request_stop);
 
         // For tests: auto-stop after a grace window when RITE_HTTP_TEST=1 so
-        // servers don't hang forever if the test task is aborted late.
+        // servers don't hang forever if the test task is aborted late. This one
+        // stops *this* server only — one server's grace window expiring is no
+        // reason to take down another that is still under test.
         let test_mode = std::env::var("RITE_HTTP_TEST").ok().as_deref() == Some("1");
         if test_mode {
             let secs: u64 = std::env::var("RITE_HTTP_TEST_SECS")
                 .ok()
                 .and_then(|s| s.parse().ok())
                 .unwrap_or(30);
-            let stx = shutdown_tx.clone();
+            let stop = stop.clone();
             tokio::spawn(async move {
                 tokio::time::sleep(std::time::Duration::from_secs(secs)).await;
-                if let Some(tx) = stx.lock().take() {
-                    let _ = tx.send(());
-                }
+                stop.stop();
             });
         }
 
@@ -446,6 +441,17 @@ impl HttpCap {
                     });
                 }
             }
+        }
+
+        // This server is done accepting; drop its switch rather than leaving a
+        // sender in the registry for a loop that has already left.
+        stop.release();
+
+        // A handler that called `@process.exit` ends the script, not just its own
+        // request: `listen` fails with the chosen status instead of returning the
+        // stopped record, and it propagates from here like any other exit.
+        if let Some(code) = take_exit_request() {
+            return Err(EvalError::Exit(code));
         }
 
         Ok(Value::record(vec![
@@ -650,6 +656,15 @@ async fn dispatch_rite(state: ServerState, idx: usize, req: Request<Body>) -> Re
     let response = match result {
         Ok(v) => coerce_response(v, &ctx),
         Err(EvalError::Return(v)) => coerce_response(v, &ctx),
+        // Ahead of the `recover` arms on purpose: `use @http.recover` turns a
+        // handler *failure* into a described 500, and an exit is not a failure —
+        // recovering it would let middleware quietly veto ending the process.
+        // The client in flight gets 503, which is the truth: this server is going
+        // away. Every other in-flight request is still served to completion.
+        Err(EvalError::Exit(code)) => {
+            request_exit(code);
+            StatusCode::SERVICE_UNAVAILABLE.into_response()
+        }
         Err(EvalError::Panic(m)) if use_recover => (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(json!({"error": "panic", "message": m})),
@@ -1211,6 +1226,89 @@ pub fn last_bound_addr() -> Option<String> {
 /// Clear the last-bound address (tests).
 pub fn clear_last_bound_addr() {
     *LAST_BOUND_ADDR.lock() = None;
+}
+
+/// Stop switches for the servers currently accepting, by id.
+///
+/// A registry rather than a single slot because a process can be running several
+/// at once — `@http` and `@tcp` share this, and the isolation tests stand two HTTP
+/// servers up side by side. A single slot made starting the second server drop the
+/// first one's sender, which its accept loop reads as "shut down", so server two
+/// silently killed server one.
+static SERVER_STOPS: Mutex<Vec<(u64, oneshot::Sender<()>)>> = Mutex::new(Vec::new());
+static NEXT_SERVER_ID: AtomicU64 = AtomicU64::new(1);
+
+/// Handle for one armed server: stops it, and takes it out of the registry.
+pub(crate) struct ServerStop(u64);
+
+/// The status a handler asked to exit with, if one did.
+///
+/// Kept apart from the stop switch because stopping is not by itself an exit:
+/// Ctrl-C leaves this `None` and `listen` returns its usual `⟨addr, status⟩`,
+/// while a handler's `@process.exit` makes `listen` fail with `Exit`, so the
+/// status leaves the server the same way it would from any other call site —
+/// and an embedder still gets a value rather than a dead process.
+static EXIT_REQUEST: Mutex<Option<u8>> = Mutex::new(None);
+
+/// Arm the stop switch for a server about to start accepting.
+///
+/// Clears any exit status left behind when this is the only live server — several
+/// run in sequence in one test binary, and a stale status would end the next one.
+pub(crate) fn arm_server_stop(tx: oneshot::Sender<()>) -> ServerStop {
+    let id = NEXT_SERVER_ID.fetch_add(1, Ordering::Relaxed);
+    let mut stops = SERVER_STOPS.lock();
+    if stops.is_empty() {
+        *EXIT_REQUEST.lock() = None;
+    }
+    stops.push((id, tx));
+    ServerStop(id)
+}
+
+impl ServerStop {
+    /// Stop just this server: what the test-mode auto-stop timer wants, since one
+    /// server's grace window expiring says nothing about another's.
+    pub(crate) fn stop(&self) {
+        let mut stops = SERVER_STOPS.lock();
+        if let Some(i) = stops.iter().position(|(id, _)| *id == self.0) {
+            let (_, tx) = stops.remove(i);
+            let _ = tx.send(());
+        }
+    }
+
+    /// Drop this server's switch without firing it — for a loop that has already
+    /// left, so the registry does not accumulate senders for dead servers.
+    ///
+    /// Takes `&self` and is idempotent: the auto-stop task holds a clone of the
+    /// handle, and a switch that could only be released by consuming the last
+    /// reference would simply never be released while that task was asleep.
+    pub(crate) fn release(&self) {
+        SERVER_STOPS.lock().retain(|(id, _)| *id != self.0);
+    }
+}
+
+/// Stop every running server. Ctrl-C means the whole process, and so does a
+/// handler calling `@process.exit`.
+///
+/// Idempotent: senders are taken as they fire, so a second Ctrl-C is a no-op.
+pub(crate) fn request_stop() {
+    for (_, tx) in std::mem::take(&mut *SERVER_STOPS.lock()) {
+        let _ = tx.send(());
+    }
+}
+
+/// Record a handler's chosen exit status and stop the server.
+///
+/// First exit wins: two in-flight handlers can call `@process.exit` with
+/// different statuses, and the process has only one to give.
+pub(crate) fn request_exit(code: u8) {
+    EXIT_REQUEST.lock().get_or_insert(code);
+    request_stop();
+}
+
+/// Take the exit status a handler asked for, if any. Called once, after the
+/// accept loop ends.
+pub(crate) fn take_exit_request() -> Option<u8> {
+    EXIT_REQUEST.lock().take()
 }
 
 impl Default for HttpCap {

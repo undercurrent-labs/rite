@@ -401,15 +401,11 @@ impl TcpCap {
         println!("rite: listening on tcp://{}", local);
         let _ = std::io::Write::flush(&mut std::io::stdout());
 
-        // Ctrl-C stops the loop, as it does for `@http.listen`.
+        // Ctrl-C stops the loop, as it does for `@http.listen` — through the same
+        // stop switch, which a handler calling `@process.exit` also reaches.
         let (shutdown_tx, mut shutdown_rx) = oneshot::channel::<()>();
-        let shutdown_tx = Arc::new(Mutex::new(Some(shutdown_tx)));
-        let stx = shutdown_tx.clone();
-        let _ = ctrlc::set_handler(move || {
-            if let Some(tx) = stx.lock().take() {
-                let _ = tx.send(());
-            }
-        });
+        let stop = crate::http::arm_server_stop(shutdown_tx);
+        let _ = ctrlc::set_handler(crate::http::request_stop);
 
         // Everything a handler needs to resolve the names it was written next to,
         // captured once at listen time. Cloning an `Environment` shares its frames,
@@ -434,6 +430,14 @@ impl TcpCap {
                     });
                 }
             }
+        }
+
+        stop.release();
+
+        // As in `@http.listen`: a connection handler that exited chose a status for
+        // the whole script, so `listen` fails with it rather than returning stopped.
+        if let Some(code) = crate::http::take_exit_request() {
+            return Err(EvalError::Exit(code));
         }
 
         Ok(Value::record(vec![
@@ -478,9 +482,13 @@ async fn serve_conn(
     // request in `@http` — flush it so `! @console.println` reaches the server process.
     crate::http::flush_handler_io(&ctx);
     if let Err(e) = result {
-        // Not `EvalError::Return`: `^ value` is how a handler ends early.
-        if !matches!(e, EvalError::Return(_)) {
-            crate::http::emit_process_stderr(&format!("rite: tcp handler error: {e}\n"));
+        match e {
+            // Not `EvalError::Return`: `^ value` is how a handler ends early.
+            EvalError::Return(_) => {}
+            // An exit is a decision about the process, not a handler error to log:
+            // record the status and stop accepting.
+            EvalError::Exit(code) => crate::http::request_exit(code),
+            e => crate::http::emit_process_stderr(&format!("rite: tcp handler error: {e}\n")),
         }
     }
     // The connection's lifetime is the block's. Closing here is what lets the shape
