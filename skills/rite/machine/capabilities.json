@@ -679,6 +679,20 @@
     },
     {
       "arity": 1,
+      "docs": "The address at the other end of a connection, as \"host:port\". Returns ok(string). In a @tcp.listen block this is the client that connected — what a server logs.",
+      "effectful": true,
+      "name": "peer_addr",
+      "permission": "net"
+    },
+    {
+      "arity": 1,
+      "docs": "This end of a connection, as \"host:port\". Returns ok(string). Useful on a client, where the source port is assigned rather than chosen.",
+      "effectful": true,
+      "name": "local_addr",
+      "permission": "net"
+    },
+    {
+      "arity": 1,
       "docs": "Close a connection handle. Closing an unknown or already-closed handle answers ok(none).",
       "effectful": true,
       "name": "close",

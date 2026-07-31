@@ -459,3 +459,139 @@ first ← ! @tcp.recv(a, 64, 5000)?
     assert_eq!(v.get_field("a").as_str(), Some("saw first"));
     assert_eq!(v.get_field("b").as_str(), Some("saw second"));
 }
+
+/// The two functions must describe opposite ends of the *same* connection, so this
+/// checks them against each other rather than against a hardcoded port: the server
+/// reports the peer it sees, and the client compares that to its own local address.
+/// If either function were wired to the wrong end, or the addresses were captured
+/// from the listening socket instead of the accepted one, these would not match.
+#[tokio::test(flavor = "multi_thread")]
+async fn each_end_sees_the_other() {
+    let _guard = server_lock().lock().await;
+
+    // The server's view: who connected to it.
+    let (server, addr) = serve(
+        r#"
+! @tcp.listen "127.0.0.1:0" ⟦ |conn|
+  who ← ! @tcp.peer_addr(conn)?
+  ! @tcp.send(conn, who)?
+⟧
+"#,
+    )
+    .await;
+
+    let v = run(
+        loopback_perms(),
+        &format!(
+            r#"
+conn ← ! @tcp.connect("{addr}")?
+seen_by_server ← to_text(! @tcp.recv(conn, 1024, 5000)?)?
+mine ← ! @tcp.local_addr(conn)?
+theirs ← ! @tcp.peer_addr(conn)?
+! @tcp.close(conn)?
+^ ⟨seen_by_server: seen_by_server, mine: mine, theirs: theirs⟩
+"#
+        ),
+    )
+    .await;
+    server.abort();
+    let _ = server.await;
+
+    let seen = v.get_field("seen_by_server").as_str().unwrap().to_string();
+    let mine = v.get_field("mine").as_str().unwrap().to_string();
+    let theirs = v.get_field("theirs").as_str().unwrap().to_string();
+
+    // The address the server reported for its peer is the client's own local address.
+    assert_eq!(
+        seen, mine,
+        "server saw peer {seen}, client's local address is {mine}"
+    );
+    // And the client's peer is the server it dialled.
+    assert_eq!(theirs, addr, "client's peer should be the server address");
+    // An ephemeral source port, so the two ends are genuinely different sockets.
+    assert_ne!(mine, theirs);
+}
+
+/// Both addresses survive a `recv` that is still waiting.
+///
+/// They are captured at accept time precisely so a query never has to take a half's
+/// mutex; if it did, asking a quiet connection who is on it — the moment a server
+/// most wants to log — would block until the read finished.
+#[tokio::test(flavor = "multi_thread")]
+async fn an_address_is_readable_while_a_recv_is_outstanding() {
+    let _guard = server_lock().lock().await;
+
+    // The handler asks *after* starting a read that will time out, so the address
+    // query happens while the read half is held.
+    let (server, addr) = serve(
+        r#"
+! @tcp.listen "127.0.0.1:0" ⟦ |conn|
+  quiet ← ! @tcp.recv(conn, 1024, 300)
+  who ← ! @tcp.peer_addr(conn)?
+  ! @tcp.send(conn, who)?
+⟧
+"#,
+    )
+    .await;
+
+    let v = run(
+        loopback_perms(),
+        &format!(
+            r#"
+conn ← ! @tcp.connect("{addr}")?
+reply ← ! @tcp.recv(conn, 1024, 5000)?
+mine ← ! @tcp.local_addr(conn)?
+! @tcp.close(conn)?
+^ ⟨reply: to_text(reply)?, mine: mine⟩
+"#
+        ),
+    )
+    .await;
+    server.abort();
+    let _ = server.await;
+
+    assert_eq!(
+        v.get_field("reply").as_str(),
+        v.get_field("mine").as_str(),
+        "the address should still be readable after a timed-out recv"
+    );
+}
+
+/// A closed handle is a script bug, not a network condition, so it raises rather
+/// than answering `err` — the same way `send` and `recv` treat one.
+#[tokio::test(flavor = "multi_thread")]
+async fn addresses_are_gone_once_the_connection_is_closed() {
+    let _guard = server_lock().lock().await;
+
+    let (server, addr) = serve(
+        r#"
+! @tcp.listen "127.0.0.1:0" ⟦ |conn|
+  ! @tcp.recv(conn, 16, 2000)
+⟧
+"#,
+    )
+    .await;
+
+    let mut ctx = ctx_with(loopback_perms());
+    let err = run_source(
+        "closed.rite",
+        &format!(
+            r#"
+conn ← ! @tcp.connect("{addr}")?
+! @tcp.close(conn)?
+^ ! @tcp.peer_addr(conn)?
+"#
+        ),
+        &mut ctx,
+    )
+    .await
+    .expect_err("peer_addr on a closed connection should fail");
+    server.abort();
+    let _ = server.await;
+
+    let msg = err.to_string();
+    assert!(
+        msg.contains("closed or invalid"),
+        "expected a closed-connection error, got {msg}"
+    );
+}

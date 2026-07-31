@@ -21,10 +21,17 @@
   still answers `err(⟨kind: "io.not_found", …⟩)`: following it fails before
   anything can report on it, so a dangling symlink cannot be detected.
 
-- **`@tcp` — byte streams, both ends.** `connect`, `send`, `recv`, `close`, and a
-  server: `! @tcp.listen "127.0.0.1:9000" ⟦ |conn| … ⟧`. A connection is an opaque
+- **`@tcp` — byte streams, both ends.** `connect`, `send`, `recv`, `peer_addr`,
+  `local_addr`, `close`, and a server:
+  `! @tcp.listen "127.0.0.1:9000" ⟦ |conn| … ⟧`. A connection is an opaque
   handle, the representation `@udp` sockets and `@db` connections already have, and
   `close` on an already-closed one is fine.
+
+  `peer_addr` is the far end and `local_addr` the near end, so a server can log the
+  client it accepted and a client can read the source port it was given. Both are
+  captured when the connection opens rather than queried on demand — they cannot
+  change, and reading them is therefore never blocked by a `recv` that is still
+  waiting, which is exactly when a server wants to know who has gone quiet.
 
   `recv(conn, max_bytes, timeout_ms)` distinguishes the two ways to get no bytes,
   because conflating them is how read loops go wrong: a peer that **closed cleanly**

@@ -394,6 +394,8 @@ rite run ping.rite --allow net=127.0.0.1
 | `@tcp.connect(addr)` | `ok(conn)` — an opaque handle |
 | `@tcp.send(conn, data)` | `ok(n)`, the number of bytes written — always the whole payload |
 | `@tcp.recv(conn, max_bytes, timeout_ms)` | `ok(bytes)` or `err(…)` — see below |
+| `@tcp.peer_addr(conn)` | `ok("host:port")` — the other end |
+| `@tcp.local_addr(conn)` | `ok("host:port")` — this end |
 | `@tcp.close(conn)` | `ok(none)`, also for an already-closed handle |
 | `@tcp.listen addr ⟦ \|conn\| … ⟧` | Blocks until shutdown; runs the block per connection |
 
@@ -472,6 +474,30 @@ rite: listening on tcp://127.0.0.1:54321
 > Unlike `@http.listen`, `@tcp.listen` takes the effect marker: it is an ordinary
 > capability call wearing a nicer shape, so `!` (or `do`) is required, like every
 > other `@tcp` call.
+
+### Who is on the other end
+
+A server usually wants to log the client it just accepted:
+
+```rite native_only
+! @tcp.listen "127.0.0.1:9000" ⟦ |conn|
+  ! println("connection from " + ! @tcp.peer_addr(conn)?)
+  ! @tcp.send(conn, "hello\n")?
+⟧
+```
+
+`@tcp.peer_addr` is the far end and `@tcp.local_addr` is the near end, so the two swap
+meaning depending on which side you ask — a client's `peer_addr` is the server it
+dialled, and its `local_addr` is the ephemeral source port the operating system chose
+for it.
+
+Both are fixed for the life of a connection and are read once, when it is accepted or
+opened. That matters in practice: asking is never blocked by a `recv` that is still
+waiting, which is exactly when a server wants to know who has gone quiet.
+
+They need an open connection. After `@tcp.close` the handle refers to nothing, and
+asking raises rather than answering `err` — using a closed handle is a mistake in the
+script, not something the network did.
 
 ### Permissions
 

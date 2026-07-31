@@ -568,6 +568,22 @@ Read up to max_bytes (default 65536), waiting at most timeout_ms (default 1000).
 - effectful: true
 - permission: net
 
+### peer_addr
+
+The address at the other end of a connection, as "host:port". Returns ok(string). In a @tcp.listen block this is the client that connected — what a server logs.
+
+- arity: 1
+- effectful: true
+- permission: net
+
+### local_addr
+
+This end of a connection, as "host:port". Returns ok(string). Useful on a client, where the source port is assigned rather than chosen.
+
+- arity: 1
+- effectful: true
+- permission: net
+
 ### close
 
 Close a connection handle. Closing an unknown or already-closed handle answers ok(none).

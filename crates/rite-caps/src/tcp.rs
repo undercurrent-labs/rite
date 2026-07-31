@@ -98,6 +98,16 @@ static NEXT_ID: AtomicU64 = AtomicU64::new(1);
 struct Conn {
     read: Arc<AsyncMutex<OwnedReadHalf>>,
     write: Arc<AsyncMutex<OwnedWriteHalf>>,
+    /// Both addresses are read once, here, and then never again.
+    ///
+    /// They are fixed for the life of a TCP connection, so there is nothing to
+    /// re-query — and querying later would have to go through a half's mutex, which
+    /// a blocked `recv` is holding. That would make `@tcp.peer_addr` hang precisely
+    /// when a server most wants it: logging who is on the other end of a connection
+    /// that has gone quiet. `None` only if the socket could not answer at accept
+    /// time, which is a connection already dead.
+    peer: Option<String>,
+    local: Option<String>,
 }
 
 /// `id → connection`, **process-global** rather than owned by the capability.
@@ -114,6 +124,9 @@ static CONNS: Mutex<Option<HashMap<u64, Conn>>> = Mutex::new(None);
 
 #[cfg(not(target_arch = "wasm32"))]
 fn register(stream: TcpStream) -> u64 {
+    // Before the split: both halves can answer, but only while nothing holds them.
+    let peer = stream.peer_addr().ok().map(|a| a.to_string());
+    let local = stream.local_addr().ok().map(|a| a.to_string());
     let (r, w) = stream.into_split();
     let id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
     CONNS.lock().get_or_insert_with(HashMap::new).insert(
@@ -121,6 +134,8 @@ fn register(stream: TcpStream) -> u64 {
         Conn {
             read: Arc::new(AsyncMutex::new(r)),
             write: Arc::new(AsyncMutex::new(w)),
+            peer,
+            local,
         },
     );
     id
@@ -187,6 +202,20 @@ impl TcpCap {
             permission: "net",
         },
         NativeFunctionDescriptor {
+            name: "peer_addr",
+            docs: "The address at the other end of a connection, as \"host:port\". Returns ok(string). In a @tcp.listen block this is the client that connected — what a server logs.",
+            arity: 1,
+            effectful: true,
+            permission: "net",
+        },
+        NativeFunctionDescriptor {
+            name: "local_addr",
+            docs: "This end of a connection, as \"host:port\". Returns ok(string). Useful on a client, where the source port is assigned rather than chosen.",
+            arity: 1,
+            effectful: true,
+            permission: "net",
+        },
+        NativeFunctionDescriptor {
             name: "close",
             docs: "Close a connection handle. Closing an unknown or already-closed handle answers ok(none).",
             arity: 1,
@@ -223,6 +252,8 @@ impl TcpCap {
                 "connect" => self.connect(args, perms).await,
                 "send" => self.send(args).await,
                 "recv" => self.recv(args).await,
+                "peer_addr" => conn_addr(args.first(), Endpoint::Peer),
+                "local_addr" => conn_addr(args.first(), Endpoint::Local),
                 "close" => close(args.first()),
                 "listen" => self.listen(args, perms, ctx).await,
                 other => Err(EvalError::Capability(format!("unknown @tcp.{}", other))),
@@ -522,6 +553,41 @@ fn conn_write(v: Option<&Value>) -> Result<Arc<AsyncMutex<OwnedWriteHalf>>, Eval
         .and_then(|m| m.get(&id))
         .map(|c| c.write.clone())
         .ok_or_else(|| EvalError::Message("tcp connection closed or invalid".into()))
+}
+
+/// Which end of the connection an address query is asking about.
+#[cfg(not(target_arch = "wasm32"))]
+enum Endpoint {
+    Peer,
+    Local,
+}
+
+/// `@tcp.peer_addr` / `@tcp.local_addr`.
+///
+/// Reads the address captured when the connection was registered — see `Conn`. A
+/// closed or unknown handle is a plain error rather than an `err` value, matching
+/// `send` and `recv`: using a handle after closing it is a bug in the script, not a
+/// condition the network produced.
+#[cfg(not(target_arch = "wasm32"))]
+fn conn_addr(v: Option<&Value>, which: Endpoint) -> Result<Value, EvalError> {
+    let id = handle_id(v)?;
+    let addr = CONNS
+        .lock()
+        .as_ref()
+        .and_then(|m| m.get(&id))
+        .map(|c| match which {
+            Endpoint::Peer => c.peer.clone(),
+            Endpoint::Local => c.local.clone(),
+        })
+        .ok_or_else(|| EvalError::Message("tcp connection closed or invalid".into()))?;
+    let op = match which {
+        Endpoint::Peer => "tcp.peer_addr",
+        Endpoint::Local => "tcp.local_addr",
+    };
+    Ok(match addr {
+        Some(a) => Value::ok(Value::string(a)),
+        None => tcp_err(op, "", "the socket could not report its address"),
+    })
 }
 
 #[cfg(not(target_arch = "wasm32"))]

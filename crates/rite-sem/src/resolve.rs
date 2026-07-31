@@ -135,6 +135,8 @@ pub const HOST_EFFECTS: &[(&str, bool)] = &[
     ("tcp.connect", true),
     ("tcp.send", true),
     ("tcp.recv", true),
+    ("tcp.peer_addr", true),
+    ("tcp.local_addr", true),
     ("tcp.close", true),
     ("tcp.listen", true),
     // @game — in-process world state: writes marked, reads not.
