@@ -80,6 +80,71 @@
       "permission": "console"
     }
   ],
+  "crypto": [
+    {
+      "arity": 1,
+      "docs": "SHA-256 digest of a string, as lowercase hex.",
+      "effectful": false,
+      "name": "sha256",
+      "permission": ""
+    },
+    {
+      "arity": 1,
+      "docs": "SHA-512 digest of a string, as lowercase hex.",
+      "effectful": false,
+      "name": "sha512",
+      "permission": ""
+    },
+    {
+      "arity": 2,
+      "docs": "HMAC-SHA-256 of a message under a key, as lowercase hex.",
+      "effectful": false,
+      "name": "hmac_sha256",
+      "permission": ""
+    },
+    {
+      "arity": 1,
+      "docs": "n cryptographically secure random bytes, as lowercase hex.",
+      "effectful": true,
+      "name": "random_bytes",
+      "permission": "random"
+    },
+    {
+      "arity": 2,
+      "docs": "Compare two strings in time independent of their contents.",
+      "effectful": false,
+      "name": "constant_time_eq",
+      "permission": ""
+    },
+    {
+      "arity": 1,
+      "docs": "Encode a string as standard base64 (RFC 4648, padded).",
+      "effectful": false,
+      "name": "base64_encode",
+      "permission": ""
+    },
+    {
+      "arity": 1,
+      "docs": "Decode standard base64 to a string. Answers a Result.",
+      "effectful": false,
+      "name": "base64_decode",
+      "permission": ""
+    },
+    {
+      "arity": 1,
+      "docs": "Encode a string as lowercase hex.",
+      "effectful": false,
+      "name": "hex_encode",
+      "permission": ""
+    },
+    {
+      "arity": 1,
+      "docs": "Decode hex to a string. Answers a Result.",
+      "effectful": false,
+      "name": "hex_decode",
+      "permission": ""
+    }
+  ],
   "csv": [
     {
       "arity": 1,

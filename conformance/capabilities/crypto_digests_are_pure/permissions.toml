@@ -1,0 +1,3 @@
+# Nothing beyond the default-secure set. `random_bytes` rides the `random`
+# grant, which is on by default; every other `@crypto` call needs no grant at all.
+allow = []

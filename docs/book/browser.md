@@ -24,6 +24,7 @@ Source repo: [github.com/undercurrent-labs/rite](https://github.com/undercurrent
 | Run pure scripts | Yes |
 | `@console` printing | Yes |
 | Pipelines, match, functions | Yes |
+| `@json`, `@csv`, `@crypto` — pure transforms | No (use CLI) — the bundle registers no capability host yet |
 | Real `@fs` disk I/O | No (use CLI) |
 | `@process` | No (blocked) |
 | Real `@http.listen` sockets | Virtual / limited — use CLI |

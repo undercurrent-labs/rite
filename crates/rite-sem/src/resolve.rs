@@ -73,6 +73,20 @@ pub const HOST_EFFECTS: &[(&str, bool)] = &[
     ("csv.encode", false),
     ("csv.read", true),
     ("csv.write", true),
+    // @crypto — value transforms. A digest, an HMAC and an encoding are functions
+    // of their arguments alone: the same input gives the same answer on every run
+    // and nothing outside the program is touched, so they take no marker. Only
+    // `random_bytes` reads the OS entropy pool, which is state outside the program
+    // and different every call — effectful for the same reason `@clock.now` is.
+    ("crypto.sha256", false),
+    ("crypto.sha512", false),
+    ("crypto.hmac_sha256", false),
+    ("crypto.random_bytes", true),
+    ("crypto.constant_time_eq", false),
+    ("crypto.base64_encode", false),
+    ("crypto.base64_decode", false),
+    ("crypto.hex_encode", false),
+    ("crypto.hex_decode", false),
     // @clock — `now`/`sleep` consult the wall clock; the rest are value math.
     ("clock.now", true),
     ("clock.parse", false),

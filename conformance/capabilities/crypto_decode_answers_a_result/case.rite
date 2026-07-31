@@ -1,0 +1,34 @@
+// The decoders take untrusted text — a header, a query parameter, a file
+// somebody else wrote — so they answer a result instead of failing the run.
+// Both halves are matched here: a good input and a malformed one behave the
+// same way structurally, which is the point.
+good ← ~ @crypto.base64_decode("Zm9vYmFy") ⟦
+  ok text → text
+  err _ → "<rejected>"
+⟧
+
+// Not a multiple of four, so it never was base64.
+bad ← ~ @crypto.base64_decode("Zg=") ⟦
+  ok text → text
+  err _ → "<rejected>"
+⟧
+
+// Decodes cleanly to the byte 0xFF, which is not text — also a rejection.
+not_text ← ~ @crypto.hex_decode("ff") ⟦
+  ok text → text
+  err _ → "<rejected>"
+⟧
+
+// The error payload is a record with the same `kind` / `message` shape
+// `@json.decode` uses, so one handler can read both.
+kind ← ~ @crypto.hex_decode("zz") ⟦
+  ok _ → "<decoded>"
+  err e → e.kind
+⟧
+
+ok_good ← good = "foobar"
+ok_bad ← bad = "<rejected>"
+ok_not_text ← not_text = "<rejected>"
+ok_kind ← kind = "crypto.hex_decode"
+
+ok_good ∧ ok_bad ∧ ok_not_text ∧ ok_kind

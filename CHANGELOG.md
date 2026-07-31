@@ -4,6 +4,30 @@
 
 ### Added
 
+- **`@crypto` — hashing, HMAC and the encodings that travel with them.**
+  `@crypto.sha256(s)`, `@crypto.sha512(s)`, `@crypto.hmac_sha256(key, message)`,
+  `@crypto.constant_time_eq(a, b)`, `@crypto.base64_encode` / `base64_decode`,
+  `@crypto.hex_encode` / `hex_decode`, and `@crypto.random_bytes(n)`.
+
+  Everything except `random_bytes` is a pure transform, so it takes no `!` marker
+  and needs no `--allow`: `@crypto.sha256("abc")` observes nothing outside the
+  program and answers the same on every run. That also makes the capability usable
+  in Studio and anywhere else the pure evaluator runs. `random_bytes` reads the
+  operating system's entropy pool, so it is marked and rides the existing `random`
+  grant — and it deliberately ignores `@random.seed`, so pinning a seed for
+  reproducible dice rolls does not pin your session tokens.
+
+  The decoders answer a Result rather than failing the run, because their input is
+  normally untrusted, and `base64_decode` is strict RFC 4648 — padded, canonical,
+  standard alphabet — rather than guessing at malformed input.
+
+  **No ciphers.** There is no `encrypt`, no AES, no RSA, and nothing that asks the
+  caller to choose an IV or a mode; that shape is how ECB and reused nonces get
+  shipped, and it belongs behind one opinionated `seal`/`open` in a future `cipher`
+  package. Password hashing (argon2, bcrypt) is deferred for a different reason: it
+  carries cost parameters and a stored-format contract, which is a design rather
+  than a function. See [Hashing and encoding](docs/book/crypto.md).
+
 - **Strings and numbers can be worked on.** Rite is pitched at tools and pipelines,
   where handling text is most of the job, and it had `lines`, `words` and `join` —
   nothing to split, trim, case, pad or slice with.

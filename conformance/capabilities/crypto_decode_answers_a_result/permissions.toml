@@ -1,0 +1,2 @@
+# Decoding is a pure transform: no grant, and no `!` marker on any call above.
+allow = []

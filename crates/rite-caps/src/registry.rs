@@ -1,5 +1,6 @@
 use crate::clock::ClockCap;
 use crate::console::ConsoleCap;
+use crate::crypto::CryptoCap;
 use crate::csv::CsvCap;
 use crate::db::DbCap;
 use crate::env::EnvCap;
@@ -41,6 +42,7 @@ pub struct HostCapabilities {
     pub fs: FsCap,
     pub json: JsonCap,
     pub csv: CsvCap,
+    pub crypto: CryptoCap,
     pub clock: ClockCap,
     pub env: EnvCap,
     pub process: ProcessCap,
@@ -58,6 +60,7 @@ impl HostCapabilities {
             fs: FsCap,
             json: JsonCap,
             csv: CsvCap,
+            crypto: CryptoCap,
             clock: ClockCap::new(),
             env: EnvCap,
             process: ProcessCap,
@@ -76,6 +79,7 @@ impl HostCapabilities {
             ("fs", FsCap::DESCRIPTORS),
             ("json", JsonCap::DESCRIPTORS),
             ("csv", CsvCap::DESCRIPTORS),
+            ("crypto", CryptoCap::DESCRIPTORS),
             ("clock", ClockCap::DESCRIPTORS),
             ("env", EnvCap::DESCRIPTORS),
             ("process", ProcessCap::DESCRIPTORS),
@@ -129,6 +133,8 @@ impl CapabilityHost for HostCapabilities {
             "fs" => self.fs.call(method, args, &self.perms, &ctx.atoms).await,
             "json" => self.json.call(method, args, &self.perms).await,
             "csv" => self.csv.call(method, args, &self.perms).await,
+            // Pure value transforms, apart from `random_bytes` — nothing to await.
+            "crypto" => self.crypto.call(method, args, &self.perms),
             "clock" => self.clock.call(method, args, effect, &self.perms).await,
             "env" => self.env.call(method, args, &self.perms).await,
             "process" => self.process.call(method, args, &self.perms, ctx).await,
