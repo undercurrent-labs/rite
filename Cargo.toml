@@ -9,6 +9,7 @@ members = [
     "crates/rite-caps",
     "crates/rite-compiler",
     "crates/rite-fmt",
+    "crates/rite-render",
     "crates/rite-doc",
     "crates/rite-test",
     "crates/rite-repl",
@@ -32,6 +33,7 @@ rust-version = "1.75"
 [workspace.dependencies]
 rite-core = { path = "crates/rite-core" }
 rite-syntax = { path = "crates/rite-syntax" }
+rite-render = { path = "crates/rite-render" }
 rite-sem = { path = "crates/rite-sem" }
 rite-runtime = { path = "crates/rite-runtime" }
 rite-caps = { path = "crates/rite-caps" }
