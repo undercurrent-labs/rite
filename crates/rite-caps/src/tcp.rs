@@ -51,8 +51,6 @@ use rite_runtime::{Evaluator, HostHandle, Key};
 #[cfg(not(target_arch = "wasm32"))]
 use std::collections::HashMap;
 #[cfg(not(target_arch = "wasm32"))]
-use std::sync::atomic::{AtomicU64, Ordering};
-#[cfg(not(target_arch = "wasm32"))]
 use std::sync::Arc;
 #[cfg(not(target_arch = "wasm32"))]
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -85,9 +83,6 @@ const DEFAULT_TIMEOUT_MS: i64 = 1_000;
 #[cfg(not(target_arch = "wasm32"))]
 const CONNECT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
 
-#[cfg(not(target_arch = "wasm32"))]
-static NEXT_ID: AtomicU64 = AtomicU64::new(1);
-
 /// One live connection, its halves locked separately.
 ///
 /// A single lock over the whole stream would make a blocking `recv` stop a `send` on
@@ -110,43 +105,42 @@ struct Conn {
     local: Option<String>,
 }
 
-/// `id → connection`, **process-global** rather than owned by the capability.
+/// Register a connection on the context that will use it.
 ///
-/// `@udp` keeps its sockets per-instance, and could: the script that binds a socket
-/// is the script that uses it. A `@tcp.listen` handler cannot work that way. Each
-/// accepted connection runs its block in a *fresh* `RuntimeContext` with a fresh
-/// `HostCapabilities` — the same isolation an `@http` request handler gets — so a
-/// table hanging off the listening capability would be invisible to the very block
-/// the handle is passed to. Ids come from one atomic counter and are never reused,
-/// so a global table cannot alias two connections.
+/// This was a process-global map, on the reasoning that a `@tcp.listen` handler
+/// runs its block in a *fresh* `RuntimeContext` — so a table hanging off the
+/// listening capability would be invisible to the very block the handle is passed
+/// to. That much is true, and it is why the table cannot live on the capability.
+/// It does not follow that it has to be global: the handler's own context is
+/// reachable at the point the connection is registered, and it is the right owner.
+///
+/// Being global cost a real property. A socket outlived the run that opened it,
+/// so `rite run` only cleaned up because the process exited — and inside
+/// `RiteEngine`, where the host process keeps going, a guest that never called
+/// `@tcp.close` leaked the connection for the lifetime of the host, with no way
+/// for the next run to reach it. The same reasoning `@fs.open` follows.
 #[cfg(not(target_arch = "wasm32"))]
-static CONNS: Mutex<Option<HashMap<u64, Conn>>> = Mutex::new(None);
-
-#[cfg(not(target_arch = "wasm32"))]
-fn register(stream: TcpStream) -> u64 {
+fn register(stream: TcpStream, ctx: &RuntimeContext) -> Result<u64, EvalError> {
     // Before the split: both halves can answer, but only while nothing holds them.
     let peer = stream.peer_addr().ok().map(|a| a.to_string());
     let local = stream.local_addr().ok().map(|a| a.to_string());
     let (r, w) = stream.into_split();
-    let id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
-    CONNS.lock().get_or_insert_with(HashMap::new).insert(
-        id,
-        Conn {
-            read: Arc::new(AsyncMutex::new(r)),
-            write: Arc::new(AsyncMutex::new(w)),
-            peer,
-            local,
-        },
-    );
-    id
-}
-
-/// Drop both halves, which closes the socket. Unknown id: nothing to do.
-#[cfg(not(target_arch = "wasm32"))]
-fn unregister(id: u64) {
-    if let Some(map) = CONNS.lock().as_mut() {
-        map.remove(&id);
-    }
+    ctx.handles
+        .insert(
+            HANDLE_KIND,
+            Box::new(Conn {
+                read: Arc::new(AsyncMutex::new(r)),
+                write: Arc::new(AsyncMutex::new(w)),
+                peer,
+                local,
+            }),
+        )
+        .map_err(|limit| {
+            EvalError::Message(format!(
+                "tcp: too many open connections ({limit}). A connection is closed with \
+                 @tcp.close, or when the run ends"
+            ))
+        })
 }
 
 /// Most recent address `@tcp.listen` actually bound.
@@ -249,12 +243,12 @@ impl TcpCap {
         #[cfg(not(target_arch = "wasm32"))]
         {
             match method {
-                "connect" => self.connect(args, perms).await,
-                "send" => self.send(args).await,
-                "recv" => self.recv(args).await,
-                "peer_addr" => conn_addr(args.first(), Endpoint::Peer),
-                "local_addr" => conn_addr(args.first(), Endpoint::Local),
-                "close" => close(args.first()),
+                "connect" => self.connect(args, perms, ctx).await,
+                "send" => self.send(args, ctx).await,
+                "recv" => self.recv(args, ctx).await,
+                "peer_addr" => conn_addr(args.first(), Endpoint::Peer, ctx),
+                "local_addr" => conn_addr(args.first(), Endpoint::Local, ctx),
+                "close" => close(args.first(), ctx),
                 "listen" => self.listen(args, perms, ctx).await,
                 other => Err(EvalError::Capability(format!("unknown @tcp.{}", other))),
             }
@@ -266,7 +260,12 @@ impl TcpCap {
     /// is not exempt the way a *bind* address is: connecting somewhere is reaching
     /// out, and `127.0.0.1` is where the interesting local services live.
     #[cfg(not(target_arch = "wasm32"))]
-    async fn connect(&self, args: Vec<Value>, perms: &PermissionSet) -> Result<Value, EvalError> {
+    async fn connect(
+        &self,
+        args: Vec<Value>,
+        perms: &PermissionSet,
+        ctx: &RuntimeContext,
+    ) -> Result<Value, EvalError> {
         let addr = args
             .first()
             .and_then(|v| v.as_str())
@@ -282,7 +281,7 @@ impl TcpCap {
         match tokio::time::timeout(CONNECT_TIMEOUT, TcpStream::connect(&addr)).await {
             Ok(Ok(stream)) => Ok(Value::ok(Value::Handle(HostHandle {
                 kind: HANDLE_KIND.into(),
-                id: register(stream),
+                id: register(stream, ctx)?,
             }))),
             // A refused connection is a condition a script can handle, so it is a
             // value — the same choice `@fs` makes for io errors.
@@ -302,8 +301,8 @@ impl TcpCap {
     /// a stream, and "I sent 3 of your 9 bytes" is a bug waiting to be a protocol
     /// error, so `write_all` loops and the answer is the payload length or an error.
     #[cfg(not(target_arch = "wasm32"))]
-    async fn send(&self, args: Vec<Value>) -> Result<Value, EvalError> {
-        let write = conn_write(args.first())?;
+    async fn send(&self, args: Vec<Value>, ctx: &RuntimeContext) -> Result<Value, EvalError> {
+        let write = conn_write(args.first(), ctx)?;
         let payload = payload_bytes(args.get(1))?;
         let mut half = write.lock().await;
         match half.write_all(&payload).await {
@@ -313,8 +312,8 @@ impl TcpCap {
     }
 
     #[cfg(not(target_arch = "wasm32"))]
-    async fn recv(&self, args: Vec<Value>) -> Result<Value, EvalError> {
-        let read = conn_read(args.first())?;
+    async fn recv(&self, args: Vec<Value>, ctx: &RuntimeContext) -> Result<Value, EvalError> {
+        let read = conn_read(args.first(), ctx)?;
         let max = int_arg(
             args.get(1),
             DEFAULT_MAX_BYTES,
@@ -460,10 +459,20 @@ async fn serve_conn(
     module_env: rite_runtime::Environment,
     functions: HashMap<String, rite_runtime::FunctionEntry>,
 ) {
-    let id = register(stream);
     let mut ctx = RuntimeContext::new();
     crate::install_defaults(&mut ctx, perms);
     crate::http::install_module_scope(&mut ctx, &module_env, &functions);
+    // Registered on the *handler's* context, so the connection is reachable from
+    // the block it is passed to and is dropped — closing the socket — when that
+    // block's context goes, which is what the explicit `unregister` below used to
+    // do by hand.
+    let id = match register(stream, &ctx) {
+        Ok(id) => id,
+        Err(e) => {
+            crate::http::emit_process_stderr(&format!("rite: tcp accept: {e}\n"));
+            return;
+        }
+    };
     // A connection is not a request. The default budget gives a script 60 seconds of
     // wall clock, which would kill an open-but-idle session on its next step — so the
     // clock is lifted here while the step, depth and size ceilings stay in place.
@@ -493,7 +502,11 @@ async fn serve_conn(
     }
     // The connection's lifetime is the block's. Closing here is what lets the shape
     // exist at all without connection-lifetime rules the language cannot express.
-    unregister(id);
+    //
+    // Dropping `ctx` would close it anyway now that the table lives there, but say
+    // so explicitly: the socket should go when the handler returns, not whenever
+    // the context happens to be dropped.
+    ctx.handles.close(id);
 }
 
 /// A payload is text or bytes. Anything else is rejected rather than stringified:
@@ -542,24 +555,24 @@ fn handle_id(v: Option<&Value>) -> Result<u64, EvalError> {
 /// (which would serialize every other connection, and trip
 /// `clippy::await_holding_lock`).
 #[cfg(not(target_arch = "wasm32"))]
-fn conn_read(v: Option<&Value>) -> Result<Arc<AsyncMutex<OwnedReadHalf>>, EvalError> {
+fn conn_read(
+    v: Option<&Value>,
+    ctx: &RuntimeContext,
+) -> Result<Arc<AsyncMutex<OwnedReadHalf>>, EvalError> {
     let id = handle_id(v)?;
-    CONNS
-        .lock()
-        .as_ref()
-        .and_then(|m| m.get(&id))
-        .map(|c| c.read.clone())
+    ctx.handles
+        .with::<Conn, _>(id, |c| c.read.clone())
         .ok_or_else(|| EvalError::Message("tcp connection closed or invalid".into()))
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-fn conn_write(v: Option<&Value>) -> Result<Arc<AsyncMutex<OwnedWriteHalf>>, EvalError> {
+fn conn_write(
+    v: Option<&Value>,
+    ctx: &RuntimeContext,
+) -> Result<Arc<AsyncMutex<OwnedWriteHalf>>, EvalError> {
     let id = handle_id(v)?;
-    CONNS
-        .lock()
-        .as_ref()
-        .and_then(|m| m.get(&id))
-        .map(|c| c.write.clone())
+    ctx.handles
+        .with::<Conn, _>(id, |c| c.write.clone())
         .ok_or_else(|| EvalError::Message("tcp connection closed or invalid".into()))
 }
 
@@ -577,13 +590,11 @@ enum Endpoint {
 /// `send` and `recv`: using a handle after closing it is a bug in the script, not a
 /// condition the network produced.
 #[cfg(not(target_arch = "wasm32"))]
-fn conn_addr(v: Option<&Value>, which: Endpoint) -> Result<Value, EvalError> {
+fn conn_addr(v: Option<&Value>, which: Endpoint, ctx: &RuntimeContext) -> Result<Value, EvalError> {
     let id = handle_id(v)?;
-    let addr = CONNS
-        .lock()
-        .as_ref()
-        .and_then(|m| m.get(&id))
-        .map(|c| match which {
+    let addr = ctx
+        .handles
+        .with::<Conn, _>(id, |c| match which {
             Endpoint::Peer => c.peer.clone(),
             Endpoint::Local => c.local.clone(),
         })
@@ -599,9 +610,11 @@ fn conn_addr(v: Option<&Value>, which: Endpoint) -> Result<Value, EvalError> {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-fn close(v: Option<&Value>) -> Result<Value, EvalError> {
+fn close(v: Option<&Value>, ctx: &RuntimeContext) -> Result<Value, EvalError> {
     let id = handle_id(v)?;
-    unregister(id);
+    // Dropping both halves closes the socket. An unknown id is nothing to do —
+    // closing twice stays fine, which is the convention this capability set.
+    ctx.handles.close(id);
     Ok(Value::ok(Value::None))
 }
 

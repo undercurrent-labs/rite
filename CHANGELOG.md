@@ -2,6 +2,21 @@
 
 ## [Unreleased]
 
+### Changed — `@tcp` connections close with the run
+
+`@tcp` kept its connections in a process-global map, so a socket outlived the run
+that opened it: `rite run` only cleaned up because the process exited, and inside
+`RiteEngine` — where the host keeps going — a guest that never called `@tcp.close`
+leaked the connection for the lifetime of the host, with no way for the next run
+to reach it. They live on the run's context now, as `@fs` handles do.
+
+The original reasoning for the global was sound as far as it went: a `@tcp.listen`
+handler runs its block in a fresh context, so a table on the *capability* would be
+invisible to the block the handle is passed to. It does not follow that the table
+must be global — the handler's own context is reachable where the connection is
+registered, and is the right owner. A connection now closes when its handler
+returns, and a client connection when the run ends.
+
 ### Added — `@fs` reads and writes without holding the whole file
 
 Every `@fs` read was whole-file: `read` and `lines` are `read_to_string`,
@@ -28,8 +43,7 @@ complaint arriving later from an unrelated call.
 path, `#write` and `#append` need `fs:write`, and nothing afterwards carries a path
 to check — so a refused open is refused before the file is created or truncated.
 
-`@tcp`'s sockets still use the process-global table and still outlive the run that
-opened them. That is the same leak and it is not fixed here.
+`@tcp`'s sockets had the same leak, fixed just after — see above.
 
 ### Fixed — `?` on the line before a loop
 

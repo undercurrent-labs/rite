@@ -595,3 +595,42 @@ conn ← ! @tcp.connect("{addr}")?
         "expected a closed-connection error, got {msg}"
     );
 }
+
+/// A connection the script never closed must not outlive the run that opened it.
+///
+/// Connections used to live in a process-global map, so `@tcp.close` was the only
+/// thing that ever removed one. Under `rite run` the process exits and nobody
+/// notices; inside `RiteEngine` the host keeps running, and a guest that forgot to
+/// close leaked the socket for the lifetime of the host — with no way for the next
+/// run to reach it. They live on the run's context now, as `@fs` handles do.
+#[tokio::test]
+async fn a_connection_is_released_when_the_run_ends() {
+    let _guard = server_lock().lock().await;
+    let (server, addr) = serve(
+        r#"
+! @tcp.listen "127.0.0.1:0" ⟦ |conn|
+  ! @tcp.recv(conn, 16, 200)?
+⟧
+"#,
+    )
+    .await;
+
+    let watch = {
+        let mut ctx = ctx_with(loopback_perms());
+        // Connect, and deliberately never close.
+        let src = format!("c ← ! @tcp.connect(\"{addr}\")?\n^ 1\n");
+        run_source("leak.rite", &src, &mut ctx)
+            .await
+            .unwrap_or_else(|e| panic!("connect failed: {e}"));
+        assert_eq!(ctx.handles.len(), 1, "the connection was not registered");
+        std::sync::Arc::downgrade(&ctx.handles)
+    };
+
+    assert!(
+        watch.upgrade().is_none(),
+        "the handle table outlived the run, so the socket is still open"
+    );
+
+    server.abort();
+    let _ = server.await;
+}
