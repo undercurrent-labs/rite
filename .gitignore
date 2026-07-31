@@ -86,3 +86,6 @@ tmp/
 # Local Claude Code skills and settings. The published agent skill is skills/rite/,
 # which is generated — these are working tools, not something users install.
 /.claude/
+
+# Browser-automation scratch (snapshots, screenshots) from local verification.
+/.playwright-mcp/

@@ -22,11 +22,34 @@ const chip = computed(() => props.label || props.lang || "text");
 const isRite = computed(() => props.lang === "rite");
 
 /**
- * `browser` blocks are executed in browser-safe mode by `rite docs check` on
- * every CI run, so Run here cannot promise something the book does not already
- * verify. Everything else opens in Studio instead of failing in place.
+ * The browser build installs no capability host.
+ *
+ * `rite-caps` sits behind rite-wasm's `native` feature, so the WASM bundle
+ * answers every `@capability` call with "not registered". `@console` is the
+ * exception — it reaches the output buffer through the context rather than the
+ * host, which is why printing works and nothing else does.
+ *
+ * `rite docs check` runs *natively*, where the capabilities are compiled in, so
+ * a block marked `browser` can pass CI and still fail here. It did: the Files
+ * and JSON chapter offered Run on `@json.encode` and answered `capability
+ * `@json.encode` not registered`. The fence mode alone is not enough to promise
+ * this button works, so the code gets the final say.
+ *
+ * When the pure capabilities become reachable in the browser this list is the
+ * one place to relax.
  */
-const canRunInline = computed(() => isRite.value && props.mode === "browser");
+const BROWSER_CAPABILITIES = ["console"];
+
+const usesUnavailableCapability = computed(() => {
+  const used = new Set<string>();
+  for (const m of source.value.matchAll(/@(\w+)\./g)) used.add(m[1]);
+  for (const m of source.value.matchAll(/\bhost\.(\w+)\./g)) used.add(m[1]);
+  return [...used].some((cap) => !BROWSER_CAPABILITIES.includes(cap));
+});
+
+const canRunInline = computed(
+  () => isRite.value && props.mode === "browser" && !usesUnavailableCapability.value
+);
 const studioHref = computed(
   () => `/studio#s=${encodeShare({ source: source.value, dialect: detectDialect(source.value) })}`
 );
