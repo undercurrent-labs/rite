@@ -81,13 +81,43 @@ impl std::fmt::Debug for NativeClosure {
     }
 }
 
+/// The declared types of a function's parameters and its result.
+///
+/// Carried on the closure rather than looked up by name because a function value
+/// outlives the name it was defined under: `f ← shout` and `each(xs, shout)` both
+/// hand the value around, and the contract has to travel with it.
+///
+/// `Arc` because a closure is cloned on every capture and the contract never
+/// changes after `register_functions` builds it.
+#[derive(Debug, Clone)]
+pub struct FnContract {
+    pub name: String,
+    pub param_names: Vec<String>,
+    /// Positionally aligned with `param_names`; `None` where nothing was declared.
+    pub param_types: Vec<Option<rite_sem::TypeExpr>>,
+    pub return_type: Option<rite_sem::TypeExpr>,
+}
+
+impl FnContract {
+    /// Nothing was annotated, so there is nothing to check.
+    pub fn is_empty(&self) -> bool {
+        self.return_type.is_none() && self.param_types.iter().all(Option::is_none)
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Closure {
     pub id: u64,
-    pub name: Option<String>,
+    /// `Arc<str>` rather than `String`: a `Closure` is stored inline in `Value`,
+    /// which is stored inline in `EvalError`, so every byte here is a byte on every
+    /// `Result` the evaluator returns. Twenty-four bytes of `Option<String>` for a
+    /// field read in one place (the `Display` impl below) is the wrong trade.
+    pub name: Option<std::sync::Arc<str>>,
     pub params: Vec<String>,
     pub env: Arc<parking_lot::RwLock<crate::env::Environment>>,
     pub body: rite_sem::BlockIr,
+    /// Declared types to enforce on entry and exit, if the source wrote any.
+    pub contract: Option<Arc<FnContract>>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

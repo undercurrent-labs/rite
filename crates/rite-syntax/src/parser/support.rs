@@ -33,13 +33,20 @@ impl Parser {
             return TypeExpr::Record(fields);
         }
         let name = self.parse_ident();
+        // `result<T>` — the payload type of an `ok`. This was an empty `if` that
+        // matched the shape and did nothing, so the annotation the spec documents was
+        // a parse error: `◆ f(x: result<int>)` reported "expected RParen, found Lt"
+        // and two more errors after it. `err` carries a failure rather than a `T`, so
+        // only the `ok` side is constrained.
         if name.name == "result" && self.check(TokenKind::Lt) {
-            // result<T> — optional; we may not have Lt as generic
+            self.advance();
+            let inner = self.parse_type_expr();
+            self.expect(TokenKind::Gt);
+            return TypeExpr::Result(Box::new(inner));
         }
         if name.name == "any" {
             return TypeExpr::Any(name.span);
         }
-        // result name with following type in brackets handled simply as Named
         TypeExpr::Named(name)
     }
 

@@ -191,6 +191,63 @@ pub ◆ square(value) ⟦
 
 Only `pub` items are imported by `use` — see [Modules](modules.md).
 
+## Type annotations
+
+A parameter or a return can declare a type. Rite has no type *checker* — nothing is
+verified before the program runs — but a declared type is enforced **at runtime**,
+on entry and on exit:
+
+```rite browser
+◆ double(x: int) → int ⟦
+  ^ x * 2
+⟧
+
+! @console.println(str(double(21)))
+```
+
+Break the contract and the call fails where the mistake is, rather than somewhere
+downstream:
+
+```rite
+◆ double(x: int) → int ⟦
+  ^ "twenty-one"
+⟧
+
+double(21)
+```
+
+> `double: declared to return int, but returned string`
+
+The types are the value kinds — `int`, `float`, `number` (either), `string`, `bool`,
+`atom`, `list`, `record`, `bytes`, `function`, `none` — plus `any`, and three
+composites:
+
+| Written | Means |
+|---|---|
+| `[int]` | a list whose every element is an `int` |
+| `result<int>` | an `ok` carrying an `int` (an `err` carries a failure, so its payload is unconstrained) |
+| `⟨name: string, age: int⟩` | a record with at least those fields, of those types |
+
+Checking is **structural**, not nominal: a value fits when its shape does. An empty
+list satisfies `[int]` because there is nothing in it that does not, and a record
+may carry fields the annotation never mentions.
+
+Annotations are optional and independent — annotate one parameter and leave the
+rest, or declare a return type and no parameters. What is not annotated is not
+constrained, and `any` says so explicitly:
+
+```rite browser
+◆ label(x: any) → string ⟦
+  ^ "value: " + str(x)
+⟧
+
+! @console.println(label(#ok))
+```
+
+They cost a check per call, so they earn their place at the edges of a program —
+where data arrives from a file, a request or a caller you do not control — more
+than in a helper called in a loop.
+
 ## Documenting a function
 
 A `///` comment directly above a declaration is its documentation. A `//!` comment at the

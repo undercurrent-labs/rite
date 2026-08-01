@@ -552,7 +552,13 @@ Install the `rite` CLI, then: `rite run script.rite --allow-all`."#.into(),
         DocSection {
             id: "contracts".into(),
             title: "Runtime type contracts".into(),
-            body_markdown: "Optional annotations like `value: int` are checked at runtime on function entry/exit.".into(),
+            body_markdown: "Optional annotations like `value: int` are checked at runtime on \
+                function entry and exit. Types are `int`, `float`, `number` (either), `string`, \
+                `bool`, `atom`, `list`, `record`, `bytes`, `function`, `none`, `any`, plus \
+                `[T]`, `result<T>` and `⟨field: T, …⟩`. Checking is structural — an empty list \
+                satisfies `[int]`, and a record may carry fields the annotation does not name. \
+                A parameter or return with no annotation is unconstrained."
+                .into(),
         },
         DocSection {
             id: "http".into(),

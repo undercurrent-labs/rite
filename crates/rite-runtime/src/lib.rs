@@ -113,7 +113,7 @@ pub fn lookup_global(ctx: &RuntimeContext, name: &str) -> Result<Value, EvalErro
 /// both resolve callees through this. Skipping it produces `undefined name` at runtime for
 /// the first recursive function, which is a confusing way to learn it.
 pub fn register_functions(ir: &ProgramIr, ctx: &mut RuntimeContext) {
-    use crate::value::Closure;
+    use crate::value::{Closure, FnContract};
     for f in &ir.functions {
         ctx.functions.insert(
             f.name.clone(),
@@ -122,14 +122,31 @@ pub fn register_functions(ir: &ProgramIr, ctx: &mut RuntimeContext) {
                 body: f.body.clone(),
             },
         );
+        // Built once per function and shared by every clone of the closure. A
+        // function with nothing annotated gets `None`, so the check at the call
+        // boundary is a null-pointer test for the overwhelming majority of calls.
+        let contract = {
+            let c = FnContract {
+                name: f.name.clone(),
+                param_names: f.param_names.clone(),
+                param_types: f.param_types.clone(),
+                return_type: f.return_type.clone(),
+            };
+            if c.is_empty() {
+                None
+            } else {
+                Some(std::sync::Arc::new(c))
+            }
+        };
         // The capture is the module scope itself (shared frames), so ordering does not
         // matter and recursion resolves.
         let clos = Value::Function(Closure {
             id: crate::eval::next_closure_id(),
-            name: Some(f.name.clone()),
+            name: Some(f.name.as_str().into()),
             params: f.param_names.clone(),
             env: std::sync::Arc::new(parking_lot::RwLock::new(ctx.env.clone())),
             body: f.body.clone(),
+            contract: contract.clone(),
         });
         ctx.env.define_name(&f.name, clos, false);
     }

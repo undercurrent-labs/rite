@@ -1,6 +1,7 @@
 //! Shared semantic intermediate representation for interpreter and compiler.
 
 use rite_core::Span;
+pub use rite_syntax::TypeExpr;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -43,6 +44,18 @@ pub struct FunctionIr {
     pub body: BlockIr,
     pub is_pub: bool,
     pub span: Span,
+    /// Declared parameter types, positionally aligned with `param_names`; `None`
+    /// where a parameter carries no annotation.
+    ///
+    /// `#[serde(default)]` because the IR is embedded as JSON in every crate
+    /// `rite build` generates: a binary built before this field existed must still
+    /// deserialise, and an absent list means "nothing annotated", which is the
+    /// behaviour those binaries were compiled with.
+    #[serde(default)]
+    pub param_types: Vec<Option<TypeExpr>>,
+    /// The declared return type, if the source wrote one.
+    #[serde(default)]
+    pub return_type: Option<TypeExpr>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

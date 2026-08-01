@@ -1,0 +1,2 @@
+◆ typed(x: int) → int ⟦ ^ x * 2 ⟧
+typed(true)

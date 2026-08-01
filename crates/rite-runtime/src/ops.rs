@@ -16,7 +16,7 @@ use crate::atom::AtomInterner;
 use crate::builtins::{compare_values, list_remove_first, membership, merge_records};
 use crate::value::{Key, ResultValue, Value};
 use crate::EvalError;
-use rite_sem::{BinaryOpIr, UnaryOpIr};
+use rite_sem::{BinaryOpIr, TypeExpr, UnaryOpIr};
 
 /// Unary `-` / `not` / `!`.
 pub fn unary(op: UnaryOpIr, v: Value) -> Result<Value, EvalError> {
@@ -201,4 +201,169 @@ fn num_binop(
             "numeric operation on non-numbers".into(),
         )),
     }
+}
+
+/// Does `v` satisfy the declared type `ty`?
+///
+/// These are the runtime contracts `def f(x: int) -> int` has always *claimed* to
+/// enforce — the generated reference has published "checked at runtime on function
+/// entry/exit" since before there was any code behind it. Annotations were parsed,
+/// printed back by the formatter, and dropped on the way to the IR.
+///
+/// Structural, not nominal: a value satisfies a type when its shape does. An empty
+/// list satisfies `[int]` because there is nothing in it that does not.
+///
+/// `any` matches everything, which is what makes it useful as an escape hatch on
+/// one parameter of an otherwise annotated function.
+///
+/// Lives here rather than in the evaluator because `rite build` emits calls to it —
+/// the compiled path has to reject exactly what the interpreter rejects, and the
+/// parity tests compare the two.
+pub fn value_matches_type(v: &Value, ty: &TypeExpr) -> bool {
+    match ty {
+        TypeExpr::Any(_) => true,
+        TypeExpr::List(inner) => match v {
+            Value::List(xs) => xs.iter().all(|x| value_matches_type(x, inner)),
+            _ => false,
+        },
+        TypeExpr::Result(inner) => match v {
+            Value::Result(r) => match r {
+                ResultValue::Ok(x) => value_matches_type(x, inner),
+                // `err` carries a failure, not a `T`; the payload is unconstrained.
+                ResultValue::Err(_) => true,
+            },
+            _ => false,
+        },
+        TypeExpr::Record(fields) => match v {
+            Value::Record(rec) => fields.iter().all(|(name, fty)| {
+                rec.get(&Key::String(name.name.clone()))
+                    .is_some_and(|fv| value_matches_type(fv, fty))
+            }),
+            _ => false,
+        },
+        TypeExpr::Named(name) => match name.name.as_str() {
+            // `number` accepts either numeric type, because a function taking one
+            // almost always means "a number" and Rite promotes int to float freely.
+            "number" => matches!(v, Value::Int(_) | Value::Float(_)),
+            "any" => true,
+            other => v.type_name() == other,
+        },
+    }
+}
+
+/// Render a declared type the way the source wrote it, for a diagnostic.
+pub fn type_expr_name(ty: &TypeExpr) -> String {
+    match ty {
+        TypeExpr::Any(_) => "any".into(),
+        TypeExpr::Named(n) => n.name.clone(),
+        TypeExpr::List(inner) => format!("[{}]", type_expr_name(inner)),
+        TypeExpr::Result(inner) => format!("result<{}>", type_expr_name(inner)),
+        TypeExpr::Record(fields) => {
+            let inner: Vec<String> = fields
+                .iter()
+                .map(|(n, t)| format!("{}: {}", n.name, type_expr_name(t)))
+                .collect();
+            format!("⟨{}⟩", inner.join(", "))
+        }
+    }
+}
+
+/// Where a value stopped matching its declared type, and what was there instead.
+///
+/// `[int]` against `[1, "a"]` is a list, so saying "expected [int], got list" names
+/// the one thing that was right. This walks to the first element or field that does
+/// not fit and reports the path to it.
+fn mismatch(v: &Value, ty: &TypeExpr, path: &mut String) -> Option<(String, String)> {
+    if value_matches_type(v, ty) {
+        return None;
+    }
+    match (ty, v) {
+        (TypeExpr::List(inner), Value::List(xs)) => {
+            for (i, x) in xs.iter().enumerate() {
+                let mark = path.len();
+                path.push_str(&format!("[{i}]"));
+                if let Some(found) = mismatch(x, inner, path) {
+                    return Some(found);
+                }
+                path.truncate(mark);
+            }
+            None
+        }
+        (TypeExpr::Record(fields), Value::Record(rec)) => {
+            for (name, fty) in fields {
+                let mark = path.len();
+                if !path.is_empty() {
+                    path.push('.');
+                }
+                path.push_str(&name.name);
+                match rec.get(&Key::String(name.name.clone())) {
+                    // Distinguished from a wrong type: the field is not there at all,
+                    // and "is none rather than int" would describe a field holding
+                    // `none`, which is a different mistake.
+                    None => return Some((String::new(), String::new())),
+                    Some(fv) => {
+                        if let Some(found) = mismatch(fv, fty, path) {
+                            return Some(found);
+                        }
+                    }
+                }
+                path.truncate(mark);
+            }
+            None
+        }
+        (TypeExpr::Result(inner), Value::Result(ResultValue::Ok(x))) => {
+            path.push_str(" (ok payload)");
+            mismatch(x, inner, path)
+        }
+        _ => Some((type_expr_name(ty), v.type_name().to_string())),
+    }
+}
+
+/// `expected X, got Y` for a value that failed `ty`, naming the inner position when
+/// the outer shape was fine.
+fn explain(v: &Value, ty: &TypeExpr) -> String {
+    let mut path = String::new();
+    match mismatch(v, ty, &mut path) {
+        Some((want, _)) if want.is_empty() => {
+            format!("expects {}, but has no field `{path}`", type_expr_name(ty))
+        }
+        Some((want, got)) if !path.is_empty() => format!(
+            "expects {}, but {path} is {got} rather than {want}",
+            type_expr_name(ty)
+        ),
+        Some((want, got)) => format!("expects {want}, got {got}"),
+        // Unreachable in practice: callers only ask after a failed match.
+        None => format!("expects {}", type_expr_name(ty)),
+    }
+}
+
+/// Check one argument against its declared type, or explain why it does not fit.
+pub fn check_param_type(
+    func: &str,
+    param: &str,
+    v: &Value,
+    ty: &TypeExpr,
+) -> Result<(), EvalError> {
+    if value_matches_type(v, ty) {
+        return Ok(());
+    }
+    Err(EvalError::Message(format!(
+        "{func}: parameter `{param}` {}",
+        explain(v, ty)
+    )))
+}
+
+/// Check a return value against the declared return type.
+pub fn check_return_type(func: &str, v: &Value, ty: &TypeExpr) -> Result<(), EvalError> {
+    if value_matches_type(v, ty) {
+        return Ok(());
+    }
+    Err(EvalError::Message(format!(
+        "{func}: declared to return {}, but returned {}",
+        type_expr_name(ty),
+        match mismatch(v, ty, &mut String::new()) {
+            Some((_, got)) => got,
+            None => v.type_name().to_string(),
+        }
+    )))
 }

@@ -16,10 +16,11 @@ fn detached(ctx: &RuntimeContext, name: &str) -> Value {
         .unwrap_or_else(|| panic!("no function {name}"));
     Value::Function(Closure {
         id: 0,
-        name: Some(name.to_string()),
+        name: Some(name.into()),
         params: entry.params.clone(),
         env: Arc::new(RwLock::new(Environment::new())),
         body: entry.body.clone(),
+        contract: None,
     })
 }
 

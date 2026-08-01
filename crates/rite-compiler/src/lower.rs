@@ -566,6 +566,28 @@ pub fn function(f: &FunctionIr, compiled: &Compiled) -> Result<String, Unsupport
         f.params.len(),
         f.params.len()
     );
+    // Declared parameter types, checked before the frame is pushed — the same point
+    // the interpreter checks them, so a rejected call has not bound anything either
+    // way. The type travels as JSON because the generated crate already depends on
+    // serde_json for the embedded IR, and a `LazyLock` keeps the parse off the call
+    // path after the first one. Emitting a second type representation here, or a
+    // second matcher, is exactly the duplication `ops.rs` exists to avoid: the check
+    // itself is `rite_runtime::ops::check_param_type`, the one the interpreter calls.
+    for (i, (ty, name)) in f.param_types.iter().zip(&f.param_names).enumerate() {
+        let Some(ty) = ty else { continue };
+        let json = serde_json::to_string(ty).map_err(|_| Unsupported("TypeExpr"))?;
+        let _ = writeln!(
+            out,
+            "        {{ static __TY: std::sync::LazyLock<rite_sem::TypeExpr> = \
+             std::sync::LazyLock::new(|| serde_json::from_str({}).expect(\"type\")); \
+             if let Some(__v) = __args.get({i}) {{ \
+             if let Err(__e) = rite_runtime::ops::check_param_type({}, {}, __v, &__TY) {{ \
+             ctx.call_depth -= 1; return Err(__e); }} }} }}",
+            rust_str(&json),
+            rust_str(&f.name),
+            rust_str(name)
+        );
+    }
     let _ = writeln!(out, "        ctx.env.push_frame();");
     // Bound under both the name and the local id, as `call_block` does — the body may
     // reference either depending on how the resolver saw it.
@@ -586,8 +608,28 @@ pub fn function(f: &FunctionIr, compiled: &Compiled) -> Result<String, Unsupport
     // A function boundary is where `^` stops being an unwind and becomes the value.
     let _ = writeln!(
         out,
-        "        match __r {{ Err(EvalError::Return(v)) => Ok(v), other => other }}\n    }})\n}}"
+        "        let __out = match __r {{ Err(EvalError::Return(v)) => Ok(v), other => other }};"
     );
+    // The declared return type applies to whatever comes out, however it got there —
+    // an explicit `^` and a trailing expression are the same value by this point.
+    match &f.return_type {
+        Some(ty) => {
+            let json = serde_json::to_string(ty).map_err(|_| Unsupported("TypeExpr"))?;
+            let _ = writeln!(
+                out,
+                "        static __TY_RET: std::sync::LazyLock<rite_sem::TypeExpr> = \
+                 std::sync::LazyLock::new(|| serde_json::from_str({}).expect(\"type\"));\n        \
+                 match __out {{ Ok(__v) => {{ \
+                 rite_runtime::ops::check_return_type({}, &__v, &__TY_RET)?; Ok(__v) }} \
+                 __e => __e }}\n    }})\n}}",
+                rust_str(&json),
+                rust_str(&f.name)
+            );
+        }
+        None => {
+            let _ = writeln!(out, "        __out\n    }})\n}}");
+        }
+    }
     Ok(out)
 }
 

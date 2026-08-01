@@ -57,6 +57,8 @@ pub fn desugar_program(resolved: &ResolvedProgram) -> ProgramIr {
                 },
                 is_pub: f.is_pub,
                 span: f.span,
+                param_types: f.params.iter().map(|p| p.ty.clone()).collect(),
+                return_type: f.return_type.clone(),
             });
         }
     }
@@ -105,6 +107,8 @@ pub fn desugar_program(resolved: &ResolvedProgram) -> ProgramIr {
                     body,
                     is_pub: true,
                     span: t.span,
+                    param_types: vec![],
+                    return_type: None,
                 });
             }
             Item::Event(e) => {

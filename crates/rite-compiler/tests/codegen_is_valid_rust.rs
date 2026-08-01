@@ -35,6 +35,22 @@ fn assert_parses(source: &str, label: &str) {
 fn every_lowered_construct_generates_parseable_rust() {
     for (label, src) in [
         ("arithmetic", "1 + 2 * 3 - 4 / 2 % 3"),
+        // Declared types emit a LazyLock static and a call into ops per annotated
+        // parameter, plus one around the result — new shapes in the generated text,
+        // and the kind a string-concatenating backend gets subtly wrong.
+        (
+            "typed params",
+            "◆ f(x: int, y: string) ⟦ ^ y ⟧\nf(1, \"a\")",
+        ),
+        ("typed return", "◆ f(x: int) → int ⟦ ^ x ⟧\nf(1)"),
+        (
+            "typed container",
+            "◆ f(xs: [int]) → ⟨n: int⟩ ⟦ ^ ⟨n: 1⟩ ⟧\nf([1])",
+        ),
+        (
+            "typed result",
+            "◆ f(x: result<int>) → any ⟦ ^ x ⟧\nf(ok(1))",
+        ),
         ("comparisons", "1 < 2 = true"),
         ("bindings", "x ← 1\ny ↢ 2\nx + y"),
         // `]]` closes an ASCII block, so a nested list needs the space — the same rule

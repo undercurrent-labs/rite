@@ -67,6 +67,7 @@ impl<'a> Evaluator<'a> {
             params: vec!["x".into()],
             env: Arc::new(parking_lot::RwLock::new(env)),
             body,
+            contract: None,
         }))
     }
 

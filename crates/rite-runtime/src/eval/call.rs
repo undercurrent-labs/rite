@@ -21,12 +21,33 @@ impl<'a> Evaluator<'a> {
                 // — and assigns through to — the defining scope's mutable bindings, which
                 // is what makes `count := count + 1` inside an `each`/`while_loop` body
                 // visible to the enclosing scope.
+                // Declared types are checked here rather than inside `call_block`
+                // because this is where the function *value* is in hand — a contract
+                // has to travel with the value, since `f ← shout` and `each(xs, f)`
+                // both call it under a name it was not declared with.
+                // No `with_stack` here: the caller's `call_block` adds the trace as
+                // the error propagates, and adding one at both ends printed the
+                // traceback twice.
+                if let Some(contract) = &c.contract {
+                    if let Err(e) = check_contract_params(contract, &args) {
+                        self.ctx.call_depth -= 1;
+                        return Err(e);
+                    }
+                }
                 let mut captured = c.env.read().clone();
                 captured.ensure_globals_from(&self.ctx.env);
                 let saved = std::mem::replace(&mut self.ctx.env, captured);
                 let r = self.call_block(&c.body, &c.params, args).await;
                 self.ctx.env = saved;
-                r
+                match (r, &c.contract) {
+                    (Ok(v), Some(contract)) => match &contract.return_type {
+                        Some(ty) => {
+                            crate::ops::check_return_type(&contract.name, &v, ty).map(|()| v)
+                        }
+                        None => Ok(v),
+                    },
+                    (r, _) => r,
+                }
             }
             // Same contract as the interpreted arm above: run in the captured environment,
             // extended with a fresh frame for the parameters. `ensure_globals_from` and the
@@ -204,4 +225,26 @@ impl<'a> Evaluator<'a> {
             other => call_builtin(other, args, &self.ctx.atoms),
         }
     }
+}
+
+/// Check a call's arguments against the function's declared parameter types.
+///
+/// Arity is checked separately and reported on its own, so a short argument list
+/// simply has nothing to check here — reporting "parameter `y` expects int, got
+/// none" for a missing argument would name the wrong mistake.
+fn check_contract_params(
+    contract: &crate::value::FnContract,
+    args: &[Value],
+) -> Result<(), EvalError> {
+    for (i, ty) in contract.param_types.iter().enumerate() {
+        let Some(ty) = ty else { continue };
+        let Some(v) = args.get(i) else { continue };
+        let name = contract
+            .param_names
+            .get(i)
+            .map(String::as_str)
+            .unwrap_or("?");
+        crate::ops::check_param_type(&contract.name, name, v, ty)?;
+    }
+    Ok(())
 }

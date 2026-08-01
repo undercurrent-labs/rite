@@ -131,6 +131,8 @@ impl<'a> Evaluator<'a> {
                 // returns, and mutables assigned through it are visible to that scope.
                 env: Arc::new(parking_lot::RwLock::new(self.ctx.env.clone())),
                 body: c.body.clone(),
+                // A lambda has no annotation syntax, so there is nothing to enforce.
+                contract: None,
             })),
             ExprIr::Pipeline { input, stages, .. } => {
                 let mut val = self.eval_operand(input).await?;
@@ -370,6 +372,7 @@ impl<'a> Evaluator<'a> {
                             params: c.param_names.clone(),
                             env: Arc::new(parking_lot::RwLock::new(self.ctx.env.clone())),
                             body: c.body.clone(),
+                            contract: None,
                         });
                         // If input is list and closure looks like map body — pipeline stage
                         // is itself the function applied to input

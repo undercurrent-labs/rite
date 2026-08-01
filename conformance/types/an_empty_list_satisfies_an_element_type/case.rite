@@ -1,0 +1,2 @@
+◆ f(xs: [int]) → int ⟦ ^ sum(xs) ⟧
+f([])

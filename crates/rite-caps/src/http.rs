@@ -819,10 +819,12 @@ pub(crate) fn install_module_scope(
         if ctx.env.get(name).is_none() {
             let clos = Value::Function(rite_runtime::Closure {
                 id: 0,
-                name: Some(name.clone()),
+                name: Some(name.as_str().into()),
                 params: f.params.clone(),
                 env: Arc::new(parking_lot::RwLock::new(module_env.clone())),
                 body: f.body.clone(),
+                // A handler rebuilt from a route record carries no declaration to enforce.
+                contract: None,
             });
             ctx.env.define_name(name, clos, false);
         }

@@ -28,6 +28,50 @@ runtime complaint about builtins. **If a script defines a function whose name
 matches a builtin and pipes into it, the pipeline now calls the definition.** That
 is the answer the same name gave in call position all along.
 
+### Added — type annotations are checked, as the reference always said they were
+
+`◆ f(x: int) → int` has been parsed, printed back by the formatter, and then
+dropped. The generated reference has carried a section headed "Runtime type
+contracts" — *"Optional annotations like `value: int` are checked at runtime on
+function entry/exit"* — the whole time, and nothing behind it was true:
+
+```
+◆ typed(x: int) → int ⟦ ^ "not an int" ⟧
+typed(true)                                // printed: not an int
+```
+
+Both are now errors, naming the function, the parameter and what arrived:
+
+```
+typed: parameter `x` expects int, got bool
+typed: declared to return int, but returned string
+```
+
+The types are the value kinds — `int`, `float`, `number` (either), `string`,
+`bool`, `atom`, `list`, `record`, `bytes`, `function`, `none` — plus `any` and
+three composites: `[T]`, `result<T>`, and `⟨field: T, …⟩`. Checking is structural,
+so an empty list satisfies `[int]` and a record may carry fields the annotation
+does not name. A container reports where it stopped matching rather than restating
+what was right:
+
+```
+f: parameter `xs` expects [int], but [1] is string rather than int
+f: parameter `r` expects ⟨n: int⟩, but has no field `n`
+```
+
+`result<T>` **parses** now. The branch that should have handled it was an empty
+`if` that matched the shape and did nothing, so `◆ f(x: result<int>)` was a parse
+error with two more errors cascading after it.
+
+A contract travels with the function *value*, not with the name it was declared
+under, so it still applies through `f ← typed` and `each(xs, typed)`. Compiled
+binaries enforce the same contracts: `rite build` emits the check around the same
+`ops` functions the interpreter calls, so the two paths cannot drift.
+
+Nothing that was unannotated changes, and nothing in the shipped corpus used an
+annotation — so this breaks only programs that were already claiming something
+untrue about themselves.
+
 ### Changed — `?` on a pipeline stage is rejected, and one on a pipeline input parses
 
 `xs → f(a)?` bound the `?` to the *stage*. The interpreter read that as "call
