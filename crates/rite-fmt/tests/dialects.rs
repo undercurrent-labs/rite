@@ -131,3 +131,35 @@ fn the_tcp_listen_block_form_survives_formatting() {
         "an ordinary @tcp call must stay a call: {ordinary}"
     );
 }
+
+/// A glyph-only operator must not be printed as an ASCII infix that means something
+/// else.
+///
+/// `÷` and `∘` were printed as `idiv` and `compose` in ASCII, on the strength of an
+/// alias table entry. Neither lexes as an operator — both names are taken by the
+/// builtins they lower to — so the output parsed as something different and
+/// **changed the answer**: `7 ÷ 2` is 3, and `rite fmt --ascii` made it
+/// `7 idiv 2`, which is two statements and evaluates to 7. `f ∘ g` became
+/// `f compose g`, which is `f`.
+///
+/// This asserts the text; `formatting_to_ascii_preserves_the_value` in the same file
+/// asserts the thing that actually matters.
+#[test]
+fn glyph_only_operators_print_as_calls_in_ascii() {
+    let ascii = rite_fmt::format_source("x ← 7 ÷ 2\n", true).expect("format ascii");
+    assert!(
+        ascii.contains("idiv(7, 2)"),
+        "÷ must become a call in ASCII, not an infix word: {ascii}"
+    );
+    let ascii = rite_fmt::format_source("c ← f ∘ g\n", true).expect("format ascii");
+    assert!(
+        ascii.contains("compose(f, g)"),
+        "∘ must become a call in ASCII, not an infix word: {ascii}"
+    );
+
+    // In glyph they stay operators — that is the whole point of retaining them.
+    let glyph = rite_fmt::format_source("x ← 7 ÷ 2\n", false).expect("format glyph");
+    assert!(glyph.contains('÷'), "glyph lost ÷: {glyph}");
+    let glyph = rite_fmt::format_source("c ← f ∘ g\n", false).expect("format glyph");
+    assert!(glyph.contains('∘'), "glyph lost ∘: {glyph}");
+}

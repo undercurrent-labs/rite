@@ -10,6 +10,7 @@ rite-core = { workspace = true }
 rite-syntax = { workspace = true }
 rite-sem = { workspace = true }
 rite-runtime = { workspace = true }
+rite-fmt = { workspace = true }
 rite-caps = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

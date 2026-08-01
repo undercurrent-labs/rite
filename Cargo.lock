@@ -2667,6 +2667,7 @@ dependencies = [
  "rite-caps",
  "rite-compiler",
  "rite-core",
+ "rite-fmt",
  "rite-runtime",
  "rite-sem",
  "rite-syntax",

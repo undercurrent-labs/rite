@@ -28,6 +28,39 @@ runtime complaint about builtins. **If a script defines a function whose name
 matches a builtin and pipes into it, the pipeline now calls the definition.** That
 is the answer the same name gave in call position all along.
 
+### Fixed — `rite fmt --ascii` changed the answer
+
+`x ← 7 ÷ 2` is `3`. Formatted to ASCII it became `x <- 7 idiv 2`, which is **`7`** —
+it parses as two statements, so the division is gone. `f ∘ g` became `f compose g`,
+which evaluates to `f`.
+
+Neither `idiv` nor `compose` lexes as an operator, and neither can: both names are
+taken by the builtins they lower to, so making them keywords would collide with
+`idiv(7, 2)` and `compose(f, g)`. `÷` and `∘` are **glyph-only**, and the formatter
+now says so by printing the call form in ASCII, which is the only rendering that
+means the same thing and round-trips.
+
+There is a test that runs both spellings and compares the *values* now, rather than
+asserting on the text — text is what let this through.
+
+### Fixed — `rite fmt` keeps the sugar you wrote
+
+`1..=5` came back as `range_incl(1, 5)`, `f ∘ g` as `compose(f, g)`, `2 ** 8` as
+`pow(2, 8)`, and `keep ⟦ |n| … ⟧` as `keep(⟦ |n| … ⟧)` — in the **glyph** dialect
+too. Formatting `examples/02-pipelines/main.rite`, the example the pipelines chapter
+is built on, rewrote it into a shape the book never uses; `examples/sugar/demo.rite`,
+whose entire purpose is to show the sugar, lost most of it.
+
+The parser was building the lowered call directly, so no `..` or `∘` ever reached
+the AST and the formatter's own arms for them were unreachable. They build their
+`BinOp` variants now and `desugar` lowers them exactly as before, so nothing
+downstream sees a difference. A single trailing block argument is recorded on the
+call, which is what lets `keep ⟦ … ⟧` print back as itself.
+
+The statement sugars — `say`, `unless`, `for … in`, `while` — are still expanded by
+the parser and still print expanded. That, and not the operators, is what keeps
+`rite fmt --check` from being a CI gate; `IMPLEMENTATION.md` says so.
+
 ### Fixed — the collection and string ceilings are enforced
 
 `max_collection_size` and `max_string_size` were declared on `ExecutionBudget`,

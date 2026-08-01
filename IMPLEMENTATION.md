@@ -84,14 +84,28 @@ Tracks implementation status for the Rite language and V1 tooling. Detailed desi
    be written against it and is now a real transliteration of its glyph twin.
 7. **`execute_command`** — three commands were advertised with no handler; the capability
    is withdrawn until they do something.
-8. **Formatter sugar fidelity** — comments, layout, route params, `use` middleware and
-   juxtaposed returns all survive, but a call with a single block argument still prints as
-   `keep(⟦ … ⟧)` rather than `keep ⟦ … ⟧`, `1..=5` prints as `range_incl(1, 5)`, and
-   `f ∘ g` prints as `compose(f, g)` — in the **glyph** dialect too, since the parser
-   builds the call directly (`parse_compose`) and no `∘` survives into the AST.
-   All three need the sugar retained in the AST; the last two are indistinguishable
-   from a real call to that builtin. `BinOp::Compose` exists and the formatter has a
-   branch for it, but nothing constructs it from source, so that branch is unreachable.
+8. **Formatter sugar fidelity** — mostly closed. `..`, `..=`, `**` and `∘` build their
+   `BinOp` variants rather than a call, so they survive `rite fmt` and the formatter's
+   long-unreachable arms for them are now live; a single trailing block argument is
+   recorded on `CallExpr` and printed back as `keep ⟦ … ⟧` rather than `keep(⟦ … ⟧)`.
+   `desugar` lowers all of them to the same `NativeCall`, so nothing downstream changed.
+
+   **`÷` and `∘` are glyph-only**, and the formatter now says so by printing them as
+   `idiv(a, b)` / `compose(f, g)` in ASCII. Their supposed ASCII spellings do not lex
+   as operators and cannot: both names are taken by the builtins they lower to, so a
+   keyword would collide with `idiv(7, 2)`. Printing them infix in ASCII **changed the
+   answer** — `7 ÷ 2` is 3, and `rite fmt --ascii` wrote `7 idiv 2`, which parses as two
+   statements and is 7. `crates/rite-test/tests/dialect_value_parity.rs` runs both
+   spellings and compares values, which is the property the text assertions missed.
+
+   Still lowered: the statement sugars — `say`, `unless`, `for … in`, `while` — which
+   `items.rs` rewrites into their expanded forms before the AST exists, so `rite fmt`
+   prints the expansion. `examples/sugar/demo.rite` is the file that shows it.
+
+   Because of those, `rite fmt --check` is **not yet a CI gate**: it would demand
+   rewriting the corpus into shapes the book does not teach, which is the outcome the
+   `@tcp.listen` note in `rite-fmt` exists to prevent. Retaining the statement sugars
+   is what unblocks it.
 9. **Incremental relexing / CST** — no rowan green tree; recovery is best-effort parse.  
 12. **Resource limits are partial** — `max_collection_size` and `max_string_size` are
     enforced where a collection's size is knowable before it is built (`range`,

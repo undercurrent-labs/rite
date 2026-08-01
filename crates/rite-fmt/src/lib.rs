@@ -1007,6 +1007,32 @@ impl<'a> Formatter<'a> {
                 self.out.push_str(&self.sigil("⟩", ">>"));
             }
             Expr::Binary(b) => {
+                // `÷` and `∘` are glyph-only. Their "ASCII spellings" — `idiv` and
+                // `compose` — do not lex as operators, because both names are taken
+                // by the builtins they lower to, so a keyword would collide with
+                // `idiv(7, 2)` and `compose(f, g)`.
+                //
+                // Printing them infix in ASCII changed the answer. `x ← 7 ÷ 2` is 3;
+                // `rite fmt --ascii` wrote `x <- 7 idiv 2`, which parses — as two
+                // statements — and is **7**. `f ∘ g` became `f compose g`, which is
+                // `f`. The call form is the only ASCII rendering that means the same
+                // thing, and it round-trips.
+                if self.ascii_mode() {
+                    let call = match b.op {
+                        BinOp::Idiv => Some("idiv"),
+                        BinOp::Compose => Some("compose"),
+                        _ => None,
+                    };
+                    if let Some(name) = call {
+                        self.out.push_str(name);
+                        self.out.push('(');
+                        self.expr(&b.left);
+                        self.out.push_str(", ");
+                        self.expr(&b.right);
+                        self.out.push(')');
+                        return;
+                    }
+                }
                 self.expr(&b.left);
                 self.out.push(' ');
                 match b.op {
@@ -1089,6 +1115,19 @@ impl<'a> Formatter<'a> {
                         self.expr(&c.args[1]);
                         return;
                     }
+                }
+                // `keep ⟦ |n| … ⟧` — a single trailing block argument, printed back
+                // the way it was written. The AST records that the source used the
+                // sugar; without that flag it is indistinguishable from
+                // `keep(⟦ … ⟧)`, and `rite fmt` rewrote every pipeline in the corpus
+                // — `examples/02-pipelines` and every snippet in the book included —
+                // into the form the book does not use. Same reasoning as
+                // `@tcp.listen` above.
+                if c.trailing_block && c.args.len() == 1 && matches!(c.args[0], Expr::Block(_)) {
+                    self.expr(&c.callee);
+                    self.out.push(' ');
+                    self.expr(&c.args[0]);
+                    return;
                 }
                 self.expr(&c.callee);
                 self.out.push('(');

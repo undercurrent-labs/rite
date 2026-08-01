@@ -360,6 +360,7 @@ impl Parser {
                     })),
                     args: vec![value],
                     span,
+                    trailing_block: false,
                 })),
                 span,
             })));
@@ -448,6 +449,7 @@ impl Parser {
                 span: body.span,
             })],
             span,
+            trailing_block: false,
         });
         Stmt::Expr(Expr::Pipeline(PipelineExpr {
             input: Box::new(iter),
@@ -503,6 +505,7 @@ impl Parser {
                 }),
             ],
             span,
+            trailing_block: false,
         }))
     }
 
@@ -525,6 +528,7 @@ impl Parser {
                 n,
             ],
             span,
+            trailing_block: false,
         });
         let stage = Expr::Call(CallExpr {
             callee: Box::new(Expr::Ident(Ident {
@@ -545,6 +549,7 @@ impl Parser {
                 span: body.span,
             })],
             span,
+            trailing_block: false,
         });
         Stmt::Expr(Expr::Pipeline(PipelineExpr {
             input: Box::new(range_call),

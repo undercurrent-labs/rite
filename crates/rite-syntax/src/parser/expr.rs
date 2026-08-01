@@ -358,6 +358,14 @@ impl Parser {
         left
     }
 
+    /// `a..b` and `a..=b`.
+    ///
+    /// These build `BinOp::Range` / `BinOp::RangeIncl` rather than a call to `range`.
+    /// Building the call in the parser meant no `..` survived into the AST, so
+    /// `rite fmt` rewrote `1..=5` as `range_incl(1, 5)` — including in the glyph
+    /// dialect, and including `examples/sugar/demo.rite`, whose whole purpose is to
+    /// show the sugar. `desugar` lowers them to the same `NativeCall`, so nothing
+    /// downstream sees a difference.
     pub(super) fn parse_range(&mut self) -> Expr {
         let left = self.parse_term();
         if self.check(TokenKind::Rest) {
@@ -366,12 +374,10 @@ impl Parser {
             self.advance();
             let right = self.parse_term();
             let span = start.merge(right.span());
-            return Expr::Call(CallExpr {
-                callee: Box::new(Expr::Ident(Ident {
-                    name: "range".into(),
-                    span,
-                })),
-                args: vec![left, right],
+            return Expr::Binary(BinaryExpr {
+                op: BinOp::Range,
+                left: Box::new(left),
+                right: Box::new(right),
                 span,
             });
         }
@@ -381,12 +387,10 @@ impl Parser {
             self.advance();
             let right = self.parse_term();
             let span = start.merge(right.span());
-            return Expr::Call(CallExpr {
-                callee: Box::new(Expr::Ident(Ident {
-                    name: "range_incl".into(),
-                    span,
-                })),
-                args: vec![left, right],
+            return Expr::Binary(BinaryExpr {
+                op: BinOp::RangeIncl,
+                left: Box::new(left),
+                right: Box::new(right),
                 span,
             });
         }
@@ -445,12 +449,10 @@ impl Parser {
             self.advance();
             let right = self.parse_power(); // right-associative
             let span = start.merge(right.span());
-            return Expr::Call(CallExpr {
-                callee: Box::new(Expr::Ident(Ident {
-                    name: "pow".into(),
-                    span,
-                })),
-                args: vec![left, right],
+            return Expr::Binary(BinaryExpr {
+                op: BinOp::Power,
+                left: Box::new(left),
+                right: Box::new(right),
                 span,
             });
         }
@@ -463,13 +465,15 @@ impl Parser {
             self.advance();
             let right = self.parse_unary();
             let span = left.span().merge(right.span());
-            // f ∘ g  →  { |x| f(g(x)) }  represented as call compose(f, g)
-            left = Expr::Call(CallExpr {
-                callee: Box::new(Expr::Ident(Ident {
-                    name: "compose".into(),
-                    span,
-                })),
-                args: vec![left, right],
+            // `BinOp::Compose`, not a call to `compose`. Building the call here meant
+            // no `∘` survived into the AST, so `rite fmt` printed `compose(f, g)` —
+            // in the glyph dialect too — and the formatter's own `BinOp::Compose` arm
+            // was unreachable. `desugar` lowers it to the same `NativeCall` the parser
+            // used to build, so nothing downstream changes.
+            left = Expr::Binary(BinaryExpr {
+                op: BinOp::Compose,
+                left: Box::new(left),
+                right: Box::new(right),
                 span,
             });
         }
@@ -539,6 +543,7 @@ impl Parser {
                     callee: Box::new(expr),
                     args,
                     span: start.merge(end_tok.span),
+                    trailing_block: false,
                 });
             } else if self.check(TokenKind::Dot) {
                 let start = expr.span();
@@ -586,6 +591,7 @@ impl Parser {
                     callee: Box::new(expr),
                     args: vec![Expr::Block(block.clone())],
                     span: start.merge(block.span),
+                    trailing_block: true,
                 });
             } else {
                 break;
@@ -655,6 +661,7 @@ impl Parser {
                         })),
                         args: vec![inner],
                         span,
+                        trailing_block: false,
                     })
                 } else if matches!(self.peek_kind(), TokenKind::OkMark | TokenKind::Ok) {
                     // bare
@@ -668,6 +675,7 @@ impl Parser {
                             span: start,
                         })],
                         span: start,
+                        trailing_block: false,
                     })
                 } else if self.at_expr_start()
                     && !self.check(TokenKind::BlockOpen)
@@ -682,6 +690,7 @@ impl Parser {
                         })),
                         args: vec![inner],
                         span,
+                        trailing_block: false,
                     })
                 } else {
                     Expr::Ident(Ident {
@@ -704,6 +713,7 @@ impl Parser {
                         })),
                         args: vec![inner],
                         span,
+                        trailing_block: false,
                     })
                 } else if self.at_expr_start()
                     && !self.check(TokenKind::BlockOpen)
@@ -718,6 +728,7 @@ impl Parser {
                         })),
                         args: vec![inner],
                         span,
+                        trailing_block: false,
                     })
                 } else {
                     Expr::Ident(Ident {
@@ -881,6 +892,7 @@ impl Parser {
                 })),
                 args: vec![addr, Expr::Block(block)],
                 span,
+                trailing_block: false,
             });
         }
 
@@ -1076,6 +1088,7 @@ impl Parser {
                         })),
                         args: vec![expr],
                         span: start,
+                        trailing_block: false,
                     }))));
                     continue;
                 }

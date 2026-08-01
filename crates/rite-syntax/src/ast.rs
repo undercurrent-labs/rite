@@ -298,6 +298,18 @@ pub struct CallExpr {
     pub callee: Box<Expr>,
     pub args: Vec<Expr>,
     pub span: Span,
+    /// The single argument was written as a trailing block: `keep ⟦ |n| … ⟧`.
+    ///
+    /// Recorded so the formatter can print it back that way. Without it the sugar
+    /// was indistinguishable from `keep(⟦ … ⟧)`, so `rite fmt` rewrote every
+    /// pipeline in the corpus — including the one in `examples/02-pipelines` and
+    /// every snippet in the book — into a shape the book does not teach.
+    ///
+    /// `#[serde(default)]` because the AST is serialised: a value written before
+    /// this field existed must still deserialise, and `false` means "print it as an
+    /// ordinary call", which is what those readers expect.
+    #[serde(default)]
+    pub trailing_block: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
