@@ -799,8 +799,17 @@ impl Resolver {
                             .get(&arg.name)
                             .map(|m| m.declares_effect)
                             .unwrap_or(false);
-                        if passes_effect && !effect {
+                        // Recorded whether or not the marker is present, like the
+                        // callee checks above. Nesting this inside `!effect` meant
+                        // writing the `!` the diagnostic asks for suppressed the
+                        // inference: the enclosing function was never marked
+                        // effectful, so it was not required to be `◆!` and its own
+                        // callers needed no marker. Complying with the discipline
+                        // switched it off.
+                        if passes_effect {
                             self.note_effect();
+                        }
+                        if passes_effect && !effect {
                             self.diagnostics.push(
                                 simple_error(
                                     E021_EFFECT_REQUIRED,
