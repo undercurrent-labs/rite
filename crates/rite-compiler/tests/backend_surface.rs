@@ -53,6 +53,7 @@ fn a_pure_builtin_is_reachable_without_the_evaluator() {
         "sum",
         vec![Value::list(vec![Value::Int(1), Value::Int(2)])],
         &AtomInterner::new(),
+        rite_runtime::Limits::unlimited(),
     )
     .expect("sum");
     assert_eq!(out.as_int(), Some(3));

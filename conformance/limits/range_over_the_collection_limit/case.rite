@@ -1,0 +1,4 @@
+// The default ceiling is 1,000,000 elements. This used to complete — the step
+// budget charges per IR node and cannot see inside a builtin — and aborted the
+// process outright when pushed further.
+range(0, 8000000)

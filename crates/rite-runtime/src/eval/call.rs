@@ -225,7 +225,7 @@ impl<'a> Evaluator<'a> {
                 }
                 Ok(Value::None)
             }
-            other => call_builtin(other, args, &self.ctx.atoms),
+            other => call_builtin(other, args, &self.ctx.atoms, self.ctx.budget.limits()),
         }
     }
 }

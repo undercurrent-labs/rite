@@ -587,6 +587,10 @@ async fn wall_clock_timeout() {
     // where a test thread gets a smaller stack than on Linux — the stack lost, aborting the
     // process instead of reporting a timeout. Recursion depth is covered by
     // `deep_recursion_reports_a_budget_error_not_an_abort`.
+    // The collection ceiling is not what is under test here, and 5M elements is well
+    // over its default — leave it in place and this fails on the range instead of on
+    // the clock, measuring the wrong thing.
+    ctx.budget.max_collection_size = usize::MAX;
     let err = run_source(
         "t.rite",
         r#"

@@ -52,6 +52,58 @@ use std::time::Instant;
 /// grown across an `await`.
 pub const DEFAULT_MAX_CALL_DEPTH: usize = if cfg!(debug_assertions) { 32 } else { 256 };
 
+/// The size ceilings, detached from the rest of the budget.
+///
+/// `max_collection_size` and `max_string_size` were declared on `ExecutionBudget`,
+/// given defaults, copied through `child()` — and **never read anywhere in the
+/// workspace**. An embedder setting them got nothing. The pure builtins are where
+/// collections actually grow, and they are handed `&AtomInterner` rather than a
+/// context, so the ceilings travel separately as a `Copy` pair.
+#[derive(Debug, Clone, Copy)]
+pub struct Limits {
+    pub max_collection_size: usize,
+    pub max_string_size: usize,
+}
+
+impl Limits {
+    /// No ceiling — for the paths that genuinely have none, and for tests.
+    pub fn unlimited() -> Self {
+        Self {
+            max_collection_size: usize::MAX,
+            max_string_size: usize::MAX,
+        }
+    }
+
+    /// Check a collection that is about to be built at this size.
+    ///
+    /// Asked *before* allocating wherever the size is knowable up front, because the
+    /// failure this replaces was not a slow program — it was `memory allocation of N
+    /// bytes failed`, which aborts the process. Inside an embedder that takes the
+    /// host down, which defeats the point of having a budget.
+    pub fn check_collection(&self, n: usize, who: &str) -> Result<(), BudgetError> {
+        if n > self.max_collection_size {
+            return Err(BudgetError::CollectionTooLarge {
+                who: who.to_string(),
+                len: n,
+                max: self.max_collection_size,
+            });
+        }
+        Ok(())
+    }
+
+    /// Check a string or byte buffer that is about to be built at this length.
+    pub fn check_string(&self, n: usize, who: &str) -> Result<(), BudgetError> {
+        if n > self.max_string_size {
+            return Err(BudgetError::StringTooLarge {
+                who: who.to_string(),
+                len: n,
+                max: self.max_string_size,
+            });
+        }
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct ExecutionBudget {
     pub max_call_depth: usize,
@@ -77,6 +129,14 @@ impl Default for ExecutionBudget {
 }
 
 impl ExecutionBudget {
+    /// The size ceilings, for the builtins that build collections.
+    pub fn limits(&self) -> Limits {
+        Limits {
+            max_collection_size: self.max_collection_size,
+            max_string_size: self.max_string_size,
+        }
+    }
+
     pub fn new() -> Self {
         Self {
             max_call_depth: DEFAULT_MAX_CALL_DEPTH,
@@ -196,6 +256,18 @@ pub enum BudgetError {
     Timeout,
     Cancelled,
     StackOverflow,
+    /// A collection would exceed `max_collection_size`.
+    CollectionTooLarge {
+        who: String,
+        len: usize,
+        max: usize,
+    },
+    /// A string or byte buffer would exceed `max_string_size`.
+    StringTooLarge {
+        who: String,
+        len: usize,
+        max: usize,
+    },
 }
 
 impl std::fmt::Display for BudgetError {
@@ -205,6 +277,14 @@ impl std::fmt::Display for BudgetError {
             BudgetError::Timeout => write!(f, "execution wall-clock timeout exceeded"),
             BudgetError::Cancelled => write!(f, "execution cancelled"),
             BudgetError::StackOverflow => write!(f, "maximum call depth exceeded"),
+            BudgetError::CollectionTooLarge { who, len, max } => write!(
+                f,
+                "{who} would build {len} elements, over the limit of {max}"
+            ),
+            BudgetError::StringTooLarge { who, len, max } => write!(
+                f,
+                "{who} would build {len} bytes of text, over the limit of {max}"
+            ),
         }
     }
 }

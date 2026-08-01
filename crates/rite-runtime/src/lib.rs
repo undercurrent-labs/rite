@@ -11,7 +11,7 @@ pub mod patterns;
 pub mod value;
 
 pub use atom::AtomInterner;
-pub use budget::ExecutionBudget;
+pub use budget::{ExecutionBudget, Limits};
 pub use env::Environment;
 pub use eval::{
     CapabilityHost, EvalError, Evaluator, FunctionEntry, HttpNextInvoker, OutputSink, OutputStream,

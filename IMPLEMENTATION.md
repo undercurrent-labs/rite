@@ -93,7 +93,17 @@ Tracks implementation status for the Rite language and V1 tooling. Detailed desi
    from a real call to that builtin. `BinOp::Compose` exists and the formatter has a
    branch for it, but nothing constructs it from source, so that branch is unreachable.
 9. **Incremental relexing / CST** — no rowan green tree; recovery is best-effort parse.  
-12. **Performance benchmarks** — `cargo bench -p rite-runtime` (criterion). Front end
+12. **Resource limits are partial** — `max_collection_size` and `max_string_size` are
+    enforced where a collection's size is knowable before it is built (`range`,
+    `range_incl`, `repeat`, `concat`), which is where the runaway cases were. Not yet
+    bounded: `@fs.read`/`read_bytes`/`lines` and `@fs.read_chunk`'s caller-supplied
+    length, `@http` response bodies, `@process.run` output capture, and `@db.query`
+    result sets — each can still buffer an unbounded amount from outside the program.
+    `@http.listen` (1 MiB), `@tcp.recv` (16 MiB) and `@udp.recv_from` (65535) are the
+    ones already capped, and are the model. `parallel` also still forks one deep-cloned
+    context per element eagerly, with no concurrency ceiling.
+
+13. **Performance benchmarks** — `cargo bench -p rite-runtime` (criterion). Front end
     and interpreter are measured separately, so a parser regression and an eval
     regression cannot be mistaken for each other. Baseline, one dev machine, release:
 

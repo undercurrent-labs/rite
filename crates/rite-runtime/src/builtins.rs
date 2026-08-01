@@ -16,6 +16,7 @@ pub fn call_builtin(
     name: &str,
     args: Vec<Value>,
     atoms: &AtomInterner,
+    limits: crate::budget::Limits,
 ) -> Result<Value, EvalError> {
     match name {
         "ok" => Ok(Value::ok(args.into_iter().next().unwrap_or(Value::None))),
@@ -35,13 +36,13 @@ pub fn call_builtin(
         "drop" => builtin_drop(args),
         "reverse" => builtin_reverse(args),
         "flatten" => builtin_flatten(args),
-        "concat" => builtin_concat(args),
+        "concat" => builtin_concat(args, limits),
         "sum" => builtin_sum(args),
         "min" => builtin_min_max(args, true),
         "max" => builtin_min_max(args, false),
         "unique" => builtin_unique(args),
-        "range" => builtin_range(args),
-        "range_incl" => builtin_range_incl(args),
+        "range" => builtin_range(args, limits),
+        "range_incl" => builtin_range_incl(args, limits),
         "lines" => builtin_lines(args),
         "words" => builtin_words(args),
         "join" => builtin_join(args, atoms),
@@ -84,7 +85,7 @@ pub fn call_builtin(
         "unwrap_or" => builtin_unwrap_or(args),
         "collect_results" => builtin_collect_results(args),
         "require" => builtin_require(args),
-        "repeat" => builtin_repeat(args),
+        "repeat" => builtin_repeat(args, limits),
         "contains" => builtin_contains(args),
         "enumerate" | "with_index" => builtin_enumerate(args),
         "panic" => Err(EvalError::Panic(
@@ -285,7 +286,7 @@ fn builtin_reverse(args: Vec<Value>) -> Result<Value, EvalError> {
     Ok(seq.same(seq.items.iter().rev().cloned().collect()))
 }
 
-fn builtin_concat(args: Vec<Value>) -> Result<Value, EvalError> {
+fn builtin_concat(args: Vec<Value>, limits: crate::budget::Limits) -> Result<Value, EvalError> {
     // Bytes concatenate into bytes. Assembling a packet from a header and a body
     // is most of what authoring bytes is for, and collecting them into a list of
     // two byte strings would be useless.
@@ -299,6 +300,7 @@ fn builtin_concat(args: Vec<Value>) -> Result<Value, EvalError> {
                 ))
             })?);
         }
+        limits.check_string(out.len(), "concat")?;
         return Ok(Value::Bytes(out.into()));
     }
     let mut out = im::Vector::new();
@@ -308,6 +310,7 @@ fn builtin_concat(args: Vec<Value>) -> Result<Value, EvalError> {
             other => out.push_back(other),
         }
     }
+    limits.check_collection(out.len(), "concat")?;
     Ok(Value::List(out))
 }
 
@@ -413,7 +416,7 @@ fn builtin_unique(args: Vec<Value>) -> Result<Value, EvalError> {
     Ok(seq.same(out))
 }
 
-fn builtin_range(args: Vec<Value>) -> Result<Value, EvalError> {
+fn builtin_range(args: Vec<Value>, limits: crate::budget::Limits) -> Result<Value, EvalError> {
     let mut it = args.into_iter();
     let start = int_arg("range", "a start", it.next(), 0)?;
     let end = int_arg("range", "an end", it.next(), start)?;
@@ -421,6 +424,11 @@ fn builtin_range(args: Vec<Value>) -> Result<Value, EvalError> {
     if step == 0 {
         return Err(EvalError::Message("range step cannot be zero".into()));
     }
+    // Counted before anything is allocated. `range(0, 8000000)` completed under a
+    // 60-step budget, because the step counter charges per IR node and cannot see
+    // inside a builtin; pushed further it aborted the process on the allocation
+    // rather than raising, which no embedder can catch.
+    limits.check_collection(range_len(start, end, step), "range")?;
     let mut xs = im::Vector::new();
     let mut i = start;
     while if step > 0 { i < end } else { i > end } {
@@ -434,7 +442,18 @@ fn builtin_range(args: Vec<Value>) -> Result<Value, EvalError> {
     Ok(Value::List(xs))
 }
 
-fn builtin_range_incl(args: Vec<Value>) -> Result<Value, EvalError> {
+/// How many elements `start..end` by `step` produces, saturating rather than
+/// overflowing so the answer is only ever an over-estimate of a refusal.
+fn range_len(start: i64, end: i64, step: i64) -> usize {
+    if step == 0 || (step > 0 && start >= end) || (step < 0 && start <= end) {
+        return 0;
+    }
+    let span = (end as i128 - start as i128).unsigned_abs();
+    let stride = (step as i128).unsigned_abs();
+    span.div_ceil(stride).min(usize::MAX as u128) as usize
+}
+
+fn builtin_range_incl(args: Vec<Value>, limits: crate::budget::Limits) -> Result<Value, EvalError> {
     let mut it = args.into_iter();
     let start = int_arg("range", "a start", it.next(), 0)?;
     let end = int_arg("range", "an end", it.next(), start)?;
@@ -442,6 +461,8 @@ fn builtin_range_incl(args: Vec<Value>) -> Result<Value, EvalError> {
     if step == 0 {
         return Err(EvalError::Message("range step cannot be zero".into()));
     }
+    // Inclusive, so one more than the half-open count when the end lands on a step.
+    limits.check_collection(range_len(start, end, step).saturating_add(1), "range_incl")?;
     let mut xs = im::Vector::new();
     let mut i = start;
     while if step > 0 { i <= end } else { i >= end } {
@@ -632,20 +653,24 @@ fn builtin_unwrap_or(args: Vec<Value>) -> Result<Value, EvalError> {
     }
 }
 
-fn builtin_repeat(args: Vec<Value>) -> Result<Value, EvalError> {
+fn builtin_repeat(args: Vec<Value>, limits: crate::budget::Limits) -> Result<Value, EvalError> {
     let mut it = args.into_iter();
     let val = it.next().unwrap_or(Value::None);
     let n = int_arg("repeat", "a count", it.next(), 0)?.max(0) as usize;
-    // `str::repeat` aborts on capacity overflow and the list loop would spin for ages;
-    // refuse absurd counts instead.
-    const MAX_REPEAT: usize = 1 << 26;
+    // `str::repeat` aborts on capacity overflow and the list loop would spin for ages,
+    // so the total is checked before either. This used to be its own `1 << 26`
+    // constant, unrelated to the budget an embedder had configured.
     let unit = match &val {
         Value::String(s) => s.len().max(1),
         Value::List(xs) => xs.len().max(1),
         _ => 1,
     };
-    if unit.checked_mul(n).is_none_or(|total| total > MAX_REPEAT) {
-        return Err(EvalError::Message("repeat count too large".into()));
+    let total = unit
+        .checked_mul(n)
+        .ok_or_else(|| EvalError::Message("repeat count too large".into()))?;
+    match &val {
+        Value::String(_) => limits.check_string(total, "repeat")?,
+        _ => limits.check_collection(total, "repeat")?,
     }
     match val {
         Value::String(s) => Ok(Value::string(s.repeat(n))),

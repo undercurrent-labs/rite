@@ -8,7 +8,7 @@
 //! printed two different ways depending on how it got to the screen.
 
 use rite_runtime::builtins::call_builtin;
-use rite_runtime::{AtomInterner, Value};
+use rite_runtime::{AtomInterner, Limits, Value};
 
 fn atoms_with(names: &[&str]) -> (AtomInterner, Vec<Value>) {
     let interner = AtomInterner::new();
@@ -20,7 +20,7 @@ fn atoms_with(names: &[&str]) -> (AtomInterner, Vec<Value>) {
 }
 
 fn str_of(value: Value, atoms: &AtomInterner) -> String {
-    let out = call_builtin("str", vec![value], atoms).expect("str");
+    let out = call_builtin("str", vec![value], atoms, Limits::unlimited()).expect("str");
     out.as_str().expect("str returns a string").to_string()
 }
 
@@ -56,6 +56,7 @@ fn join_renders_atom_elements_by_name() {
         "join",
         vec![Value::List(vals.into()), Value::string(", ")],
         &atoms,
+        Limits::unlimited(),
     )
     .expect("join");
     assert_eq!(joined.as_str(), Some("#a, #b"));
@@ -64,7 +65,8 @@ fn join_renders_atom_elements_by_name() {
 #[test]
 fn panic_reports_the_atom_it_was_given() {
     let (atoms, vals) = atoms_with(&["boom"]);
-    let err = call_builtin("panic", vec![vals[0].clone()], &atoms).expect_err("panics");
+    let err = call_builtin("panic", vec![vals[0].clone()], &atoms, Limits::unlimited())
+        .expect_err("panics");
     assert!(
         err.to_string().contains("#boom"),
         "a panic reason must name the atom, got: {err}"

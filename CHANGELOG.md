@@ -28,6 +28,28 @@ runtime complaint about builtins. **If a script defines a function whose name
 matches a builtin and pipes into it, the pipeline now calls the definition.** That
 is the answer the same name gave in call position all along.
 
+### Fixed — the collection and string ceilings are enforced
+
+`max_collection_size` and `max_string_size` were declared on `ExecutionBudget`,
+given defaults of 1,000,000 and 10,000,000, copied through `child()` — and read
+**nowhere in the workspace**. An embedder setting them got nothing.
+
+That mattered more than a missing knob, because the step budget cannot see inside a
+builtin: `range(0, 8000000)` is a handful of IR nodes and eight million elements, so
+it completed under a **60-step** budget. Pushed further it aborted the process on the
+allocation rather than raising — inside an embedder, taking the host down with it,
+which is the opposite of what a budget is for.
+
+They are checked before the allocation wherever the size is knowable up front —
+`range`, `range_incl`, `repeat` and `concat` — and the failure is an ordinary budget
+error, exit code 8. `repeat`'s own unrelated `1 << 26` constant is gone in favour of
+the configured ceiling.
+
+Still unbounded, and now written down in `IMPLEMENTATION.md` rather than implied:
+`@fs` whole-file reads and `read_chunk`'s caller-supplied length, `@http` response
+bodies, `@process.run` output capture, `@db.query` result sets, and `parallel`'s
+eager one-context-per-element fork.
+
 ### Fixed — `@fs.write` with no content no longer empties the file
 
 ```
