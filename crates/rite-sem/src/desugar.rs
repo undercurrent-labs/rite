@@ -920,7 +920,6 @@ impl Desugar {
                     .as_ref()
                     .map(|b| Box::new(self.desugar_pattern(b))),
             },
-            Pattern::Typed(t) => self.desugar_pattern(&t.pattern),
         }
     }
 }

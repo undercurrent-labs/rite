@@ -421,7 +421,6 @@ pub enum Pattern {
     List(ListPattern),
     Record(RecordPattern),
     Result(ResultPattern),
-    Typed(TypedPattern),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -457,13 +456,6 @@ pub enum ResultPatKind {
     Err,
     Some,
     None,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TypedPattern {
-    pub pattern: Box<Pattern>,
-    pub ty: TypeExpr,
-    pub span: Span,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

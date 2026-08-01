@@ -1071,7 +1071,6 @@ impl Resolver {
                     self.define_pattern(b, mutable, file);
                 }
             }
-            Pattern::Typed(t) => self.define_pattern(&t.pattern, mutable, file),
             Pattern::Atom(_) | Pattern::Literal(_) | Pattern::Wildcard(_) => {}
         }
     }

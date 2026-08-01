@@ -1,4 +1,9 @@
-(* Rite v1 normative EBNF — refined only when behavior remains equivalent *)
+(* Rite grammar.
+   Descriptive, not normative: the parser in crates/rite-syntax is the definition,
+   and where the two disagree this file is the one that is wrong. It described a
+   pipeline precedence the parser had abandoned, omitted six operators, and claimed
+   three productions that did not parse at all — and rite-doc copies it verbatim into
+   the agent bundle, so the drift was published. *)
 
 program          = { item | statement } ;
 
@@ -8,11 +13,15 @@ item             = function_decl
                  | import_decl
                  | test_decl ;
 
-function_decl    = [ "pub" ] def_kw [ effect_kw ] identifier [ type_params ]
+(* No type_params: generics are not implemented. Parameter and return annotations
+   are, and are enforced at runtime — see docs/book/functions.md. *)
+function_decl    = [ "pub" ] def_kw [ effect_kw ] identifier
                    "(" [ parameter_list ] ")"
                    [ return_annotation ] block ;
 
-data_decl        = def_kw identifier record_type ;
+(* `def Name ⟨field: T⟩` is not implemented; a data declaration binds a record
+   literal. *)
+data_decl        = def_kw identifier record_literal ;
 
 event_decl       = def_kw ( "item" | "room" | "world" ) atom block ;
 
@@ -30,7 +39,10 @@ assignment       = identifier ":=" expression ;
 
 expression       = pipeline ;
 
-pipeline         = conditional { pipe_op pipeline_stage } ;
+(* `→` is looser than every binary operator, so its input reads as written:
+   `a + b → str` is `(a + b) → str`. A binary operator *after* a pipeline is a parse
+   error (E015) — nothing below this level can consume one. *)
+pipeline         = coalesce { pipe_op pipeline_stage } ;
 
 pipeline_stage   = call_expr
                  | member_expr
@@ -40,18 +52,26 @@ pipeline_stage   = call_expr
 
 conditional      = if_kw expression block [ ":" block ]
                  | match_expr
-                 | logic_or ;
+                 | pipeline ;
+
+coalesce         = logic_or { "??" logic_or } ;
 
 match_expr       = match_kw expression block ;
 
 match_arm        = pattern pipe_op expression ;
 
-logic_or         = logic_and { "or" logic_and } ;
+logic_or         = logic_xor { "or" logic_xor } ;
+logic_xor        = logic_and { xor_op logic_and } ;
 logic_and        = equality { "and" equality } ;
 equality         = comparison { ( "=" | "!=" ) comparison } ;
-comparison       = term { ( "<" | "<=" | ">" | ">=" | in_kw | not_in_kw ) term } ;
+comparison       = range_expr { ( "<" | "<=" | ">" | ">=" | in_kw | not_in_kw ) range_expr } ;
+(* Non-associative, and lowered to range/range_incl calls in desugar — but retained
+   as operators in the AST, so `rite fmt` prints back what was written. *)
+range_expr       = term [ ( ".." | range_incl_op ) term ] ;
 term             = factor { ( "+" | "-" ) factor } ;
-factor           = unary { ( "*" | "/" | "%" ) unary } ;
+factor           = power { ( "*" | "/" | "%" | idiv_op ) power } ;
+power            = compose { "**" power } ;   (* right-associative *)
+compose          = unary { compose_op unary } ;
 unary            = [ "-" | "not" | effect_kw ] postfix ;
 
 postfix          = call_expr { "?" } ;  (* postfix ? is try-unwrap *)
@@ -101,8 +121,7 @@ pattern          = identifier
                  | list_pattern
                  | record_pattern
                  | option_pattern
-                 | result_pattern
-                 | typed_pattern ;
+                 | result_pattern ;
 
 list_pattern     = "[" [ pattern { "," pattern } [ "," ".." pattern ] ] "]" ;
 record_pattern   = record_open [ pattern_field { "," pattern_field } ] record_close ;
@@ -118,6 +137,12 @@ def_kw           = "◆" | "def" ;
 bind_op          = "←" | "<-" ;
 mutable_bind_op  = "↢" | "<~" ;
 pipe_op          = "→" | "->" ;
+xor_op           = "⊻" | "xor" ;
+range_incl_op    = "‥" | "..=" ;
+(* Glyph-only: `idiv` and `compose` are builtin function names, so neither can be an
+   infix keyword. `rite fmt` prints these as calls in the ASCII dialect. *)
+idiv_op          = "÷" ;
+compose_op       = "∘" ;
 return_kw        = "^" | "return" ;
 if_kw            = "?" | "if" ;
 match_kw         = "~" | "match" ;

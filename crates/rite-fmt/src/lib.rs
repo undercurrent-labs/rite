@@ -1332,7 +1332,6 @@ impl<'a> Formatter<'a> {
                     self.pattern(b);
                 }
             }
-            Pattern::Typed(t) => self.pattern(&t.pattern),
         }
     }
 
