@@ -454,10 +454,22 @@ fn pipeline_stage(stage: &rite_sem::PipelineStageIr, compiled: &Compiled) -> Low
                     rust_str(name)
                 )
             }
-            // A bare name in stage position is a builtin applied to the value.
+            // A bare name in stage position resolves the way a call callee does:
+            // a function this backend compiled is dispatched directly, and anything
+            // else goes through `lookup_global` — binding, then function, then
+            // builtin. This used to call `call_native_public` unconditionally, which
+            // consulted the builtin table and nothing else, so a user's own function
+            // was unreachable as a stage and a builtin won over a definition that
+            // shadowed it everywhere else. The interpreter had the same bug; both
+            // sides move together or `interpreter_ir_parity` fails.
+            rite_sem::ExprIr::Global(name) if compiled.contains(name) => format!(
+                "{{ let __args = vec![__v]; {}(ctx, __args).await? }}",
+                mangle(name)
+            ),
             rite_sem::ExprIr::Global(name) => format!(
-                "{{ let __args = vec![__v]; let mut __ev = rite_runtime::Evaluator::new(ctx); \
-                 __ev.call_native_public({}, __args).await? }}",
+                "{{ let __c = rite_runtime::lookup_global(ctx, {})?; let __args = vec![__v]; \
+                 let mut __ev = rite_runtime::Evaluator::new(ctx); \
+                 __ev.call_value_public(__c, __args).await? }}",
                 rust_str(name)
             ),
             rite_sem::ExprIr::Closure(c) => format!(

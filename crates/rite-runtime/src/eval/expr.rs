@@ -375,7 +375,15 @@ impl<'a> Evaluator<'a> {
                         // is itself the function applied to input
                         self.call_value(clos, vec![input]).await
                     }
-                    ExprIr::Global(name) => self.call_native(name, vec![input]).await,
+                    // No `ExprIr::Global` arm on purpose. Sending a bare name straight
+                    // to `call_native` consulted the builtin table and nothing else,
+                    // so a user's own function was unreachable as a stage and a
+                    // builtin of the same name won over a definition that shadowed it
+                    // everywhere else in the language. The `other` arm below evaluates
+                    // the name through `lookup_global` — binding, then function, then
+                    // builtin — and `call_value` dispatches a `NativeName` back to
+                    // `call_native`, so builtin stages still land where they did. The
+                    // cost is one environment lookup per stage.
                     ExprIr::Member { object, field, .. }
                         if matches!(object.as_ref(), ExprIr::Placeholder(_)) =>
                     {

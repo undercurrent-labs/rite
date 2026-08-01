@@ -2,6 +2,55 @@
 
 ## [Unreleased]
 
+### Fixed — a pipeline reaches the functions you wrote
+
+`3 → dbl` for a `◆ dbl` you defined yourself failed at runtime with **unknown
+builtin `dbl`**, naming a category the function was never in. Only the builtin
+table was consulted for a bare name in stage position, so a pipeline — the most
+visible thing in the language — composed with the standard library and nothing
+else. `3 → dbl()` worked, which is how it went unnoticed: every bundled example
+and every snippet in the book pipes into builtins.
+
+The quieter half of the same bug was worse. A name that *is* a builtin resolved to
+the builtin even where a definition shadowed it, so one program answered two
+different things about the same name:
+
+```
+◆ count(xs) ⟦ ^ 99 ⟧
+count([1, 2, 3])      // 99
+[1, 2, 3] → count     // was 3
+```
+
+A bare stage now resolves the way a call already did — local binding, then
+function, then builtin — so both lines answer 99, a closure in a binding works as
+a stage, and an unknown stage name is a resolve error naming it rather than a
+runtime complaint about builtins. **If a script defines a function whose name
+matches a builtin and pipes into it, the pipeline now calls the definition.** That
+is the answer the same name gave in call position all along.
+
+### Fixed — writing the marker no longer switches off the check
+
+Passing an effectful function to a higher-order one requires `!` on the call, and
+supplying it disabled the inference that the marker exists to drive:
+
+```
+◆! shout(n) ⟦ ! @console.println(str(n)) ⟧
+◆ run(xs) ⟦ ! each(xs, shout) ⟧   // the ! the resolver asks for
+◆ outer() ⟦ run([7]) ⟧            // plain ◆. no marker. printed 7.
+```
+
+`rite check` said `ok`. The call that records the effect sat inside the branch
+that reports the missing marker, so taking the fix removed the record: `run` was
+never inferred effectful, never required to be `◆!`, and its own callers were
+never asked for anything. Complying with the discipline was what turned it off —
+the one path a reader following the diagnostics would take.
+
+It is recorded whether or not the marker is present now, matching the two checks
+either side of it that always did. **A function that passes an effectful function
+to a higher-order one must be declared `◆!` / `def!`, and its callers must mark
+the call.** Scripts that were relying on the hole will now be told what they are
+doing; that is the point, but it is a new error on code that used to pass.
+
 ## [0.5.0] — 2026-08-01
 
 The release where a lot of things that looked like they worked turned out not to,

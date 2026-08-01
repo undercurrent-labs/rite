@@ -742,15 +742,15 @@ impl Desugar {
                 kind: StageKind::Block,
                 expr: self.desugar_expr(stage),
             },
-            Expr::Ident(i) => PipelineStageIr {
-                kind: StageKind::Call,
-                expr: ExprIr::NativeCall {
-                    name: i.name.clone(),
-                    args: vec![],
-                    effect: EffectKind::Pure,
-                    span: i.span,
-                },
-            },
+            // A bare name stage resolves exactly as a call callee does — `xs → count`
+            // and `count(xs)` must name the same function. This arm used to build a
+            // `NativeCall` directly, which consulted the builtin table and nothing
+            // else: `3 → dbl` for a user-defined `dbl` failed at runtime with
+            // "unknown builtin", and a user function shadowing a builtin was ignored,
+            // so `count(xs)` answered 99 where `xs → count` answered 3 about the same
+            // program. Falling through to `other` desugars it as `Global`, which the
+            // evaluator resolves through `lookup_global` (binding, then function, then
+            // builtin) — the order the comment on `Expr::Call` above already declares.
             Expr::Call(_c) => {
                 // value → f(args) becomes f(value, args...)
                 PipelineStageIr {
