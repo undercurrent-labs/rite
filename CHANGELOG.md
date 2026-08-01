@@ -1,6 +1,50 @@
 # Changelog
 
-## [Unreleased]
+## [0.5.0] — 2026-08-01
+
+The release where a lot of things that looked like they worked turned out not to,
+and now do. Most were found by *running* the feature being documented rather than
+by reading code or watching tests pass: a silently wrong builtin, a formatter that
+turned a function into its own body, an embedded script whose output went nowhere,
+and a rendered image with no text in it. Each had a green test suite over it at
+the time.
+
+**Read this before upgrading.** Three changes can break working code, all of them
+cases where the old behaviour was a wrong answer delivered quietly:
+
+- **Builtins that answered the wrong type now raise.** `sum(["1", "2"])` was `0`,
+  the same `0` a correct empty list gives. `keys("abc")` was `[]`. `lines(xs)` on
+  a list was `[]`, which reads exactly like an empty file. Each of these now says
+  what is wrong at the call. If a script depended on one, it fails now — loudly,
+  which is the point, but it fails.
+- **`join` on a string joins its characters.** `join("abc", "-")` was `"abc"` and
+  is now `"a-b-c"`.
+- **Exit codes 3 and 4 mean what the published table always said.** A resolve
+  failure exits **4** from `rite run` where it exited 3; a parse failure exits
+  **3** from `rite check` where it exited 4. Anything matching on those numbers
+  needs a look.
+
+And one that is unlikely to bite but worth knowing: `{ || 42 }` is a function of
+no arguments now, where it used to evaluate to `42`.
+
+### Added — `and_then` calls its function
+
+It lived in the pure builtin table, which cannot invoke a closure, so it ignored
+the function it was given and answered its input: `and_then(ok(2), { |n| ok(n * 10) })`
+gave `ok(2)`. A chain built on it looked like it worked and did nothing, which is
+the worst way for a combinator to fail. `ok` calls the function, `err`
+short-circuits unchanged, and a plain value passes through so it composes with
+functions that do not wrap.
+
+### Added — date arithmetic
+
+`@clock.add(t, duration)` and `@clock.diff(a, b)`. `add` reuses the duration
+vocabulary `@clock.duration` already speaks, so `"7d"` means the same everywhere,
+and a negative duration expresses "thirty days ago" without a second function.
+Both answer results — a string that is not a timestamp and a unit that does not
+exist are both things a caller gets wrong — and both are unmarked, since shifting
+a timestamp you already hold observes nothing outside the program. An
+out-of-range shift is an `err`, not a panic.
 
 ### Added — `rite render`, pictures of code
 
