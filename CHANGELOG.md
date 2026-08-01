@@ -28,6 +28,37 @@ runtime complaint about builtins. **If a script defines a function whose name
 matches a builtin and pipes into it, the pipeline now calls the definition.** That
 is the answer the same name gave in call position all along.
 
+### Changed — naming an effectful function no longer hides it
+
+Effect-ness travelled along the call graph by name, so giving a function a
+different name took it off the graph:
+
+```
+◆! shout(n) ⟦ ! @console.println(str(n)) ⟧
+◆ run(xs) ⟦
+  g ← shout        // a rename
+  each(xs, g)      // …and `each(xs, shout)` — the checked form — is gone
+⟧
+```
+
+`rite check` said `ok` on that, and on `f ← shout` followed by `f("hi")`, which
+printed from a plain `◆` with no marker anywhere in the file. One line of
+indirection was the whole of it, and the second form is what anyone factoring a
+call out of a loop writes.
+
+A binding now carries the property of what it holds: a name that resolves to a
+`◆!` function, or a lambda whose own body performs an effect. Calling through it,
+or handing it to a higher-order function, is checked exactly as the original is.
+**A function doing either must be declared `◆!` / `def!`, and its callers must
+mark the call.** Nothing in the shipped corpus changed, which is the argument for
+the rule rather than against it.
+
+It follows a *name*. A function read from a record field, received as a parameter,
+or returned by a call still passes unremarked — there is nothing to attach the
+property to, and saying so plainly is better than implying a guarantee. The
+effects chapter now lists exactly what is and is not seen, and why closing the
+rest needs a type system Rite does not have.
+
 ### Fixed — writing the marker no longer switches off the check
 
 Passing an effectful function to a higher-order one requires `!` on the call, and

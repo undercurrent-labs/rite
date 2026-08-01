@@ -1,0 +1,3 @@
+f ← ⟦ |n| ! @console.println(str(n)) ⟧
+◆ run(xs) ⟦ each(xs, f) ⟧
+run([1])

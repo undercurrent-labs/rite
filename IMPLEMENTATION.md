@@ -61,10 +61,21 @@ Tracks implementation status for the Rite language and V1 tooling. Detailed desi
 
 #### P1 — Quality / polish
 
-5. **Effect tracking is syntactic, not typed** — a function passed by name (`each(shout)`)
-   is caught, and a lambda written inline carries its own marker, but a closure stored in
-   a binding and passed along later is not tracked. Closing that needs types Rite does not
-   have. Permissions bound what any of it can reach regardless.
+5. **Effect tracking follows names, not values** — a function passed by name
+   (`each(shout)`) is caught, a lambda written inline carries its own marker, and a
+   binding that holds an effectful function now carries the property forward, so
+   `g ← shout` then `each(xs, g)`, and `f ← shout` then `f(1)`, are both caught. A
+   lambda bound to a name is classified from its body.
+
+   What remains uncovered is a function with no name to attach the property to: one
+   read from a record field or list element (`each(xs, r.go)`), one received as a
+   parameter (`◆ run(xs, f) ⟦ each(xs, f) ⟧`), or one returned by a call. Closing
+   that needs effect polymorphism — "effectful exactly when the argument is" — which
+   needs a type system Rite does not have. The blunt alternative is to require a marker
+   wherever the analysis cannot tell, which would put one on every function that accepts
+   a function, `map` included; that trades a known gap for a marker that no longer
+   distinguishes anything, and is not currently taken. `docs/book/effects.md` states the
+   boundary as it stands. Permissions bound what any of it can reach regardless.
 6. **Game free-form sugar** — still prefer `@game.register_*`. The declarative
    `def item :name ⟦ … ⟧` form does not exist; `examples/text-rpg/game.ascii.rite` used to
    be written against it and is now a real transliteration of its glyph twin.

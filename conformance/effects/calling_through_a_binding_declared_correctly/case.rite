@@ -1,0 +1,6 @@
+◆! shout(n) ⟦ ! @console.println(str(n)) ⟧
+◆! run() ⟦
+  f ← shout
+  ! f(1)
+⟧
+! run()

@@ -347,6 +347,14 @@ struct BindingInfo {
     mutable: bool,
     #[allow(dead_code)]
     span: Span,
+    /// This binding holds something that performs a host effect when called.
+    ///
+    /// Effect-ness travels along the call graph by *name*, so a function reached
+    /// through a binding used to leave the graph entirely: `f ← shout` followed by
+    /// `f("hi")` printed from a plain `◆`, with nothing to report it. Naming the
+    /// value does not make it inert, so the binding carries the property forward
+    /// and calling through it is checked exactly as calling `shout` would be.
+    effectful_callable: bool,
 }
 
 pub fn resolve(program: &Program, file: &SourceFile) -> (ResolvedProgram, Diagnostics) {
@@ -614,8 +622,25 @@ impl Resolver {
     fn resolve_stmt(&mut self, stmt: &Stmt, file: rite_core::FileId) {
         match stmt {
             Stmt::Binding(b) => {
+                // Snapshot around the walk: for a lambda, the difference says whether
+                // its *body* performs a host effect, which is the only way to know for
+                // a function that has no name to look up. This is what the comment on
+                // `effects_seen` has always described.
+                let before = self.effects_seen;
                 self.resolve_expr(&b.value, file, false);
+                let effectful = match &b.value {
+                    Expr::Block(_) => self.effects_seen > before,
+                    other => self.names_effectful_callable(other),
+                };
                 self.define_pattern(&b.pattern, b.mutable, file);
+                // Only a plain `f ← …` carries the mark. A destructuring pattern
+                // binds parts of a value, and which part holds the callable is not
+                // something this analysis can say.
+                if effectful {
+                    if let Pattern::Ident(i) = &b.pattern {
+                        self.mark_effectful_callable(&i.name);
+                    }
+                }
             }
             Stmt::Assign(a) => {
                 if let Some(info) = self.lookup(&a.name.name) {
@@ -734,11 +759,19 @@ impl Resolver {
                     // as calling the capability directly would. Driven by the
                     // declaration rather than by inference: the contract is what a
                     // caller can see, and it is known before any body is walked.
-                    let declared = self
-                        .functions
-                        .get(&callee.name)
-                        .map(|m| m.declares_effect)
-                        .unwrap_or(false);
+                    // A binding holding an effectful function is checked like the
+                    // function itself: `f ← shout` then `f("hi")` reaches the
+                    // terminal exactly as `shout("hi")` does, and used to say
+                    // nothing. A local shadows a global of the same name, so the
+                    // binding is consulted first.
+                    let declared = match self.lookup(&callee.name) {
+                        Some(b) => b.effectful_callable,
+                        None => self
+                            .functions
+                            .get(&callee.name)
+                            .map(|m| m.declares_effect)
+                            .unwrap_or(false),
+                    };
                     if declared {
                         self.note_effect();
                     }
@@ -794,11 +827,18 @@ impl Resolver {
                 // and passed later is not tracked, and cannot be without types.
                 for a in &c.args {
                     if let Expr::Ident(arg) = a {
-                        let passes_effect = self
-                            .functions
-                            .get(&arg.name)
-                            .map(|m| m.declares_effect)
-                            .unwrap_or(false);
+                        // Same rule as the callee above: a binding that holds an
+                        // effectful function passes one. `g ← shout` followed by
+                        // `each(xs, g)` is the documented `each(shout)` case with a
+                        // rename in front of it, and one line was enough to slip it.
+                        let passes_effect = match self.lookup(&arg.name) {
+                            Some(b) => b.effectful_callable,
+                            None => self
+                                .functions
+                                .get(&arg.name)
+                                .map(|m| m.declares_effect)
+                                .unwrap_or(false),
+                        };
                         // Recorded whether or not the marker is present, like the
                         // callee checks above. Nesting this inside `!effect` meant
                         // writing the `!` the diagnostic asks for suppressed the
@@ -1010,8 +1050,48 @@ impl Resolver {
                 local,
                 mutable,
                 span,
+                effectful_callable: false,
             },
         );
+    }
+
+    /// Record that `name`'s binding holds an effectful callable.
+    ///
+    /// Applied after `define_pattern`, so a destructuring pattern simply does not
+    /// get the mark — `⟨go: f⟩ ← r` binds `f` from a field this analysis cannot
+    /// follow, and claiming to know what is in it would be worse than admitting
+    /// the gap.
+    fn mark_effectful_callable(&mut self, name: &str) {
+        if let Some(scope) = self.scopes.last_mut() {
+            if let Some(info) = scope.bindings.get_mut(name) {
+                info.effectful_callable = true;
+            }
+        }
+    }
+
+    /// Does binding this expression to a name produce something that performs a
+    /// host effect when called?
+    ///
+    /// Deliberately narrow: a name that resolves to a function declared `◆!`, a
+    /// name already carrying the mark, or a parenthesised/marked form of either.
+    /// Anything arriving through a record field, a list element, a parameter or
+    /// the result of a call answers `false` — see `effects.md` for what that
+    /// leaves uncovered.
+    fn names_effectful_callable(&self, e: &Expr) -> bool {
+        match e {
+            Expr::Ident(i) => {
+                if let Some(b) = self.lookup(&i.name) {
+                    return b.effectful_callable;
+                }
+                self.functions
+                    .get(&i.name)
+                    .map(|m| m.declares_effect)
+                    .unwrap_or(false)
+            }
+            Expr::Group(g) => self.names_effectful_callable(&g.expr),
+            Expr::Unary(u) if u.op == UnaryOp::Effect => self.names_effectful_callable(&u.expr),
+            _ => false,
+        }
     }
 
     /// True when this name refers to an imported module rather than a value.

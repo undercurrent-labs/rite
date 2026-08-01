@@ -58,9 +58,55 @@ line, so nothing is hidden and no extra marker is asked for:
 [1, 2] → each { |n| ! @console.println(str(n)) }
 ```
 
-The rule reads what is written at the call. A closure stored in a binding and
-passed along later is not tracked; that would need a type system Rite does not
-have. Permissions still bound what any of it can reach.
+Naming a function first changes nothing. A binding that holds an effectful
+function is checked exactly as the function is, so neither of these gets past the
+compiler:
+
+```rite
+◆! shout(n) ⟦ ! @console.println(str(n)) ⟧
+
+◆ run(xs) ⟦
+  g ← shout          // a rename, not a disguise
+  each(xs, g)        // error[E021]: passing `g` here requires `!` on the call
+⟧
+```
+
+```rite
+◆! shout(n) ⟦ ! @console.println(str(n)) ⟧
+
+◆ run() ⟦
+  f ← shout
+  f(1)               // error[E021]: calling `f` requires `!`
+⟧
+```
+
+A lambda bound to a name carries the property the same way, from its body:
+
+```rite
+f ← ⟦ |n| ! @console.println(str(n)) ⟧   // performs an effect when called
+
+◆ run(xs) ⟦ each(xs, f) ⟧                // error[E021]
+```
+
+#### What is not tracked
+
+The property follows a **name**. It does not follow a function that arrives some
+other way, because there is no name to attach it to:
+
+- a function held in a record field or a list element — `each(xs, r.go)`
+- a function received as a parameter — `◆ run(xs, f) ⟦ each(xs, f) ⟧`
+- a function returned by a call — `each(xs, pick())`
+
+In each of those, `rite check` is silent whether or not the function performs
+effects. Closing this needs effect polymorphism — a way to say "this combinator is
+effectful exactly when its argument is" — and that needs a type system Rite does
+not have. Marking every function that takes a function would be the alternative,
+and it would make the marker mean less rather than more: `map` itself would carry
+one.
+
+**Permissions still bound what any of it can reach.** The marker is a legibility
+device — it says where to look. The grant is the boundary, and it is checked at
+the capability, not at the call site that reaches it.
 
 ```rite browser
 do host.console.println("hi")
