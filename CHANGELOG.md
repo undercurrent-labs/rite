@@ -1,5 +1,7 @@
 # Changelog
 
+## [Unreleased]
+
 ## [0.6.0] — 2026-08-01
 
 A strictness release, from two independent reviews of 0.4.1. Both named the same
