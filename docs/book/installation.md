@@ -150,6 +150,7 @@ rite convert examples/hello/hello.rite --to glyph --stdout
 | `rite studio` | Local Studio API host |
 | `rite docs build` | Generate reference docs |
 | `rite doc [path]` | Document your own scripts' `///` comments |
+| `rite render <file>` | Draw highlighted source as SVG or PNG |
 | `rite capabilities` | List host capabilities |
 
 ```bash

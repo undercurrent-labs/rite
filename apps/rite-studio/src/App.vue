@@ -2,7 +2,7 @@
 import { computed, reactive, ref, watch } from "vue";
 import { EXAMPLES } from "./examples";
 import { decodeShare, encodeShare } from "./share";
-import { convertWithMap, formatOutput, riteCall } from "./riteApi";
+import { convertWithMap, formatOutput, riteCall, renderSvg } from "./riteApi";
 import CodeEditor from "./CodeEditor.vue";
 import { tokenize } from "./highlight";
 
@@ -143,6 +143,68 @@ async function api(path: string, body: Record<string, unknown>) {
   }
 }
 
+/**
+ * Save the editor's contents as a PNG.
+ *
+ * The picture comes from `rite-render` through WASM, then goes through a canvas
+ * to become a PNG — so what is saved is exactly what `rite render` would draw,
+ * and the browser never needs a rasteriser. Studio offers PNG only: an SVG is
+ * what the CLI is for, and one format here is one thing to explain.
+ */
+async function savePng() {
+  busy.value = true;
+  try {
+    const svg = await renderSvg(source.value, "window");
+    if (!svg) {
+      panel.value = "diag";
+      content.diag =
+        "Could not render an image: the WASM module is not available in this build.";
+      return;
+    }
+
+    // The SVG carries its own font, so the canvas needs nothing from the page.
+    const blob = new Blob([svg], { type: "image/svg+xml;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    try {
+      const img = new Image();
+      await new Promise<void>((resolve, reject) => {
+        img.onload = () => resolve();
+        img.onerror = () => reject(new Error("the browser could not read the rendered SVG"));
+        img.src = url;
+      });
+
+      // Twice the CSS size, so it stays sharp when it lands somewhere retina.
+      const scale = 2;
+      const canvas = document.createElement("canvas");
+      canvas.width = img.width * scale;
+      canvas.height = img.height * scale;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) throw new Error("no 2d canvas context");
+      ctx.scale(scale, scale);
+      ctx.drawImage(img, 0, 0);
+
+      const png = await new Promise<Blob | null>((resolve) =>
+        canvas.toBlob(resolve, "image/png")
+      );
+      if (!png) throw new Error("the canvas produced no PNG");
+
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(png);
+      link.download = "rite.png";
+      link.click();
+      // Revoked on the next tick: revoking immediately can beat the download.
+      setTimeout(() => URL.revokeObjectURL(link.href), 10_000);
+    } finally {
+      URL.revokeObjectURL(url);
+    }
+  } catch (e) {
+    panel.value = "diag";
+    content.diag = `Could not save an image: ${e instanceof Error ? e.message : String(e)}`;
+  } finally {
+    busy.value = false;
+  }
+}
+
 function copyShareLink() {
   void flash("link", location.href);
 }
@@ -253,6 +315,14 @@ const curlTokens = computed(() => tokenize(`rite run server.rite\n${curlCommand.
       <button class="btn" :disabled="busy" @click="showAst">AST</button>
       <button class="btn" :disabled="busy" @click="showIr">IR</button>
       <button class="btn" :disabled="busy" @click="emitRust">Rust</button>
+      <button
+        class="btn"
+        :disabled="busy"
+        title="Save this script as a PNG, highlighted"
+        @click="savePng"
+      >
+        Save PNG
+      </button>
       <button
         class="btn"
         title="Copy a link that reopens this script"

@@ -6,8 +6,15 @@ license.workspace = true
 description = "Render highlighted Rite source as an image"
 repository.workspace = true
 
+[features]
+# PNG rasterisation. Off by default so the browser build and anything embedding
+# the highlighter do not pull a rasteriser and a font stack they cannot use;
+# `rite-cli` turns it on.
+png = ["dep:resvg"]
+
 [dependencies]
 rite-core = { workspace = true }
 rite-syntax = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+resvg = { version = "0.45", optional = true, default-features = false, features = ["text", "system-fonts", "memmap-fonts"] }

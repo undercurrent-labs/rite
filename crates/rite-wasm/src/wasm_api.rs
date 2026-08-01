@@ -1,9 +1,9 @@
 //! wasm-bindgen surface for hosted Studio.
 
 use crate::{
-    analyze, complete, convert, emit_rust, format, hover, map_position, parse, run_blocking,
-    semantic_ir, syntax_tree, ExecutionResult, FormatResultDto, ParseResult, RunOptions,
-    SourceMapDto,
+    analyze, complete, convert, emit_rust, format, hover, map_position, parse, render_svg,
+    run_blocking, semantic_ir, syntax_tree, ExecutionResult, FormatResultDto, ParseResult,
+    RunOptions, SourceMapDto,
 };
 use serde::Serialize;
 use wasm_bindgen::prelude::*;
@@ -24,6 +24,14 @@ fn to_js<T: Serialize>(value: &T) -> Result<JsValue, JsValue> {
 #[wasm_bindgen]
 pub fn wasm_parse(source: &str) -> Result<JsValue, JsValue> {
     to_js(&parse(source))
+}
+
+#[wasm_bindgen]
+pub fn wasm_render_svg(source: &str, frame: &str) -> Result<JsValue, JsValue> {
+    match render_svg(source, frame) {
+        Ok(svg) => Ok(JsValue::from_str(&svg)),
+        Err(e) => Err(JsValue::from_str(&e)),
+    }
 }
 
 #[wasm_bindgen]

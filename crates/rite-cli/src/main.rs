@@ -100,6 +100,31 @@ enum Commands {
         #[arg(long = "json-errors")]
         json_errors: bool,
     },
+    /// Render highlighted Rite source as an image
+    ///
+    /// Writes SVG, a self-contained SVG with the font embedded, or PNG. The
+    /// highlighting is the language's own lexer and the same palette the site
+    /// uses, so a picture of Rite and the Rite on the page cannot drift apart.
+    Render {
+        /// Script to render; `-` reads standard input
+        file: PathBuf,
+        /// `svg` (small, uses the viewer's font), `svg-font` (self-contained),
+        /// or `png`
+        #[arg(long, default_value = "svg")]
+        format: String,
+        /// Chrome around the code: `text`, `box`, or `window`
+        #[arg(long, default_value = "text")]
+        frame: String,
+        /// Where to write it; defaults to standard output
+        #[arg(long, short)]
+        output: Option<PathBuf>,
+        /// Type size in pixels
+        #[arg(long, default_value = "15")]
+        font_size: f32,
+        /// Pixels per unit for `png`, for a screen that wants more of them
+        #[arg(long, default_value = "2")]
+        scale: f32,
+    },
     /// Format Rite source (rewrites files in place)
     Fmt {
         /// Files or directories to format; required unless --all is given
@@ -636,6 +661,97 @@ async fn run(cli: Cli) -> anyhow::Result<ExitCode> {
             let code =
                 rite_compiler::generate_from_ir(&ir, &file).map_err(|e| anyhow::anyhow!(e))?;
             println!("{}", code);
+            Ok(ExitCode::SUCCESS)
+        }
+        Commands::Render {
+            file,
+            format,
+            frame,
+            output,
+            font_size,
+            scale,
+        } => {
+            // `-` for stdin, so `rite fmt … | rite render -` works and a snippet
+            // does not need a file first.
+            let source = if file.as_os_str() == "-" {
+                use std::io::Read;
+                let mut buf = String::new();
+                std::io::stdin().read_to_string(&mut buf)?;
+                buf
+            } else {
+                std::fs::read_to_string(&file)
+                    .map_err(|e| anyhow::anyhow!("{}: {e}", file.display()))?
+            };
+
+            let format = match format.as_str() {
+                "svg" => rite_render::Format::Svg,
+                "svg-font" => rite_render::Format::SvgFont,
+                "png" => rite_render::Format::Png,
+                other => {
+                    eprintln!("unknown --format `{other}` — expected svg, svg-font or png");
+                    return Ok(ExitCode::from(2));
+                }
+            };
+            let frame = match frame.as_str() {
+                "text" => rite_render::Frame::Text,
+                "box" => rite_render::Frame::Box,
+                "window" => rite_render::Frame::Window,
+                other => {
+                    eprintln!("unknown --frame `{other}` — expected text, box or window");
+                    return Ok(ExitCode::from(2));
+                }
+            };
+            if font_size <= 0.0 || scale <= 0.0 {
+                eprintln!("--font-size and --scale must be greater than zero");
+                return Ok(ExitCode::from(2));
+            }
+            let opts = rite_render::RenderOptions {
+                format,
+                frame,
+                font_size,
+            };
+
+            // PNG is bytes and everything else is text, but both go to a file or
+            // to stdout on the same rule.
+            let bytes = match format {
+                rite_render::Format::Png => match rite_render::render_png(&source, &opts, scale) {
+                    Ok(png) => png,
+                    Err(e) => {
+                        eprintln!("render: {e}");
+                        return Ok(ExitCode::from(1));
+                    }
+                },
+                _ => match rite_render::render(&source, &opts) {
+                    Ok(svg) => svg.into_bytes(),
+                    Err(e) => {
+                        eprintln!("render: {e}");
+                        return Ok(ExitCode::from(1));
+                    }
+                },
+            };
+
+            match output {
+                Some(path) => {
+                    if let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
+                        std::fs::create_dir_all(parent)?;
+                    }
+                    std::fs::write(&path, &bytes)
+                        .map_err(|e| anyhow::anyhow!("{}: {e}", path.display()))?;
+                    eprintln!("wrote {} ({} bytes)", path.display(), bytes.len());
+                }
+                None => {
+                    use std::io::Write;
+                    // Binary to a terminal is a mess nobody asked for; a PNG needs
+                    // somewhere to go.
+                    use std::io::IsTerminal;
+                    if matches!(format, rite_render::Format::Png) && std::io::stdout().is_terminal()
+                    {
+                        eprintln!("render: png is binary — give it --output <file>, or pipe it");
+                        return Ok(ExitCode::from(2));
+                    }
+                    std::io::stdout().write_all(&bytes)?;
+                }
+            }
             Ok(ExitCode::SUCCESS)
         }
         Commands::Docs { cmd } => docs_cmd::run(cmd).await,

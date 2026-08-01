@@ -30,6 +30,9 @@ pub enum Format {
     /// Self-contained: the face travels with the picture, so it renders the same
     /// everywhere. Larger by the size of the font.
     SvgFont,
+    /// Rasterised, for somewhere that will not take an SVG at all. CLI only —
+    /// see [`render_png`].
+    Png,
 }
 
 /// The chrome around the code.
@@ -66,12 +69,14 @@ impl Default for RenderOptions {
 pub enum RenderError {
     /// `svg-font` was asked for and no face is available to embed.
     NoFont(String),
+    /// PNG rasterisation failed.
+    Raster(String),
 }
 
 impl std::fmt::Display for RenderError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            RenderError::NoFont(m) => write!(f, "{m}"),
+            RenderError::NoFont(m) | RenderError::Raster(m) => write!(f, "{m}"),
         }
     }
 }
@@ -83,9 +88,88 @@ pub fn render(source: &str, opts: &RenderOptions) -> Result<String, RenderError>
     let runs = tokens::runs(source);
     let face = match opts.format {
         Format::Svg => None,
-        Format::SvgFont => Some(embedded_font()?),
+        // A caller asking for PNG through the SVG entry point gets the
+        // self-contained SVG that PNG is rasterised from, rather than a refusal.
+        Format::SvgFont | Format::Png => Some(embedded_font()?),
     };
     Ok(svg::render(&runs, opts, face.as_deref()))
+}
+
+/// Render source to PNG bytes.
+///
+/// Behind the `png` feature so the browser build and anything embedding the
+/// highlighter do not pull in a rasteriser and a font stack they cannot use.
+/// Studio produces its PNGs from `svg-font` through a canvas instead, which needs
+/// no rasteriser in the browser and is WYSIWYG by construction.
+///
+/// Rasterising needs real glyph outlines — the computed layout says *where* each
+/// run goes, not what it looks like — so this reads the system's fonts. A missing
+/// face is a picture with holes in it, which is worth failing over rather than
+/// shipping.
+#[cfg(feature = "png")]
+pub fn render_png(source: &str, opts: &RenderOptions, scale: f32) -> Result<Vec<u8>, RenderError> {
+    rasterise(source, opts, scale)?
+        .encode_png()
+        .map_err(|e| RenderError::Raster(format!("encoding PNG: {e}")))
+}
+
+/// The pixels behind [`render_png`], so a test can look at them.
+///
+/// It has to: the first PNG this produced had the frame, the background and the
+/// window dots, and no text — and every SVG assertion passed while it did,
+/// because the markup was correct and only the rasteriser disagreed. A test that
+/// reads markup cannot see an empty picture.
+#[cfg(feature = "png")]
+fn rasterise(
+    source: &str,
+    opts: &RenderOptions,
+    scale: f32,
+) -> Result<resvg::tiny_skia::Pixmap, RenderError> {
+    use resvg::tiny_skia;
+    use resvg::usvg;
+
+    // *Not* the self-contained SVG. `usvg` resolves fonts through its own
+    // database and ignores an `@font-face` with a data URL, so rasterising the
+    // embedded form produced a picture with the frame, the background and the
+    // window dots — and no text at all. Every SVG test passed while it did,
+    // because the markup was right; only looking at the PNG showed it.
+    //
+    // So: plain SVG, and the face goes into the database instead.
+    let svg = render(
+        source,
+        &RenderOptions {
+            format: Format::Svg,
+            ..opts.clone()
+        },
+    )?;
+
+    let mut options = usvg::Options::default();
+    let db = options.fontdb_mut();
+    db.load_system_fonts();
+    // The same face `svg-font` embeds, so the two formats agree, and loaded by
+    // path rather than trusting the system to have it under that name.
+    if let Some(path) = font_path() {
+        let _ = db.load_font_file(path);
+    }
+    // `ui-monospace` is a CSS keyword, not a family anything has installed; name
+    // a real fallback so a missing DejaVu still draws glyphs rather than nothing.
+    options.font_family = "DejaVu Sans Mono".to_string();
+    let tree = usvg::Tree::from_str(&svg, &options)
+        .map_err(|e| RenderError::Raster(format!("parsing the rendered SVG: {e}")))?;
+
+    let size = tree.size();
+    let (w, h) = (
+        (size.width() * scale).ceil() as u32,
+        (size.height() * scale).ceil() as u32,
+    );
+    let mut pixmap = tiny_skia::Pixmap::new(w.max(1), h.max(1))
+        .ok_or_else(|| RenderError::Raster(format!("cannot allocate a {w}×{h} image")))?;
+    resvg::render(
+        &tree,
+        tiny_skia::Transform::from_scale(scale, scale),
+        &mut pixmap.as_mut(),
+    );
+    Ok(pixmap)
 }
 
 /// The face `svg-font` embeds, base64-encoded.
@@ -101,6 +185,21 @@ pub fn render(source: &str, opts: &RenderOptions) -> Result<String, RenderError>
 /// obvious improvement — it needs `fontTools`, which was not available when this
 /// was written.
 fn embedded_font() -> Result<String, RenderError> {
+    let path = font_path().ok_or_else(|| {
+        RenderError::NoFont(
+            "no DejaVu Sans Mono found to embed. Install it, or point \
+             RITE_RENDER_FONT at a .ttf — or use --format svg, which relies on \
+             the viewer's own monospace font"
+                .into(),
+        )
+    })?;
+    let bytes = std::fs::read(&path)
+        .map_err(|e| RenderError::NoFont(format!("reading font {}: {e}", path.display())))?;
+    Ok(base64(&bytes))
+}
+
+/// Where the face lives on this machine, if it does.
+fn font_path() -> Option<std::path::PathBuf> {
     const CANDIDATES: [&str; 6] = [
         "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf",
         "/usr/share/fonts/TTF/DejaVuSansMono.ttf",
@@ -109,26 +208,16 @@ fn embedded_font() -> Result<String, RenderError> {
         "/Library/Fonts/DejaVuSansMono.ttf",
         "/System/Library/Fonts/Menlo.ttc",
     ];
-    let path = std::env::var("RITE_RENDER_FONT")
+    std::env::var("RITE_RENDER_FONT")
         .ok()
-        .filter(|p| std::path::Path::new(p).is_file())
+        .map(std::path::PathBuf::from)
+        .filter(|p| p.is_file())
         .or_else(|| {
             CANDIDATES
                 .iter()
-                .find(|p| std::path::Path::new(p).is_file())
-                .map(|p| p.to_string())
+                .map(std::path::PathBuf::from)
+                .find(|p| p.is_file())
         })
-        .ok_or_else(|| {
-            RenderError::NoFont(
-                "no DejaVu Sans Mono found to embed. Install it, or point \
-                 RITE_RENDER_FONT at a .ttf — or use --format svg, which relies on \
-                 the viewer's own monospace font"
-                    .into(),
-            )
-        })?;
-    let bytes = std::fs::read(&path)
-        .map_err(|e| RenderError::NoFont(format!("reading font {path}: {e}")))?;
-    Ok(base64(&bytes))
 }
 
 /// Base64, written out rather than pulled in: one dependency for forty lines is
@@ -173,6 +262,39 @@ mod tests {
         assert_eq!(base64(b"foob"), "Zm9vYg==");
         assert_eq!(base64(b"fooba"), "Zm9vYmE=");
         assert_eq!(base64(b"foobar"), "Zm9vYmFy");
+    }
+
+    /// The rasterised picture actually has code in it.
+    ///
+    /// The first version of `render_png` produced a frame with nothing inside:
+    /// `usvg` resolves fonts through its own database and ignores an
+    /// `@font-face` data URL, so every glyph silently drew as nothing. The SVG
+    /// tests all passed. This one counts pixels, which is the only way to notice.
+    #[cfg(feature = "png")]
+    #[test]
+    fn the_rasterised_image_contains_glyphs() {
+        let opts = RenderOptions {
+            frame: Frame::Text,
+            ..Default::default()
+        };
+        let code = rasterise("◆! main() ⟦\n  ^ 42\n⟧\n", &opts, 2.0).expect("rasterise");
+        let blank = rasterise("\n\n\n", &opts, 2.0).expect("rasterise");
+
+        // The background is one flat colour, so anything else is drawn ink.
+        let ink = |p: &resvg::tiny_skia::Pixmap| {
+            let bg = p.pixel(1, 1).expect("a pixel");
+            p.pixels().iter().filter(|px| **px != bg).count()
+        };
+        let drawn = ink(&code);
+        assert!(
+            drawn > 500,
+            "the picture is nearly empty ({drawn} non-background pixels) — the \
+             rasteriser probably found no font for the text"
+        );
+        assert!(
+            drawn > ink(&blank) * 4,
+            "code drew about as little as blank lines did"
+        );
     }
 
     #[test]

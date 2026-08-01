@@ -75,6 +75,38 @@ pub fn parse(source: &str) -> ParseResult {
     }
 }
 
+/// Render source as SVG, for Studio's "save as image".
+///
+/// Studio takes this to a canvas to get a PNG: no rasteriser in the browser, and
+/// no second layout implementation in TypeScript to drift from the one
+/// `rite render` uses.
+///
+/// Plain SVG, **not** the self-contained form, which was the first attempt: that
+/// one embeds a face read from the filesystem, and a browser has no filesystem —
+/// so it failed at the point of asking, and Studio reported it as the WASM module
+/// being unavailable. Which is worse than wrong: it blamed the wrong thing.
+///
+/// Leaving the font to the browser is also the more honest picture here. The
+/// canvas resolves the same monospace stack the editor is displayed with, so what
+/// gets saved is what the person was looking at.
+pub fn render_svg(source: &str, frame: &str) -> Result<String, String> {
+    let frame = match frame {
+        "box" => rite_render::Frame::Box,
+        "window" => rite_render::Frame::Window,
+        "text" | "" => rite_render::Frame::Text,
+        other => return Err(format!("unknown frame `{other}`")),
+    };
+    rite_render::render(
+        source,
+        &rite_render::RenderOptions {
+            format: rite_render::Format::Svg,
+            frame,
+            ..Default::default()
+        },
+    )
+    .map_err(|e| e.to_string())
+}
+
 pub fn analyze(source: &str) -> serde_json::Value {
     let mut eng = AnalysisEngine::new();
     let snap = eng.analyze("browser.rite", source);

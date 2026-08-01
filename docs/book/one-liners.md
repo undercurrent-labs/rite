@@ -279,3 +279,31 @@ value.
 
 - [Pipelines](pipelines.md) · [Effects](effects.md) · [Files and JSON](files-json.md) · [HTTP](http.md)  
 - [Browser & Studio](browser.md)
+
+## Pictures of code
+
+`rite render` draws highlighted source, using the language's own lexer and the
+same palette the site uses — so an image in a README cannot drift from the way
+the code reads on the page.
+
+```bash
+rite render greet.rite --output greet.svg
+rite render greet.rite --format png --frame window --output greet.png
+cat greet.rite | rite render - --frame box > greet.svg
+```
+
+| Flag | Does |
+|---|---|
+| `--format svg` | Small, and uses whatever monospace font the viewer has. The default |
+| `--format svg-font` | Self-contained: the face travels with the picture, ~100× larger |
+| `--format png` | Rasterised, for somewhere that will not take an SVG |
+| `--frame text \| box \| window` | Background only, a rounded border, or a title bar with dots |
+| `--font-size` · `--scale` | Type size, and pixels per unit for PNG |
+
+Layout is computed per column rather than measured, so plain `--format svg` still
+lines up in a viewer whose monospace font is not the one you have. Reach for
+`svg-font` when the picture has to look identical everywhere, and for `png` when
+whatever you are pasting into refuses SVG at all.
+
+Source that does not compile still renders — that is deliberate, so a page
+explaining a mistake can show it.

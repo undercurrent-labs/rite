@@ -2,6 +2,52 @@
 
 ## [Unreleased]
 
+### Added — `rite render`, pictures of code
+
+`rite render <file>` draws highlighted Rite as SVG or PNG, so a README, a slide or
+a docs page can show code that looks the way Studio shows it.
+
+```
+rite render greet.rite --output greet.svg
+rite render greet.rite --format png --frame window --output greet.png
+cat greet.rite | rite render - --frame box > greet.svg
+```
+
+`--format svg` is small and uses the viewer's own monospace font; `svg-font`
+embeds the face and is self-contained at about a hundred times the size; `png`
+rasterises. `--frame` is `text`, `box` or `window`. Layout is computed per column
+rather than measured, which is what lets the small format still line up in a
+viewer whose monospace font is not the one you have.
+
+The highlighting is the language's own lexer and one shared palette — a new
+keyword or host function cannot leave the pictures behind, because there is no
+second list to update. Source that does not compile still renders, deliberately,
+so a page explaining a mistake can show it.
+
+`grammar/palette.json` is now the one colour table, with gates holding the site's
+stylesheet to it: same colours, no colours of its own, an entry for every token
+kind and no entries for kinds nothing emits. A fourth gate turns the stylesheet's
+own comment into a checked property — every colour clears 4.5:1 against the panel
+background, the worst being the comment grey at 6.32:1.
+
+Studio gains **Save PNG**, rendering through the same crate over WASM and taking
+the SVG to a canvas — so the browser needs no rasteriser, and there is no second
+layout implementation in TypeScript to drift from `rite render`.
+
+Two bugs found by looking at the output rather than at the tests, both of which
+every assertion of the day was happy with:
+
+The first PNG had the frame, the background and the window dots, and no text at
+all. `usvg` resolves fonts through its own database and ignores an `@font-face`
+data URL, so every glyph drew as nothing. There is a test that counts pixels now.
+
+And whitespace was *drawn* rather than counted, with `xml:space="preserve"` asked
+to hold it. Chrome collapses runs of spaces inside `<text>` whatever that
+attribute says, so `^ n * n` rendered as `^n  *n` — glyphs in the wrong columns,
+which is the one thing a picture of code must not do. Every visible segment is
+placed at its own computed column now, and no drawn run contains a space. The
+golden file could not have caught it: it was generated from the same mistake.
+
 ### Added — a host can call a function inside a guest script
 
 `RiteEngine::load(name, src)` runs a script and keeps it, so the functions it

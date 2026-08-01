@@ -21,6 +21,7 @@ Source repo: [github.com/undercurrent-labs/rite](https://github.com/undercurrent
 | Feature | Hosted Studio |
 |---------|----------------|
 | Parse / check / format / convert | Yes |
+| Save the editor's contents as a PNG | Yes |
 | Run pure scripts | Yes |
 | `@console` printing | Yes |
 | Pipelines, match, functions | Yes |
@@ -29,6 +30,12 @@ Source repo: [github.com/undercurrent-labs/rite](https://github.com/undercurrent
 | `@process` | No (blocked) |
 | Real `@http.listen` sockets | Virtual / limited — use CLI |
 | Full RPG + save files | Prefer CLI |
+
+**Save PNG** draws the editor's contents the way `rite render` does — the same
+Rust highlighter, over WASM, taken through a canvas so the browser needs no
+rasteriser. The picture uses your browser's monospace font, which is the one
+Studio is showing you; for an image that looks the same everywhere regardless,
+use `rite render --format svg-font` from the CLI.
 
 If Run shows a clear error about capabilities or “native host”, switch to local CLI.
 

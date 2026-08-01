@@ -233,6 +233,24 @@ Dump semantic IR
 
 Start language server (stdio)
 
+## `rite render`
+
+Render highlighted Rite source as an image
+
+Writes SVG, a self-contained SVG with the font embedded, or PNG. The highlighting is the language's own lexer and the same palette the site uses, so a picture of Rite and the Rite on the page cannot drift apart.
+
+| Argument | Meaning |
+|---|---|
+| `<file>` | Script to render; `-` reads standard input |
+
+| Flag | Meaning |
+|---|---|
+| `--format` | `svg` (small, uses the viewer's font), `svg-font` (self-contained), or `png` |
+| `--frame` | Chrome around the code: `text`, `box`, or `window` |
+| `-o`, `--output` | Where to write it; defaults to standard output |
+| `--font-size` | Type size in pixels |
+| `--scale` | Pixels per unit for `png`, for a screen that wants more of them |
+
 ## `rite repl`
 
 Interactive REPL

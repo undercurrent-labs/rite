@@ -55,6 +55,30 @@ struct Placed {
     text: String,
 }
 
+/// Split a piece into its non-whitespace segments, each with the column it starts
+/// at. `"  a  b"` at column 4 gives `[("a", 6), ("b", 9)]`.
+fn visible_segments(piece: &str, start: usize) -> Vec<(String, usize)> {
+    let mut out = Vec::new();
+    let mut current = String::new();
+    let mut current_start = start;
+    for (offset, c) in piece.chars().enumerate() {
+        if c.is_whitespace() {
+            if !current.is_empty() {
+                out.push((std::mem::take(&mut current), current_start));
+            }
+        } else {
+            if current.is_empty() {
+                current_start = start + offset;
+            }
+            current.push(c);
+        }
+    }
+    if !current.is_empty() {
+        out.push((current, current_start));
+    }
+    out
+}
+
 /// Break runs at newlines, so each line can be positioned on its own baseline.
 fn lines(runs: &[Run]) -> Vec<Vec<Placed>> {
     let mut out: Vec<Vec<Placed>> = vec![Vec::new()];
@@ -68,18 +92,23 @@ fn lines(runs: &[Run]) -> Vec<Vec<Placed>> {
             if piece.is_empty() {
                 continue;
             }
-            // Columns, not bytes: a glyph is one column and several bytes.
-            let width = piece.chars().count();
-            // Leading whitespace only moves the cursor; drawing it would put an
-            // empty `<text>` in the output for every indent.
-            if !piece.trim().is_empty() {
+            // Whitespace is never *drawn*, only counted. Every visible segment is
+            // placed at its own column instead.
+            //
+            // Drawing it and trusting `xml:space="preserve"` looked right in the
+            // golden file and wrong in a browser: Chrome collapses runs of spaces
+            // inside `<text>` whatever that attribute says, so `^ n * n` came out
+            // as `^n  *n` — glyphs in the wrong columns, which is the one thing a
+            // picture of code must not do. The golden file could not catch it,
+            // having been generated from the same mistake.
+            for (segment, at) in visible_segments(piece, column) {
                 out.last_mut().unwrap().push(Placed {
-                    column,
+                    column: at,
                     kind: run.kind,
-                    text: piece.to_string(),
+                    text: segment,
                 });
             }
-            column += width;
+            column += piece.chars().count();
         }
     }
     // A trailing newline makes a last empty line; it is not a line of code.

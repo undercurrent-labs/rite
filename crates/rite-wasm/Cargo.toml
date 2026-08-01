@@ -13,6 +13,9 @@ rite-core = { workspace = true }
 rite-syntax = { workspace = true }
 rite-sem = { workspace = true }
 rite-fmt = { workspace = true }
+# Default features only: `png` would pull a rasteriser and a system font stack
+# into a browser build that can use neither. Studio takes the SVG to a canvas.
+rite-render = { workspace = true }
 rite-analysis = { workspace = true }
 # Pure evaluator (wasm-safe; no Tokio/mio)
 rite-runtime = { workspace = true }

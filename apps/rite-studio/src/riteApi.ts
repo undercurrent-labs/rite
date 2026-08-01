@@ -29,6 +29,7 @@ type WasmMod = {
   wasm_analyze: (s: string) => unknown;
   wasm_format: (s: string, d: string) => unknown;
   wasm_convert: (s: string, d: string) => unknown;
+  wasm_render_svg: (s: string, frame: string) => string;
   wasm_run: (s: string, allowAll: boolean) => unknown;
   wasm_emit_rust: (s: string) => unknown;
   wasm_syntax_tree: (s: string) => unknown;
@@ -198,6 +199,26 @@ export async function convertWithMap(
 }
 
 /** Pretty-print a run/check result for the Studio output panel. */
+/**
+ * The SVG Studio saves as a picture.
+ *
+ * Rendered by `rite-render` through WASM rather than drawn here: a second layout
+ * in TypeScript would be a second thing to keep in step with `rite render`, and
+ * the whole point of the Rust renderer is that there is only one. Studio asks for
+ * the self-contained form so the saved image carries its font.
+ *
+ * Needs the WASM module, which Studio already loads to run code. `null` means the
+ * module is genuinely not there; a module that *is* there and fails throws, so
+ * the caller can say what went wrong. Catching both as `null` reported a
+ * rendering failure as a missing module, which sent me looking in the wrong place
+ * for ten minutes.
+ */
+export async function renderSvg(source: string, frame: string): Promise<string | null> {
+  const wasm = await loadWasm();
+  if (!wasm?.wasm_render_svg) return null;
+  return wasm.wasm_render_svg(source, frame);
+}
+
 export function formatOutput(path: string, result: unknown): string {
   if (result == null) return "(empty)";
   if (typeof result !== "object") return String(result);

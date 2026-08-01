@@ -188,3 +188,46 @@ fn source_that_looks_like_markup_is_escaped() {
     assert!(svg.contains("&lt;script&gt;"), "expected escaped markup");
     assert!(svg.contains("&amp;"), "expected an escaped ampersand");
 }
+
+/// No `<text>` element contains a space.
+///
+/// Whitespace is counted into the column of the next visible segment, never
+/// drawn. Drawing it and trusting `xml:space="preserve"` looked correct in the
+/// golden file and wrong in a browser — Chrome collapses runs of spaces inside
+/// `<text>` whatever that attribute says, so `^ n * n` rendered as `^n  *n`, with
+/// glyphs in the wrong columns. The golden file could not catch that, having been
+/// generated from the same mistake; only looking at the picture did.
+#[test]
+fn no_drawn_text_carries_whitespace() {
+    let svg = render(SAMPLE, &RenderOptions::default()).expect("render");
+    for chunk in svg.split("<text ").skip(1) {
+        let body = chunk
+            .split_once('>')
+            .and_then(|(_, rest)| rest.split_once("</text>"))
+            .map(|(body, _)| body)
+            .expect("a text element");
+        assert!(
+            !body.contains(' '),
+            "a drawn run carries a space, so the browser may collapse it: {body:?}"
+        );
+    }
+}
+
+/// Indentation still lands where it should: the second line of the sample starts
+/// two columns in, and the x of its first run says so.
+#[test]
+fn indentation_becomes_position_rather_than_spaces() {
+    let svg = render("◆ f() ⟦\n  ^ 1\n⟧\n", &RenderOptions::default()).expect("render");
+    let xs: Vec<f32> = svg
+        .split("<text x=\"")
+        .skip(1)
+        .filter_map(|c| c.split('"').next()?.parse().ok())
+        .collect();
+    let first = xs.first().copied().expect("a first run");
+    // Something on the indented line sits two columns right of the margin.
+    let advance = 15.0 * 0.602;
+    assert!(
+        xs.iter().any(|x| (x - (first + advance * 2.0)).abs() < 0.5),
+        "no run at the two-column indent: {xs:?}"
+    );
+}
