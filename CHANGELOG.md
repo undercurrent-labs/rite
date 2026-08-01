@@ -28,6 +28,34 @@ runtime complaint about builtins. **If a script defines a function whose name
 matches a builtin and pipes into it, the pipeline now calls the definition.** That
 is the answer the same name gave in call position all along.
 
+### Changed — a marker over nothing is an error
+
+`!` was checked in one direction only: leaving it out where an effect happens was
+an error, and putting it where nothing happens was silence. So `x ← ! 42` passed,
+and the marker could not be read as "something happens here" — the only reason to
+write it.
+
+The shape that made this expensive is the one anyone arriving from Rust writes
+first:
+
+```
+println!("one")
+```
+
+`rite check` said `ok` and the program printed nothing. Statements split on
+expression boundaries, so that line is **two** of them: a discarded reference to
+`println`, then `!` applied to `"one"`. Both halves were individually legal.
+
+A marker over an operand that calls nothing — no function, no capability, no
+pipeline stage — is now `E021`, with the help text naming the `println!` case.
+The marker goes before the call: `! println("one")`.
+
+The test is whether anything is **called**, not whether the call is effectful.
+`! each(xs, f)` for a parameter `f` stays legal, because whether `f` performs an
+effect is exactly what Rite cannot always know — and rejecting the responsible
+form would be the worse error. Nothing in the shipped corpus carried a stray
+marker, so no example or chapter changed.
+
 ### Changed — naming an effectful function no longer hides it
 
 Effect-ness travelled along the call graph by name, so giving a function a

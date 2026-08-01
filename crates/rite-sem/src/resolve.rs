@@ -333,6 +333,12 @@ pub struct Resolver {
     effects_seen: usize,
     /// Who calls whom, so effect-ness can be closed over the call graph.
     call_edges: HashMap<String, HashSet<String>>,
+    /// Call-like nodes seen while walking: calls, capability references, and
+    /// pipeline stages. Snapshotting this around a `!` operand answers "could
+    /// anything have happened in there at all?" — which is the question a marker
+    /// over nothing has to be judged by, since whether a *particular* call is
+    /// effectful is exactly what this analysis cannot always say.
+    call_sites_seen: usize,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -395,6 +401,7 @@ impl Resolver {
             direct_effects: HashSet::new(),
             effects_seen: 0,
             call_edges: HashMap::new(),
+            call_sites_seen: 0,
         };
         // Predefine pure builtins
         for name in BUILTIN_NAMES {
@@ -732,6 +739,7 @@ impl Resolver {
             // Pure capabilities are unaffected, which is what keeps `use @http.log` and
             // `⊏ @http.recover` (middleware markers, `effectful: false`) working.
             Expr::Capability(c) => {
+                self.call_sites_seen += 1;
                 let path = c.path.join(".");
                 if is_effectful(&path) {
                     self.note_effect();
@@ -750,6 +758,7 @@ impl Resolver {
                 }
             }
             Expr::Call(c) => {
+                self.call_sites_seen += 1;
                 // `! @fs.write(…)` can attach the marker to the callee rather
                 // than to the whole call, depending on how it was written.
                 let effect = in_effect || has_effect_marker(c.callee.as_ref());
@@ -869,7 +878,43 @@ impl Resolver {
                 // `!` licenses the operand; `-`/`not` carry the ambient context
                 // into their single operand unchanged.
                 let eff = u.op == UnaryOp::Effect || in_effect;
-                self.resolve_expr(&u.expr, file, eff);
+                if u.op == UnaryOp::Effect {
+                    // A marker over an operand containing no call, no capability and
+                    // no pipeline stage cannot be marking anything: `! 42` and
+                    // `x ← ! (1 + 1)` were accepted in silence, so `!` could not be
+                    // read as "something happens here" — the only reason to write it.
+                    //
+                    // The trap this closes is `println!("one")`. Statements split on
+                    // expression boundaries, so that is *two* of them — a discarded
+                    // reference to `println`, then `! "one"` — which checked clean and
+                    // printed nothing. It is the first thing anyone arriving from Rust
+                    // writes.
+                    //
+                    // Judged on whether anything was *called*, not on whether the call
+                    // was effectful: which calls perform effects is exactly what this
+                    // analysis cannot always say (see `effects.md`), so `! each(xs, f)`
+                    // for a parameter `f` must stay legal. Erring here costs a missed
+                    // stray marker; erring the other way rejects the responsible form.
+                    let calls_before = self.call_sites_seen;
+                    self.resolve_expr(&u.expr, file, eff);
+                    if self.call_sites_seen == calls_before {
+                        self.diagnostics.push(
+                            simple_error(
+                                E021_EFFECT_REQUIRED,
+                                "`!` marks an expression that performs no effect",
+                                file,
+                                u.span,
+                                "nothing here calls out of the program",
+                            )
+                            .with_help(
+                                "remove the marker; `!` belongs on a host call, \
+                                 and `println!(…)` is two statements, not a call",
+                            ),
+                        );
+                    }
+                } else {
+                    self.resolve_expr(&u.expr, file, eff);
+                }
             }
             // Neither operand is *the* subject of `a + b`: both reset.
             Expr::Binary(b) => {
@@ -882,6 +927,9 @@ impl Resolver {
                 // (shout))` would have no way to be written.
                 self.resolve_expr(&p.input, file, in_effect);
                 for s in &p.stages {
+                    // A stage applies something to the value even when it is
+                    // written as a bare name, so it counts as a call site.
+                    self.call_sites_seen += 1;
                     self.resolve_expr(s, file, in_effect);
                 }
             }

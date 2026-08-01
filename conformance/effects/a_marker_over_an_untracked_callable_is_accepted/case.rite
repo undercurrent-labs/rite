@@ -1,0 +1,3 @@
+◆! run(xs, f) ⟦ ! each(xs, f) ⟧
+◆! shout(n) ⟦ ! @console.println(str(n)) ⟧
+! run([1], shout)
