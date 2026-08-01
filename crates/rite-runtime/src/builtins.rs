@@ -113,12 +113,19 @@ pub fn call_builtin(
 
 fn builtin_count(args: Vec<Value>) -> Result<Value, EvalError> {
     let v = args.into_iter().next().unwrap_or(Value::None);
+    // `count(42)` answered `0` — the same answer an empty collection gives, so a
+    // wrong type read as an ordinary result and surfaced somewhere else.
     let n = match v {
         Value::List(xs) => xs.len() as i64,
         Value::String(s) => s.chars().count() as i64,
         Value::Record(r) => r.len() as i64,
         Value::Bytes(b) => b.len() as i64,
-        _ => 0,
+        other => {
+            return Err(EvalError::Message(format!(
+                "count expects a list, string, record or bytes, got {}",
+                other.type_name()
+            )))
+        }
     };
     Ok(Value::Int(n))
 }
@@ -212,6 +219,26 @@ impl Seq {
     }
 }
 
+/// An integer argument, distinguishing "not given" from "given as the wrong thing".
+///
+/// These were all `.and_then(|v| v.as_int()).unwrap_or(default)`, which cannot tell
+/// the two apart — so a wrong type quietly became the default and the call answered
+/// something plausible: `repeat(2, "ab")` was `[]`, `take("abcde", "2")` was `""`,
+/// and `range("a", "b")` was an empty range. Absent still means the default, because
+/// several of these have a real one (`slice`'s end is the length); present and not an
+/// integer now says so.
+fn int_arg(who: &str, what: &str, v: Option<Value>, default: i64) -> Result<i64, EvalError> {
+    match v {
+        None | Some(Value::None) => Ok(default),
+        Some(ref x) => x.as_int().ok_or_else(|| {
+            EvalError::Message(format!(
+                "{who} expects {what} as an int, got {}",
+                x.type_name()
+            ))
+        }),
+    }
+}
+
 fn builtin_first(args: Vec<Value>) -> Result<Value, EvalError> {
     let seq = Seq::of(args.into_iter().next(), "first")?;
     Ok(seq.items.first().cloned().unwrap_or(Value::None))
@@ -242,14 +269,14 @@ fn builtin_take(args: Vec<Value>) -> Result<Value, EvalError> {
     let mut it = args.into_iter();
     let seq = Seq::of(it.next(), "take")?;
     // pipeline: xs → take(n) passes the sequence first, then n from the stage args
-    let n = it.next().and_then(|v| v.as_int()).unwrap_or(0).max(0) as usize;
+    let n = int_arg("take", "a count", it.next(), 0)?.max(0) as usize;
     Ok(seq.same(seq.items.iter().take(n).cloned().collect()))
 }
 
 fn builtin_drop(args: Vec<Value>) -> Result<Value, EvalError> {
     let mut it = args.into_iter();
     let seq = Seq::of(it.next(), "drop")?;
-    let n = it.next().and_then(|v| v.as_int()).unwrap_or(0).max(0) as usize;
+    let n = int_arg("drop", "a count", it.next(), 0)?.max(0) as usize;
     Ok(seq.same(seq.items.iter().skip(n).cloned().collect()))
 }
 
@@ -388,9 +415,9 @@ fn builtin_unique(args: Vec<Value>) -> Result<Value, EvalError> {
 
 fn builtin_range(args: Vec<Value>) -> Result<Value, EvalError> {
     let mut it = args.into_iter();
-    let start = it.next().and_then(|v| v.as_int()).unwrap_or(0);
-    let end = it.next().and_then(|v| v.as_int()).unwrap_or(start);
-    let step = it.next().and_then(|v| v.as_int()).unwrap_or(1);
+    let start = int_arg("range", "a start", it.next(), 0)?;
+    let end = int_arg("range", "an end", it.next(), start)?;
+    let step = int_arg("range", "a step", it.next(), 1)?;
     if step == 0 {
         return Err(EvalError::Message("range step cannot be zero".into()));
     }
@@ -409,9 +436,9 @@ fn builtin_range(args: Vec<Value>) -> Result<Value, EvalError> {
 
 fn builtin_range_incl(args: Vec<Value>) -> Result<Value, EvalError> {
     let mut it = args.into_iter();
-    let start = it.next().and_then(|v| v.as_int()).unwrap_or(0);
-    let end = it.next().and_then(|v| v.as_int()).unwrap_or(start);
-    let step = it.next().and_then(|v| v.as_int()).unwrap_or(1);
+    let start = int_arg("range", "a start", it.next(), 0)?;
+    let end = int_arg("range", "an end", it.next(), start)?;
+    let step = int_arg("range", "a step", it.next(), 1)?;
     if step == 0 {
         return Err(EvalError::Message("range step cannot be zero".into()));
     }
@@ -549,8 +576,8 @@ fn builtin_pow(args: Vec<Value>) -> Result<Value, EvalError> {
 
 fn builtin_idiv(args: Vec<Value>) -> Result<Value, EvalError> {
     let mut it = args.into_iter();
-    let a = it.next().and_then(|v| v.as_int()).unwrap_or(0);
-    let b = it.next().and_then(|v| v.as_int()).unwrap_or(0);
+    let a = int_arg("idiv", "a numerator", it.next(), 0)?;
+    let b = int_arg("idiv", "a denominator", it.next(), 0)?;
     if b == 0 {
         return Err(EvalError::Message("division by zero".into()));
     }
@@ -608,7 +635,7 @@ fn builtin_unwrap_or(args: Vec<Value>) -> Result<Value, EvalError> {
 fn builtin_repeat(args: Vec<Value>) -> Result<Value, EvalError> {
     let mut it = args.into_iter();
     let val = it.next().unwrap_or(Value::None);
-    let n = it.next().and_then(|v| v.as_int()).unwrap_or(0).max(0) as usize;
+    let n = int_arg("repeat", "a count", it.next(), 0)?.max(0) as usize;
     // `str::repeat` aborts on capacity overflow and the list loop would spin for ages;
     // refuse absurd counts instead.
     const MAX_REPEAT: usize = 1 << 26;
@@ -639,7 +666,7 @@ fn builtin_contains(args: Vec<Value>) -> Result<Value, EvalError> {
     let mut it = args.into_iter();
     let container = it.next().unwrap_or(Value::None);
     let item = it.next().unwrap_or(Value::None);
-    Ok(Value::Bool(membership(&item, &container)))
+    Ok(Value::Bool(try_membership(&item, &container)?))
 }
 
 fn builtin_enumerate(args: Vec<Value>) -> Result<Value, EvalError> {
@@ -688,7 +715,7 @@ fn builtin_zip(args: Vec<Value>) -> Result<Value, EvalError> {
 fn builtin_chunk(args: Vec<Value>) -> Result<Value, EvalError> {
     let mut it = args.into_iter();
     let seq = Seq::of(it.next(), "chunk")?;
-    let size = it.next().and_then(|v| v.as_int()).unwrap_or(1).max(1) as usize;
+    let size = int_arg("chunk", "a size", it.next(), 1)?.max(1) as usize;
     // The pieces keep the kind they came from — chunking a string gives strings —
     // but the chunks themselves are a list, since a list of strings is not a string.
     let mut out = Vec::new();
@@ -830,8 +857,13 @@ pub fn list_remove_first(list: &im::Vector<Value>, item: &Value) -> im::Vector<V
     out
 }
 
-pub fn membership(item: &Value, container: &Value) -> bool {
-    match container {
+/// Is `item` in `container`?
+///
+/// Fallible because a non-container has no answer: `contains(42, 1)` and `1 ∈ 42`
+/// both said `false`, which reads as "asked and answered" rather than "that is not
+/// a container".
+pub fn try_membership(item: &Value, container: &Value) -> Result<bool, EvalError> {
+    Ok(match container {
         Value::List(xs) => xs.iter().any(|x| x.structural_eq(item)),
         Value::Record(r) => match item {
             Value::String(s) => r.contains_key(&Key::String(s.to_string())),
@@ -842,8 +874,13 @@ pub fn membership(item: &Value, container: &Value) -> bool {
             _ => r.values().any(|v| v.structural_eq(item)),
         },
         Value::String(s) => item.as_str().map(|sub| s.contains(sub)).unwrap_or(false),
-        _ => false,
-    }
+        other => {
+            return Err(EvalError::Message(format!(
+                "cannot test membership: {} is not a container",
+                other.type_name()
+            )))
+        }
+    })
 }
 
 // ── Strings ──────────────────────────────────────────────────────────────────
@@ -961,8 +998,8 @@ fn builtin_slice(args: Vec<Value>) -> Result<Value, EvalError> {
     // Lists slice too — the same operation, and refusing would be arbitrary.
     if let Some(Value::List(xs)) = &first {
         let len = xs.len() as i64;
-        let start = resolve_index(it.next().and_then(|v| v.as_int()).unwrap_or(0), len);
-        let end = resolve_index(it.next().and_then(|v| v.as_int()).unwrap_or(len), len);
+        let start = resolve_index(int_arg("slice", "a start", it.next(), 0)?, len);
+        let end = resolve_index(int_arg("slice", "an end", it.next(), len)?, len);
         let mut out = im::Vector::new();
         for i in start..end.max(start) {
             if let Some(v) = xs.get(i as usize) {
@@ -973,8 +1010,8 @@ fn builtin_slice(args: Vec<Value>) -> Result<Value, EvalError> {
     }
     if let Some(Value::Bytes(b)) = &first {
         let len = b.len() as i64;
-        let start = resolve_index(it.next().and_then(|v| v.as_int()).unwrap_or(0), len);
-        let end = resolve_index(it.next().and_then(|v| v.as_int()).unwrap_or(len), len);
+        let start = resolve_index(int_arg("slice", "a start", it.next(), 0)?, len);
+        let end = resolve_index(int_arg("slice", "an end", it.next(), len)?, len);
         return Ok(Value::Bytes(
             b[start as usize..end.max(start) as usize].into(),
         ));
@@ -982,8 +1019,8 @@ fn builtin_slice(args: Vec<Value>) -> Result<Value, EvalError> {
     let s = str_arg(first, "slice")?;
     let chars: Vec<char> = s.chars().collect();
     let len = chars.len() as i64;
-    let start = resolve_index(it.next().and_then(|v| v.as_int()).unwrap_or(0), len);
-    let end = resolve_index(it.next().and_then(|v| v.as_int()).unwrap_or(len), len);
+    let start = resolve_index(int_arg("slice", "a start", it.next(), 0)?, len);
+    let end = resolve_index(int_arg("slice", "an end", it.next(), len)?, len);
     Ok(Value::string(
         chars[start as usize..end.max(start) as usize]
             .iter()

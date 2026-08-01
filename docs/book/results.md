@@ -33,6 +33,32 @@ text ← ! @fs.read("config.json")?
 data ← @json.decode(text)?
 ```
 
+**`?` requires a result.** `42?` is an error, not `42`. The operator says "this can
+fail", so writing it over something that cannot is a claim about the code that is
+not true — and the case that costs is a call which *used* to answer a result and
+stopped, where a pass-through `?` would go on doing nothing.
+
+`ok(none)` is a result and unwraps to `none`, which is how `@fs.read_line` reports
+the end of a file.
+
+### A function that can fail answers a result on both paths
+
+`?` returns `err` from the enclosing function, so any function containing one can
+answer a failure — and then it has to answer `ok(…)` on the way out too, or a
+caller cannot tell the two apart:
+
+```rite native_only
+◆! describe(path) ⟦
+  m ← ! @fs.metadata(path)?     // may return err from describe
+  ^ ok(⟨path: path, len: m.len⟩)  // …so success is wrapped to match
+⟧
+
+info ← ! describe("notes.txt")?
+```
+
+Returning the bare record would make `describe` answer a record sometimes and an
+`err` other times — a half-result, which `?` at the call site cannot unwrap.
+
 Parser note: postfix `?` on a value is **not** the same as the conditional `?` (`if`). Position decides:
 
 ```rite

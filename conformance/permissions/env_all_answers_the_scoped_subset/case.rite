@@ -2,4 +2,4 @@
 // outright, even though the only thing it could have returned was the one variable
 // that *was* granted. It now answers the subset. PATH is set everywhere this runs,
 // and nothing else is granted, so the key list is exactly one name.
-^ keys(! @env.all()?)
+^ keys(! @env.all())

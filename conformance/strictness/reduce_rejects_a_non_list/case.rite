@@ -1,0 +1,1 @@
+reduce("abc", ⟦ |a, b| a ⟧)

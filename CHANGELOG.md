@@ -28,6 +28,45 @@ runtime complaint about builtins. **If a script defines a function whose name
 matches a builtin and pipes into it, the pipeline now calls the definition.** That
 is the answer the same name gave in call position all along.
 
+### Changed — `?` requires a result, and the last fail-soft builtins raise
+
+`42?` was `42`. The operator that says "this can fail" could be written over
+something that cannot, and the case that costs is a call which *used* to answer a
+result and stopped: the `?` goes on doing nothing, in silence. It now raises.
+
+`ok(none)` is a result and still unwraps to `none` — that is how `@fs.read_line`
+reports the end of a file — and `and_then` is unchanged as the combinator that
+accepts a bare value.
+
+**This has a consequence worth knowing.** `?` returns `err` from the enclosing
+function, so a function containing one can answer a failure — and must therefore
+answer `ok(…)` on the way out too, or a caller cannot tell the two apart:
+
+```
+◆! describe(path) ⟦
+  m ← ! @fs.metadata(path)?
+  ^ ok(⟨path: path, len: m.len⟩)   // not the bare record
+⟧
+```
+
+Two places in this repo were writing a `?` over something that never answered a
+result — a tutorial and a conformance fixture. Both were doing nothing, and both
+now say so.
+
+**The higher-order family validates its arguments.** `map` was the only one that
+did. `keep` and `group` answered an empty list for a non-list, `each`, `reduce` and
+`find` answered `none`, and `all(42)` was `true` — every one of them a value a
+correct call also produces. They are list-only, deliberately: `take("abcde", 2)`
+has an obvious answer of the same kind, and mapping a function over a string does
+not. The function argument is checked before the loop rather than at the first
+element, so `keep([1, 2], 7)` names the mistake instead of failing inside it.
+
+**And the last of the coercing arguments.** `count(42)` was `0`, `contains(42, 1)`
+was `false`, `repeat(2, "ab")` was `[]`, `take("abcde", "2")` was `""`, and
+`range("a", "b")` was an empty range — each because a wrong type became a default.
+Absent still means the default, since several of these have a real one; present and
+wrong now says so. `1 ∈ 42` raises for the same reason `contains` does.
+
 ### Changed — ordering is total or it is an error, and `sort` takes the comparator it documents
 
 Comparison answered `Equal` for every pair it did not understand, so the

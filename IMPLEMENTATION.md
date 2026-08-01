@@ -71,11 +71,14 @@ Tracks implementation status for the Rite language and V1 tooling. Detailed desi
    read from a record field or list element (`each(xs, r.go)`), one received as a
    parameter (`◆ run(xs, f) ⟦ each(xs, f) ⟧`), or one returned by a call. Closing
    that needs effect polymorphism — "effectful exactly when the argument is" — which
-   needs a type system Rite does not have. The blunt alternative is to require a marker
-   wherever the analysis cannot tell, which would put one on every function that accepts
-   a function, `map` included; that trades a known gap for a marker that no longer
-   distinguishes anything, and is not currently taken. `docs/book/effects.md` states the
-   boundary as it stands. Permissions bound what any of it can reach regardless.
+   needs a type system Rite does not have.
+
+   **The blunt alternative was considered and rejected.** Requiring a marker wherever the
+   analysis cannot tell would put one on every function that accepts a function, `map`
+   included: the marker would stop distinguishing anything, which costs more than the gap
+   it closes. A known boundary that the book states plainly is worth more than a marker
+   that means "this function has arguments". `docs/book/effects.md` states it.
+   Permissions bound what any of it can reach regardless.
 6. **Game free-form sugar** — still prefer `@game.register_*`. The declarative
    `def item :name ⟦ … ⟧` form does not exist; `examples/text-rpg/game.ascii.rite` used to
    be written against it and is now a real transliteration of its glyph twin.

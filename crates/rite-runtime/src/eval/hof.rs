@@ -108,12 +108,10 @@ impl<'a> Evaluator<'a> {
         args: Vec<Value>,
         keep: bool,
     ) -> Result<Value, EvalError> {
+        let who = if keep { "keep" } else { "reject" };
         let mut it = args.into_iter();
-        let list = match it.next() {
-            Some(Value::List(xs)) => xs,
-            _ => return Ok(Value::list(Vec::<Value>::new())),
-        };
-        let f = it.next().unwrap_or(Value::None);
+        let list = Self::hof_list(who, it.next())?;
+        let f = Self::hof_fn(who, it.next())?;
         let mut out = im::Vector::new();
         for item in list {
             let pred = self.call_value(f.clone(), vec![item.clone()]).await?;
@@ -180,11 +178,8 @@ impl<'a> Evaluator<'a> {
 
     pub(super) async fn builtin_each(&mut self, args: Vec<Value>) -> Result<Value, EvalError> {
         let mut it = args.into_iter();
-        let list = match it.next() {
-            Some(Value::List(xs)) => xs,
-            _ => return Ok(Value::None),
-        };
-        let f = it.next().unwrap_or(Value::None);
+        let list = Self::hof_list("each", it.next())?;
+        let f = Self::hof_fn("each", it.next())?;
         for item in list {
             let _ = self.call_value(f.clone(), vec![item]).await?;
         }
@@ -193,11 +188,9 @@ impl<'a> Evaluator<'a> {
 
     pub(super) async fn builtin_reduce(&mut self, args: Vec<Value>) -> Result<Value, EvalError> {
         let mut it = args.into_iter();
-        let list = match it.next() {
-            Some(Value::List(xs)) => xs,
-            _ => return Ok(Value::None),
-        };
-        let f = it.next().unwrap_or(Value::None);
+        let list = Self::hof_list("reduce", it.next())?;
+        let f = Self::hof_fn("reduce", it.next())?;
+        // The seed is genuinely optional — `reduce(xs, f)` starts from `none`.
         let mut acc = it.next().unwrap_or(Value::None);
         for item in list {
             acc = self.call_value(f.clone(), vec![acc, item]).await?;
@@ -228,11 +221,8 @@ impl<'a> Evaluator<'a> {
 
     pub(super) async fn builtin_find(&mut self, args: Vec<Value>) -> Result<Value, EvalError> {
         let mut it = args.into_iter();
-        let list = match it.next() {
-            Some(Value::List(xs)) => xs,
-            _ => return Ok(Value::None),
-        };
-        let f = it.next().unwrap_or(Value::None);
+        let list = Self::hof_list("find", it.next())?;
+        let f = Self::hof_fn("find", it.next())?;
         for item in list {
             let pred = self.call_value(f.clone(), vec![item.clone()]).await?;
             if pred.is_truthy() {
@@ -247,12 +237,15 @@ impl<'a> Evaluator<'a> {
         args: Vec<Value>,
         is_any: bool,
     ) -> Result<Value, EvalError> {
+        let who = if is_any { "any" } else { "all" };
         let mut it = args.into_iter();
-        let list = match it.next() {
-            Some(Value::List(xs)) => xs,
-            _ => return Ok(Value::Bool(!is_any)),
+        let list = Self::hof_list(who, it.next())?;
+        // The predicate is optional: `any(xs)` asks whether any element is truthy.
+        // Given one, it must be callable.
+        let f = match it.next() {
+            None | Some(Value::None) => None,
+            Some(other) => Some(Self::hof_fn(who, Some(other))?),
         };
-        let f = it.next();
         for item in list {
             let pred = if let Some(ref func) = f {
                 self.call_value(func.clone(), vec![item]).await?
@@ -272,10 +265,9 @@ impl<'a> Evaluator<'a> {
     pub(super) async fn builtin_group(&mut self, args: Vec<Value>) -> Result<Value, EvalError> {
         // group list by field name if second is string, or function
         let mut it = args.into_iter();
-        let list = match it.next() {
-            Some(Value::List(xs)) => xs,
-            _ => return Ok(Value::list(Vec::<Value>::new())),
-        };
+        let list = Self::hof_list("group", it.next())?;
+        // The key is a field name *or* a function, so it is classified per item below
+        // rather than checked once here.
         let key_fn = it.next();
         let mut groups: IndexMap<String, im::Vector<Value>> = IndexMap::new();
         for item in list {
@@ -296,6 +288,43 @@ impl<'a> Evaluator<'a> {
             .map(|(k, vs)| Value::list(vec![Value::string(k), Value::List(vs)]))
             .collect();
         Ok(Value::list(out))
+    }
+}
+
+impl Evaluator<'_> {
+    /// The list argument of a higher-order builtin, or a message naming the callee.
+    ///
+    /// The whole family answered *something* for a non-list: `keep` and `group` an
+    /// empty list, `each`, `reduce` and `find` a `none`, `any` and `all` a bool — so
+    /// `all(42)` was `true`. Each of those is a value a correct call can also produce,
+    /// which is what made them expensive: the mistake surfaced somewhere else, wearing
+    /// another type's name. `map` was the only one that said so.
+    ///
+    /// Deliberately list-only, unlike `Seq::of`. The sequence builtins read strings and
+    /// bytes because `take("abcde", 2)` has an obvious answer of the same kind; mapping
+    /// a function over a string does not — the results need not be strings, so there is
+    /// nothing coherent to rebuild. Saying "expects list" is better than inventing one.
+    fn hof_list(who: &str, v: Option<Value>) -> Result<im::Vector<Value>, EvalError> {
+        match v {
+            Some(Value::List(xs)) => Ok(xs),
+            Some(other) => Err(EvalError::Message(format!(
+                "{who} expects list, got {}",
+                other.type_name()
+            ))),
+            None => Err(EvalError::Message(format!("{who} expects a list"))),
+        }
+    }
+
+    /// The function argument, checked before the loop rather than at the first element.
+    fn hof_fn(who: &str, v: Option<Value>) -> Result<Value, EvalError> {
+        match v {
+            Some(f) if f.is_callable() => Ok(f),
+            Some(other) => Err(EvalError::Message(format!(
+                "{who} expects function, got {}",
+                other.type_name()
+            ))),
+            None => Err(EvalError::Message(format!("{who} expects a function"))),
+        }
     }
 }
 

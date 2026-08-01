@@ -298,14 +298,22 @@ fn try_unwraps_ok_and_early_returns_err() {
     }
 }
 
+/// `?` requires a result.
+///
+/// It used to pass a non-result through, so `42?` was `42` and the operator that
+/// says "this can fail" could be written over something that cannot — most
+/// usefully over a call that had stopped answering a result, where the `?` then
+/// quietly did nothing. This test asserted that pass-through; it asserts the
+/// contract that replaced it.
+///
+/// `ok(none)` still unwraps to `none`, which is how `@fs.read_line` reports the
+/// end of a file — the result is what matters, not what is inside it.
 #[test]
-fn try_on_a_plain_value_passes_it_through() {
-    assert_eq!(
-        ops::unwrap_try(Value::Int(1)).expect("ok").as_int(),
-        Some(1)
-    );
+fn try_requires_a_result() {
+    assert!(ops::unwrap_try(Value::Int(1)).is_err());
+    assert!(ops::unwrap_try(Value::None).is_err());
     assert!(matches!(
-        ops::unwrap_try(Value::None).expect("ok"),
+        ops::unwrap_try(Value::ok(Value::None)).expect("ok"),
         Value::None
     ));
 }
@@ -317,22 +325,17 @@ fn membership_matches_atoms_by_name() {
     let interner = atoms();
     let a = Value::Atom(interner.intern("a"));
 
-    assert!(ops::contains(
-        &interner,
-        &a,
-        &Value::list(vec![Value::string("a")])
-    ));
-    assert!(ops::contains(&interner, &a, &Value::list(vec![a.clone()])));
+    assert!(ops::contains(&interner, &a, &Value::list(vec![Value::string("a")])).unwrap());
+    assert!(ops::contains(&interner, &a, &Value::list(vec![a.clone()])).unwrap());
 
     let mut rec = indexmap::IndexMap::new();
     rec.insert(Key::String("a".into()), Value::Int(1));
-    assert!(ops::contains(&interner, &a, &Value::Record(rec)));
+    assert!(ops::contains(&interner, &a, &Value::Record(rec)).unwrap());
 
-    assert!(!ops::contains(
-        &interner,
-        &a,
-        &Value::list(vec![Value::string("b")])
-    ));
+    assert!(!ops::contains(&interner, &a, &Value::list(vec![Value::string("b")])).unwrap());
+
+    // A non-container has no answer, rather than `false`.
+    assert!(ops::contains(&interner, &a, &Value::Int(42)).is_err());
 }
 
 #[test]

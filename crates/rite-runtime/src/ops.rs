@@ -13,7 +13,7 @@
 //! borrow of the world.
 
 use crate::atom::AtomInterner;
-use crate::builtins::{list_remove_first, membership, merge_records, try_compare_values};
+use crate::builtins::{list_remove_first, merge_records, try_compare_values, try_membership};
 use crate::value::{Key, ResultValue, Value};
 use crate::EvalError;
 use rite_sem::{BinaryOpIr, TypeExpr, UnaryOpIr};
@@ -61,11 +61,21 @@ pub fn index(obj: &Value, idx: &Value) -> Value {
 ///
 /// The early return is an `EvalError::Return`, so a caller that is *not* a function
 /// boundary must propagate it rather than treat it as a failure.
+///
+/// A non-`Result` is an error. It used to pass through, so `42?` was `42` and the
+/// operator that exists to say "this can fail" could be written over something that
+/// cannot — most usefully on a call whose signature changed to stop answering a
+/// result, where the `?` then quietly did nothing. Nothing is lost: `ok(none)` is a
+/// result and unwraps to `none`, which is how `@fs.read_line` reports the end of a
+/// file, and `and_then` remains the combinator that accepts a bare value.
 pub fn unwrap_try(v: Value) -> Result<Value, EvalError> {
     match v {
         Value::Result(ResultValue::Ok(inner)) => Ok(*inner),
         Value::Result(ResultValue::Err(e)) => Err(EvalError::Return(Value::err(*e))),
-        other => Ok(other),
+        other => Err(EvalError::Message(format!(
+            "`?` expects a result, got {}",
+            other.type_name()
+        ))),
     }
 }
 
@@ -158,8 +168,8 @@ pub fn binary(
         BinaryOpIr::GtEq => Ok(Value::Bool(try_compare_values(&l, &r)?.is_ge())),
         // Both operands are already evaluated by the caller; `∈` and `∉` share the same
         // membership test so neither re-runs a side-effecting operand.
-        BinaryOpIr::In => Ok(Value::Bool(contains(atoms, &l, &r))),
-        BinaryOpIr::NotIn => Ok(Value::Bool(!contains(atoms, &l, &r))),
+        BinaryOpIr::In => Ok(Value::Bool(contains(atoms, &l, &r)?)),
+        BinaryOpIr::NotIn => Ok(Value::Bool(!contains(atoms, &l, &r)?)),
         BinaryOpIr::And | BinaryOpIr::Or => Err(EvalError::Message(
             "`and` / `or` short-circuit and cannot take pre-evaluated operands".into(),
         )),
@@ -168,23 +178,23 @@ pub fn binary(
 
 /// Membership test behind `∈` / `∉`, with atoms also matching by name so
 /// `#a ∈ ["a"]` and `#a ∈ ⟨a: 1⟩` hold.
-pub fn contains(atoms: &AtomInterner, item: &Value, container: &Value) -> bool {
+pub fn contains(atoms: &AtomInterner, item: &Value, container: &Value) -> Result<bool, EvalError> {
     if let Value::Atom(id) = item {
         let name = atoms.name(*id);
         match container {
             Value::List(xs) => {
-                return xs
+                return Ok(xs
                     .iter()
-                    .any(|x| x.structural_eq(item) || x.as_str() == Some(name.as_str()))
+                    .any(|x| x.structural_eq(item) || x.as_str() == Some(name.as_str())))
             }
             Value::Record(rec) => {
-                return rec.contains_key(&Key::String(name.clone()))
-                    || rec.contains_key(&Key::Atom(name))
+                return Ok(rec.contains_key(&Key::String(name.clone()))
+                    || rec.contains_key(&Key::Atom(name)))
             }
             _ => {}
         }
     }
-    membership(item, container)
+    try_membership(item, container)
 }
 
 /// Shared shape for the arithmetic operators that promote int/float the same way.
