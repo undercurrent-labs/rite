@@ -70,15 +70,14 @@ Tracks implementation status for the Rite language and V1 tooling. Detailed desi
    What remains uncovered is a function with no name to attach the property to: one
    read from a record field or list element (`each(xs, r.go)`), one received as a
    parameter (`◆ run(xs, f) ⟦ each(xs, f) ⟧`), or one returned by a call. Closing
-   that needs effect polymorphism — "effectful exactly when the argument is" — which
-   needs a type system Rite does not have.
+   that needs effect polymorphism ("effectful exactly when the argument is"), and so a
+   type system Rite does not have.
 
-   **The blunt alternative was considered and rejected.** Requiring a marker wherever the
-   analysis cannot tell would put one on every function that accepts a function, `map`
-   included: the marker would stop distinguishing anything, which costs more than the gap
-   it closes. A known boundary that the book states plainly is worth more than a marker
-   that means "this function has arguments". `docs/book/effects.md` states it.
-   Permissions bound what any of it can reach regardless.
+   **The blunt alternative was considered and rejected.** Requiring a marker wherever
+   the analysis cannot tell would put one on every function that accepts a function,
+   `map` included, at which point the marker distinguishes nothing.
+   `docs/book/effects.md` states the boundary instead. Permissions bound what any of it
+   can reach regardless.
 6. **Game free-form sugar** — still prefer `@game.register_*`. The declarative
    `def item :name ⟦ … ⟧` form does not exist; `examples/text-rpg/game.ascii.rite` used to
    be written against it and is now a real transliteration of its glyph twin.
@@ -94,27 +93,26 @@ Tracks implementation status for the Rite language and V1 tooling. Detailed desi
    `idiv(a, b)` / `compose(f, g)` in ASCII. Their supposed ASCII spellings do not lex
    as operators and cannot: both names are taken by the builtins they lower to, so a
    keyword would collide with `idiv(7, 2)`. Printing them infix in ASCII **changed the
-   answer** — `7 ÷ 2` is 3, and `rite fmt --ascii` wrote `7 idiv 2`, which parses as two
+   answer**: `7 ÷ 2` is 3, and `rite fmt --ascii` wrote `7 idiv 2`, which parses as two
    statements and is 7. `crates/rite-test/tests/dialect_value_parity.rs` runs both
-   spellings and compares values, which is the property the text assertions missed.
+   spellings and compares the values, which the text assertions did not.
 
    Still lowered: the statement sugars — `say`, `unless`, `for … in`, `while` — which
    `items.rs` rewrites into their expanded forms before the AST exists, so `rite fmt`
    prints the expansion. `examples/sugar/demo.rite` is the file that shows it.
 
    Because of those, `rite fmt --check` is **not yet a CI gate**: it would demand
-   rewriting the corpus into shapes the book does not teach, which is the outcome the
-   `@tcp.listen` note in `rite-fmt` exists to prevent. Retaining the statement sugars
-   is what unblocks it.
+   rewriting the corpus into shapes the book does not teach. Retaining the statement
+   sugars unblocks it.
 9. **Incremental relexing / CST** — no rowan green tree; recovery is best-effort parse.  
 12. **Resource limits are partial** — `max_collection_size` and `max_string_size` are
     enforced where a collection's size is knowable before it is built (`range`,
-    `range_incl`, `repeat`, `concat`), which is where the runaway cases were. Not yet
+    `range_incl`, `repeat`, `concat`), where the runaway cases were. Not yet
     bounded: `@fs.read`/`read_bytes`/`lines` and `@fs.read_chunk`'s caller-supplied
     length, `@http` response bodies, `@process.run` output capture, and `@db.query`
-    result sets — each can still buffer an unbounded amount from outside the program.
+    result sets. Each can still buffer an unbounded amount from outside the program.
     `@http.listen` (1 MiB), `@tcp.recv` (16 MiB) and `@udp.recv_from` (65535) are the
-    ones already capped, and are the model. `parallel` also still forks one deep-cloned
+    ones already capped, and are the model. `parallel` still forks one deep-cloned
     context per element eagerly, with no concurrency ceiling.
 
 13. **Performance benchmarks** — `cargo bench -p rite-runtime` (criterion). Front end

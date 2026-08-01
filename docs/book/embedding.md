@@ -121,15 +121,15 @@ Four ceilings, and they bound different things:
 |---|---|
 | `max_steps` | IR nodes evaluated — a runaway loop |
 | `timeout` | wall clock (native only; WASM has no `Instant`) |
-| `max_call_depth` | nesting, which is the native stack in disguise |
+| `max_call_depth` | call nesting, and so the native stack |
 | `max_collection_size` / `max_string_size` | how large a single value may get |
 
 The last two matter more than the step count suggests, because **the step budget
 cannot see inside a builtin**: one `range(0, 8000000)` is a handful of IR nodes and
 eight million elements. Before these were enforced, that completed under a 60-step
-budget, and a larger one aborted the process on the allocation — taking the host
-down with it, which is the opposite of what a budget is for. They are checked
-before the allocation wherever the size is knowable up front.
+budget, and a larger one aborted the process on the allocation, taking the host
+down with it. They are checked before the allocation wherever the size is knowable
+up front.
 
 ```rust
 let budget = rite::runtime::ExecutionBudget::new()

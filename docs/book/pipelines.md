@@ -89,7 +89,7 @@ When the piped value should **not** be the first argument, use `$`:
 ! @console.println("-" → join(["a", "b"], $))   // a-b
 ```
 
-Without it the value goes first, which is what `["a", "b"] → join("-")` relies on.
+Without it the value goes first, as `["a", "b"] → join("-")` does.
 Use `$` when a helper's primary parameter is not in first position (a "replace
 needle in haystack" shape). If everything is written first-arg-friendly, you rarely
 need it.
@@ -203,12 +203,11 @@ xs ← [1, 2, 3]
 xs → count > 2
 ```
 
-The reason is worth knowing, because it is the one thing about `→` you have to
-remember. An infix operator cannot be looser than `+` on its left and tighter than
-`+` on its right — reaching the input side costs the result side. Rite spends the
-parentheses on the result and keeps the input honest, and says so at the point of
-the mistake instead of quietly parsing something else. `|>` in F#, Elixir and Elm
-makes the same trade; there the equivalent shows up as a type error.
+The reason: an infix operator cannot be looser than `+` on its left and tighter
+than `+` on its right, so reaching the input side costs the result side. Rite spends
+the parentheses on the result, and reports the mistake at the point of use instead
+of parsing something else. `|>` in F#, Elixir and Elm makes the same trade, where
+the equivalent shows up as a type error.
 
 ## Next
 

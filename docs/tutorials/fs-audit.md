@@ -38,10 +38,10 @@ into places a narrower grant excludes.
 `@fs.metadata` answers a record: `len` in bytes, `is_file` and `is_dir`,
 `is_symlink`, and `mtime`.
 
-The `ok(…)` is not decoration. `?` on the line above returns `err` from `describe`
-when the metadata call fails, so `describe` can answer a failure — and a function
-that can answer a failure has to answer a result on the way out too, or a caller
-has no way to tell the two apart. `?` at the call site requires one.
+The `ok(…)` matters. `?` on the line above returns `err` from `describe` when the
+metadata call fails, so `describe` can answer a failure. A function that can answer
+a failure has to answer a result on success too, or a caller cannot tell the two
+apart, and `?` at the call site requires one.
 
 `describe` is declared `◆!` — with the marker — because it calls something
 effectful. That is not a style choice: Rite infers effect-ness from the body and

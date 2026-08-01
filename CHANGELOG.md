@@ -1,6 +1,44 @@
 # Changelog
 
-## [Unreleased]
+## [0.6.0] — 2026-08-01
+
+A strictness release, from two independent reviews of 0.4.1. Both named the same
+four areas: pipelines, type annotations, fail-soft builtins, and effect tracking.
+Working through them found nine further bugs, three of them cases where one part of
+the language disagreed with another. A pipeline and a plain call gave different
+answers for the same name. `rite fmt --ascii` changed what a program computed.
+Writing the effect marker the compiler asked for turned the check off.
+
+**Read this before upgrading.** Seven changes can break working code. Every one of
+them is a place the old behaviour produced an answer rather than a complaint:
+
+- **`→` is looser than the operators.** `a + b → str` was `a + (b → str)`; it is now
+  `(a + b) → str`. The other side costs you parentheses: `xs → count > 2` is a parse
+  error, and `(xs → count) > 2` is the fix. `rite check` names every site.
+- **`?` requires a result.** `42?` was `42`. A function that can fail must now answer
+  `ok(…)` on success too — see the entry below, it is the subtlest change here.
+- **Incomparable values raise.** `"a" < 1` was `false`, and `"a" <= 1` and `"a" >= 1`
+  were both **true**. `sort` on a mixed list handed the list back unsorted.
+- **The higher-order builtins check their arguments.** `keep(42, f)` was `[]`,
+  `all(42)` was `true`.
+- **A wrong-typed count raises.** `repeat(2, "ab")` was `[]`, `range("a", "b")` was
+  an empty range.
+- **Effect tracking follows bindings**, so `g ← shout` then `each(xs, g)` needs the
+  marker — and a marker over an expression that calls nothing is now an error, which
+  catches `println!("x")`.
+- **Type annotations are enforced.** They were parsed and dropped, while the
+  generated reference said they were checked at runtime.
+
+### Fixed — the grammar file describes the parser that exists
+
+`grammar/rite.ebnf` called itself normative and was wrong about the thing both
+reviews asked about: it placed `→` at the loosest precedence, which is an
+arrangement the parser had already abandoned. It also omitted six operators and
+described three productions that did not parse at all. `rite docs agent` copies it
+verbatim into the agent bundle, so the drift was being published to anything reading
+the machine-readable grammar.
+
+It now matches, and says out loud that the parser is the definition.
 
 ### Fixed — a pipeline reaches the functions you wrote
 
@@ -37,7 +75,7 @@ which evaluates to `f`.
 Neither `idiv` nor `compose` lexes as an operator, and neither can: both names are
 taken by the builtins they lower to, so making them keywords would collide with
 `idiv(7, 2)` and `compose(f, g)`. `÷` and `∘` are **glyph-only**, and the formatter
-now says so by printing the call form in ASCII, which is the only rendering that
+now says so by printing the call form in ASCII. That is the only rendering that
 means the same thing and round-trips.
 
 There is a test that runs both spellings and compares the *values* now, rather than
@@ -55,7 +93,7 @@ The parser was building the lowered call directly, so no `..` or `∘` ever reac
 the AST and the formatter's own arms for them were unreachable. They build their
 `BinOp` variants now and `desugar` lowers them exactly as before, so nothing
 downstream sees a difference. A single trailing block argument is recorded on the
-call, which is what lets `keep ⟦ … ⟧` print back as itself.
+call, so `keep ⟦ … ⟧` prints back as itself.
 
 The statement sugars — `say`, `unless`, `for … in`, `while` — are still expanded by
 the parser and still print expanded. That, and not the operators, is what keeps
@@ -70,8 +108,7 @@ given defaults of 1,000,000 and 10,000,000, copied through `child()` — and rea
 That mattered more than a missing knob, because the step budget cannot see inside a
 builtin: `range(0, 8000000)` is a handful of IR nodes and eight million elements, so
 it completed under a **60-step** budget. Pushed further it aborted the process on the
-allocation rather than raising — inside an embedder, taking the host down with it,
-which is the opposite of what a budget is for.
+allocation rather than raising, taking an embedder's host down with it.
 
 They are checked before the allocation wherever the size is knowable up front —
 `range`, `range_incl`, `repeat` and `concat` — and the failure is an ordinary budget
@@ -97,11 +134,10 @@ default, where it merely did nothing.
 Every capability had grown its own argument handling, and the `unwrap_or` shape
 behind this one was not unique to `@fs`: `@random.int("a", "b")` answered `0`,
 `@clock.sleep("soon")` slept for 0 ms, `@csv.encode` of a non-list wrote an empty
-CSV, and `@json.encode()` with nothing to encode wrote `"null"`. A capability
-reaches outside the program, which is the worst place to guess. They share one
-argument layer now, and its messages name the call and the position — where
-`@fs`'s old helper said "expected path string" and left you to work out which of
-the three `@fs` calls on the line had complained.
+CSV, and `@json.encode()` with nothing to encode wrote `"null"`. They share one argument layer
+now, and its messages name the call and the position. `@fs`'s old helper said
+"expected path string", leaving you to work out which of the three `@fs` calls on
+the line had complained.
 
 ### Changed — a failed `match` says what did not match
 
@@ -109,9 +145,8 @@ the three `@fs` calls on the line had complained.
 match failure: no arm matched record value `⟨kind: 7⟩`
 ```
 
-It used to say only `match failure: no arm matched`, which in a `~` over a record
-or an atom is the one thing you already knew. The value was in scope on the line
-above and simply not used.
+It used to say only `match failure: no arm matched`. The value was in scope on the
+line above and simply not used.
 
 ### Changed — `?` requires a result, and the last fail-soft builtins raise
 
@@ -123,7 +158,7 @@ result and stopped: the `?` goes on doing nothing, in silence. It now raises.
 reports the end of a file — and `and_then` is unchanged as the combinator that
 accepts a bare value.
 
-**This has a consequence worth knowing.** `?` returns `err` from the enclosing
+**This has a consequence.** `?` returns `err` from the enclosing
 function, so a function containing one can answer a failure — and must therefore
 answer `ok(…)` on the way out too, or a caller cannot tell the two apart:
 
@@ -164,10 +199,8 @@ relational operators asserted things the equality operator denied:
 ```
 
 `sort` inherited it, and that was the expensive part: `sort([3, "b", 1, "a", 2])`
-handed back **the list unchanged**. Not sorted, not an error — a plausible answer,
-which is the only kind that never announces itself. The comparator was not
-transitive either, so what order it did produce was unspecified rather than merely
-surprising.
+handed back **the list unchanged** — not sorted, and not an error. The comparator
+was not transitive either, so what order it did produce was unspecified.
 
 Ordering is now defined for numbers, strings, `bool` (`false` first), bytes, and
 lists (lexicographically, element by element then by length). Everything else
@@ -341,13 +374,11 @@ A binding now carries the property of what it holds: a name that resolves to a
 `◆!` function, or a lambda whose own body performs an effect. Calling through it,
 or handing it to a higher-order function, is checked exactly as the original is.
 **A function doing either must be declared `◆!` / `def!`, and its callers must
-mark the call.** Nothing in the shipped corpus changed, which is the argument for
-the rule rather than against it.
+mark the call.** Nothing in the shipped corpus changed.
 
 It follows a *name*. A function read from a record field, received as a parameter,
-or returned by a call still passes unremarked — there is nothing to attach the
-property to, and saying so plainly is better than implying a guarantee. The
-effects chapter now lists exactly what is and is not seen, and why closing the
+or returned by a call still passes unremarked: there is nothing to attach the
+property to. The effects chapter lists what is and is not seen, and why closing the
 rest needs a type system Rite does not have.
 
 ### Fixed — writing the marker no longer switches off the check
@@ -370,8 +401,7 @@ the one path a reader following the diagnostics would take.
 It is recorded whether or not the marker is present now, matching the two checks
 either side of it that always did. **A function that passes an effectful function
 to a higher-order one must be declared `◆!` / `def!`, and its callers must mark
-the call.** Scripts that were relying on the hole will now be told what they are
-doing; that is the point, but it is a new error on code that used to pass.
+the call.** Scripts relying on the hole now get an error where they used to pass.
 
 ## [0.5.0] — 2026-08-01
 
