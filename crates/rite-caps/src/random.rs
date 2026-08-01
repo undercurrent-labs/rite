@@ -83,8 +83,10 @@ impl RandomCap {
         perms.check_random().map_err(EvalError::Permission)?;
         match method {
             "int" => {
-                let min = args.first().and_then(|v| v.as_int()).unwrap_or(0);
-                let max = args.get(1).and_then(|v| v.as_int()).unwrap_or(min);
+                // `@random.int("a", "b")` answered `0` — a number in range, from a
+                // call that named no range at all.
+                let min = crate::args::int_arg_or("random.int", &args, 0, 0)?;
+                let max = crate::args::int_arg_or("random.int", &args, 1, min)?;
                 if max < min {
                     return Err(EvalError::Message("random.int: max < min".into()));
                 }
@@ -125,7 +127,7 @@ impl RandomCap {
                 ))
             }
             "seed" => {
-                let seed = args.first().and_then(|v| v.as_int()).unwrap_or(0) as u64;
+                let seed = crate::args::int_arg_or("random.seed", &args, 0, 0)? as u64;
                 self.rng = StdRng::seed_from_u64(seed);
                 Ok(Value::None)
             }

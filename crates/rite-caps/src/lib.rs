@@ -1,5 +1,6 @@
 //! Host capabilities and permission system for Rite.
 
+pub mod args;
 pub mod clock;
 pub mod console;
 pub mod crypto;

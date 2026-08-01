@@ -135,7 +135,9 @@ impl ClockCap {
                 )))
             }
             "sleep" => {
-                let ms = args.first().and_then(|v| v.as_int()).unwrap_or(0).max(0) as u64;
+                // A non-int used to sleep for 0 ms, which looks exactly like a
+                // sleep that worked.
+                let ms = crate::args::int_arg_or("clock.sleep", &args, 0, 0)?.max(0) as u64;
                 tokio::time::sleep(Duration::from_millis(ms)).await;
                 Ok(Value::None)
             }

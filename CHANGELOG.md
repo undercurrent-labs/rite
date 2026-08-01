@@ -28,6 +28,36 @@ runtime complaint about builtins. **If a script defines a function whose name
 matches a builtin and pipes into it, the pipeline now calls the definition.** That
 is the answer the same name gave in call position all along.
 
+### Fixed — `@fs.write` with no content no longer empties the file
+
+```
+! @fs.write("notes.txt")     // wrote an empty file
+```
+
+The content argument defaulted to `""` when it was missing, and `std::fs::write`
+truncates, so leaving it off — or misspelling the variable holding it — destroyed
+whatever was there and answered `ok`. It is required now. `@fs.append` had the same
+default, where it merely did nothing.
+
+Every capability had grown its own argument handling, and the `unwrap_or` shape
+behind this one was not unique to `@fs`: `@random.int("a", "b")` answered `0`,
+`@clock.sleep("soon")` slept for 0 ms, `@csv.encode` of a non-list wrote an empty
+CSV, and `@json.encode()` with nothing to encode wrote `"null"`. A capability
+reaches outside the program, which is the worst place to guess. They share one
+argument layer now, and its messages name the call and the position — where
+`@fs`'s old helper said "expected path string" and left you to work out which of
+the three `@fs` calls on the line had complained.
+
+### Changed — a failed `match` says what did not match
+
+```
+match failure: no arm matched record value `⟨kind: 7⟩`
+```
+
+It used to say only `match failure: no arm matched`, which in a `~` over a record
+or an atom is the one thing you already knew. The value was in scope on the line
+above and simply not used.
+
 ### Changed — `?` requires a result, and the last fail-soft builtins raise
 
 `42?` was `42`. The operator that says "this can fail" could be written over

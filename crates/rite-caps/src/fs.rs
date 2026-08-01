@@ -163,7 +163,7 @@ impl FsCap {
             "flush" => flush(&args, ctx),
             "close" => close_handle(&args, ctx),
             "read" => {
-                let path = path_arg(&args, 0)?;
+                let path = path_arg_for("fs.read", &args, 0)?;
                 let path = perms.check_fs_read(&path).map_err(EvalError::Permission)?;
                 match std::fs::read_to_string(&path) {
                     Ok(s) => Ok(Value::ok(Value::string(s))),
@@ -171,7 +171,7 @@ impl FsCap {
                 }
             }
             "read_bytes" => {
-                let path = path_arg(&args, 0)?;
+                let path = path_arg_for("fs.read_bytes", &args, 0)?;
                 let path = perms.check_fs_read(&path).map_err(EvalError::Permission)?;
                 match std::fs::read(&path) {
                     Ok(b) => Ok(Value::ok(Value::Bytes(b.into()))),
@@ -179,18 +179,22 @@ impl FsCap {
                 }
             }
             "write" => {
-                let path = path_arg(&args, 0)?;
+                let path = path_arg_for("fs.write", &args, 0)?;
                 let path = perms.check_fs_write(&path).map_err(EvalError::Permission)?;
-                let content = args.get(1).map(|v| v.to_display(atoms)).unwrap_or_default();
+                // Required. This was `.unwrap_or_default()`, so `@fs.write(path)`
+                // with the content argument left off wrote an *empty file* — and
+                // `std::fs::write` truncates, so a typo at the call site destroyed
+                // whatever was there.
+                let content = crate::args::required("fs.write", &args, 1)?.to_display(atoms);
                 match std::fs::write(&path, content) {
                     Ok(()) => Ok(Value::ok(Value::None)),
                     Err(e) => Ok(io_err("fs.write", &path, e)),
                 }
             }
             "append" => {
-                let path = path_arg(&args, 0)?;
+                let path = path_arg_for("fs.append", &args, 0)?;
                 let path = perms.check_fs_write(&path).map_err(EvalError::Permission)?;
-                let content = args.get(1).map(|v| v.to_display(atoms)).unwrap_or_default();
+                let content = crate::args::required("fs.append", &args, 1)?.to_display(atoms);
                 use std::io::Write;
                 match std::fs::OpenOptions::new()
                     .create(true)
@@ -203,7 +207,7 @@ impl FsCap {
                 }
             }
             "lines" => {
-                let path = path_arg(&args, 0)?;
+                let path = path_arg_for("fs.lines", &args, 0)?;
                 let path = perms.check_fs_read(&path).map_err(EvalError::Permission)?;
                 match std::fs::read_to_string(&path) {
                     Ok(s) => {
@@ -214,12 +218,12 @@ impl FsCap {
                 }
             }
             "exists" => {
-                let path = path_arg(&args, 0)?;
+                let path = path_arg_for("fs.exists", &args, 0)?;
                 let path = perms.check_fs_read(&path).map_err(EvalError::Permission)?;
                 Ok(Value::Bool(path.exists()))
             }
             "metadata" => {
-                let requested = path_arg(&args, 0)?;
+                let requested = path_arg_for("fs.metadata", &args, 0)?;
                 let path = perms
                     .check_fs_read(&requested)
                     .map_err(EvalError::Permission)?;
@@ -271,7 +275,7 @@ impl FsCap {
                 Ok(Value::ok(Value::list(matches)))
             }
             "mkdir" => {
-                let path = path_arg(&args, 0)?;
+                let path = path_arg_for("fs.mkdir", &args, 0)?;
                 let path = perms.check_fs_write(&path).map_err(EvalError::Permission)?;
                 match std::fs::create_dir_all(&path) {
                     Ok(()) => Ok(Value::ok(Value::None)),
@@ -279,7 +283,7 @@ impl FsCap {
                 }
             }
             "remove" => {
-                let path = path_arg(&args, 0)?;
+                let path = path_arg_for("fs.remove", &args, 0)?;
                 let path = perms.check_fs_write(&path).map_err(EvalError::Permission)?;
                 let res = if path.is_dir() {
                     std::fs::remove_dir_all(&path)
@@ -292,8 +296,8 @@ impl FsCap {
                 }
             }
             "copy" => {
-                let from = path_arg(&args, 0)?;
-                let to = path_arg(&args, 1)?;
+                let from = path_arg_for("fs.copy", &args, 0)?;
+                let to = path_arg_for("fs.copy", &args, 1)?;
                 let from = perms.check_fs_read(&from).map_err(EvalError::Permission)?;
                 let to = perms.check_fs_write(&to).map_err(EvalError::Permission)?;
                 match std::fs::copy(&from, &to) {
@@ -302,8 +306,8 @@ impl FsCap {
                 }
             }
             "move" => {
-                let from = path_arg(&args, 0)?;
-                let to = path_arg(&args, 1)?;
+                let from = path_arg_for("fs.move", &args, 0)?;
+                let to = path_arg_for("fs.move", &args, 1)?;
                 let from = perms.check_fs_write(&from).map_err(EvalError::Permission)?;
                 let to = perms.check_fs_write(&to).map_err(EvalError::Permission)?;
                 match std::fs::rename(&from, &to) {
@@ -337,11 +341,12 @@ fn glob_prefix(pattern: &str) -> PathBuf {
     }
 }
 
-fn path_arg(args: &[Value], i: usize) -> Result<PathBuf, EvalError> {
-    args.get(i)
-        .and_then(|v| v.as_str())
-        .map(PathBuf::from)
-        .ok_or_else(|| EvalError::Message("expected path string".into()))
+/// The path argument, as a `PathBuf`.
+///
+/// `who` names the call: "expected path string" left a caller to work out which of
+/// the `@fs` calls on the line had complained.
+fn path_arg_for(who: &str, args: &[Value], i: usize) -> Result<PathBuf, EvalError> {
+    crate::args::str_arg(who, args, i).map(PathBuf::from)
 }
 
 /// Modification time as an RFC3339 UTC string, or `none` where the platform or
@@ -461,7 +466,7 @@ fn open_handle(
     perms: &PermissionSet,
     ctx: &rite_runtime::RuntimeContext,
 ) -> Result<Value, EvalError> {
-    let path = path_arg(args, 0)?;
+    let path = path_arg_for("fs.open", args, 0)?;
     // The mode is an atom — `#read` — so a typo is a resolve-time unknown rather
     // than a string that silently means something else.
     let mode = match args.get(1) {

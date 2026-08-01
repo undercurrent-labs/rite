@@ -105,7 +105,9 @@ impl CsvCap {
                 Ok(decode_csv(text, &opts))
             }
             "encode" => {
-                let rows = args.first().cloned().unwrap_or(Value::list(vec![]));
+                // A non-list used to encode as an empty CSV — a file that looks
+                // written and holds nothing.
+                let rows = crate::args::required("csv.encode", &args, 0)?.clone();
                 let opts = CsvOptions::from_value(args.get(1));
                 match encode_csv(&rows, &opts) {
                     Ok(s) => Ok(Value::string(s)),
@@ -132,7 +134,7 @@ impl CsvCap {
                     .map(PathBuf::from)
                     .ok_or_else(|| EvalError::Message("csv.write expects path".into()))?;
                 let path = perms.check_fs_write(&path).map_err(EvalError::Permission)?;
-                let rows = args.get(1).cloned().unwrap_or(Value::list(vec![]));
+                let rows = crate::args::required("csv.write", &args, 1)?.clone();
                 let opts = CsvOptions::from_value(args.get(2));
                 match encode_csv(&rows, &opts) {
                     Ok(text) => match std::fs::write(&path, text) {

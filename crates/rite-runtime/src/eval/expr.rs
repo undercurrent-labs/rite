@@ -169,7 +169,14 @@ impl<'a> Evaluator<'a> {
                         return result;
                     }
                 }
-                Err(EvalError::Message("match failure: no arm matched".into()))
+                // The value is right there and used to be left out, so the message
+                // said only that something had not matched — in a `~` over a record
+                // or an atom, that is the one thing you already knew.
+                Err(EvalError::Message(format!(
+                    "match failure: no arm matched {} value `{}`",
+                    scrut.type_name(),
+                    scrut.to_display(&self.ctx.atoms)
+                )))
             }
             ExprIr::Return(val, _) => {
                 let v = match val {

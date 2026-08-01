@@ -65,13 +65,15 @@ impl JsonCap {
                 }
             }
             "encode" => {
-                // Atoms will show as numbers without interner; use display path
-                let v = args.first().cloned().unwrap_or(Value::None);
+                // Atoms will show as numbers without interner; use display path.
+                // Required: a missing argument used to encode as `"null"`, which is
+                // valid JSON and not what the caller meant to write.
+                let v = crate::args::required("json.encode", &args, 0)?.clone();
                 let json = value_to_json_string(&v, false);
                 Ok(Value::string(json))
             }
             "encode_pretty" => {
-                let v = args.first().cloned().unwrap_or(Value::None);
+                let v = crate::args::required("json.encode_pretty", &args, 0)?.clone();
                 Ok(Value::string(value_to_json_string(&v, true)))
             }
             "read" => {
