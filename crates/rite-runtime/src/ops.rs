@@ -13,7 +13,7 @@
 //! borrow of the world.
 
 use crate::atom::AtomInterner;
-use crate::builtins::{compare_values, list_remove_first, membership, merge_records};
+use crate::builtins::{list_remove_first, membership, merge_records, try_compare_values};
 use crate::value::{Key, ResultValue, Value};
 use crate::EvalError;
 use rite_sem::{BinaryOpIr, TypeExpr, UnaryOpIr};
@@ -148,10 +148,14 @@ pub fn binary(
         },
         BinaryOpIr::Eq => Ok(Value::Bool(l.structural_eq(&r))),
         BinaryOpIr::NotEq => Ok(Value::Bool(!l.structural_eq(&r))),
-        BinaryOpIr::Lt => Ok(Value::Bool(compare_values(&l, &r) < 0)),
-        BinaryOpIr::LtEq => Ok(Value::Bool(compare_values(&l, &r) <= 0)),
-        BinaryOpIr::Gt => Ok(Value::Bool(compare_values(&l, &r) > 0)),
-        BinaryOpIr::GtEq => Ok(Value::Bool(compare_values(&l, &r) >= 0)),
+        // An incomparable pair raises rather than answering. It used to collapse to
+        // `Equal`, so `"a" <= 1` and `"a" >= 1` were both true about values that are
+        // not equal — the relational operators asserting something the equality
+        // operator denied.
+        BinaryOpIr::Lt => Ok(Value::Bool(try_compare_values(&l, &r)?.is_lt())),
+        BinaryOpIr::LtEq => Ok(Value::Bool(try_compare_values(&l, &r)?.is_le())),
+        BinaryOpIr::Gt => Ok(Value::Bool(try_compare_values(&l, &r)?.is_gt())),
+        BinaryOpIr::GtEq => Ok(Value::Bool(try_compare_values(&l, &r)?.is_ge())),
         // Both operands are already evaluated by the caller; `∈` and `∉` share the same
         // membership test so neither re-runs a side-effecting operand.
         BinaryOpIr::In => Ok(Value::Bool(contains(atoms, &l, &r))),

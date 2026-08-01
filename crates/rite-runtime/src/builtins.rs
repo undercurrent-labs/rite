@@ -39,7 +39,6 @@ pub fn call_builtin(
         "sum" => builtin_sum(args),
         "min" => builtin_min_max(args, true),
         "max" => builtin_min_max(args, false),
-        "sort" => builtin_sort(args),
         "unique" => builtin_unique(args),
         "range" => builtin_range(args),
         "range_incl" => builtin_range_incl(args),
@@ -105,7 +104,7 @@ pub fn call_builtin(
         // says what is actually true; `while_loop`, `compose`, `print` and `println` used
         // to fall through to "unknown builtin", which was simply wrong.
         "map" | "keep" | "reject" | "reduce" | "each" | "find" | "any" | "all" | "group"
-        | "parallel" | "while_loop" | "compose" | "print" | "println" | "and_then" => Err(
+        | "parallel" | "while_loop" | "compose" | "print" | "println" | "and_then" | "sort" => Err(
             EvalError::Message(format!("builtin `{}` requires evaluator dispatch", name)),
         ),
         other => Err(EvalError::Message(format!("unknown builtin `{}`", other))),
@@ -143,9 +142,9 @@ enum SeqKind {
 ///
 /// Elements are ordinary values: a character is a one-character string, a byte is
 /// an int, which is what `byte_at` already answers.
-struct Seq {
+pub(crate) struct Seq {
     kind: SeqKind,
-    items: Vec<Value>,
+    pub(crate) items: Vec<Value>,
 }
 
 impl Seq {
@@ -153,7 +152,7 @@ impl Seq {
     ///
     /// `who` names the builtin, because the message a caller sees has to point at
     /// the call they wrote rather than at some later victim of a wrong type.
-    fn of(v: Option<Value>, who: &str) -> Result<Seq, EvalError> {
+    pub(crate) fn of(v: Option<Value>, who: &str) -> Result<Seq, EvalError> {
         match v {
             Some(Value::List(xs)) => Ok(Seq {
                 kind: SeqKind::List,
@@ -203,7 +202,7 @@ impl Seq {
         }
     }
 
-    fn same(&self, items: Vec<Value>) -> Value {
+    pub(crate) fn same(&self, items: Vec<Value>) -> Value {
         Seq::rebuild(self.kind, items)
     }
 
@@ -345,8 +344,8 @@ fn builtin_min_max(args: Vec<Value>, is_min: bool) -> Result<Value, EvalError> {
         match &best {
             None => best = Some(x),
             Some(b) => {
-                let cmp = compare_values(&x, b);
-                if is_min && cmp < 0 || !is_min && cmp > 0 {
+                let cmp = try_compare_values(&x, b)?;
+                if (is_min && cmp.is_lt()) || (!is_min && cmp.is_gt()) {
                     best = Some(x);
                 }
             }
@@ -357,13 +356,25 @@ fn builtin_min_max(args: Vec<Value>, is_min: bool) -> Result<Value, EvalError> {
     Ok(best.unwrap_or(Value::None))
 }
 
-fn builtin_sort(args: Vec<Value>) -> Result<Value, EvalError> {
-    let seq = Seq::of(args.into_iter().next(), "sort")?;
+/// `sort(seq)` with no comparator: the language's own order.
+pub(crate) fn sort_by_natural_order(seq: Seq) -> Result<Value, EvalError> {
     let mut v = seq.items.clone();
-    v.sort_by(|a, b| compare_values(a, b).cmp(&0));
-    Ok(seq.same(v))
+    // `sort_by` cannot fail, so the first incomparable pair is remembered and
+    // raised afterwards. The sort still runs to completion — its output is
+    // discarded, which is the point: a half-ordered list must not escape.
+    let mut failure: Option<EvalError> = None;
+    v.sort_by(|a, b| match try_compare_values(a, b) {
+        Ok(o) => o,
+        Err(e) => {
+            failure.get_or_insert(e);
+            std::cmp::Ordering::Equal
+        }
+    });
+    match failure {
+        Some(e) => Err(e),
+        None => Ok(seq.same(v)),
+    }
 }
-
 fn builtin_unique(args: Vec<Value>) -> Result<Value, EvalError> {
     let seq = Seq::of(args.into_iter().next(), "unique")?;
     let mut out: Vec<Value> = Vec::new();
@@ -737,20 +748,61 @@ fn builtin_expect(args: Vec<Value>) -> Result<Value, EvalError> {
     )))
 }
 
-pub fn compare_values(a: &Value, b: &Value) -> i32 {
+/// Order two values, or say why they cannot be ordered.
+///
+/// Ordering used to be total by fiat: every pair this did not understand answered
+/// `Equal`. That made `"a" <= 1` and `"a" >= 1` both true while `"a" = 1` was
+/// false, and it made `sort` on a mixed list answer the list back unchanged —
+/// a plausible result that is not sorted, which is the one kind of wrong answer
+/// that never announces itself. The comparator was not transitive either, so the
+/// order it did produce was unspecified rather than merely surprising.
+///
+/// What is ordered, and how:
+///
+/// * numbers, including `int` against `float`, numerically;
+/// * strings, by Unicode scalar order;
+/// * `bool`, `false` before `true`;
+/// * `bytes`, lexicographically;
+/// * lists, lexicographically — element by element, then by length, so ordering a
+///   list of lists is defined exactly when ordering their elements is.
+///
+/// Everything else is an error: two different kinds, two atoms (symbols carry no
+/// order), two records (field order is insertion order, so any answer would be an
+/// artefact of how they were built), functions, handles, results, and `NaN`, which
+/// is unordered against everything including itself.
+///
+/// Equality is untouched and stays total: `"a" = 1` is `false`, not an error.
+pub fn try_compare_values(a: &Value, b: &Value) -> Result<std::cmp::Ordering, EvalError> {
     use std::cmp::Ordering;
-    let ord = match (a, b) {
-        (Value::Int(x), Value::Int(y)) => x.cmp(y),
-        (Value::Float(x), Value::Float(y)) => x.partial_cmp(y).unwrap_or(Ordering::Equal),
-        (Value::Int(x), Value::Float(y)) => (*x as f64).partial_cmp(y).unwrap_or(Ordering::Equal),
-        (Value::Float(x), Value::Int(y)) => x.partial_cmp(&(*y as f64)).unwrap_or(Ordering::Equal),
-        (Value::String(x), Value::String(y)) => x.as_ref().cmp(y.as_ref()),
-        _ => Ordering::Equal,
-    };
-    match ord {
-        Ordering::Less => -1,
-        Ordering::Equal => 0,
-        Ordering::Greater => 1,
+    fn nope(a: &Value, b: &Value) -> EvalError {
+        EvalError::Message(if a.type_name() == b.type_name() {
+            format!("cannot order two {} values", a.type_name())
+        } else {
+            format!("cannot order {} against {}", a.type_name(), b.type_name())
+        })
+    }
+    fn floats(x: f64, y: f64, a: &Value, b: &Value) -> Result<Ordering, EvalError> {
+        x.partial_cmp(&y)
+            .ok_or_else(|| EvalError::Message(format!("cannot order {} against {}", a, b)))
+    }
+    match (a, b) {
+        (Value::Int(x), Value::Int(y)) => Ok(x.cmp(y)),
+        (Value::Float(x), Value::Float(y)) => floats(*x, *y, a, b),
+        (Value::Int(x), Value::Float(y)) => floats(*x as f64, *y, a, b),
+        (Value::Float(x), Value::Int(y)) => floats(*x, *y as f64, a, b),
+        (Value::String(x), Value::String(y)) => Ok(x.as_ref().cmp(y.as_ref())),
+        (Value::Bool(x), Value::Bool(y)) => Ok(x.cmp(y)),
+        (Value::Bytes(x), Value::Bytes(y)) => Ok(x.as_ref().cmp(y.as_ref())),
+        (Value::List(x), Value::List(y)) => {
+            for (xa, xb) in x.iter().zip(y.iter()) {
+                match try_compare_values(xa, xb)? {
+                    Ordering::Equal => continue,
+                    other => return Ok(other),
+                }
+            }
+            Ok(x.len().cmp(&y.len()))
+        }
+        _ => Err(nope(a, b)),
     }
 }
 

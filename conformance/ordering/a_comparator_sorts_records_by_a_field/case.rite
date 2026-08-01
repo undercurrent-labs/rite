@@ -1,0 +1,2 @@
+files ← [⟨n: "a", len: 3⟩, ⟨n: "b", len: 9⟩]
+sort(files, ⟦ |a, b| b.len - a.len ⟧) → map ⟦ |f| f.n ⟧

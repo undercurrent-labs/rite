@@ -124,6 +124,60 @@ impl<'a> Evaluator<'a> {
         Ok(Value::List(out))
     }
 
+    /// `sort(seq)` and `sort(seq, comparator)`.
+    ///
+    /// The two-argument form is documented in two tutorials, complete with an
+    /// explanation of the sign convention — and the second argument was dropped on
+    /// the floor. `sort(files, ⟦ |a, b| b.len - a.len ⟧)` ran the default comparator,
+    /// which answered `Equal` for every pair of records, so the list came back in its
+    /// original order looking sorted.
+    ///
+    /// The comparator answers a number: negative if the first argument comes first,
+    /// positive if the second does, zero if neither. A comparator that answers
+    /// something else is a mistake worth naming rather than treating as zero.
+    ///
+    /// This is also what makes the stricter default ordering affordable: a pair the
+    /// language will not order for you is a pair you can order yourself.
+    pub(super) async fn builtin_sort(&mut self, args: Vec<Value>) -> Result<Value, EvalError> {
+        let mut it = args.into_iter();
+        let mut seq = crate::builtins::Seq::of(it.next(), "sort")?;
+        let Some(f) = it.next().filter(|v| v.is_callable()) else {
+            return crate::builtins::sort_by_natural_order(seq);
+        };
+        // An insertion sort: the comparator is async, and `sort_by` cannot await.
+        // Sorting a large list through a Rite closure is not the shape to optimise
+        // for — being able to express the order at all is.
+        let items = std::mem::take(&mut seq.items);
+        let mut out: Vec<Value> = Vec::with_capacity(items.len());
+        for item in items {
+            let mut lo = 0usize;
+            let mut hi = out.len();
+            while lo < hi {
+                let mid = (lo + hi) / 2;
+                let verdict = self
+                    .call_value(f.clone(), vec![item.clone(), out[mid].clone()])
+                    .await?;
+                let n = match verdict {
+                    Value::Int(n) => n as f64,
+                    Value::Float(n) => n,
+                    other => {
+                        return Err(EvalError::Message(format!(
+                            "sort: comparator must answer a number, got {}",
+                            other.type_name()
+                        )))
+                    }
+                };
+                if n < 0.0 {
+                    hi = mid;
+                } else {
+                    lo = mid + 1;
+                }
+            }
+            out.insert(lo, item);
+        }
+        Ok(seq.same(out))
+    }
+
     pub(super) async fn builtin_each(&mut self, args: Vec<Value>) -> Result<Value, EvalError> {
         let mut it = args.into_iter();
         let list = match it.next() {

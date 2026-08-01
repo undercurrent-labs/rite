@@ -28,6 +28,42 @@ runtime complaint about builtins. **If a script defines a function whose name
 matches a builtin and pipes into it, the pipeline now calls the definition.** That
 is the answer the same name gave in call position all along.
 
+### Changed — ordering is total or it is an error, and `sort` takes the comparator it documents
+
+Comparison answered `Equal` for every pair it did not understand, so the
+relational operators asserted things the equality operator denied:
+
+```
+"a" < 1      // was false
+"a" <= 1     // was true
+"a" >= 1     // was true      …about values that are not equal
+```
+
+`sort` inherited it, and that was the expensive part: `sort([3, "b", 1, "a", 2])`
+handed back **the list unchanged**. Not sorted, not an error — a plausible answer,
+which is the only kind that never announces itself. The comparator was not
+transitive either, so what order it did produce was unspecified rather than merely
+surprising.
+
+Ordering is now defined for numbers, strings, `bool` (`false` first), bytes, and
+lists (lexicographically, element by element then by length). Everything else
+raises: two different kinds, two atoms, two records, and `NaN`. Atoms are symbols
+and a record's fields are in insertion order, so ordering either would report how
+the value was built rather than what it means. **Equality is untouched** — `"a" = 1`
+is still `false`, not an error.
+
+**`sort(seq, comparator)` now calls the comparator.** Two tutorials document it,
+one of them explaining the sign convention in full, and the second argument was
+dropped on the floor: `sort(files, ⟦ |a, b| b.len - a.len ⟧)` ran the default
+comparator, which called every pair of records equal, so the list came back in its
+original order looking sorted. The tutorial's own assertion is what caught it,
+after the stricter ordering turned a wrong answer into an error.
+
+Negative if the first argument comes first, positive if the second does, zero if
+neither — and a comparator answering something other than a number is told so. This
+is also what makes the stricter default affordable: a pair the language will not
+order for you is a pair you can order yourself.
+
 ### Added — type annotations are checked, as the reference always said they were
 
 `◆ f(x: int) → int` has been parsed, printed back by the formatter, and then

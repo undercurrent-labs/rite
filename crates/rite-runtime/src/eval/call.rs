@@ -205,6 +205,9 @@ impl<'a> Evaluator<'a> {
             "any" => self.builtin_any_all(args, true).await,
             "all" => self.builtin_any_all(args, false).await,
             "group" => self.builtin_group(args).await,
+            // `sort` moved here from the pure table when it learned to take a
+            // comparator: a pure builtin cannot invoke a Rite closure.
+            "sort" => self.builtin_sort(args).await,
             "parallel" => self.builtin_parallel(args).await,
             "import" => Ok(Value::None), // module loading handled at higher layer
             "while_loop" => self.builtin_while_loop(args).await,

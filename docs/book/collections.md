@@ -82,6 +82,51 @@ not have.
 `sum`, `min`, `max` and `join` read all three kinds too — summing bytes is a
 checksum, and `min` uses the ordering `sort` uses, so `min("cba")` is `"a"`.
 
+### What can be ordered
+
+`<`, `<=`, `>`, `>=`, `sort`, `min` and `max` all ask the same question, and it
+does not have an answer for every pair:
+
+| Ordered | How |
+|---|---|
+| numbers | numerically, `int` against `float` included |
+| strings | by Unicode scalar |
+| `bool` | `false` before `true` |
+| bytes | lexicographically |
+| lists | lexicographically — element by element, then by length |
+
+Anything else raises: two different kinds, two atoms, two records, and `NaN`,
+which is unordered against everything including itself.
+
+```rite browser
+! @console.println(str([1, 2] < [1, 3]))     // true
+! @console.println(str(sort([3, 1, 2])))     // [1, 2, 3]
+```
+
+`"a" < 1` is an error rather than an answer. It used to be `false` — and `"a" <= 1`
+and `"a" >= 1` were both **true**, because anything the comparison did not
+understand was treated as equal. That also made `sort` on a mixed list hand back
+the list unchanged: not sorted, not an error, just a plausible-looking answer.
+
+Atoms and records are deliberately unordered. Atoms are symbols, and a record's
+fields are in insertion order, so any ordering of either would be an artefact of
+how the value was built rather than a property of what it means.
+
+### Ordering it yourself
+
+`sort` takes a comparator for everything the language will not order for you, and
+for orders that are not the natural one. It answers a number: negative if the
+first argument comes first, positive if the second does, zero if neither.
+
+```rite browser
+files ← [⟨name: "a", len: 3⟩, ⟨name: "b", len: 9⟩, ⟨name: "c", len: 5⟩]
+
+biggest ← sort(files, { |a, b| b.len - a.len })
+! @console.println(biggest → map { |f| f.name })   // ["b", "c", "a"]
+```
+
+Records have no order of their own, and this is why they do not need one.
+
 **Handed the wrong kind, these raise.** `sum` of a list of strings, `keys` of
 anything but a record, `lines` of a list, `flatten` of a string: each says so at
 the call. They used to answer `0`, `[]` or `ok([])` — the same answers a correct
