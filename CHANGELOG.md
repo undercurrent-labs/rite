@@ -1,5 +1,7 @@
 # Changelog
 
+## [Unreleased]
+
 ## [0.5.0] — 2026-08-01
 
 The release where a lot of things that looked like they worked turned out not to,
