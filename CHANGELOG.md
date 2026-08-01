@@ -28,6 +28,40 @@ runtime complaint about builtins. **If a script defines a function whose name
 matches a builtin and pipes into it, the pipeline now calls the definition.** That
 is the answer the same name gave in call position all along.
 
+### Changed — `→` is looser than the operators, and its result needs parentheses
+
+**This changes how existing pipelines parse.** `a + b → str` was `a + (b → str)`,
+which is not what it looks like and not what anyone writing it means. It is now
+`(a + b) → str`.
+
+The cost is on the other side, and it is not optional: an infix operator cannot be
+looser than `+` on its left and tighter than `+` on its right. Reaching the input
+side costs the result side, so an operator directly after a pipeline is now a parse
+error — `E015` — naming the form that works:
+
+```
+xs → count > 2        // error[E015]: a pipeline's result cannot be an operand of `>`
+(xs → count) > 2      // this
+```
+
+This arrangement has now been all three ways round, and the other two each answer
+one case by quietly getting the other wrong:
+
+| | `a + b → str` | `xs → count > 2` |
+|---|---|---|
+| Loose, stages as full expressions | `(a + b) → str` | `xs → (count > 2)` — died at runtime |
+| Tight, stages at postfix | `a + (b → str)` — silently | `(xs → count) > 2` |
+| **Loose, stages at postfix** | `(a + b) → str` | **E015** |
+
+Stages are unchanged — a name, a call, or a trailing-block call, never a bare
+operator expression. `|>` in F#, Elixir and Elm makes the same trade; there the
+rejected case is a type error instead of a parse error.
+
+**Migration** is mechanical: parenthesise any pipeline whose result feeds an
+operator. Across the 101 `.rite` files in this repo it was one line in
+`examples/06-cli-tool`, plus the fixtures and the chapter that taught the old rule.
+`rite check` names every site.
+
 ### Changed — a marker over nothing is an error
 
 `!` was checked in one direction only: leaving it out where an effect happens was

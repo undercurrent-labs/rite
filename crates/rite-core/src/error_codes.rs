@@ -37,6 +37,13 @@ pub const E011_EXPECTED_TOKEN: ErrorCode = ErrorCode(11);
 pub const E012_UNCLOSED_DELIMITER: ErrorCode = ErrorCode(12);
 pub const E013_INVALID_SYNTAX: ErrorCode = ErrorCode(13);
 pub const E014_AMBIGUOUS_QUESTION: ErrorCode = ErrorCode(14);
+/// A pipeline's result used as an operand: `xs → count > 2`.
+///
+/// `→` is looser than every binary operator so that its *input* reads as written
+/// (`a + b → str` is `(a + b) → str`). Nothing below that level can consume a
+/// trailing operator, so the parenthesised form is required and asked for by name
+/// rather than left to fail somewhere else.
+pub const E015_PIPELINE_RESULT_OPERAND: ErrorCode = ErrorCode(15);
 
 // Resolve
 pub const E020_UNDEFINED_NAME: ErrorCode = ErrorCode(20);

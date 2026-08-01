@@ -8,7 +8,7 @@
 
 argv ← ! @process.args
 
-args ← ? argv → count > 0 ⟦ argv ⟧ : ⟦ ["alpha", "beta", "gamma"] ⟧
+args ← ? (argv → count) > 0 ⟦ argv ⟧ : ⟦ ["alpha", "beta", "gamma"] ⟧
 
 ! @console.println("count: " + str(args → count))
 ! @console.println(args → join(", "))

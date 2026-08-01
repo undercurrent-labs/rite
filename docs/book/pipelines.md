@@ -115,25 +115,42 @@ Pipelines work offline in [Studio](/studio) for pure data (no FS). Paste the eve
 
 ## Precedence
 
-`→` binds **tighter than the operators**, so a pipeline's result is an ordinary operand:
+`→` binds **looser than every operator**, so whatever is on the left is finished
+before it is piped:
 
 ```rite browser
-xs ← [1, 2, 3]
-xs → count > 2        // (xs → count) > 2   → true
-xs → sum + 1          // (xs → sum) + 1     → 7
-xs → sum = 6          // (xs → sum) = 6     → true
+a ← 2
+b ← 3
+! @console.println(a + b → str)   // (a + b) → str   → "5"
 ```
 
 Each stage is a name, a call, or a trailing-block call — never a bare operator
-expression. That is what lets the operator after a pipeline attach to the *result*.
+expression. `xs → count + 1` would have to mean `xs → (count + 1)`, and `count + 1`
+is not something you can apply to a list.
 
-The trade-off is on the input side: a bare binary expression before `→` groups to the
-right, so parenthesise when you mean to pipe the whole thing.
+### Using a pipeline's result
 
-```rite
-a + b → str           // a + (b → str)
-(a + b) → str         // the sum, piped
+Parenthesise it. An operator directly after a pipeline is a **parse error**, not a
+regrouping:
+
+```rite browser
+xs ← [1, 2, 3]
+! @console.println(str((xs → count) > 2))
 ```
+
+Without them:
+
+```rite compile_fail
+xs ← [1, 2, 3]
+xs → count > 2
+```
+
+The reason is worth knowing, because it is the one thing about `→` you have to
+remember. An infix operator cannot be looser than `+` on its left and tighter than
+`+` on its right — reaching the input side costs the result side. Rite spends the
+parentheses on the result and keeps the input honest, and says so at the point of
+the mistake instead of quietly parsing something else. `|>` in F#, Elixir and Elm
+makes the same trade; there the equivalent shows up as a type error.
 
 ## Next
 

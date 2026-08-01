@@ -276,8 +276,9 @@ fn pipelines() {
             "[] → first",
             "[\"a\", \"b\"] → join(\", \")",
             "5 → str",
-            "[1, 2, 3] → count > 2",
+            "([1, 2, 3] → count) > 2",
             "([1, 2] → sum) + 1",
+            "1 + 2 → str",
             "[⟨name: \"a\"⟩, ⟨name: \"b\"⟩] → map .name → join(\"-\")",
         ],
     );

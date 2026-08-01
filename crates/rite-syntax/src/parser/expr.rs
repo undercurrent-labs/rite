@@ -6,7 +6,9 @@ use super::support::{is_callable_expr, pattern_span};
 use super::*;
 use crate::ast::*;
 use crate::token::TokenKind;
-use rite_core::{simple_error, E010_UNEXPECTED_TOKEN, E012_UNCLOSED_DELIMITER};
+use rite_core::{
+    simple_error, E010_UNEXPECTED_TOKEN, E012_UNCLOSED_DELIMITER, E015_PIPELINE_RESULT_OPERAND,
+};
 
 impl Parser {
     pub fn parse_expression(&mut self) -> Expr {
@@ -15,25 +17,38 @@ impl Parser {
 
     /// `input → stage → stage`.
     ///
-    /// Binds **tighter than the binary operators** and each stage is parsed at postfix
-    /// level, so a pipeline can be an operand:
+    /// Binds **looser than every binary operator**, so the input side reads as it is
+    /// written and a completed value moves to the next stage:
     ///
     /// ```text
-    /// xs → count > 2   is   (xs → count) > 2
-    /// xs → sum + 1     is   (xs → sum) + 1
+    /// a + b → str   is   (a + b) → str
     /// ```
     ///
-    /// Previously the pipeline sat at the very top of the precedence chain and stages
-    /// were parsed as full expressions, so the stage swallowed the operator: the first
-    /// line meant `xs → (count > 2)` and failed at runtime with "cannot call value of
-    /// type bool". Every binary operator after a stage was affected.
+    /// Each stage is still parsed at postfix level — a name, a call, or a
+    /// trailing-block call, never a bare operator expression.
     ///
-    /// The trade: `a + b → f` groups as `a + (b → f)`. A pipeline cannot both be an
-    /// operand and contain a bare binary expression as its input, and reading a
-    /// reduction's result (`→ sum > 0`) is far more common than piping a sum — write
-    /// `(a + b) → f` for the other case.
+    /// # Why an operator *after* a pipeline is rejected
+    ///
+    /// An infix operator cannot be looser than `+` on its left and tighter than `+` on
+    /// its right. Reaching the input side costs the result side: with `→` at the
+    /// bottom of the chain there is no level left to attach a trailing operator to.
+    ///
+    /// This has been arranged all three possible ways, and only one of them is honest:
+    ///
+    /// * **Loose, stages as full expressions** — the original. The stage swallowed the
+    ///   operator, so `xs → count > 2` meant `xs → (count > 2)` and failed at runtime
+    ///   with "cannot call value of type bool". Every operator after a stage was
+    ///   affected, and none of it was visible in the source.
+    /// * **Tight, stages at postfix** — the replacement. `xs → count > 2` worked, at
+    ///   the price of `a + b → str` silently meaning `a + (b → str)`.
+    /// * **Loose, stages at postfix, trailing operator rejected** — this one. The input
+    ///   side is what it looks like, and the case the tight arrangement bought is a
+    ///   *parse error* naming the parenthesised form rather than a wrong answer.
+    ///
+    /// So `xs → count > 2` no longer parses; write `(xs → count) > 2`. That is the same
+    /// trade F#, Elixir and Elm make with `|>`, where the equivalent is a type error.
     pub(super) fn parse_pipeline(&mut self) -> Expr {
-        let expr = self.parse_unary();
+        let expr = self.parse_coalesce();
         let mut stages = Vec::new();
         let start = expr.span();
         while self.check(TokenKind::Arrow) {
@@ -44,15 +59,63 @@ impl Parser {
             stages.push(stage);
         }
         if stages.is_empty() {
-            expr
-        } else {
-            let end = stages.last().map(|s| s.span()).unwrap_or(start);
-            Expr::Pipeline(PipelineExpr {
-                input: Box::new(expr),
-                stages,
-                span: start.merge(end),
-            })
+            return expr;
         }
+        let end = stages.last().map(|s| s.span()).unwrap_or(start);
+        let span = start.merge(end);
+        // Nothing below this level will consume a trailing operator, so saying so here
+        // is the difference between a diagnostic and a dangling token reported
+        // somewhere unrelated.
+        if let Some(op) = self.binary_operator_text() {
+            self.diagnostics.push(
+                simple_error(
+                    E015_PIPELINE_RESULT_OPERAND,
+                    format!("a pipeline's result cannot be an operand of `{op}`"),
+                    self.file,
+                    span,
+                    "this pipeline is followed by an operator",
+                )
+                .with_help("parenthesise the pipeline to use its result: `(… → …) <op> x`"),
+            );
+        }
+        Expr::Pipeline(PipelineExpr {
+            input: Box::new(expr),
+            stages,
+            span,
+        })
+    }
+
+    /// The operator sitting at the cursor, if it is a binary one.
+    ///
+    /// Every token any level of the ladder below `parse_pipeline` would consume as an
+    /// infix operator. Kept as one list so a new operator cannot be added to the ladder
+    /// and silently escape the check.
+    fn binary_operator_text(&self) -> Option<&'static str> {
+        Some(match self.peek_kind() {
+            TokenKind::Coalesce => "??",
+            TokenKind::Or => "or",
+            TokenKind::Xor => "xor",
+            TokenKind::And => "and",
+            TokenKind::Eq => "=",
+            TokenKind::NotEq => "!=",
+            TokenKind::Lt => "<",
+            TokenKind::LtEq => "<=",
+            TokenKind::Gt => ">",
+            TokenKind::GtEq => ">=",
+            TokenKind::In => "in",
+            TokenKind::NotIn => "not in",
+            TokenKind::Rest => "..",
+            TokenKind::RangeIncl => "..=",
+            TokenKind::Plus => "+",
+            TokenKind::Minus => "-",
+            TokenKind::Star => "*",
+            TokenKind::Slash => "/",
+            TokenKind::Percent => "%",
+            TokenKind::Idiv => "//",
+            TokenKind::Power => "**",
+            TokenKind::Compose => "∘",
+            _ => return None,
+        })
     }
 
     pub(super) fn parse_pipeline_stage(&mut self) -> Expr {
@@ -102,7 +165,7 @@ impl Parser {
         if self.check(TokenKind::Match) {
             return self.parse_match();
         }
-        self.parse_coalesce()
+        self.parse_pipeline()
     }
 
     pub(super) fn parse_match(&mut self) -> Expr {
@@ -373,10 +436,10 @@ impl Parser {
     }
 
     pub(super) fn parse_compose(&mut self) -> Expr {
-        let mut left = self.parse_pipeline();
+        let mut left = self.parse_unary();
         while self.check(TokenKind::Compose) {
             self.advance();
-            let right = self.parse_pipeline();
+            let right = self.parse_unary();
             let span = left.span().merge(right.span());
             // f ∘ g  →  { |x| f(g(x)) }  represented as call compose(f, g)
             left = Expr::Call(CallExpr {
