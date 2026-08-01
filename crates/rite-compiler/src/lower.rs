@@ -441,7 +441,7 @@ fn pipeline_stage(stage: &rite_sem::PipelineStageIr, compiled: &Compiled) -> Low
              __other => __other.get_field({f}) }}",
             f = rust_str(field)
         ),
-        StageKind::Block | StageKind::Call | StageKind::PlaceholderCall => match &stage.expr {
+        StageKind::Block | StageKind::Call => match &stage.expr {
             rite_sem::ExprIr::NativeCall { name, args, .. } => {
                 let mut parts = vec!["__v".to_string()];
                 for a in args {

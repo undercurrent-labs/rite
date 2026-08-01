@@ -335,7 +335,7 @@ impl<'a> Evaluator<'a> {
                 }
                 other => Ok(other.get_field(field)),
             },
-            StageKind::Block | StageKind::Call | StageKind::PlaceholderCall => {
+            StageKind::Block | StageKind::Call => {
                 match &stage.expr {
                     ExprIr::NativeCall { name, args, .. } => {
                         let mut argv = vec![input];

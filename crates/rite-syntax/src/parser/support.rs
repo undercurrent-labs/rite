@@ -164,6 +164,23 @@ impl Parser {
         {
             return false;
         }
+        // `expr? → stage ⟦…⟧`: the `?` is try, because no condition can *begin* with
+        // `→`. Without this the scan ran past `→ keep` and found the stage's own
+        // trailing block, exactly as it once ran past `while` and found the loop's —
+        // so `rows ← (! @json.read(p))? → keep ⟦ |r| r.active ⟧` failed with
+        // "unexpected token →", pointing at the pipeline rather than at the `?`.
+        //
+        // Arrow is the only infix token handled here rather than a general
+        // "starts with a binary operator" rule: `-` and `not` are prefix operators
+        // too, and a condition may legitimately open with either.
+        if self
+            .tokens
+            .get(self.pos + 1)
+            .map(|t| t.kind == TokenKind::Arrow)
+            .unwrap_or(false)
+        {
+            return false;
+        }
         let mut i = self.pos + 1;
         let mut depth_paren = 0i32;
         let mut depth_bracket = 0i32;

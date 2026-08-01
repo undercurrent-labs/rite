@@ -1,0 +1,2 @@
+rows ← (ok([⟨active: true⟩, ⟨active: false⟩]))? → keep ⟦ |r| r.active ⟧
+rows → count

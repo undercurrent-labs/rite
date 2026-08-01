@@ -39,7 +39,8 @@ These names are available as pipeline-friendly builtins (collection-oriented):
 | `sum` | Sum numbers |
 | `count` | Length |
 | `first` / `last` | Ends of a list, string or bytes |
-| `sort` / related | Ordering helpers where implemented |
+| `sort` | Order a list, string or bytes |
+| `unique` | Drop repeats, keeping first appearance |
 | `flatten` | Nested lists → flat (lists only) |
 
 ```rite browser
@@ -47,7 +48,9 @@ words ← ["alpha", "beta", "gamma"]
 ! @console.println(words → count)
 ```
 
-Exact builtin set evolves with the runtime; `rite docs build` and capability/docs output list host functions. Pure list helpers live in the evaluator builtins.
+That table is a starting set, not the whole one. `rite docs build` writes the
+complete list of builtins and host functions to `docs/generated/`, generated from the
+same tables the runtime dispatches on, so it cannot drift from what is actually there.
 
 ## Multi-line style
 
@@ -60,16 +63,71 @@ summary ← rows
   → sum
 ```
 
+## Your own functions are stages
+
+A stage is any callable — a builtin, a function you defined, a module function, or
+a binding holding a closure. A bare name resolves the way it would in a call, so a
+definition of your own shadowing a builtin wins in both places:
+
+```rite browser
+◆ shout(s) ⟦ ^ upper(s) + "!" ⟧
+
+! @console.println("hello" → shout)        // HELLO!
+```
+
+```rite browser
+◆ square(n) ⟦ ^ n * n ⟧
+
+! @console.println(str([1, 2, 3] → map(square) → sum))   // 14
+```
+
 ## The `$` placeholder
 
 When the piped value should **not** be the first argument, use `$`:
 
 ```rite browser
-// Conceptual: pass piped value as a later argument
-// value → some_fn(fixed, $, other)
+! @console.println("-" → join(["a", "b"], $))   // a-b
 ```
 
-Use `$` when a helper’s primary parameter is not in first position (e.g. “replace needle in haystack” styles). If everything is written first-arg-friendly, you rarely need `$`.
+Without it the value goes first, which is what `["a", "b"] → join("-")` relies on.
+Use `$` when a helper's primary parameter is not in first position (a "replace
+needle in haystack" shape). If everything is written first-arg-friendly, you rarely
+need it.
+
+## Results do not short-circuit
+
+A stage receives whatever the previous one produced, and a `Result` is an ordinary
+value. Nothing unwraps it and nothing stops on `err`:
+
+```rite browser
+◆ tag(v) ⟦ ^ ⟨seen: v⟩ ⟧
+
+! @console.println(err("boom") → tag)   // ⟨seen: err(boom)⟩ — tag still ran
+```
+
+That is deliberate: a stage that silently skipped itself would make a pipeline's
+behaviour depend on a value you cannot see in the source. Short-circuiting is
+opt-in, and it is spelled `and_then`:
+
+```rite browser
+! @console.println(err("boom") → and_then { |n| ok(n * 10) })   // err(boom)
+! @console.println(ok(3) → and_then { |n| ok(n * 10) })         // ok(30)
+```
+
+To unwrap and propagate, put `?` on the pipeline's **result** — `?` on a stage is
+rejected (`E016`), because it would apply to the stage rather than to the value
+flowing through it:
+
+```rite
+total ← (rows → map { |r| r.n } → sum)?
+```
+
+## Evaluation is eager
+
+Every stage runs to completion and hands the next one a finished value, so
+`xs → map f → keep p → sum` builds two intermediate lists. There are no lazy or
+streaming values in Rite today. For a large file, read it in pieces with
+`@fs.open` and its handle rather than piping `@fs.lines` over the whole thing.
 
 ## Pipelines vs nested calls
 

@@ -200,7 +200,6 @@ pub enum StageKind {
     Call,
     MemberProjection(String),
     Block,
-    PlaceholderCall,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

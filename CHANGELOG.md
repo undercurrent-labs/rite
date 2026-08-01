@@ -28,6 +28,31 @@ runtime complaint about builtins. **If a script defines a function whose name
 matches a builtin and pipes into it, the pipeline now calls the definition.** That
 is the answer the same name gave in call position all along.
 
+### Changed — `?` on a pipeline stage is rejected, and one on a pipeline input parses
+
+`xs → f(a)?` bound the `?` to the *stage*. The interpreter read that as "call
+`f(a)` without the piped value, unwrap the answer, then call the answer with
+`xs`"; the compiler backend refused to lower it at all, so the two execution paths
+disagreed about a program that compiled. Nothing in the book, the examples or the
+fixtures used it. It is now `E016`, pointing at the `?` and naming the two places
+it can go — on the pipeline's result, or on its input.
+
+The second half was a parse bug of the same family as 0.5.0's `?`-before-`while`:
+
+```
+rows ← (! @json.read(path))? → keep ⟦ |r| r.active ⟧
+```
+
+`?` and prefix `?` (if) are one token, so the parser looks ahead to tell them
+apart. The scan ran past `→ keep` and found the *stage's* trailing block, concluded
+the `?` opened a conditional, and failed with "unexpected token →" — pointing at
+the pipeline rather than at the `?`. No condition can begin with `→`, which makes
+the fix unambiguous.
+
+Also documented rather than left to be discovered: a `Result` travels through a
+stage as an ordinary value and **does not** short-circuit — `and_then` is the
+opt-in — and pipelines are eager, with every stage materialising its result.
+
 ### Changed — `→` is looser than the operators, and its result needs parentheses
 
 **This changes how existing pipelines parse.** `a + b → str` was `a + (b → str)`,

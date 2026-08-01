@@ -44,6 +44,13 @@ pub const E014_AMBIGUOUS_QUESTION: ErrorCode = ErrorCode(14);
 /// trailing operator, so the parenthesised form is required and asked for by name
 /// rather than left to fail somewhere else.
 pub const E015_PIPELINE_RESULT_OPERAND: ErrorCode = ErrorCode(15);
+/// `?` applied to a pipeline stage: `xs → f(a)?`.
+///
+/// Postfix `?` binds to the stage, so it unwraps the stage expression rather than
+/// the value flowing through the pipeline — a reading with no use, and one the
+/// interpreter and the compiler backend disagreed about. `?` goes on the result:
+/// `(xs → f(a))?`.
+pub const E016_TRY_ON_PIPELINE_STAGE: ErrorCode = ErrorCode(16);
 
 // Resolve
 pub const E020_UNDEFINED_NAME: ErrorCode = ErrorCode(20);

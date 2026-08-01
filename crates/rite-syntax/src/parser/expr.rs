@@ -8,6 +8,7 @@ use crate::ast::*;
 use crate::token::TokenKind;
 use rite_core::{
     simple_error, E010_UNEXPECTED_TOKEN, E012_UNCLOSED_DELIMITER, E015_PIPELINE_RESULT_OPERAND,
+    E016_TRY_ON_PIPELINE_STAGE,
 };
 
 impl Parser {
@@ -134,7 +135,28 @@ impl Parser {
         // Postfix level: an identifier, a call, a trailing-block call (`map { … }`), a
         // closure, a field access. Deliberately not a full expression — that is what let
         // a stage absorb the operator that followed the pipeline.
-        self.parse_postfix()
+        let stage = self.parse_postfix();
+        // `xs → f(a)?` binds the `?` to the stage, which describes nothing anyone
+        // means. The evaluator read it as "call `f(a)` — *without* the piped value —
+        // unwrap that, then call the result with `xs`", and the compiler backend
+        // refused to lower it at all, so the two execution paths disagreed about a
+        // program that compiled. Nothing in the corpus, the book or the fixtures used
+        // it. Rejecting it is cheaper than choosing which of the two wrong readings to
+        // canonise; `?` belongs on the pipeline's result, where it applies to the value
+        // that comes out.
+        if let Expr::Try(t) = &stage {
+            self.diagnostics.push(
+                simple_error(
+                    E016_TRY_ON_PIPELINE_STAGE,
+                    "`?` cannot be applied to a pipeline stage",
+                    self.file,
+                    t.span,
+                    "this unwraps the stage, not the value flowing through it",
+                )
+                .with_help("put it on the result instead: `(… → …)?`"),
+            );
+        }
+        stage
     }
 
     pub(super) fn parse_conditional(&mut self) -> Expr {
