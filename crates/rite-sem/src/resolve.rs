@@ -132,6 +132,7 @@ pub const HOST_EFFECTS: &[(&str, bool)] = &[
     ("http.post", true),
     ("http.request", true),
     ("http.response", false),
+    ("http.file", true),
     ("http.log", false),
     ("http.recover", false),
     // @udp — datagram sockets. Every one of these touches the socket: `bind` claims

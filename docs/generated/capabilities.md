@@ -558,11 +558,19 @@ Send a request described by a record: <<method, url, headers, body, timeout_ms>>
 
 ### response
 
-Build an explicit response record `⟨status, body⟩`. The body is optional and defaults to `none`.
+Build an explicit response record `⟨status, body, headers⟩`. Body and headers are optional; the body defaults to `none` and an explicit `content-type` header overrides the one inferred from the body.
 
-- arity: 2
+- arity: 3
 - effectful: false
 - permission: 
+
+### file
+
+Read a file under `root` and build a response for it, with `content-type` from the extension. The subpath cannot escape `root`. A directory resolves to its `index.html`. Returns ok(response) or err(record). Needs `--allow fs:read=<root>`.
+
+- arity: 2
+- effectful: true
+- permission: fs
 
 ### log
 

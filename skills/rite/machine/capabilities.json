@@ -570,11 +570,18 @@
       "permission": "net"
     },
     {
-      "arity": 2,
-      "docs": "Build an explicit response record `⟨status, body⟩`. The body is optional and defaults to `none`.",
+      "arity": 3,
+      "docs": "Build an explicit response record `⟨status, body, headers⟩`. Body and headers are optional; the body defaults to `none` and an explicit `content-type` header overrides the one inferred from the body.",
       "effectful": false,
       "name": "response",
       "permission": ""
+    },
+    {
+      "arity": 2,
+      "docs": "Read a file under `root` and build a response for it, with `content-type` from the extension. The subpath cannot escape `root`. A directory resolves to its `index.html`. Returns ok(response) or err(record). Needs `--allow fs:read=<root>`.",
+      "effectful": true,
+      "name": "file",
+      "permission": "fs"
     },
     {
       "arity": 0,

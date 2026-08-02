@@ -348,7 +348,7 @@ impl PermissionSet {
 /// exist, which is what makes it safe to resolve `..` in it lexically here — leaving
 /// it for `path_under`'s prefix test would let `granted/missing/../../etc` look like
 /// it starts with `granted`.
-fn canonicalize_loose(path: &Path) -> PathBuf {
+pub(crate) fn canonicalize_loose(path: &Path) -> PathBuf {
     if let Ok(c) = path.canonicalize() {
         return c;
     }

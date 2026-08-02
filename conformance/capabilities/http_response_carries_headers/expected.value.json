@@ -1,0 +1,1 @@
+[{"status":200,"body":null},{"status":201,"body":{"id":7}},{"status":200,"body":"<h1>hi</h1>","headers":{"content-type":"text/html; charset=utf-8"}},{"status":302,"body":null,"headers":{"location":"/elsewhere"}}]

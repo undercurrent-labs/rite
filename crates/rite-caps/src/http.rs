@@ -3,6 +3,7 @@
 use crate::permissions::PermissionSet;
 use crate::registry::NativeFunctionDescriptor;
 use axum::body::Body;
+use axum::http::header::{HeaderName, HeaderValue};
 use axum::http::{Method, Request, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::Json;
@@ -128,10 +129,17 @@ impl HttpCap {
         },
         NativeFunctionDescriptor {
             name: "response",
-            docs: "Build an explicit response record `⟨status, body⟩`. The body is optional and defaults to `none`.",
-            arity: 2,
+            docs: "Build an explicit response record `⟨status, body, headers⟩`. Body and headers are optional; the body defaults to `none` and an explicit `content-type` header overrides the one inferred from the body.",
+            arity: 3,
             effectful: false,
             permission: "",
+        },
+        NativeFunctionDescriptor {
+            name: "file",
+            docs: "Read a file under `root` and build a response for it, with `content-type` from the extension. The subpath cannot escape `root`. A directory resolves to its `index.html`. Returns ok(response) or err(record). Needs `--allow fs:read=<root>`.",
+            arity: 2,
+            effectful: true,
+            permission: "fs",
         },
         NativeFunctionDescriptor {
             name: "log",
@@ -214,13 +222,34 @@ impl HttpCap {
             }
             "response" => {
                 let status = args.first().and_then(|v| v.as_int()).unwrap_or(200);
-                Ok(Value::record(vec![
+                let mut fields = vec![
                     (Key::String("status".into()), Value::Int(status)),
                     (
                         Key::String("body".into()),
                         args.get(1).cloned().unwrap_or(Value::None),
                     ),
-                ]))
+                ];
+                // Only when asked for. A `headers: none` on every response would
+                // change what two-argument calls print, and the record is a value
+                // scripts pass around and compare, not just something we hand back
+                // to the server.
+                if let Some(headers) = args.get(2) {
+                    if !matches!(headers, Value::None) {
+                        fields.push((Key::String("headers".into()), headers.clone()));
+                    }
+                }
+                Ok(Value::record(fields))
+            }
+            "file" => {
+                let root = string_arg(&args, 0, "http.file expects a root directory string")?;
+                // A missing or `none` subpath means the root itself, which resolves
+                // to its index — `@http.file("public", req.path.rest)` with an empty
+                // catch-all is exactly the request for `/`.
+                let sub = match args.get(1) {
+                    Some(Value::None) | None => String::new(),
+                    Some(v) => v.as_str().map(str::to_string).unwrap_or_default(),
+                };
+                serve_file(&root, &sub, perms)
             }
             // Middleware identifiers are resolved at listen-time via `use` / `⊏`.
             // Calling them as values is a no-op document of the plug-in.
@@ -475,17 +504,57 @@ async fn dispatch_fallback(state: ServerState, req: Request<Body>) -> Response {
     {
         return Json(json!({"status": "ok"})).into_response();
     }
-    for (idx, route) in state.routes.iter().enumerate() {
-        if !route.method.eq_ignore_ascii_case(method.as_str()) {
-            continue;
-        }
-        if match_path(&route.path, &path).is_some()
+    // Two passes, specific before catch-all. Declaration order decides between two
+    // routes of the same kind, but a catch-all never shadows an exact route it was
+    // merely written above — which is what lets an SPA's `GET "/*path"` sit at the
+    // top of the block with its API routes below it and still work.
+    let matches = |route: &RiteRoute| {
+        match_path(&route.path, &path).is_some()
             || normalize_path(&route.path) == path
             || route.path == path
-        {
-            return dispatch_rite(state.clone(), idx, req).await;
+    };
+    for catch_all in [false, true] {
+        for (idx, route) in state.routes.iter().enumerate() {
+            if catch_all_name(&route.path).is_some() != catch_all {
+                continue;
+            }
+            if !route.method.eq_ignore_ascii_case(method.as_str()) {
+                continue;
+            }
+            if matches(route) {
+                return dispatch_rite(state.clone(), idx, req).await;
+            }
         }
     }
+
+    // The path exists, the method does not. Reporting that as 404 tells a client
+    // the resource is absent when it is right there — and costs it the `Allow`
+    // header that says which methods would have worked.
+    let allowed: Vec<String> = state
+        .routes
+        .iter()
+        .filter(|r| matches(r))
+        .map(|r| r.method.to_ascii_uppercase())
+        .collect();
+    if !allowed.is_empty() {
+        let mut seen: Vec<String> = Vec::new();
+        for m in allowed {
+            if !seen.contains(&m) {
+                seen.push(m);
+            }
+        }
+        let allow = seen.join(", ");
+        let mut resp = (
+            StatusCode::METHOD_NOT_ALLOWED,
+            Json(json!({"error": "method_not_allowed", "allow": seen})),
+        )
+            .into_response();
+        if let Ok(v) = HeaderValue::try_from(allow) {
+            resp.headers_mut().insert(axum::http::header::ALLOW, v);
+        }
+        return resp;
+    }
+
     (StatusCode::NOT_FOUND, Json(json!({"error": "not_found"}))).into_response()
 }
 
@@ -568,6 +637,8 @@ async fn dispatch_rite(state: ServerState, idx: usize, req: Request<Body>) -> Re
         }
     }
 
+    let form = form_value(&headers, &body_text);
+
     let req_value = Value::record(vec![
         (Key::String("method".into()), Value::string(method.as_str())),
         (Key::String("path".into()), Value::Record(path_rec)),
@@ -585,6 +656,7 @@ async fn dispatch_rite(state: ServerState, idx: usize, req: Request<Body>) -> Re
                 None => Value::err(Value::string("invalid json")),
             },
         ),
+        (Key::String("form".into()), form),
         (
             Key::String("body".into()),
             Value::Bytes(body_bytes.to_vec().into()),
@@ -951,21 +1023,45 @@ pub fn coerce_response(v: Value, ctx: &RuntimeContext) -> Response {
         Value::List(xs) if !xs.is_empty() => {
             if let Some(status) = xs[0].as_int() {
                 let body = xs.get(1).cloned().unwrap_or(Value::None);
-                return status_body(status as u16, body, ctx);
+                // `^ 200 body headers` — the juxta form's third slot, so the terse
+                // return is not the one shape that cannot set a content type.
+                let headers = xs.get(2).cloned();
+                return status_body(status as u16, body, headers.as_ref(), ctx);
             }
             json_response(200, &Value::List(xs), ctx)
         }
         Value::Record(ref r) => {
             if let Some(Value::Int(status)) = r.get(&Key::String("status".into())) {
+                let headers = r.get(&Key::String("headers".into())).cloned();
                 if r.contains_key(&Key::String("body".into())) {
                     let body = r
                         .get(&Key::String("body".into()))
                         .cloned()
                         .unwrap_or(Value::None);
-                    return status_body(*status as u16, body, ctx);
+                    return status_body(*status as u16, body, headers.as_ref(), ctx);
+                }
+                // `headers` present without `body` still means "this record is the
+                // response envelope", so the header record must not be serialized
+                // into the payload describing itself. Whatever else is on the record
+                // is the body, exactly as it would be without the envelope fields.
+                if headers.is_some() {
+                    let rest: IndexMap<Key, Value> = r
+                        .iter()
+                        .filter(|(k, _)| {
+                            let n = k.as_str();
+                            n != "status" && n != "headers"
+                        })
+                        .map(|(k, v)| (k.clone(), v.clone()))
+                        .collect();
+                    let body = if rest.is_empty() {
+                        Value::None
+                    } else {
+                        Value::Record(rest)
+                    };
+                    return status_body(*status as u16, body, headers.as_ref(), ctx);
                 }
                 if r.len() > 1 {
-                    return status_body(*status as u16, Value::Record(r.clone()), ctx);
+                    return status_body(*status as u16, Value::Record(r.clone()), None, ctx);
                 }
             }
             json_response(200, &Value::Record(r.clone()), ctx)
@@ -986,9 +1082,14 @@ pub fn coerce_response(v: Value, ctx: &RuntimeContext) -> Response {
     }
 }
 
-fn status_body(status: u16, body: Value, ctx: &RuntimeContext) -> Response {
+fn status_body(
+    status: u16,
+    body: Value,
+    headers: Option<&Value>,
+    ctx: &RuntimeContext,
+) -> Response {
     let code = StatusCode::from_u16(status).unwrap_or(StatusCode::OK);
-    match body {
+    let mut resp = match body {
         Value::String(s) => (
             code,
             [(
@@ -1009,6 +1110,59 @@ fn status_body(status: u16, body: Value, ctx: &RuntimeContext) -> Response {
             let j = other.to_json(&ctx.atoms);
             (code, Json(j)).into_response()
         }
+    };
+    apply_headers(&mut resp, headers, ctx);
+    resp
+}
+
+/// Merge a handler's `headers` record onto the response.
+///
+/// An explicit `content-type` **replaces** the one inferred from the body's type.
+/// That is the whole point of the field: the type of the Rust value is a poor
+/// proxy for the media type, and without an override a string body is always
+/// `text/plain`, which makes a browser render HTML as source text.
+///
+/// A string value sets the header once; a **list** value emits the name once per
+/// element. The list form exists because a record holds one value per key, and
+/// `set-cookie` is the header that genuinely needs to repeat.
+///
+/// A name or value that is not valid in HTTP is skipped rather than failing the
+/// request: a handler returning one bad header should not turn a 200 into a 500.
+fn apply_headers(resp: &mut Response, headers: Option<&Value>, ctx: &RuntimeContext) {
+    let Some(Value::Record(hs)) = headers else {
+        return;
+    };
+    for (k, v) in hs.iter() {
+        let Ok(name) = HeaderName::try_from(k.as_str().to_ascii_lowercase()) else {
+            continue;
+        };
+        let values: Vec<String> = match v {
+            Value::List(xs) => xs.iter().map(|x| header_text(x, ctx)).collect(),
+            other => vec![header_text(other, ctx)],
+        };
+        let mut first = true;
+        for raw in values {
+            let Ok(value) = HeaderValue::try_from(raw) else {
+                continue;
+            };
+            if first {
+                // Insert, not append: an explicit header replaces the inferred one.
+                resp.headers_mut().insert(name.clone(), value);
+                first = false;
+            } else {
+                resp.headers_mut().append(name.clone(), value);
+            }
+        }
+    }
+}
+
+/// A header value as HTTP sees it. An atom is its bare name — `#no_cache` is a
+/// header value spelling, not the `#`-prefixed display form.
+fn header_text(v: &Value, ctx: &RuntimeContext) -> String {
+    match v {
+        Value::String(s) => s.to_string(),
+        Value::Atom(id) => ctx.atoms.name(*id).to_string(),
+        other => other.to_display(&ctx.atoms),
     }
 }
 
@@ -1099,6 +1253,42 @@ fn is_loopback_host(host: &str) -> bool {
 /// Decode one `application/x-www-form-urlencoded` component: `+` → space,
 /// `%XX` → byte. A malformed escape is kept verbatim (`%zz` stays `%zz`) rather
 /// than dropping input, and the decoded bytes are read as UTF-8 lossily.
+/// `req.form` — an `application/x-www-form-urlencoded` body as a record.
+///
+/// A result like `req.json`, and for the same reason: "there was no form here" is
+/// an ordinary thing for a handler to branch on. The content type is what decides,
+/// not the shape of the bytes — a JSON body happens to parse as a single
+/// key-with-no-value pair, and silently handing that back as a form would be worse
+/// than saying no.
+///
+/// Decoding matches the query string exactly (`+` is a space, `%xx` is a byte,
+/// last value wins for a repeated key), because they are the same encoding.
+fn form_value(headers: &axum::http::HeaderMap, body: &str) -> Value {
+    let is_form = headers
+        .get(axum::http::header::CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .map(|ct| {
+            ct.split(';')
+                .next()
+                .unwrap_or("")
+                .trim()
+                .eq_ignore_ascii_case("application/x-www-form-urlencoded")
+        })
+        .unwrap_or(false);
+    if !is_form {
+        return Value::err(Value::string("not a form body"));
+    }
+    let mut rec: IndexMap<Key, Value> = IndexMap::new();
+    for pair in body.split('&').filter(|p| !p.is_empty()) {
+        let (raw_key, raw_val) = pair.split_once('=').unwrap_or((pair, ""));
+        rec.insert(
+            Key::String(form_urldecode(raw_key)),
+            Value::string(form_urldecode(raw_val)),
+        );
+    }
+    Value::ok(Value::Record(rec))
+}
+
 fn form_urldecode(s: &str) -> String {
     let bytes = s.as_bytes();
     let mut out: Vec<u8> = Vec::with_capacity(bytes.len());
@@ -1198,14 +1388,38 @@ fn normalize_path(path: &str) -> String {
     }
 }
 
+/// Does this pattern end in a `*rest` catch-all?
+///
+/// Only the last segment counts: `/a/*rest/b` has nothing to capture the tail
+/// with, so it is an ordinary literal segment that will simply never match.
+fn catch_all_name(pattern: &str) -> Option<&str> {
+    pattern
+        .trim_matches('/')
+        .rsplit('/')
+        .next()
+        .and_then(|seg| seg.strip_prefix('*'))
+}
+
 fn match_path(pattern: &str, path: &str) -> Option<HashMap<String, String>> {
     let p_parts: Vec<&str> = pattern.trim_matches('/').split('/').collect();
     let path_parts: Vec<&str> = path.trim_matches('/').split('/').collect();
-    if p_parts.len() != path_parts.len() {
-        return None;
+    // A catch-all consumes every remaining segment, so it matches a path that is
+    // *at least* as long as the fixed prefix — and also one exactly as long as the
+    // prefix, capturing the empty remainder, which is what makes `/assets/*rest`
+    // answer a bare `/assets`.
+    let tail = p_parts.last().and_then(|s| s.strip_prefix('*'));
+    match tail {
+        Some(_) if path_parts.len() + 1 < p_parts.len() => return None,
+        None if p_parts.len() != path_parts.len() => return None,
+        _ => {}
     }
+    let fixed = if tail.is_some() {
+        p_parts.len() - 1
+    } else {
+        p_parts.len()
+    };
     let mut params = HashMap::new();
-    for (p, a) in p_parts.iter().zip(path_parts.iter()) {
+    for (p, a) in p_parts.iter().take(fixed).zip(path_parts.iter()) {
         if let Some(name) = p.strip_prefix(':') {
             params.insert(name.to_string(), a.to_string());
         } else if let Some(name) = p.strip_prefix('{').and_then(|s| s.strip_suffix('}')) {
@@ -1214,7 +1428,144 @@ fn match_path(pattern: &str, path: &str) -> Option<HashMap<String, String>> {
             return None;
         }
     }
+    if let Some(name) = tail {
+        // Unnamed (`*`) is a pure wildcard — it matches without binding anything,
+        // which is the fallback-route spelling.
+        if !name.is_empty() {
+            params.insert(name.to_string(), path_parts[fixed..].join("/"));
+        }
+    }
     Some(params)
+}
+
+/// Read `sub` beneath `root` and build a response record for it.
+///
+/// Two separate gates, and both are load-bearing:
+///
+/// 1. **Containment.** The joined path is resolved and must still sit under the
+///    resolved root, so `../../etc/passwd` — or a symlink pointing out of the tree —
+///    is refused. This is checked *before* the file is opened, and the refusal is
+///    `http.forbidden` rather than a not-found, because a traversal attempt is not
+///    the same event as a missing asset and a server should be able to log it.
+/// 2. **Permission.** The resolved path still goes through `check_fs_read`, so
+///    serving a directory needs `--allow fs:read=<root>` like any other read.
+///    Containment alone would let `@http.file` read anything under the CWD, which
+///    is precisely the authority the permission system exists to withhold.
+///
+/// A directory resolves to its `index.html`, which is what makes `GET "/"` and an
+/// SPA's client-routed deep links work without a special case in the handler.
+fn serve_file(root: &str, sub: &str, perms: &PermissionSet) -> Result<Value, EvalError> {
+    let root_path = std::path::Path::new(root);
+    let root_canon = crate::permissions::canonicalize_loose(root_path);
+
+    // Reject the traversal on the *lexical* path first: joining a subpath that
+    // climbs out and then canonicalizing would resolve somewhere real, and the
+    // containment check below would catch it — but only after the join has already
+    // named a file outside the tree. Refusing `..` outright keeps the intent clear.
+    if sub.split('/').any(|seg| seg == "..") {
+        return Ok(file_err(
+            "http.forbidden",
+            sub,
+            "path escapes the served root",
+        ));
+    }
+
+    let joined = root_path.join(sub.trim_start_matches('/'));
+    let canon = crate::permissions::canonicalize_loose(&joined);
+    if !canon.starts_with(&root_canon) {
+        return Ok(file_err(
+            "http.forbidden",
+            sub,
+            "path escapes the served root",
+        ));
+    }
+
+    let target = if canon.is_dir() {
+        canon.join("index.html")
+    } else {
+        canon
+    };
+
+    // Permission errors abort the handler rather than becoming a value, matching
+    // `@fs.read`: a missing grant is a bug in how the program was launched, not a
+    // condition the script is expected to branch on.
+    let target = perms
+        .check_fs_read(&target)
+        .map_err(EvalError::Permission)?;
+
+    match std::fs::read(&target) {
+        Ok(bytes) => Ok(Value::ok(Value::record(vec![
+            (Key::String("status".into()), Value::Int(200)),
+            (
+                Key::String("headers".into()),
+                Value::record(vec![(
+                    Key::String("content-type".into()),
+                    Value::string(content_type_for(&target)),
+                )]),
+            ),
+            (Key::String("body".into()), Value::Bytes(bytes.into())),
+        ]))),
+        Err(e) => {
+            let kind = match e.kind() {
+                std::io::ErrorKind::NotFound => "http.not_found",
+                std::io::ErrorKind::PermissionDenied => "io.permission_denied",
+                _ => "io.error",
+            };
+            Ok(file_err(kind, sub, &e.to_string()))
+        }
+    }
+}
+
+fn file_err(kind: &str, path: &str, message: &str) -> Value {
+    Value::err(Value::record(vec![
+        (Key::String("kind".into()), Value::string(kind)),
+        (Key::String("operation".into()), Value::string("http.file")),
+        (Key::String("path".into()), Value::string(path)),
+        (Key::String("message".into()), Value::string(message)),
+    ]))
+}
+
+/// Media type from the file extension.
+///
+/// A deliberately small table rather than a mime database: it covers what a static
+/// site or a built SPA bundle actually ships, and an unknown extension falls back
+/// to `application/octet-stream` — a download prompt, never a guess that lets a
+/// browser sniff an upload as script. Text formats carry `charset=utf-8` because
+/// Rite source and its output are UTF-8 throughout.
+fn content_type_for(path: &std::path::Path) -> &'static str {
+    let ext = path
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    match ext.as_str() {
+        "html" | "htm" => "text/html; charset=utf-8",
+        "css" => "text/css; charset=utf-8",
+        "js" | "mjs" => "text/javascript; charset=utf-8",
+        "json" => "application/json; charset=utf-8",
+        "map" => "application/json; charset=utf-8",
+        "txt" => "text/plain; charset=utf-8",
+        "csv" => "text/csv; charset=utf-8",
+        "xml" => "application/xml; charset=utf-8",
+        "svg" => "image/svg+xml",
+        "png" => "image/png",
+        "jpg" | "jpeg" => "image/jpeg",
+        "gif" => "image/gif",
+        "webp" => "image/webp",
+        "avif" => "image/avif",
+        "ico" => "image/x-icon",
+        "woff" => "font/woff",
+        "woff2" => "font/woff2",
+        "ttf" => "font/ttf",
+        "otf" => "font/otf",
+        "wasm" => "application/wasm",
+        "pdf" => "application/pdf",
+        "mp4" => "video/mp4",
+        "webm" => "video/webm",
+        "mp3" => "audio/mpeg",
+        "wav" => "audio/wav",
+        _ => "application/octet-stream",
+    }
 }
 
 /// Most recent successfully bound listen address (for tests / tooling).

@@ -1,0 +1,11 @@
+// A response could not name its own content type: the media type was inferred from
+// the body's runtime type, so a string body was always text/plain and HTML reached
+// the browser as source text. `headers` is the third argument, and is left off the
+// record entirely when it is not supplied — a two-argument call still builds the
+// two-field record that scripts already compare against.
+^ [
+  @http.response(200),
+  @http.response(201, ⟨id: 7⟩),
+  @http.response(200, "<h1>hi</h1>", ⟨"content-type": "text/html; charset=utf-8"⟩),
+  @http.response(302, none, ⟨location: "/elsewhere"⟩)
+]

@@ -283,12 +283,19 @@ async fn e2e_health_echo_sum_on_ephemeral_port() {
     assert!(miss_body.get("error").is_some(), "{miss_body}");
 
     // --- method not matching path ---
+    // 405, not 404: the path is right there, and answering "no such thing" for it
+    // both misdescribes the failure and withholds the `Allow` header that says
+    // which methods would have worked. This asserted 404 while that was the bug.
     let wrong = client
         .post(format!("{base}/health"))
         .send()
         .await
         .expect("wrong method");
-    assert_eq!(wrong.status(), 404);
+    assert_eq!(wrong.status(), 405);
+    assert_eq!(
+        wrong.headers().get("allow").and_then(|v| v.to_str().ok()),
+        Some("GET"),
+    );
 
     handle.abort();
     let _ = handle.await;

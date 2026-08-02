@@ -68,10 +68,11 @@ Equivalent explicit form:
 |------|---------|
 | `^ 200 ⟨…⟩` | Status code + JSON object body |
 | `^ ⟨status: 200, body: …⟩` | Explicit status + body fields |
+| `^ ⟨status: 200, body: …, headers: ⟨…⟩⟩` | …and response headers |
 | `^ "plain text"` | 200 + text/plain |
 
-`@http.response(status, body)` builds that explicit record for you, which is handy
-when the status is computed rather than written literally:
+`@http.response(status, body, headers)` builds that explicit record for you, which is
+handy when the status is computed rather than written literally:
 
 ```rite browser
 ! @console.println(@http.response(201, ⟨id: 7⟩))
@@ -83,8 +84,50 @@ when the status is computed rather than written literally:
 ⟨status: 404, body: none⟩
 ```
 
-It is not marked — it builds a record and touches nothing — and the body is
-optional, defaulting to `none`.
+It is not marked — it builds a record and touches nothing — and both the body and
+the headers are optional, the body defaulting to `none`.
+
+### Content types and headers
+
+Without a `headers` field the media type is inferred from the **type of the body**:
+
+| Body | Content-Type |
+|------|--------------|
+| String | `text/plain; charset=utf-8` |
+| Bytes | `application/octet-stream` |
+| Record / list / anything else | `application/json` |
+| `none` | no body, status only |
+
+That inference is a guess, and for HTML it is the wrong one — a browser renders
+`text/plain` markup as source text. An explicit `content-type` **replaces** it:
+
+```rite browser
+^ ⟨
+  status: 200,
+  body: "<h1>hello</h1>",
+  headers: ⟨"content-type": "text/html; charset=utf-8"⟩
+⟩
+```
+
+Header names hold hyphens, so they need **quoting** as record keys — `⟨"content-type": …⟩`,
+not `⟨content-type: …⟩`, which parses as a subtraction. Names without hyphens
+(`location`, `etag`) can be written bare.
+
+A header whose value is a **list** is sent once per element. This is the only way to
+set more than one cookie, since a record holds a single value per key:
+
+```rite browser
+^ ⟨
+  status: 204,
+  headers: ⟨"set-cookie": ["session=abc; Path=/", "theme=dark; Path=/"]⟩
+⟩
+```
+
+Redirects need nothing else:
+
+```rite browser
+^ @http.response(302, none, ⟨location: "/signed-in"⟩)
+```
 
 ### Port `0` (ephemeral)
 
@@ -130,6 +173,87 @@ Use that URL with `curl`. Prefer a fixed port while learning.
   ⟧
 ⟧
 ```
+
+### Catch-all routes
+
+A `:name` param matches **one** segment. A final `*name` matches the whole
+remainder, including slashes and including nothing at all:
+
+```rite browser
+@http.listen "127.0.0.1:4040" ⟦
+  GET "/files/*rest" |req| ⟦
+    ^ 200 ⟨wanted: req.path.rest⟩
+  ⟧
+⟧
+```
+
+| Request | `req.path.rest` |
+|---------|-----------------|
+| `/files/a.txt` | `"a.txt"` |
+| `/files/deep/nested/a.txt` | `"deep/nested/a.txt"` |
+| `/files` | `""` |
+
+A bare `*` matches the same way without binding anything.
+
+**Specific routes always win**, whatever the declaration order — a catch-all is only
+tried once every literal and `:param` route has failed to match. That is what lets a
+site-wide `GET "/*path"` sit at the top of the block with its API routes below it.
+
+### Serving files
+
+`@http.file(root, subpath)` reads a file under `root` and builds the response for it,
+with a `content-type` from the extension. It is effectful and needs a read grant:
+
+```bash
+rite run site.rite --allow fs:read=./public
+```
+
+```rite native_only
+@http.listen "127.0.0.1:4040" ⟦
+  GET "/*path" |req| ⟦
+    ^ ! @http.file("./public", req.path.path)?
+  ⟧
+⟧
+```
+
+Two things it does on your behalf:
+
+- **The subpath cannot escape `root`.** `../../etc/passwd` comes back as
+  `err(⟨kind: "http.forbidden", …⟩)`, checked before the file is opened. The read
+  grant still applies on top of that.
+- **A directory resolves to its `index.html`**, so `/` works with no special case.
+
+It returns a result, so a missing file is a value you decide about rather than a
+crash — `err(⟨kind: "http.not_found", …⟩)`.
+
+Recognised extensions cover what a static site ships: `html`, `css`, `js`, `mjs`,
+`json`, `svg`, `png`, `jpg`, `gif`, `webp`, `avif`, `ico`, `woff`, `woff2`, `ttf`,
+`otf`, `wasm`, `xml`, `csv`, `txt`, `pdf`, `mp4`, `webm`, `mp3`, `wav`. Anything else
+is `application/octet-stream` — a download, never a guess a browser might sniff as
+script.
+
+#### A single-page app
+
+An SPA needs its client-routed deep links (`/settings/profile`) to return the shell
+rather than a 404. Try the file, fall back to the index:
+
+```rite native_only
+@http.listen "127.0.0.1:4040" ⟦
+  GET "/api/health" ⟦
+    ^ 200 ⟨status: #ok⟩
+  ⟧
+
+  GET "/*path" |req| ⟦
+    hit ← ! @http.file("./public", req.path.path)
+    ^ ~ hit ⟦
+      ok page → page
+      err e → ! @http.file("./public", "index.html")?
+    ⟧
+  ⟧
+⟧
+```
+
+The API route keeps answering as itself: it is specific, so it is matched first.
 
 ### Middleware
 
@@ -194,12 +318,41 @@ Header names on `req.headers` are **lowercase** (`authorization`, `content-type`
 
 | Field | Meaning |
 |-------|---------|
-| `req.path` | Path parameters (`:word` → `req.path.word`) |
+| `req.path` | Path parameters (`:word` → `req.path.word`, `*rest` → `req.path.rest`) |
 | `req.query` | Query string as a record |
 | `req.headers` | Request headers as a record (lowercase names → string) |
 | `req.json` | Parsed JSON body as a **result** (unwrap with `?`) |
+| `req.form` | `application/x-www-form-urlencoded` body as a **result** |
 | `req.uri` | Path string |
 | `req.method` | `"GET"`, `"POST"`, … |
+
+`req.form` is decided by the **content type**, not by whether the bytes happen to
+parse — a JSON body answers `err`, so a handler can tell the two apart:
+
+```rite browser
+POST "/subscribe" |req| ⟦
+  fields ← req.form?
+  ^ 200 ⟨email: fields.email⟩
+⟧
+```
+
+Decoding matches the query string exactly: `+` is a space, `%xx` is a byte, and a
+repeated key keeps its last value.
+
+### When nothing matches
+
+| Situation | Answer |
+|-----------|--------|
+| No route for the path | `404` + `{"error":"not_found"}` |
+| Path exists, method does not | `405` + `{"error":"method_not_allowed","allow":[…]}` and an `Allow` header |
+
+Serve your own 404 page by claiming the tail with a catch-all — `GET "/*path"` is
+reached only after every specific route has declined.
+
+Note the interaction: once a catch-all is in place, *every* path matches it, so a
+request with a method it does not cover answers `405`, not `404`. That is the honest
+answer — a `GET "/*path"` really does serve that path — but it means a site with a
+catch-all stops producing `404` for anything except methods no route declares.
 
 ## Permissions
 

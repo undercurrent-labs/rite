@@ -25,6 +25,7 @@ Tracks implementation status for the Rite language and V1 tooling. Detailed desi
 | CI release workflow | **Done** — `.github/workflows/ci.yml` (rust, wasm, studio, vsix, manifest) |
 | CI matrix | **Done** — Linux, macOS and Windows; clippy is a hard gate; `deploy` requires the Rust job; a guard fails the build if generation rewrites tracked files |
 | Outbound HTTP | **Done** — `@http.get` / `post` / `request`, gated per host by `net` |
+| HTTP responses and static files | **Done** — `headers` on any response (content-type override, repeated `set-cookie`), `*rest` catch-all routes matched after specific ones, `@http.file` root-anchored static serving with mime types, 405 + `Allow`, `req.form` |
 | Streaming output | **Done** — `RuntimeContext::sink`; `rite run` prints as the script runs |
 | Script arguments | **Done** — `@process.args`, also in compiled binaries |
 | Script exit codes | **Done** — `@process.exit(code)`, 0–255, no permission; same status from `rite run` and a compiled binary |
@@ -109,7 +110,8 @@ Tracks implementation status for the Rite language and V1 tooling. Detailed desi
     enforced where a collection's size is knowable before it is built (`range`,
     `range_incl`, `repeat`, `concat`), where the runaway cases were. Not yet
     bounded: `@fs.read`/`read_bytes`/`lines` and `@fs.read_chunk`'s caller-supplied
-    length, `@http` response bodies, `@process.run` output capture, and `@db.query`
+    length, `@http.file` (whole-file read, same class as `@fs.read_bytes`),
+    `@http` response bodies, `@process.run` output capture, and `@db.query`
     result sets. Each can still buffer an unbounded amount from outside the program.
     `@http.listen` (1 MiB), `@tcp.recv` (16 MiB) and `@udp.recv_from` (65535) are the
     ones already capped, and are the model. `parallel` still forks one deep-cloned
