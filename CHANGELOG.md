@@ -1,5 +1,7 @@
 # Changelog
 
+## [Unreleased]
+
 ## [0.6.1] — 2026-08-01
 
 An HTTP release. A Rite server could not return HTML: the media type was inferred
