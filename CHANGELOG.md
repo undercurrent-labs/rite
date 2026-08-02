@@ -1,6 +1,58 @@
 # Changelog
 
-## [Unreleased]
+## [0.6.1] — 2026-08-01
+
+An HTTP release. A Rite server could not return HTML: the media type was inferred
+from the runtime type of the response body, so a string was always `text/plain`
+and a browser rendered the markup as source text. A `headers` field on the
+response record was accepted and silently dropped. There was also no way to serve
+a file — the router required a pattern and a path to have the same number of
+segments, so `/assets/css/app.css` could not be routed at all.
+
+Together the changes below serve a static site or a built single-page app.
+
+### Added
+
+- **Response headers.** Any response may carry a `headers` record, and an explicit
+  `content-type` replaces the one inferred from the body. `@http.response` takes
+  them as a third argument — `@http.response(302, none, ⟨location: "/next"⟩)`. A
+  two-argument call builds the same two-field record it always did.
+
+  A header whose value is a **list** is sent once per element. That is the only
+  way to set more than one cookie, since a record holds one value per key.
+
+  Header names hold hyphens, so they need quoting as record keys —
+  `⟨"content-type": "text/html; charset=utf-8"⟩`. Bare `content-type` lexes as a
+  subtraction, and the failure is a server that does not start.
+
+- **Catch-all routes.** A trailing `*name` captures the rest of the path,
+  including slashes and including nothing: `/files/*rest` binds `req.path.rest`
+  to `"deep/nested/a.txt"` for `/files/deep/nested/a.txt`, and to `""` for
+  `/files`. Specific routes are matched **first**, whatever the declaration
+  order, so a site-wide `GET "/*path"` does not shadow the API routes below it.
+
+- **`@http.file(root, subpath)`** reads a file and builds the response for it,
+  with a content type from the extension. A subpath that escapes `root` is
+  refused — checked lexically and again after canonicalization, so a symlink
+  pointing out of the tree is caught as well. The `fs:read` grant still applies
+  on top of that. A directory resolves to its `index.html`, so `/` needs no
+  special case. Effectful; returns a result, so a missing file is a value you
+  decide about.
+
+- **`req.form`** parses an `application/x-www-form-urlencoded` body into a record,
+  as a result alongside `req.json`. The content type decides, not whether the
+  bytes happen to parse, so a JSON body answers `err` and a handler can tell the
+  two apart.
+
+### Changed
+
+- **A path that exists with a method it does not have answers `405`**, with an
+  `Allow` header listing the methods that would have worked. It previously
+  answered `404`, which describes the resource as absent when it is right there.
+  If you assert on status codes, `POST` to a `GET`-only path is the case to check.
+
+  Note the interaction with a catch-all: once `GET "/*path"` is declared, every
+  path matches it, so other methods answer `405` rather than `404`.
 
 ## [0.6.0] — 2026-08-01
 
