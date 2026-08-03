@@ -1,5 +1,7 @@
 # Changelog
 
+## [Unreleased]
+
 ## [0.6.2] — 2026-08-03
 
 An MCP release. A Rite script could expose an HTTP service in a dozen lines but had no
