@@ -170,6 +170,11 @@ fn rasterise_svg(svg: &str, scale: f32) -> Result<resvg::tiny_skia::Pixmap, Rend
     Ok(pixmap)
 }
 
+// Gated with everything else that touches `resvg`. Splitting `rasterise_svg` out
+// of this function dropped the attribute, and nothing local noticed: a workspace
+// build enables `png`, and only the WASM build — which takes `rite-render` with
+// default features off — ever compiles this file without it.
+#[cfg(feature = "png")]
 fn rasterise(
     source: &str,
     opts: &RenderOptions,

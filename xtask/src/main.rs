@@ -45,6 +45,26 @@ fn main() {
                 ]));
             }
         }
+        // The one configuration a workspace build never covers.
+        //
+        // `cargo check --workspace` and `cargo test --all-features` both enable
+        // every feature, so a `resvg` call that lost its `#[cfg(feature =
+        // "png")]` compiled locally and broke only in CI's WASM job, which takes
+        // `rite-render` with default features off. This is that build, minus the
+        // wasm-pack packaging.
+        "wasm-check" => {
+            run(Command::new("rustup").args(["target", "add", "wasm32-unknown-unknown"]));
+            run(Command::new("cargo").args([
+                "check",
+                "-p",
+                "rite-wasm",
+                "--no-default-features",
+                "--features",
+                "wasm",
+                "--target",
+                "wasm32-unknown-unknown",
+            ]));
+        }
         "cant-og" => {
             if let Err(e) = cant_og() {
                 eprintln!("cant-og: {e:#}");
@@ -52,7 +72,9 @@ fn main() {
             }
         }
         _ => {
-            eprintln!("xtask commands: test | fmt | clippy | doc | examples | cant-og");
+            eprintln!(
+                "xtask commands: test | fmt | clippy | doc | examples | wasm-check | cant-og"
+            );
         }
     }
 }
