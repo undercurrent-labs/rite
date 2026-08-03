@@ -4,7 +4,7 @@ Rite’s public site and playground run as a static app plus a **WASM** build of
 
 ## Product site map
 
-Hosted at [https://rite.undrc.dev](https://rite.undrc.dev):
+Hosted at [https://rite.foo](https://rite.foo):
 
 | Path | Content |
 |------|---------|

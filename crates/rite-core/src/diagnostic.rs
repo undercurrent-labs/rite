@@ -119,79 +119,104 @@ impl Diagnostic {
 
     /// Render a human-readable diagnostic with source excerpts.
     pub fn render(&self, sources: &SourceMap) -> String {
-        let mut out = String::new();
-        out.push_str(&format!(
-            "{}[{}]: {}\n",
-            self.severity, self.code, self.title
-        ));
-
-        for label in &self.labels {
-            if let Some(file) = sources.get(label.span.file) {
-                let lc = file.line_col(label.span.span.start);
-                let line_text = file.line_text(lc.line).unwrap_or("");
-                let path = file
-                    .path
-                    .as_ref()
-                    .map(|p| p.display().to_string())
-                    .unwrap_or_else(|| file.name.clone());
-
-                out.push_str(&format!("\n  --> {}:{}:{}\n", path, lc.line, lc.column));
-                out.push_str("   |\n");
-                out.push_str(&format!("{:4} | {}\n", lc.line, line_text));
-
-                // Pad by the *display width* of the text before the span, so the caret
-                // lines up under a proportional-width glyph as well as under ASCII.
-                // `lc.column` counts characters; a wide character (CJK, some symbols)
-                // occupies two terminal cells, which only `unicode-width` knows.
-                let chars_before = (lc.column as usize).saturating_sub(1);
-                let prefix: String = line_text.chars().take(chars_before).collect();
-                let marker_start = UnicodeWidthStr::width(prefix.as_str());
-                // The span is a byte range; the caret length is how many characters of
-                // this line it actually covers.
-                let span_chars = line_text
-                    .get(prefix.len()..)
-                    .map(|rest| {
-                        rest.char_indices()
-                            .take_while(|(i, _)| *i < label.span.span.len().max(1))
-                            .count()
-                    })
-                    .unwrap_or(1)
-                    .max(1);
-                let line_chars = line_text.chars().count();
-                let mut underline = String::new();
-                underline.push_str(&" ".repeat(marker_start));
-                if label.primary {
-                    underline.push_str(
-                        &"^".repeat(span_chars.min(line_chars.saturating_sub(chars_before).max(1))),
-                    );
-                } else {
-                    underline.push_str(
-                        &"-".repeat(span_chars.min(line_chars.saturating_sub(chars_before).max(1))),
-                    );
-                }
-                out.push_str(&format!("   | {}\n", underline));
-                if !label.message.is_empty() {
-                    out.push_str(&format!(
-                        "   | {} {}\n",
-                        " ".repeat(marker_start),
-                        label.message
-                    ));
-                }
-            } else if !label.span.span.is_dummy() {
-                out.push_str(&format!("  at {}\n", label.span.span));
-            }
-        }
-
-        for note in &self.notes {
-            out.push_str(&format!("\nnote: {}\n", note));
-        }
-
-        if let Some(help) = &self.help {
-            out.push_str(&format!("\nhelp: {}\n", help));
-        }
-
-        out
+        render_snippet(
+            &format!("{}[{}]: {}", self.severity, self.code, self.title),
+            &self.labels,
+            &self.notes,
+            self.help.as_deref(),
+            sources,
+        )
     }
+}
+
+/// Render a labelled source excerpt under a header line.
+///
+/// This is [`Diagnostic::render`] with the header lifted out. Everything below
+/// the header — resolving each label's file, sizing the caret by *display* width
+/// rather than byte count, printing the excerpt, then the notes and the help — is
+/// independent of what kind of code the diagnostic carries, and a tool that has
+/// spans and labels but not a [`ErrorCode`] had no way to reach it.
+///
+/// `header` is the whole first line, without its newline: callers own their own
+/// code namespace. Rite passes `"error[E021]: …"`; a tool with codes of its own
+/// passes whatever it uses.
+pub fn render_snippet(
+    header: &str,
+    labels: &[Label],
+    notes: &[String],
+    help: Option<&str>,
+    sources: &SourceMap,
+) -> String {
+    let mut out = String::new();
+    out.push_str(header);
+    out.push('\n');
+
+    for label in labels {
+        if let Some(file) = sources.get(label.span.file) {
+            let lc = file.line_col(label.span.span.start);
+            let line_text = file.line_text(lc.line).unwrap_or("");
+            let path = file
+                .path
+                .as_ref()
+                .map(|p| p.display().to_string())
+                .unwrap_or_else(|| file.name.clone());
+
+            out.push_str(&format!("\n  --> {}:{}:{}\n", path, lc.line, lc.column));
+            out.push_str("   |\n");
+            out.push_str(&format!("{:4} | {}\n", lc.line, line_text));
+
+            // Pad by the *display width* of the text before the span, so the caret
+            // lines up under a proportional-width glyph as well as under ASCII.
+            // `lc.column` counts characters; a wide character (CJK, some symbols)
+            // occupies two terminal cells, which only `unicode-width` knows.
+            let chars_before = (lc.column as usize).saturating_sub(1);
+            let prefix: String = line_text.chars().take(chars_before).collect();
+            let marker_start = UnicodeWidthStr::width(prefix.as_str());
+            // The span is a byte range; the caret length is how many characters of
+            // this line it actually covers.
+            let span_chars = line_text
+                .get(prefix.len()..)
+                .map(|rest| {
+                    rest.char_indices()
+                        .take_while(|(i, _)| *i < label.span.span.len().max(1))
+                        .count()
+                })
+                .unwrap_or(1)
+                .max(1);
+            let line_chars = line_text.chars().count();
+            let mut underline = String::new();
+            underline.push_str(&" ".repeat(marker_start));
+            if label.primary {
+                underline.push_str(
+                    &"^".repeat(span_chars.min(line_chars.saturating_sub(chars_before).max(1))),
+                );
+            } else {
+                underline.push_str(
+                    &"-".repeat(span_chars.min(line_chars.saturating_sub(chars_before).max(1))),
+                );
+            }
+            out.push_str(&format!("   | {}\n", underline));
+            if !label.message.is_empty() {
+                out.push_str(&format!(
+                    "   | {} {}\n",
+                    " ".repeat(marker_start),
+                    label.message
+                ));
+            }
+        } else if !label.span.span.is_dummy() {
+            out.push_str(&format!("  at {}\n", label.span.span));
+        }
+    }
+
+    for note in notes {
+        out.push_str(&format!("\nnote: {}\n", note));
+    }
+
+    if let Some(help) = help {
+        out.push_str(&format!("\nhelp: {}\n", help));
+    }
+
+    out
 }
 
 impl fmt::Display for Diagnostic {
@@ -211,4 +236,51 @@ pub fn simple_error(
     message: impl Into<String>,
 ) -> Diagnostic {
     Diagnostic::error(code, title).with_primary(SourceSpan::new(file, span), message)
+}
+
+#[cfg(test)]
+mod render_tests {
+    use super::*;
+    use crate::error_codes::E021_EFFECT_REQUIRED;
+    use crate::source::SourceMap;
+    use crate::span::{SourceSpan, Span};
+
+    /// Pins the rendered form so lifting the body into [`render_snippet`] cannot
+    /// have changed a caret, a column, or a blank line.
+    #[test]
+    fn renders_header_excerpt_caret_note_and_help() {
+        let mut sources = SourceMap::new();
+        let id = sources.add_file("t.rite", "def f() [[\n  @fs.read(\"x\")\n]]\n");
+        let d = Diagnostic::error(E021_EFFECT_REQUIRED, "effect marker required")
+            .with_primary(SourceSpan::new(id, Span::from_range(13, 16)), "add `!`")
+            .with_note("reads are effects")
+            .with_help("write `! @fs.read(\"x\")`");
+        assert_eq!(
+            d.render(&sources),
+            concat!(
+                "error[E021]: effect marker required\n",
+                "\n  --> t.rite:2:3\n",
+                "   |\n",
+                "   2 |   @fs.read(\"x\")\n",
+                "   |   ^^^\n",
+                "   |    add `!`\n",
+                "\nnote: reads are effects\n",
+                "\nhelp: write `! @fs.read(\"x\")`\n",
+            )
+        );
+    }
+
+    /// The header is the caller's, so a namespace Rite does not own renders too.
+    #[test]
+    fn render_snippet_takes_any_header() {
+        let mut sources = SourceMap::new();
+        let id = sources.add_file("t.txt", "alpha beta\n");
+        let labels = vec![Label::primary(
+            SourceSpan::new(id, Span::from_range(6, 10)),
+            "here",
+        )];
+        let out = render_snippet("error[LINT-0042]: no", &labels, &[], None, &sources);
+        assert!(out.starts_with("error[LINT-0042]: no\n"));
+        assert!(out.contains("   |       ^^^^\n"), "{out}");
+    }
 }

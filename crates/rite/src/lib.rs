@@ -1,5 +1,7 @@
 //! Public embedding API for Rite.
 
+pub mod options;
+
 use rite_caps::{install_defaults, Permission, PermissionSet};
 use rite_core::{Diagnostics, SourceFile};
 use rite_runtime::{check_source, run_file, EvalError, RuntimeContext, Value};
@@ -8,6 +10,7 @@ use rite_syntax::{parse_source, Program};
 use std::path::Path;
 use std::sync::Arc;
 
+pub use options::{parse_duration, RuntimeOptions};
 pub use rite_caps as caps;
 pub use rite_core as core;
 pub use rite_runtime as runtime;

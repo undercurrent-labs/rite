@@ -1,0 +1,102 @@
+// Generated from case.cant by cant 0.6.2. Do not edit.
+//
+// This is ordinary Rite, and it is exactly what `cant run` executes.
+// Every generated name carries the prefix `cant_9e115ead`, which combines a
+// reserved word, a hash of the Cant source, and a node number.
+
+// n0: the source
+def cant_9e115ead_n0(__in) [[
+  __ignored <- __in
+  ^ [ [1, 2] ]
+]]
+
+// n1: scatter — one emission per element
+def cant_9e115ead_n1(__in) [[
+  __out <~ []
+  for __e in __in [[
+    if (type_of(__e) != "list") [[
+      ^ panic("CANT-R003: scatter expected a list at case.cant+10, got " + type_of(__e))
+    ]]
+    for __x in __e [[
+      __out := concat(__out, [ __x ])
+    ]]
+  ]]
+  ^ __out
+]]
+
+// n2: orbit — breadth-first, deduplicated, at most 64 candidates
+def cant_9e115ead_n2(__in) [[
+  __work <~ __in
+  __seen <~ []
+  __out <~ []
+  __accepted <~ 0
+  while (count(__work) > 0) [[
+    __c <- first(__work)
+    __work := rest(__work)
+    __k <- __c
+    if (not contains(__seen, __k)) [[
+      __seen := concat(__seen, [ __k ])
+      __accepted := __accepted + 1
+      if (__accepted > 64) [[
+        ^ panic("CANT-O002: orbit at case.cant+15 accepted its limit of 64 candidates")
+      ]]
+      __out := concat(__out, [ __c ])
+      __work := concat(__work, cant_9e115ead_s0([ __c ]))
+    ]]
+  ]]
+  ^ __out
+]]
+
+// n3: ward — the input unchanged, or nothing
+def cant_9e115ead_n3(__in) [[
+  __out <~ []
+  for __e in __in [[
+    if (__e < 8) [[
+      __out := concat(__out, [ __e ])
+    ]]
+  ]]
+  ^ __out
+]]
+
+// n4: a stage, once per emission
+def cant_9e115ead_n4(__in) [[
+  __out <~ []
+  for __e in __in [[
+    __out := concat(__out, [ __e * 2 ])
+  ]]
+  ^ __out
+]]
+
+// n5: collect — every emission becomes one list
+def cant_9e115ead_n5(__in) [[
+  ^ [ __in ]
+]]
+
+// s0: the flow inside n2
+def cant_9e115ead_s0(__in) [[
+  __v <~ __in
+  __v := cant_9e115ead_n3(__v)
+  __v := cant_9e115ead_n4(__v)
+  ^ __v
+]]
+
+// The program boundary: zero emissions become `none`, one becomes
+// that value, and many become a list in emission order.
+def cant_9e115ead_boundary(__in) [[
+  __n <- count(__in)
+  if (__n = 0) [[ ^ none ]]
+  if (__n = 1) [[ ^ first(__in) ]]
+  ^ __in
+]]
+
+// The top-level flow.
+def cant_9e115ead_main() [[
+  __v <~ [ none ]
+  __v := cant_9e115ead_n0(__v)
+  __v := cant_9e115ead_n1(__v)
+  __v := cant_9e115ead_n2(__v)
+  __v := cant_9e115ead_n5(__v)
+  ^ cant_9e115ead_boundary(__v)
+]]
+
+cant_9e115ead_main()

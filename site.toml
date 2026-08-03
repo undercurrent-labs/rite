@@ -1,0 +1,38 @@
+# Canonical hosts for everything this repository publishes.
+#
+# This file exists because the site host was hardcoded in 51 places across
+# `scripts/install.sh`, the release workflow, three Vue views, the book, the
+# README, `crates/rite-cli/src/config.rs` and two `<meta>` tags — and one of
+# them (`crates/rite-lsp/src/main.rs`) had drifted to a *different* domain
+# nobody owned, pointing every diagnostic help link at a stranger's server.
+#
+# The host cannot be templated into all of those at build time: they are bash,
+# YAML, Vue, Rust and Markdown, and three of them are shipped artifacts that must
+# work with no build step at all. So the rule is enforced rather than generated —
+# `crates/rite-cli/tests/site_domain_sync.rs` fails if any tracked file mentions a
+# Rite host that is not listed here.
+#
+# Changing a host means: edit this file, run the sync test to get the list of
+# files to update, update them, and re-run. The test names every offender, so the
+# work is mechanical rather than archaeological.
+
+version = "1"
+
+# The product site: home, docs book, Studio, `/install`, `/skill/*`.
+primary = "rite.foo"
+
+# Cant's site. A sibling, not a section: Cant is a separate language with its own
+# vocabulary, status and release cadence, and folding it into the Rite site would
+# imply a relationship the architecture explicitly does not have
+# (docs/adr/0001-cant-sibling-frontend.md).
+cant = "cant.rite.foo"
+
+# Hosts that used to be canonical. Kept so the sync test can tell "a stale
+# reference someone forgot to update" from "a typo", and so a redirect can be
+# retired deliberately rather than by discovering the traffic stopped.
+#
+# Binaries already released have `rite.undrc.dev` baked in — `scripts/install.sh`
+# is fetched by URL, but `rite update` reads SITE_BASE from the binary the user
+# already has. So this redirect outlives the cutover by one full release cycle at
+# minimum, and there is no date at which removing it is obviously safe. Leave it.
+legacy = ["rite.undrc.dev"]

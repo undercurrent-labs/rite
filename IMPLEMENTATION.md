@@ -180,6 +180,50 @@ DAP, package registry, JetBrains, collaborative Studio, cloud compile, bytecode 
 | Studio | `apps/rite-studio` (playground) + `rite studio` Axum API |
 | Product site | `apps/rite-web` (home, docs book, studio shell) → Cloudflare |
 | Agent | `skills/rite` |
+| Cant (sibling language) | `cant-syntax`, `cant-sem`, `cant`, `cant-cli` |
+
+### Cant
+
+A **sibling front end**, not a Rite dialect: different composition semantics
+(zero-or-more emissions, scatter, collect, ward, fork, bounded orbit), its own
+lexer, parser and graph, executing by generating canonical ASCII Rite and passing
+it through Rite's ordinary pipeline. Rite's grammar, `Dialect` enum, alias table,
+IR and capability namespace are unchanged, and no `rite-*` crate depends on a
+`cant-*` crate — enforced by `crates/cant-cli/tests/boundaries.rs`.
+
+- [`docs/adr/0001-cant-sibling-frontend.md`](docs/adr/0001-cant-sibling-frontend.md)
+- [`docs/adr/0002-cant-lowers-through-rite.md`](docs/adr/0002-cant-lowers-through-rite.md)
+- [`docs/cant/internals.md`](docs/cant/internals.md) — pipeline, reusable Rite
+  APIs, missing seams, and every conflict found between the spec and this tree
+- [`docs/cant/checklist.md`](docs/cant/checklist.md) — per-criterion status
+
+Status: **v0 complete, experimental.** Every published command works — `cant
+version` / `check` / `parse` / `fmt` / `convert` / `graph` / `expand` / `explain`
+/ `run` / `build` / `repl`, plus `cant -e '…'`. Programs execute on Rite's
+runtime and compile through Rite's compiler; `crates/cant-cli/tests/differential.rs`
+checks that `cant run`, `rite run <cant expand>` and the compiled binary agree.
+`cant` ships in the release archives beside `rite` and `rite-lsp`, and
+`docs/cant/graph-schema.md` freezes the graph JSON at version 0 as the contract
+for a future Sigil renderer.
+
+**Cant is removable.** No Rite source file mentions it at all; Rite's grammar,
+conformance fixtures, examples, book and skill bundle never have. Thirteen shared
+files carry a line each, all listed in `crates/cant-cli/tests/removable.rs` with
+what deleting Cant does to them.
+
+Three extractions landed in Rite for it, each independently useful and each
+behaviour-preserving:
+
+- `rite_core::render_snippet` — `Diagnostic::render` with the header lifted out,
+  so any tool with spans and labels can draw a Rite-style excerpt.
+- `rite::options::RuntimeOptions` — the shared meaning of `--allow` / `--deny` /
+  `--timeout` / the four budget knobs. `rite run` uses it too, which is what
+  proves it preserved behaviour, and it surfaced two latent bugs: a
+  silently-discarded bad `--deny`, and three `ExecutionBudget` knobs `rite run`
+  never exposed.
+- `rite_render::svg_to_png` — arbitrary SVG to PNG, the part of `render_png` that
+  was never about Rite. It builds Cant's social card without anyone installing an
+  image toolchain.
 
 ### Key decisions
 

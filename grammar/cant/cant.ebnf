@@ -1,0 +1,80 @@
+(* Cant grammar.
+
+   Descriptive, not normative: the parser in crates/cant-syntax is the definition,
+   and where the two disagree this file is the one that is wrong. Rite's own
+   grammar/rite.ebnf carries the same warning for the same reason — it drifted.
+
+   Cant is not a Rite dialect. See docs/adr/0001-cant-sibling-frontend.md.
+
+   Every operator below has exactly one canonical ASCII spelling and at most one
+   glyph spelling; both are listed in grammar/cant/operators.toml, which is the
+   machine-readable source this file paraphrases. Where a production shows an
+   ASCII token, the glyph is accepted in the same position. *)
+
+program          = [ shebang ] flow ;
+
+(* A program is one flow. There is no declaration form in v0: a .cant file is an
+   expression, not a module. See docs/cant/checklist.md, open question 1. *)
+flow             = stage { flow_op stage } ;
+
+flow_op          = "->" ;                       (* glyph: → *)
+
+stage            = structural_stage | scatter | collect | leaf ;
+
+structural_stage = ( ward | fork | orbit ) { modifier } ;
+
+(* A modifier configures the structural form immediately to its left, and is
+   legal ONLY there. Elsewhere ":" is Rite's ASCII atom prefix and belongs to the
+   leaf — `?{ $.level = :error }` contains an atom, not a modifier. *)
+modifier         = ":" modifier_name modifier_value ;
+modifier_name    = identifier ;
+modifier_value   = leaf ;
+
+ward             = "?{" flow "}" ;              (* glyph: ⊣⟦ flow ⟧ *)
+fork             = "|{" flow { ";" flow } "}" ; (* glyph: ⫴⟦ … ⟧ *)
+orbit            = "~{" flow "}" ;              (* glyph: ⟲⟦ flow ⟧ *)
+
+(* `*` is scatter only when it is the whole stage. `$ * 2` is a leaf containing a
+   multiplication. The glyph ⋇ is unambiguous and is a parse error anywhere a
+   stage is not expected. *)
+scatter          = "*" ;                        (* glyph: ⋇ *)
+
+(* `[]` is collect in stage position and the empty list literal in source
+   position. The glyph ⌁ is always collect. *)
+collect          = "[]" ;                       (* glyph: ⌁ *)
+
+(* A leaf is Rite expression text. Cant does not re-specify Rite's expression
+   grammar; the leaf is delimited by the surrounding Cant structure and handed to
+   Rite verbatim. It is any run of tokens that contains no flow operator, branch
+   separator, or block close at leaf-depth zero. See grammar/rite.ebnf for what
+   Rite accepts inside it. *)
+leaf             = leaf_token { leaf_token } ;
+
+leaf_token       = identifier
+                 | literal
+                 | placeholder
+                 | capability_ref
+                 | rite_operator
+                 | "(" { leaf_token } ")"
+                 | "[" { leaf_token } "]"
+                 | "{" { leaf_token } "}" ;     (* Rite closure: keep { |n| n > 0 } *)
+
+placeholder      = "$" ;
+capability_ref   = [ "!" ] "@" identifier { "." identifier } ;
+
+(* Lexical.
+
+   Comments and string literals are preserved exactly and never scanned for
+   operators: a string containing "->" or "?{" is a string. *)
+literal          = integer | float | string | raw_string ;
+comment          = line_comment | block_comment ;
+line_comment     = "//" { ? any character except newline ? } ;
+block_comment    = "/*" { ? any character ? } "*/" ;
+string           = '"' { string_char } '"' ;
+raw_string       = 'r"' { ? any character except " ? } '"' ;
+identifier       = ( letter | "_" ) { letter | digit | "_" } ;
+shebang          = "#!" { ? any character except newline ? } ;
+
+(* Not in v0, and deliberately absent from this grammar rather than reserved:
+   named anchors, feedback edges other than orbit, parallel fork, error-routing
+   edges, streaming emissions, layout annotations. See spec §17. *)

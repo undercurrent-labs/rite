@@ -1,0 +1,24 @@
+[package]
+name = "cant"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Public API for Cant: parse, analyze, graph, expand, run, build"
+
+[dependencies]
+cant-syntax = { workspace = true }
+cant-sem = { workspace = true }
+rite-core = { workspace = true }
+# Generated Rite goes through Rite's own front end — that is the whole of
+# ADR 0002. `rite-sem` pulls `rite-syntax` with it.
+rite-sem = { workspace = true }
+# Execution and native builds go through Rite's own runtime and compiler —
+# ADR 0002. `rite` supplies the shared permission/budget option parsing.
+rite = { workspace = true }
+rite-runtime = { workspace = true }
+rite-caps = { workspace = true }
+rite-compiler = { workspace = true }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+rite-core = { workspace = true }

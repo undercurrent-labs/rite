@@ -5,13 +5,13 @@ You do **not** need the source tree to run Rite scripts. Prefer a **binary insta
 ## Quick install (recommended)
 
 ```bash
-curl -fsSL https://rite.undrc.dev/install | bash
+curl -fsSL https://rite.foo/install | bash
 ```
 
 Same script:
 
 ```bash
-curl -fsSL https://rite.undrc.dev/install.sh | bash
+curl -fsSL https://rite.foo/install.sh | bash
 ```
 
 This will:
@@ -24,7 +24,7 @@ This will:
 ### Pin a version
 
 ```bash
-curl -fsSL https://rite.undrc.dev/install | RITE_VERSION=v0.6.2 bash
+curl -fsSL https://rite.foo/install | RITE_VERSION=v0.6.2 bash
 ```
 
 Use the latest tag from [Releases](https://github.com/undercurrent-labs/rite/releases) (omit `RITE_VERSION` to install whatever is current).
@@ -66,12 +66,12 @@ rite update --check               # CLI + skill freshness
 rite vscode install               # download .vsix + install via code/cursor
 ```
 
-Details: [Agents & skill](agents.md) · [https://rite.undrc.dev/agents](https://rite.undrc.dev/agents)
+Details: [Agents & skill](agents.md) · [https://rite.foo/agents](https://rite.foo/agents)
 
 ### Security notes
 
 - Prefer reading the script once:  
-  `curl -fsSL https://rite.undrc.dev/install.sh -o install-rite.sh && less install-rite.sh && bash install-rite.sh`
+  `curl -fsSL https://rite.foo/install.sh -o install-rite.sh && less install-rite.sh && bash install-rite.sh`
 - Installer **refuses** archives that fail checksum verification
 - Binaries are built by CI from tagged commits (see `.github/workflows/release.yml`)
 
@@ -93,13 +93,13 @@ No binary matches every platform — see **Windows** above, and new architecture
 Releases before they land in the installer's detection table. Either:
 
 - Build [from source](#from-source-contributors) or use `cargo install` below, or  
-- Use [Studio](https://rite.undrc.dev/studio) in the browser for pure scripts (no CLI)
+- Use [Studio](https://rite.foo/studio) in the browser for pure scripts (no CLI)
 
 ## Studio only (zero install)
 
 For pure scripts, format, and explore:
 
-**[https://rite.undrc.dev/studio](https://rite.undrc.dev/studio)**
+**[https://rite.foo/studio](https://rite.foo/studio)**
 
 No binary, no Rust toolchain. Full FS/HTTP/process still needs the CLI.
 

@@ -72,12 +72,17 @@ jobs:
           HOST="$(rustc -vV | sed -n 's/^host: //p')"
           rustup show
           rustup target list --installed
+          # `cant` ships in the same archive as `rite`. It is a sibling language in
+          # the same monorepo, so a release that carried one and not the other
+          # would make the pair harder to keep in step than keeping them together
+          # ever was. It stays removable: drop `-p cant-cli` here and from the
+          # packaging steps below and nothing else changes.
           if [[ "$HOST" == "${{ matrix.target }}" ]]; then
-            cargo build -p rite-cli -p rite-lsp --release
+            cargo build -p rite-cli -p rite-lsp -p cant-cli --release
             BIN=target/release
           else
             # e.g. x86_64-apple-darwin on aarch64 macos-latest
-            cargo build -p rite-cli -p rite-lsp --release --target "${{ matrix.target }}"
+            cargo build -p rite-cli -p rite-lsp -p cant-cli --release --target "${{ matrix.target }}"
             BIN=target/${{ matrix.target }}/release
           fi
           echo "BIN=$BIN" >> "$GITHUB_ENV"
@@ -92,9 +97,17 @@ jobs:
           mkdir -p "dist/${STAGE}"
           cp "${BIN}/rite" "dist/${STAGE}/rite"
           cp "${BIN}/rite-lsp" "dist/${STAGE}/rite-lsp"
-          chmod +x "dist/${STAGE}/rite" "dist/${STAGE}/rite-lsp"
+          cp "${BIN}/cant" "dist/${STAGE}/cant"
+          chmod +x "dist/${STAGE}/rite" "dist/${STAGE}/rite-lsp" "dist/${STAGE}/cant"
           strip "dist/${STAGE}/rite" 2>/dev/null || true
           strip "dist/${STAGE}/rite-lsp" 2>/dev/null || true
+          strip "dist/${STAGE}/cant" 2>/dev/null || true
+          # Each binary must actually run on the machine that built it. A
+          # cross-compiled target cannot be checked this way and is skipped.
+          if [[ "$(rustc -vV | sed -n 's/^host: //p')" == "${TARGET}" ]]; then
+            "dist/${STAGE}/rite" version
+            "dist/${STAGE}/cant" version
+          fi
           tar -C dist -czf "dist/rite-${TARGET}.tar.gz" "${STAGE}"
           if command -v sha256sum >/dev/null 2>&1; then
             (cd dist && sha256sum "rite-${TARGET}.tar.gz" > "SHA256SUMS-${TARGET}")
@@ -114,6 +127,9 @@ jobs:
           New-Item -ItemType Directory -Force -Path "dist/$Stage" | Out-Null
           Copy-Item "$Bin/rite.exe" "dist/$Stage/rite.exe"
           Copy-Item "$Bin/rite-lsp.exe" "dist/$Stage/rite-lsp.exe"
+          Copy-Item "$Bin/cant.exe" "dist/$Stage/cant.exe"
+          & "dist/$Stage/rite.exe" version
+          & "dist/$Stage/cant.exe" version
           # Git Bash has no `zip`; use PowerShell
           Compress-Archive -Path "dist/$Stage" -DestinationPath "dist/rite-$Target.zip" -Force
           $hash = (Get-FileHash "dist/rite-$Target.zip" -Algorithm SHA256).Hash.ToLower()
@@ -225,6 +241,11 @@ jobs:
             "version": "${{ steps.ver.outputs.version }}",
             "commit": "${{ github.sha }}",
             "repo": "${{ github.repository }}",
+            "binaries": ["rite", "rite-lsp", "cant"],
+            "languages": {
+              "rite": { "language_version": "1" },
+              "cant": { "language_version": "0", "graph_schema_version": "0", "stability": "experimental" }
+            },
             "assets": {
               "skill": "rite-agent-skill.tar.gz",
               "vscode": "rite.vsix"
@@ -252,13 +273,13 @@ jobs:
             ## Install (no clone)
 
             ```bash
-            curl -fsSL https://rite.undrc.dev/install | bash
+            curl -fsSL https://rite.foo/install | bash
             ```
 
             Pin a version:
 
             ```bash
-            curl -fsSL https://rite.undrc.dev/install | RITE_VERSION=${{ steps.ver.outputs.version }} bash
+            curl -fsSL https://rite.foo/install | RITE_VERSION=${{ steps.ver.outputs.version }} bash
             ```
 
             Binaries install to `~/.local/bin` by default (`rite` + `rite-lsp`).
@@ -273,7 +294,7 @@ jobs:
 
             ```bash
             rite skill install --target all
-            # or download: rite-agent-skill.tar.gz from assets / https://rite.undrc.dev/skill/
+            # or download: rite-agent-skill.tar.gz from assets / https://rite.foo/skill/
             ```
 
             ### VS Code / Cursor
@@ -283,15 +304,126 @@ jobs:
             # or Install from VSIX: rite.vsix
             ```
 
-            See https://rite.undrc.dev/agents
+            See https://rite.foo/agents
 
             ### Manual download
 
             Grab the archive for your platform from the assets below, verify against `SHA256SUMS`, extract, and put `rite` on your `PATH`.
 
-            Docs: https://rite.undrc.dev/docs/installation
+            Docs: https://rite.foo/docs/installation
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Both sites, deployed from the tag.
+  #
+  # They used to deploy from every push to main, one job in `ci.yml`. That put the
+  # page ahead of the thing it describes: `https://rite.foo/install` pins
+  # `RITE_VERSION` to whatever the tree says, and the archives it names do not
+  # exist until a tag is published. Deploying here, after `publish`, means the
+  # download the page offers is on disk before the page offers it.
+  #
+  # One job, two workers, because this is one repository. ADR 0001 requires that
+  # Cant be *removable*, not that it ship on its own schedule: `rite-*` still
+  # depends on nothing of Cant's, and `apps/cant-web` is still its own worker with
+  # its own domain. Removing Cant deletes the two Cant steps below and the
+  # `cant-web` deploy. The two builds are also independent — a Cant site failure
+  # cannot stop the Rite site, because the Rite deploy runs first.
+  sites:
+    name: Deploy sites (Cloudflare)
+    needs: [publish]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+
+      # Before anything expensive: a missing secret should cost seconds, not a
+      # WASM build.
+      - name: Check Cloudflare secrets
+        env:
+          TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if [ -z "$TOKEN" ] || [ -z "$ACCOUNT" ]; then
+            echo "::error::Missing CLOUDFLARE_API_TOKEN or CLOUDFLARE_ACCOUNT_ID in repo Actions secrets."
+            exit 1
+          fi
+          echo "Cloudflare secrets present (values masked)."
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: jetli/wasm-pack-action@v0.4.0
+      - uses: Swatinem/rust-cache@v2
+      # Must match package.json "packageManager": "pnpm@9.0.0" exactly
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.0.0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 20
+          cache: pnpm
+
+      # `scripts/build-site.sh` mirrors a packaged VSIX into the site when one is
+      # on disk, and links it only when it is — so the artifact from the `vscode`
+      # job has to land before the build, not after.
+      - uses: actions/download-artifact@v5
+        with:
+          name: rite-vsix
+          path: dist/vscode
+
+      - name: install & typecheck
+        run: |
+          set -euo pipefail
+          pnpm install
+          # Gates, not advisory: `typecheck` was broken for both Rite apps once
+          # and nothing noticed, because the build itself never typechecks.
+          pnpm --dir apps/rite-web typecheck
+          pnpm --dir apps/rite-studio typecheck
+          pnpm --dir apps/cant-web typecheck
+
+      - name: build the Rite site
+        run: bash scripts/build-site.sh
+
+      - name: verify the Rite dist
+        run: |
+          set -euo pipefail
+          test -f apps/rite-web/dist/index.html
+          test -f apps/rite-web/dist/install.sh || test -f apps/rite-web/dist/install
+          test -f apps/rite-web/dist/skill/rite-agent-skill.tar.gz
+          test -f apps/rite-web/dist/skill/rite-agent-skill.zip
+          # Must be zip/gzip, not SPA HTML mistaken for a download
+          file apps/rite-web/dist/skill/rite-agent-skill.zip | grep -qiE 'zip|archive'
+          ! grep -q '<!DOCTYPE html' apps/rite-web/dist/skill/rite-agent-skill.zip
+          # Same gate for the VSIX mirror the Agents page links.
+          test -f apps/rite-web/dist/vscode/rite.vsix
+          file apps/rite-web/dist/vscode/rite.vsix | grep -qiE 'zip|archive'
+          ! grep -q '<!DOCTYPE html' apps/rite-web/dist/vscode/rite.vsix
+          ls -la apps/rite-web/dist/skill/ apps/rite-web/dist/vscode/
+          ls -la apps/rite-web/dist | head -25
+
+      - name: Deploy Worker (rite-web → rite.foo)
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: apps/rite-web
+          # Match local deploy tooling (assets Workers need modern wrangler)
+          wranglerVersion: "4.28.0"
+          command: deploy
+
+      # ---- Cant. Delete from here to the end of the job to remove Cant.
+      - name: build the Cant site
+        run: bash scripts/build-cant-site.sh
+
+      - name: Deploy Worker (cant-web → cant.rite.foo)
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: apps/cant-web
+          wranglerVersion: "4.28.0"
+          command: deploy
 
   # Runs *after* publish, against the binary that was actually released.
   #

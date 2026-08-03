@@ -11,3 +11,6 @@ path = "src/main.rs"
 
 [dependencies]
 anyhow = { workspace = true }
+# `cant-og` rasterises a hand-authored SVG. The rasteriser is already in the
+# tree — no image tooling has to be installed to build a release asset.
+rite-render = { workspace = true, features = ["png"] }

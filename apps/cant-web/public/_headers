@@ -1,0 +1,13 @@
+# Cloudflare static asset headers (copied to dist on build).
+#
+# `cant` ships inside the Rite release archive, so this site serves no installer
+# or artifact of its own and this file only sets the security headers the Rite
+# site sets. If that ever changes, the /install rules from
+# apps/rite-web/public/_headers belong here too, with the same
+# `Content-Type: text/x-shellscript` care: Cloudflare's SPA fallback will
+# otherwise answer a missing asset with 200 + index.html, and a shell script that
+# is really HTML fails in a way nobody enjoys debugging.
+
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin

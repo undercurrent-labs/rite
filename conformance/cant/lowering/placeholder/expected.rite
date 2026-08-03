@@ -1,0 +1,39 @@
+// Generated from case.cant by cant 0.6.2. Do not edit.
+//
+// This is ordinary Rite, and it is exactly what `cant run` executes.
+// Every generated name carries the prefix `cant_a75b2955`, which combines a
+// reserved word, a hash of the Cant source, and a node number.
+
+// n0: the source
+def cant_a75b2955_n0(__in) [[
+  __ignored <- __in
+  ^ [ "-" ]
+]]
+
+// n1: a stage, once per emission
+def cant_a75b2955_n1(__in) [[
+  __out <~ []
+  for __e in __in [[
+    __out := concat(__out, [ join(["a", "b"], __e) ])
+  ]]
+  ^ __out
+]]
+
+// The program boundary: zero emissions become `none`, one becomes
+// that value, and many become a list in emission order.
+def cant_a75b2955_boundary(__in) [[
+  __n <- count(__in)
+  if (__n = 0) [[ ^ none ]]
+  if (__n = 1) [[ ^ first(__in) ]]
+  ^ __in
+]]
+
+// The top-level flow.
+def cant_a75b2955_main() [[
+  __v <~ [ none ]
+  __v := cant_a75b2955_n0(__v)
+  __v := cant_a75b2955_n1(__v)
+  ^ cant_a75b2955_boundary(__v)
+]]
+
+cant_a75b2955_main()

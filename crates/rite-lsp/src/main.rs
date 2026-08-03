@@ -575,7 +575,7 @@ impl Backend {
                 severity: Some(severity),
                 code: Some(NumberOrString::String(code_str)),
                 code_description: Some(CodeDescription {
-                    href: Url::parse("https://rite.dev/docs/diagnostics")
+                    href: Url::parse("https://rite.foo/docs/diagnostics")
                         .unwrap_or_else(|_| Url::parse("https://example.com").unwrap()),
                 }),
                 source: Some("rite".into()),

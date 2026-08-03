@@ -33,12 +33,12 @@ The skill is cached under `~/.local/share/rite/skill/rite`. Install metadata (ve
 Download from the site or a GitHub Release:
 
 ```bash
-curl -fsSL https://rite.undrc.dev/skill/rite-agent-skill.tar.gz -o skill.tgz
+curl -fsSL https://rite.foo/skill/rite-agent-skill.tar.gz -o skill.tgz
 mkdir -p ~/.grok/skills
 tar -xzf skill.tgz -C ~/.grok/skills   # → ~/.grok/skills/rite
 ```
 
-Site: [rite.undrc.dev/agents](https://rite.undrc.dev/agents)
+Site: [rite.foo/agents](https://rite.foo/agents)
 
 ## Update CLI and skill
 

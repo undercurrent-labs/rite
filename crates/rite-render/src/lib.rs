@@ -120,42 +120,40 @@ pub fn render_png(source: &str, opts: &RenderOptions, scale: f32) -> Result<Vec<
 /// because the markup was correct and only the rasteriser disagreed. A test that
 /// reads markup cannot see an empty picture.
 #[cfg(feature = "png")]
-fn rasterise(
-    source: &str,
-    opts: &RenderOptions,
-    scale: f32,
-) -> Result<resvg::tiny_skia::Pixmap, RenderError> {
+/// Rasterise arbitrary SVG markup to a PNG.
+///
+/// Split out of [`render_png`], which rasterises *highlighted Rite source*. This
+/// takes any SVG, which is what a caller with a hand-authored one needs — a
+/// social card, a brand mark, a diagram — and is the only part of the pipeline
+/// that is not about Rite at all.
+///
+/// Fonts resolve through `usvg`'s own database, seeded with the system fonts and
+/// the face this crate embeds, so text in the markup draws rather than silently
+/// vanishing. That failure mode is why this is worth being a real API rather
+/// than something each caller reimplements: the first PNG this crate ever
+/// produced had every shape and no text, and every SVG assertion passed while it
+/// did.
+#[cfg(feature = "png")]
+pub fn svg_to_png(svg: &str, scale: f32) -> Result<Vec<u8>, RenderError> {
+    rasterise_svg(svg, scale)?
+        .encode_png()
+        .map_err(|e| RenderError::Raster(format!("encoding PNG: {e}")))
+}
+
+#[cfg(feature = "png")]
+fn rasterise_svg(svg: &str, scale: f32) -> Result<resvg::tiny_skia::Pixmap, RenderError> {
     use resvg::tiny_skia;
     use resvg::usvg;
-
-    // *Not* the self-contained SVG. `usvg` resolves fonts through its own
-    // database and ignores an `@font-face` with a data URL, so rasterising the
-    // embedded form produced a picture with the frame, the background and the
-    // window dots — and no text at all. Every SVG test passed while it did,
-    // because the markup was right; only looking at the PNG showed it.
-    //
-    // So: plain SVG, and the face goes into the database instead.
-    let svg = render(
-        source,
-        &RenderOptions {
-            format: Format::Svg,
-            ..opts.clone()
-        },
-    )?;
 
     let mut options = usvg::Options::default();
     let db = options.fontdb_mut();
     db.load_system_fonts();
-    // The same face `svg-font` embeds, so the two formats agree, and loaded by
-    // path rather than trusting the system to have it under that name.
     if let Some(path) = font_path() {
         let _ = db.load_font_file(path);
     }
-    // `ui-monospace` is a CSS keyword, not a family anything has installed; name
-    // a real fallback so a missing DejaVu still draws glyphs rather than nothing.
     options.font_family = "DejaVu Sans Mono".to_string();
-    let tree = usvg::Tree::from_str(&svg, &options)
-        .map_err(|e| RenderError::Raster(format!("parsing the rendered SVG: {e}")))?;
+    let tree = usvg::Tree::from_str(svg, &options)
+        .map_err(|e| RenderError::Raster(format!("parsing the SVG: {e}")))?;
 
     let size = tree.size();
     let (w, h) = (
@@ -170,6 +168,32 @@ fn rasterise(
         &mut pixmap.as_mut(),
     );
     Ok(pixmap)
+}
+
+fn rasterise(
+    source: &str,
+    opts: &RenderOptions,
+    scale: f32,
+) -> Result<resvg::tiny_skia::Pixmap, RenderError> {
+    // *Not* the self-contained SVG. `usvg` resolves fonts through its own
+    // database and ignores an `@font-face` with a data URL, so rasterising the
+    // embedded form produced a picture with the frame, the background and the
+    // window dots — and no text at all. Every SVG test passed while it did,
+    // because the markup was right; only looking at the PNG showed it.
+    //
+    // So: plain SVG, and the face goes into the database instead.
+    let svg = render(
+        source,
+        &RenderOptions {
+            format: Format::Svg,
+            ..opts.clone()
+        },
+    )?;
+    // The font handling — system database, the embedded face by path, and a real
+    // monospace fallback because `ui-monospace` is a CSS keyword nothing has
+    // installed — now lives in `rasterise_svg`, which is the only part of this
+    // that was never about Rite.
+    rasterise_svg(&svg, scale)
 }
 
 /// The face `svg-font` embeds, base64-encoded.

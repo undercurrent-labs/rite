@@ -94,3 +94,9 @@ tmp/
 
 # Browser-automation scratch (snapshots, screenshots) from local verification.
 /.playwright-mcp/
+
+# `cant build` writes its generated Rite beside the source so a compiled program
+# stays auditable; the differential harness does the same per fixture. Neither
+# belongs in the repository.
+.rite/cant/
+conformance/cant/execution/*/.rite/

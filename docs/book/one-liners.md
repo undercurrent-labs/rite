@@ -3,7 +3,7 @@
 Rite suits short, self-contained scripts — the kind you reach for between larger tools. Install the CLI first:
 
 ```bash
-curl -fsSL https://rite.undrc.dev/install | bash
+curl -fsSL https://rite.foo/install | bash
 export PATH="$HOME/.local/bin:$PATH"
 ```
 
@@ -273,7 +273,7 @@ value.
 | Real HTTP listen | Virtual / limited | Yes |
 | Share snippet | `/studio#s=…` | File / gist |
 
-**https://rite.undrc.dev/studio** is great for pure experiments; use the installed CLI for real files and servers.
+**https://rite.foo/studio** is great for pure experiments; use the installed CLI for real files and servers.
 
 ## Next
 

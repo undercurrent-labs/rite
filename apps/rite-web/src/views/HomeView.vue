@@ -4,7 +4,7 @@ import { useLatestTag } from "../lib/release";
 
 const { tag: latestTag, resolved: tagResolved } = useLatestTag();
 
-const installSnippet = `curl -fsSL https://rite.undrc.dev/install | bash
+const installSnippet = `curl -fsSL https://rite.foo/install | bash
 # → ~/.local/bin/rite  (+ rite-lsp)
 export PATH="$HOME/.local/bin:$PATH"
 rite version`;

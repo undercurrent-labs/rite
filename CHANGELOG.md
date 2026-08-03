@@ -2,6 +2,62 @@
 
 ## [Unreleased]
 
+### Added
+
+- **Cant**, a sibling language, shipped as a second executable in the same
+  archives. Terminal-typeable and graph-oriented: every stage emits zero or more
+  values, and scatter, collect, ward, fork and a bounded orbit change how many
+  are in flight.
+
+  ```bash
+  cant -e '[1, 2, 3, 4, 5, 6] -> * -> ?{ $ % 2 = 0 } -> []'
+  # [2, 4, 6]
+  ```
+
+  It is **not a Rite dialect.** It has its own lexer, parser and flow graph, and
+  it executes by generating canonical ASCII Rite and passing that through Rite's
+  ordinary front end — so it inherits Rite's values, effect discipline,
+  capabilities, budgets, interpreter and native compiler without reimplementing
+  any of them. `cant expand` prints exactly what runs, and a differential harness
+  checks that `cant run`, `rite run <cant expand>` and the compiled binary agree
+  on value, output and exit status.
+
+  Rite's grammar, `Dialect` enum, alias table, IR and capability namespace are
+  unchanged; no Rite source file mentions Cant at all. See
+  `docs/adr/0001-cant-sibling-frontend.md` and `docs/cant/`.
+
+  v0 is experimental: the operator vocabulary and the graph JSON schema
+  (`docs/cant/graph-schema.md`, version 0) can still change.
+
+- **`rite::options::RuntimeOptions`** — the shared meaning of `--allow`,
+  `--deny`, `--timeout` and the four budget knobs, so a second executable cannot
+  disagree with `rite run` about what `--allow fs:read=./data` means.
+- **`rite_core::render_snippet`** — the caret-underlined source excerpt from
+  `Diagnostic::render`, without needing a `rite_core::ErrorCode`.
+- **`rite_render::svg_to_png`** — rasterise arbitrary SVG, not just highlighted
+  Rite source.
+
+### Fixed
+
+- **A bad `--deny` was discarded silently.** A typo in a permission *revocation*
+  left the permission in place — the failure mode where you believe you locked
+  something down and did not. It is now an error, as a bad `--allow` always was.
+- **LSP diagnostics linked to a domain this project does not own.** Every
+  diagnostic offered a help link to `rite.dev`; it now points at the canonical
+  host, and `crates/rite-cli/tests/site_domain_sync.rs` fails if any tracked file
+  names a host `site.toml` does not declare.
+
+### Changed
+
+- The canonical host is **`rite.foo`**. `rite.undrc.dev` redirects and is not
+  being retired: released binaries have it compiled into `SITE_BASE`, so
+  `rite update` on an installed CLI still asks for it.
+- **The sites deploy on the tag, not on every push to `main`.** The install
+  one-liner names a version whose archives only exist once a release is
+  published, so a site deployed from `main` spent every gap between merge and tag
+  offering a download nobody could get. Both sites are still built by every CI
+  run; only the publish moved.
+
 ## [0.6.2] — 2026-08-03
 
 An MCP release. A Rite script could expose an HTTP service in a dozen lines but had no

@@ -35,6 +35,18 @@ jobs:
         with:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
+      # `cant-sem/tests/dot_renders.rs` pipes its DOT output through Graphviz and
+      # requires exit 0 *and* empty stderr. Without `dot` on PATH that test prints
+      # a note and returns, so the coverage would silently vanish rather than fail.
+      - name: install graphviz
+        run: |
+          if [ "${{ runner.os }}" = "macOS" ]; then
+            brew install graphviz
+          else
+            sudo apt-get update && sudo apt-get install -y graphviz
+          fi
+        shell: bash
+        if: runner.os != 'Windows'
       - name: fmt
         run: cargo fmt --all -- --check
       # Gate, not advisory: the tree is clippy-clean, so a new warning must fail CI.
@@ -42,9 +54,11 @@ jobs:
       # which cargo rejects, and `continue-on-error` hid that it never ran.)
       - name: clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
-      # example_ladder integration tests spawn target/debug/rite
+      # example_ladder integration tests spawn target/debug/rite; Cant's
+      # differential harness spawns both target/debug/cant *and* target/debug/rite
+      # — without the latter it prints a note and checks nothing.
       - name: build debug CLI
-        run: cargo build -p rite-cli -p rite-lsp
+        run: cargo build -p rite-cli -p rite-lsp -p cant-cli
       # `--no-fail-fast`: without it cargo stops at the first failing test binary, so a
       # platform-specific break reports one failure per run. Three consecutive Windows
       # runs each surfaced exactly one more problem — at 36 minutes a run, that is a
@@ -63,7 +77,15 @@ jobs:
         run: |
           RITE_SKIP_VSIX=1 cargo test -p rite-cli --test packaging -- --nocapture
       - name: build release tools
-        run: cargo build -p rite-cli -p rite-lsp --release
+        run: cargo build -p rite-cli -p rite-lsp -p cant-cli --release
+      # The release archive ships `cant`; a binary that does not start is worth
+      # catching here rather than in a release.
+      - name: cant smoke test
+        if: runner.os != 'Windows'
+        run: |
+          ./target/release/cant version
+          ./target/release/cant -e '[1, 2, 3] -> * -> ?{ $ > 1 } -> []'
+          ./target/release/cant explain -e '[1, 2] -> * -> []' > /dev/null
       - name: doctests
         if: runner.os != 'Windows'
         run: ./target/release/rite docs check
@@ -182,6 +204,36 @@ jobs:
           name: rite-web-dist
           path: apps/rite-web/dist
 
+  cant-site:
+    name: Cant site
+    runs-on: ubuntu-latest
+    # No `needs:` — the Cant site embeds no WASM engine and mirrors no VSIX, so it
+    # depends on nothing the other jobs produce. Keeping it independent is the
+    # point: ADR 0001 requires that Cant be removable without touching Rite, and a
+    # build graph that couples them would quietly make that false.
+    steps:
+      - uses: actions/checkout@v5
+      # Must match package.json "packageManager": "pnpm@9.0.0" exactly
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.0.0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 20
+          cache: pnpm
+      - name: install & build cant site
+        run: |
+          set -euo pipefail
+          pnpm install
+          # Gate, not advisory — same reasoning as the rite-web typecheck above.
+          pnpm --dir apps/cant-web typecheck
+          bash scripts/build-cant-site.sh
+      - name: upload cant dist
+        uses: actions/upload-artifact@v5
+        with:
+          name: cant-web-dist
+          path: apps/cant-web/dist
+
   vscode:
     name: VS Code extension
     runs-on: ubuntu-latest
@@ -207,58 +259,17 @@ jobs:
             dist/skill-check/rite-agent-skill.tar.gz
             dist/skill-check/rite-agent-skill.zip
 
-  deploy:
-    name: Deploy Cloudflare
-    runs-on: ubuntu-latest
-    # `rust` too: never publish the site from a commit whose tests fail.
-    needs: [rust, studio]
-    # Production site: main pushes + manual runs (not PRs / forks)
-    if: >
-      github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'push' && github.ref == 'refs/heads/main')
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@v5
-      - name: Check Cloudflare secrets
-        env:
-          TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: |
-          if [ -z "$TOKEN" ] || [ -z "$ACCOUNT" ]; then
-            echo "::error::Missing CLOUDFLARE_API_TOKEN or CLOUDFLARE_ACCOUNT_ID in repo Actions secrets."
-            exit 1
-          fi
-          echo "Cloudflare secrets present (values masked)."
-      - uses: actions/download-artifact@v5
-        with:
-          name: rite-web-dist
-          path: apps/rite-web/dist
-      - name: Verify dist
-        run: |
-          set -euo pipefail
-          test -f apps/rite-web/dist/index.html
-          test -f apps/rite-web/dist/install.sh || test -f apps/rite-web/dist/install
-          test -f apps/rite-web/dist/skill/rite-agent-skill.tar.gz
-          test -f apps/rite-web/dist/skill/rite-agent-skill.zip
-          # Must be zip/gzip, not SPA HTML mistaken for a download
-          file apps/rite-web/dist/skill/rite-agent-skill.zip | grep -qiE 'zip|archive'
-          ! grep -q '<!DOCTYPE html' apps/rite-web/dist/skill/rite-agent-skill.zip
-          # Same gate for the VSIX mirror the Agents page links.
-          test -f apps/rite-web/dist/vscode/rite.vsix
-          file apps/rite-web/dist/vscode/rite.vsix | grep -qiE 'zip|archive'
-          ! grep -q '<!DOCTYPE html' apps/rite-web/dist/vscode/rite.vsix
-          ls -la apps/rite-web/dist/skill/ apps/rite-web/dist/vscode/
-          ls -la apps/rite-web/dist | head -25
-      - name: Deploy Worker (rite-studio)
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          workingDirectory: apps/rite-web
-          # Match local deploy tooling (assets Workers need modern wrangler)
-          wranglerVersion: "4.28.0"
-          command: deploy
+  # No deploy job. Both sites go out from `.github/workflows/release.yml`, on the
+  # tag, after the GitHub Release is published.
+  #
+  # They used to deploy on every push to main, which meant the site could describe
+  # a release that did not exist: the install one-liner, the version badge and the
+  # download links are built from the tree, while the assets they point at only
+  # appear when a tag is published. Between a merge and a tag the page named a
+  # version nobody could install.
+  #
+  # The jobs above still *build* both sites on every push and PR, so a broken site
+  # fails before it is anywhere near production. Only the publish moved.
 
   release-manifest:
     name: Release manifest

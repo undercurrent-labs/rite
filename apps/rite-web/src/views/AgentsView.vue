@@ -20,13 +20,13 @@ const skillZipGh =
   "https://github.com/undercurrent-labs/rite/releases/latest/download/rite-agent-skill.zip";
 const vsixGh =
   "https://github.com/undercurrent-labs/rite/releases/latest/download/rite.vsix";
-const installCli = "curl -fsSL https://rite.undrc.dev/install | bash";
+const installCli = "curl -fsSL https://rite.foo/install | bash";
 
 const { tag: latestTag, resolved: tagResolved } = useLatestTag();
 
 const cliSnippet = computed(
   () => `${installCli}
-# pin: RITE_VERSION=${latestTag.value} curl -fsSL https://rite.undrc.dev/install | bash`
+# pin: RITE_VERSION=${latestTag.value} curl -fsSL https://rite.foo/install | bash`
 );
 const skillSnippet = `rite skill install --target all
 # or:  rite skill install --target grok`;
@@ -153,7 +153,7 @@ rite update`;
       <pre class="mt-3 overflow-x-auto rounded-lg bg-black/40 p-4 font-mono text-sm text-slate-300"># GitHub (recommended)
 curl -fsSL -o skill.tgz \
   https://github.com/undercurrent-labs/rite/releases/latest/download/rite-agent-skill.tar.gz
-# or site mirror: https://rite.undrc.dev/skill/rite-agent-skill.tar.gz
+# or site mirror: https://rite.foo/skill/rite-agent-skill.tar.gz
 
 mkdir -p ~/.grok/skills
 tar -xzf skill.tgz -C ~/.grok/skills

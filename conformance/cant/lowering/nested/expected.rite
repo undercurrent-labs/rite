@@ -1,0 +1,132 @@
+// Generated from case.cant by cant 0.6.2. Do not edit.
+//
+// This is ordinary Rite, and it is exactly what `cant run` executes.
+// Every generated name carries the prefix `cant_d01d8317`, which combines a
+// reserved word, a hash of the Cant source, and a node number.
+
+// n0: the source
+def cant_d01d8317_n0(__in) [[
+  __ignored <- __in
+  ^ [ 4 ]
+]]
+
+// n1: fork — every branch sees the same input, results concatenated
+def cant_d01d8317_n1(__in) [[
+  __out <~ []
+  for __e in __in [[
+    __out := concat(__out, cant_d01d8317_s0([ __e ]))
+    __out := concat(__out, cant_d01d8317_s1([ __e ]))
+  ]]
+  ^ __out
+]]
+
+// n2: ward — the input unchanged, or nothing
+def cant_d01d8317_n2(__in) [[
+  __out <~ []
+  for __e in __in [[
+    if (__e > 2) [[
+      __out := concat(__out, [ __e ])
+    ]]
+  ]]
+  ^ __out
+]]
+
+// n3: a stage, once per emission
+def cant_d01d8317_n3(__in) [[
+  __out <~ []
+  for __e in __in [[
+    __out := concat(__out, [ __e * 10 ])
+  ]]
+  ^ __out
+]]
+
+// n4: orbit — breadth-first, deduplicated, at most 8 candidates
+def cant_d01d8317_n4(__in) [[
+  __work <~ __in
+  __seen <~ []
+  __out <~ []
+  __accepted <~ 0
+  while (count(__work) > 0) [[
+    __c <- first(__work)
+    __work := rest(__work)
+    __k <- __c
+    if (not contains(__seen, __k)) [[
+      __seen := concat(__seen, [ __k ])
+      __accepted := __accepted + 1
+      if (__accepted > 8) [[
+        ^ panic("CANT-O002: orbit at case.cant+31 accepted its limit of 8 candidates")
+      ]]
+      __out := concat(__out, [ __c ])
+      __work := concat(__work, cant_d01d8317_s2([ __c ]))
+    ]]
+  ]]
+  ^ __out
+]]
+
+// n5: ward — the input unchanged, or nothing
+def cant_d01d8317_n5(__in) [[
+  __out <~ []
+  for __e in __in [[
+    if (__e < 8) [[
+      __out := concat(__out, [ __e ])
+    ]]
+  ]]
+  ^ __out
+]]
+
+// n6: a stage, once per emission
+def cant_d01d8317_n6(__in) [[
+  __out <~ []
+  for __e in __in [[
+    __out := concat(__out, [ __e + 2 ])
+  ]]
+  ^ __out
+]]
+
+// n7: collect — every emission becomes one list
+def cant_d01d8317_n7(__in) [[
+  ^ [ __in ]
+]]
+
+// s0: the flow inside n1
+def cant_d01d8317_s0(__in) [[
+  __v <~ __in
+  __v := cant_d01d8317_n2(__v)
+  __v := cant_d01d8317_n3(__v)
+  ^ __v
+]]
+
+// s1: the flow inside n1
+def cant_d01d8317_s1(__in) [[
+  __v <~ __in
+  __v := cant_d01d8317_n4(__v)
+  ^ __v
+]]
+
+// s2: the flow inside n4
+def cant_d01d8317_s2(__in) [[
+  __v <~ __in
+  __v := cant_d01d8317_n5(__v)
+  __v := cant_d01d8317_n6(__v)
+  ^ __v
+]]
+
+// The program boundary: zero emissions become `none`, one becomes
+// that value, and many become a list in emission order.
+def cant_d01d8317_boundary(__in) [[
+  __n <- count(__in)
+  if (__n = 0) [[ ^ none ]]
+  if (__n = 1) [[ ^ first(__in) ]]
+  ^ __in
+]]
+
+// The top-level flow.
+def cant_d01d8317_main() [[
+  __v <~ [ none ]
+  __v := cant_d01d8317_n0(__v)
+  __v := cant_d01d8317_n1(__v)
+  __v := cant_d01d8317_n7(__v)
+  ^ cant_d01d8317_boundary(__v)
+]]
+
+cant_d01d8317_main()

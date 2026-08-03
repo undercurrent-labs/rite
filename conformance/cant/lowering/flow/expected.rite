@@ -1,0 +1,62 @@
+// Generated from case.cant by cant 0.6.2. Do not edit.
+//
+// This is ordinary Rite, and it is exactly what `cant run` executes.
+// Every generated name carries the prefix `cant_fc0e3432`, which combines a
+// reserved word, a hash of the Cant source, and a node number.
+
+// n0: the source
+def cant_fc0e3432_n0(__in) [[
+  __ignored <- __in
+  ^ [ [1, 2, 3] ]
+]]
+
+// n1: scatter — one emission per element
+def cant_fc0e3432_n1(__in) [[
+  __out <~ []
+  for __e in __in [[
+    if (type_of(__e) != "list") [[
+      ^ panic("CANT-R003: scatter expected a list at case.cant+13, got " + type_of(__e))
+    ]]
+    for __x in __e [[
+      __out := concat(__out, [ __x ])
+    ]]
+  ]]
+  ^ __out
+]]
+
+// n2: ward — the input unchanged, or nothing
+def cant_fc0e3432_n2(__in) [[
+  __out <~ []
+  for __e in __in [[
+    if (__e % 2 = 0) [[
+      __out := concat(__out, [ __e ])
+    ]]
+  ]]
+  ^ __out
+]]
+
+// n3: collect — every emission becomes one list
+def cant_fc0e3432_n3(__in) [[
+  ^ [ __in ]
+]]
+
+// The program boundary: zero emissions become `none`, one becomes
+// that value, and many become a list in emission order.
+def cant_fc0e3432_boundary(__in) [[
+  __n <- count(__in)
+  if (__n = 0) [[ ^ none ]]
+  if (__n = 1) [[ ^ first(__in) ]]
+  ^ __in
+]]
+
+// The top-level flow.
+def cant_fc0e3432_main() [[
+  __v <~ [ none ]
+  __v := cant_fc0e3432_n0(__v)
+  __v := cant_fc0e3432_n1(__v)
+  __v := cant_fc0e3432_n2(__v)
+  __v := cant_fc0e3432_n3(__v)
+  ^ cant_fc0e3432_boundary(__v)
+]]
+
+cant_fc0e3432_main()

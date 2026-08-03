@@ -18,6 +18,12 @@ members = [
     "crates/rite-wasm",
     "crates/rite",
     "crates/rite-cli",
+    # Cant: a sibling front end, not a Rite dialect. The dependency edge is
+    # one-way (cant-* -> rite-*) and is enforced by crates/cant-cli/tests/boundaries.rs.
+    "crates/cant-syntax",
+    "crates/cant-sem",
+    "crates/cant",
+    "crates/cant-cli",
     "xtask",
 ]
 default-members = ["crates/rite-cli"]
@@ -46,6 +52,10 @@ rite-analysis = { path = "crates/rite-analysis" }
 rite-lsp = { path = "crates/rite-lsp" }
 rite-wasm = { path = "crates/rite-wasm" }
 rite = { path = "crates/rite" }
+
+cant-syntax = { path = "crates/cant-syntax" }
+cant-sem = { path = "crates/cant-sem" }
+cant = { path = "crates/cant" }
 
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }

@@ -1,0 +1,11 @@
+roots
+  -> *
+  -> ~{
+       !@fs.read
+       -> imports
+       -> *
+       -> resolve
+     }
+     :by canonical_path
+     :max 4096
+  -> []

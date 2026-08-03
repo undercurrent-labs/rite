@@ -15,7 +15,7 @@ Status and architecture notes: [`IMPLEMENTATION.md`](IMPLEMENTATION.md). Languag
 ### Install CLI (no clone)
 
 ```bash
-curl -fsSL https://rite.undrc.dev/install | bash
+curl -fsSL https://rite.foo/install | bash
 export PATH="$HOME/.local/bin:$PATH"
 rite version
 ```
@@ -43,7 +43,7 @@ rite describe language --json
 rite skill install --target all
 rite update --check
 rite vscode install
-# Site: https://rite.undrc.dev/agents
+# Site: https://rite.foo/agents
 
 cargo test --workspace
 ```

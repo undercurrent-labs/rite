@@ -1,0 +1,37 @@
+import { createRouter, createWebHistory } from "vue-router";
+import HomeView from "./views/HomeView.vue";
+
+// Only the landing page is eager: a visitor who never opens the docs should not
+// download the markdown renderer.
+const DocsView = () => import("./views/DocsView.vue");
+const NotFoundView = () => import("./views/NotFoundView.vue");
+
+export const router = createRouter({
+  history: createWebHistory(import.meta.env.BASE_URL),
+  routes: [
+    { path: "/", name: "home", component: HomeView, meta: { title: "Cant" } },
+    {
+      path: "/docs",
+      name: "docs-index",
+      component: DocsView,
+      meta: { title: "Docs · Cant" },
+    },
+    {
+      path: "/docs/:slug",
+      name: "docs",
+      component: DocsView,
+      meta: { title: "Docs · Cant" },
+    },
+    { path: "/:pathMatch(.*)*", name: "not-found", component: NotFoundView },
+  ],
+  scrollBehavior(to, _from, saved) {
+    if (saved) return saved;
+    if (to.hash) return { el: to.hash, top: 80 };
+    return { top: 0 };
+  },
+});
+
+router.afterEach((to) => {
+  const title = (to.meta.title as string | undefined) ?? "Cant";
+  document.title = title;
+});

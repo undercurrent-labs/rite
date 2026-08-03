@@ -100,4 +100,4 @@ rite docs agent    # agent-oriented summary
 ## Repository
 
 Source: [github.com/undercurrent-labs/rite](https://github.com/undercurrent-labs/rite)  
-Hosted book + Studio: [rite.undrc.dev](https://rite.undrc.dev)
+Hosted book + Studio: [rite.foo](https://rite.foo)

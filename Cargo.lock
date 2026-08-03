@@ -460,6 +460,59 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fc652a48c352aef3ea3aed32080501cf3ef6ed5da78602a020c991775b0aff04"
 
 [[package]]
+name = "cant"
+version = "0.6.2"
+dependencies = [
+ "cant-sem",
+ "cant-syntax",
+ "rite",
+ "rite-caps",
+ "rite-compiler",
+ "rite-core",
+ "rite-runtime",
+ "rite-sem",
+ "serde_json",
+]
+
+[[package]]
+name = "cant-cli"
+version = "0.6.2"
+dependencies = [
+ "cant",
+ "cant-sem",
+ "cant-syntax",
+ "clap",
+ "rite",
+ "rite-caps",
+ "rite-core",
+ "rite-runtime",
+ "rustyline",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
+name = "cant-sem"
+version = "0.6.2"
+dependencies = [
+ "cant-syntax",
+ "proptest",
+ "rite-core",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "cant-syntax"
+version = "0.6.2"
+dependencies = [
+ "proptest",
+ "rite-core",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "cast"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4108,6 +4161,7 @@ name = "xtask"
 version = "0.6.2"
 dependencies = [
  "anyhow",
+ "rite-render",
 ]
 
 [[package]]

@@ -12,14 +12,13 @@ mod vscode_cmd;
 
 use clap::{CommandFactory, Parser, Subcommand, ValueEnum};
 use docs_cmd::DocsCmd;
-use rite_caps::{Permission, PermissionSet};
+use rite_caps::PermissionSet;
 use rite_core::SourceMap;
 use rite_runtime::{EvalError, RuntimeContext};
 use rite_sem::{compile_to_ir, ir_to_json};
 use rite_syntax::parse_source;
 use std::path::PathBuf;
 use std::process::ExitCode;
-use std::time::Duration;
 
 #[derive(Parser, Debug)]
 #[command(
@@ -920,26 +919,24 @@ async fn run(cli: Cli) -> anyhow::Result<ExitCode> {
             json_errors,
             args,
         } => {
-            let mut perms = if allow_all {
-                PermissionSet::allow_all()
-            } else {
-                PermissionSet::default_secure()
+            // `rite::RuntimeOptions` is the one definition of what these flags
+            // mean, so every tool in this workspace that runs a script agrees
+            // about `--allow fs:read=./data` without a second copy of the rules.
+            let options = rite::RuntimeOptions {
+                allow,
+                deny,
+                allow_all,
+                timeout: timeout.clone(),
+                max_steps,
+                ..Default::default()
             };
-
-            for a in allow {
-                match Permission::parse(&a) {
-                    Ok(p) => perms.grant(p),
-                    Err(e) => {
-                        eprintln!("{}", e);
-                        return Ok(ExitCode::from(2));
-                    }
+            let perms = match options.permissions() {
+                Ok(perms) => perms,
+                Err(e) => {
+                    eprintln!("{}", e);
+                    return Ok(ExitCode::from(2));
                 }
-            }
-            for d in deny {
-                if let Ok(p) = Permission::parse(&d) {
-                    perms.deny(p);
-                }
-            }
+            };
 
             let mut sources = SourceMap::new();
             let id = sources.add_path(&file).map_err(|e| anyhow::anyhow!(e))?;
@@ -974,18 +971,13 @@ async fn run(cli: Cli) -> anyhow::Result<ExitCode> {
                 ctx.script_dir = Some(parent.to_path_buf());
                 ctx.module_roots.push(parent.to_path_buf());
             }
-            if let Some(ms) = max_steps {
-                ctx.budget = ctx.budget.with_max_steps(ms);
-            }
-            if let Some(t) = timeout {
-                // A bad --timeout used to be discarded silently, leaving the
-                // default 60s budget in place.
-                match parse_duration(&t) {
-                    Ok(dur) => ctx.budget = ctx.budget.with_timeout(dur),
-                    Err(e) => {
-                        eprintln!("invalid --timeout {t:?}: {e}");
-                        return Ok(ExitCode::from(2));
-                    }
+            // A bad --timeout used to be discarded silently, leaving the default
+            // 60s budget in place.
+            match options.budget() {
+                Ok(budget) => ctx.budget = budget,
+                Err(e) => {
+                    eprintln!("{e}");
+                    return Ok(ExitCode::from(2));
                 }
             }
             rite_caps::install_defaults(&mut ctx, perms);
@@ -1062,16 +1054,19 @@ async fn run(cli: Cli) -> anyhow::Result<ExitCode> {
             allow_all,
             allow,
         } => {
-            let mut perms = if allow_all {
-                PermissionSet::allow_all()
-            } else {
-                PermissionSet::default_secure()
-            };
-            for a in &allow {
-                if let Ok(p) = Permission::parse(a) {
-                    perms.grant(p);
+            let perms = match (rite::RuntimeOptions {
+                allow,
+                allow_all,
+                ..Default::default()
+            })
+            .permissions()
+            {
+                Ok(perms) => perms,
+                Err(e) => {
+                    eprintln!("{}", e);
+                    return Ok(ExitCode::from(2));
                 }
-            }
+            };
             match rite_compiler::build_script(&file, release, emit_rust, output.as_deref(), &perms)
             {
                 Ok(path) => {
@@ -1209,39 +1204,9 @@ fn flush_script_output(ctx: &RuntimeContext) {
     }
 }
 
-/// Parse `500ms`, `30s`, `5m`, or a bare number of seconds.
-fn parse_duration(s: &str) -> Result<Duration, String> {
-    let t = s.trim();
-    let invalid = |unit: &str| format!("expected a number{unit} (e.g. 500ms, 30s, 5m)");
-    if let Some(ms) = t.strip_suffix("ms") {
-        return ms
-            .trim()
-            .parse()
-            .map(Duration::from_millis)
-            .map_err(|_| invalid(" of milliseconds"));
-    }
-    if let Some(sec) = t.strip_suffix('s') {
-        return sec
-            .trim()
-            .parse()
-            .map(Duration::from_secs)
-            .map_err(|_| invalid(" of seconds"));
-    }
-    if let Some(m) = t.strip_suffix('m') {
-        return m
-            .trim()
-            .parse::<u64>()
-            .map(|n| Duration::from_secs(n * 60))
-            .map_err(|_| invalid(" of minutes"));
-    }
-    t.parse::<u64>()
-        .map(Duration::from_secs)
-        .map_err(|_| invalid(" of seconds"))
-}
-
 #[cfg(test)]
 mod duration_tests {
-    use super::parse_duration;
+    use rite::parse_duration;
     use std::time::Duration;
 
     #[test]

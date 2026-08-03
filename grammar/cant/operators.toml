@@ -1,0 +1,106 @@
+# Cant operator manifest.
+#
+# The single source of truth for every structural Cant operator: its canonical
+# ASCII spelling, its optional glyph spelling, and the token kind both normalize
+# to. `cant-syntax` embeds this file with `include_str!` and parses it; nothing
+# hard-codes a spelling anywhere else, and `crates/cant-syntax/tests/manifest_sync.rs`
+# fails if this file and `CantTokenKind` disagree in either direction.
+#
+# This is NOT `grammar/aliases.json`. That file is Rite's, and Cant is not a Rite
+# dialect — see docs/adr/0001-cant-sibling-frontend.md. The two never reference
+# each other.
+#
+# Rules enforced by the manifest reader and by manifest_sync:
+#   * `ascii` is required, non-empty, and ASCII-only. Cant must be typeable.
+#   * `glyph` is optional. At most one per operator.
+#   * `token` names a `CantTokenKind` variant; every variant lexed from source
+#     must appear here exactly once.
+#   * `ambiguous = true` marks an ASCII spelling that also means something else
+#     inside a leaf expression, and is therefore resolved by the parser from
+#     position. See docs/cant/internals.md, "Lexing and the two ambiguities".
+
+version = "0"
+language_version = "0"
+
+[[operator]]
+concept = "flow"
+token = "Flow"
+ascii = "->"
+glyph = "→"
+description = "Send each current emission through the next stage"
+
+[[operator]]
+concept = "scatter"
+token = "Star"
+ascii = "*"
+glyph = "⋇"
+ambiguous = true
+description = "Expand a list into ordered emissions; also multiplication inside a leaf"
+
+[[operator]]
+concept = "collect"
+token = "Collect"
+ascii = "[]"
+glyph = "⌁"
+ambiguous = true
+description = "Materialize the current emissions as one list value; also the empty list literal"
+
+[[operator]]
+concept = "ward_open"
+token = "WardOpen"
+ascii = "?{"
+glyph = "⊣⟦"
+description = "Open a ward: pass the input only when the predicate is truthy"
+
+[[operator]]
+concept = "fork_open"
+token = "ForkOpen"
+ascii = "|{"
+glyph = "⫴⟦"
+description = "Open a fork: run ordered branches from the same input"
+
+[[operator]]
+concept = "orbit_open"
+token = "OrbitOpen"
+ascii = "~{"
+glyph = "⟲⟦"
+description = "Open an orbit: bounded breadth-first fixed-point traversal"
+
+[[operator]]
+concept = "block_close"
+token = "BlockClose"
+ascii = "}"
+glyph = "⟧"
+description = "Close a ward, fork, or orbit"
+
+[[operator]]
+concept = "branch_separator"
+token = "Semi"
+ascii = ";"
+description = "Separate fork branches"
+
+[[operator]]
+concept = "current_value"
+token = "Dollar"
+ascii = "$"
+description = "The current emission, as an explicit insertion point in a stage"
+
+[[operator]]
+concept = "effect"
+token = "Bang"
+ascii = "!"
+ambiguous = true
+description = "Rite's explicit effect boundary; also the head of `!=` inside a leaf"
+
+[[operator]]
+concept = "capability"
+token = "At"
+ascii = "@"
+description = "Host capability namespace, as in Rite"
+
+[[operator]]
+concept = "modifier"
+token = "Colon"
+ascii = ":"
+ambiguous = true
+description = "Configure the preceding structural form, as `:name value`; also Rite's ASCII atom prefix inside a leaf"

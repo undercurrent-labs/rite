@@ -9,5 +9,13 @@ not_found_handling = "single-page-application"
 # Serve real files (install.sh, wasm) even when SPA fallback is enabled
 html_handling = "auto-trailing-slash"
 
+# The canonical host from site.toml, declared here rather than attached by hand in
+# the dashboard: the domain a deploy serves is part of the deploy, and a worker
+# whose custom domain lives only in someone's browser history is one dashboard
+# edit away from serving the site at an address nothing in this tree names.
+[[routes]]
+pattern = "rite.foo"
+custom_domain = true
+
 # Deploy: pnpm site:build && wrangler deploy  (from apps/rite-web)
 # Preview: wrangler dev

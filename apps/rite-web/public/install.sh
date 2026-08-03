@@ -2,8 +2,8 @@
 # Install Rite CLI (and optionally rite-lsp) from GitHub Releases — no clone required.
 #
 # Usage (requires bash — not dash/sh):
-#   curl -fsSL https://rite.undrc.dev/install | bash
-#   curl -fsSL https://rite.undrc.dev/install.sh | bash
+#   curl -fsSL https://rite.foo/install | bash
+#   curl -fsSL https://rite.foo/install.sh | bash
 #
 #   RITE_VERSION=v0.1.8 bash install.sh
 #   RITE_INSTALL_DIR=$HOME/bin INSTALL_LSP=0 bash install.sh
@@ -13,13 +13,14 @@
 #   RITE_REPO          GitHub repo (default: undercurrent-labs/rite)
 #   RITE_INSTALL_DIR   Install directory (default: $HOME/.local/bin)
 #   INSTALL_LSP        Install rite-lsp too (default: 1)
+#   INSTALL_CANT       Install cant too, when the archive has it (default: 1)
 #   RITE_BASE_URL      Override asset base (default: GitHub releases download URL)
 #   RITE_DRY_RUN       If 1, print actions only
 
 # `curl | sh` often runs dash, which breaks [[ and other bashisms.
 if [ -z "${BASH_VERSION:-}" ]; then
   printf 'error: this installer requires bash (not sh/dash).\n' >&2
-  printf '  curl -fsSL https://rite.undrc.dev/install | bash\n' >&2
+  printf '  curl -fsSL https://rite.foo/install | bash\n' >&2
   exit 1
 fi
 
@@ -28,6 +29,7 @@ set -euo pipefail
 REPO="${RITE_REPO:-undercurrent-labs/rite}"
 INSTALL_DIR="${RITE_INSTALL_DIR:-${HOME}/.local/bin}"
 INSTALL_LSP="${INSTALL_LSP:-1}"
+INSTALL_CANT="${INSTALL_CANT:-1}"
 DRY_RUN="${RITE_DRY_RUN:-0}"
 VERSION="${RITE_VERSION:-}"
 
@@ -186,6 +188,16 @@ Refuse to install without checksums."
     ok "installed ${INSTALL_DIR}/rite-lsp"
   fi
 
+  # Cant, the sibling language, ships in the same archive.
+  #
+  # Guarded on the file existing rather than on the version: an archive from
+  # before Cant shipped has no `cant` in it, and an installer that failed on one
+  # would break every downgrade. INSTALL_CANT=0 opts out.
+  if [[ "$INSTALL_CANT" == "1" && -f "${dir}/cant" ]]; then
+    install -m 755 "${dir}/cant" "${INSTALL_DIR}/cant"
+    ok "installed ${INSTALL_DIR}/cant"
+  fi
+
   # PATH hint
   case ":${PATH}:" in
     *":${INSTALL_DIR}:"*) ;;
@@ -201,8 +213,8 @@ Refuse to install without checksums."
     "${INSTALL_DIR}/rite" version 2>/dev/null || "${INSTALL_DIR}/rite" --version 2>/dev/null || true
   fi
 
-  printf '\n%sRite is installed.%s Docs: https://rite.undrc.dev/docs\n' "$GREEN" "$RESET"
-  printf 'Studio (no install): https://rite.undrc.dev/studio\n'
+  printf '\n%sRite is installed.%s Docs: https://rite.foo/docs\n' "$GREEN" "$RESET"
+  printf 'Studio (no install): https://rite.foo/studio\n'
 }
 
 main "$@"

@@ -1,0 +1,23 @@
+[package]
+name = "cant-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Cant command-line interface"
+
+[[bin]]
+name = "cant"
+path = "src/main.rs"
+
+[dependencies]
+cant = { workspace = true }
+cant-syntax = { workspace = true }
+rite = { workspace = true }
+rite-caps = { workspace = true }
+rite-core = { workspace = true }
+rite-runtime = { workspace = true }
+cant-sem = { workspace = true }
+rustyline = { workspace = true }
+tokio = { workspace = true }
+clap = { workspace = true }
+serde_json = { workspace = true }

@@ -1,0 +1,22 @@
+name = "cant-web"
+compatibility_date = "2025-04-01"
+
+# Cant's site: its own worker and its own domain, not a route on the Rite worker.
+#
+# Separate because Cant is a separate language, and its front page says so without
+# qualifying every sentence on Rite's. It deploys in the same pipeline as the Rite
+# site — one repository, one release — which is a schedule, not a coupling: see
+# docs/adr/0001-cant-sibling-frontend.md.
+[assets]
+directory = "./dist"
+not_found_handling = "single-page-application"
+html_handling = "auto-trailing-slash"
+
+# The custom domain from site.toml. Attaching this needs the zone to exist in
+# Cloudflare first; `wrangler deploy` fails with a clear message if it does not.
+[[routes]]
+pattern = "cant.rite.foo"
+custom_domain = true
+
+# Deploy: pnpm cant:build && wrangler deploy  (from apps/cant-web)
+# Preview: wrangler dev

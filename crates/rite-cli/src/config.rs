@@ -5,7 +5,7 @@ use std::fs;
 use std::path::PathBuf;
 
 const DEFAULT_REPO: &str = "undercurrent-labs/rite";
-const SITE_BASE: &str = "https://rite.undrc.dev";
+const SITE_BASE: &str = "https://rite.foo";
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct RiteConfig {
