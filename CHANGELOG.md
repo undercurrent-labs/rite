@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+## [0.7.0] — 2026-08-03
+
+A second language in the same archive. Cant is terminal-typeable and
+graph-oriented — a program is a flow of stages, and each one emits zero or more
+values — and it runs by generating canonical Rite, so everything Rite already
+enforces about effects, capabilities and budgets applies to it unchanged. Rite
+itself gains three extracted APIs and two fixes; its grammar, IR and gates are
+untouched.
+
+The minor bump is the new executable. Nothing in Rite is breaking.
+
 ### Added
 
 - **Cant**, a sibling language, shipped as a second executable in the same
