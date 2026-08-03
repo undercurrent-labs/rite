@@ -377,6 +377,11 @@ pub fn expr(e: &ExprIr, compiled: &Compiled) -> Lowered {
 
         ExprIr::Match { .. } => return Err(Unsupported("Match")),
         ExprIr::HttpListen { .. } => return Err(Unsupported("HttpListen")),
+        // Same answer as `HttpListen`, for the same reason: the declaration bodies are
+        // IR the backend has no way to express. `codegen` falls back to the interpreter
+        // for this statement, running it over the `ProgramIr` embedded in the binary —
+        // so a compiled binary does serve MCP, and does it through the normative path.
+        ExprIr::McpServe { .. } => return Err(Unsupported("McpServe")),
         // `n := v` arrives from the desugarer as Assign{ value: Seq[Global(name), value] }.
         // Assigning through `env.assign` is what makes the write reach the frame that
         // declared the name, including a frame a closure captured.

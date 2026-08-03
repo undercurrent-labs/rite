@@ -11,6 +11,7 @@ pub mod fs;
 pub mod game;
 pub mod http;
 pub mod json;
+pub mod mcp;
 pub mod permissions;
 pub mod process;
 pub mod random;

@@ -135,6 +135,14 @@ pub const HOST_EFFECTS: &[(&str, bool)] = &[
     ("http.file", true),
     ("http.log", false),
     ("http.recover", false),
+    // @mcp — `serve` claims a transport (stdin/stdout, or a socket) and then runs
+    // script bodies for whoever is on the other end. `progress` writes a notification
+    // onto that transport. `log` is a marker named in `use @mcp.log`, and
+    // `tool_schema` is a pure derivation from a function's declared types.
+    ("mcp.serve", true),
+    ("mcp.progress", true),
+    ("mcp.log", false),
+    ("mcp.tool_schema", false),
     // @udp — datagram sockets. Every one of these touches the socket: `bind` claims
     // a port, `local_addr` asks the OS which one it got, and the two transfers move
     // bytes on and off the wire.
@@ -1037,6 +1045,37 @@ impl Resolver {
                     self.define(&p.name.name, false, p.span, file);
                 }
                 self.resolve_block(&r.body, file);
+                self.pop_scope();
+            }
+            Expr::McpServe(m) => {
+                // Unlike `@http.listen`, which escapes the effect check only because it
+                // is not a `Call`, an MCP server is held to it: it binds a transport and
+                // runs script bodies on demand for an outside caller, which is as
+                // effectful as anything in the language gets. The check is here rather
+                // than inherited, so the omission stays visible.
+                if !in_effect {
+                    self.diagnostics.push(simple_error(
+                        E021_EFFECT_REQUIRED,
+                        "`@mcp.serve` performs an effect",
+                        file,
+                        m.span,
+                        "mark it as an explicit effect: ! @mcp.serve",
+                    ));
+                }
+                // Serving *is* a call out of the program, so it counts as one for the
+                // stray-marker check above. Without this, the `!` this construct now
+                // requires would itself be reported as marking nothing — the two rules
+                // would contradict each other and no spelling would check clean.
+                self.call_sites_seen += 1;
+                self.resolve_expr(&m.config, file, false);
+                self.resolve_block(&m.body, file);
+            }
+            Expr::McpDecl(d) => {
+                self.push_scope();
+                for p in &d.params {
+                    self.define(&p.name.name, false, p.span, file);
+                }
+                self.resolve_block(&d.body, file);
                 self.pop_scope();
             }
             // Parentheses are transparent.

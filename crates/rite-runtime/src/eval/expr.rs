@@ -11,6 +11,67 @@ use std::pin::Pin;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
+/// Normalize the `@mcp.serve` configuration expression.
+///
+/// `@mcp.serve "calculator" ⟦…⟧` is the common case and means stdio, so a bare string
+/// is the server name. A record names any of the fields it wants to change. Resolved
+/// here rather than in the host because reading `transport: #http` needs the atom
+/// interner, which `CapabilityHost::call` has but the value alone does not.
+fn mcp_config_from(v: &Value, atoms: &AtomInterner) -> Result<McpServeConfig, EvalError> {
+    if let Some(name) = v.as_str() {
+        return Ok(McpServeConfig::named(name));
+    }
+    let Value::Record(_) = v else {
+        return Err(EvalError::Message(
+            "@mcp.serve expects a server name or a config record: \
+             `@mcp.serve \"calculator\" ⟦ … ⟧`"
+                .into(),
+        ));
+    };
+    // `get_field` answers `Value::None` for an absent key, so an omitted field and an
+    // explicit `none` are the same thing here — both mean "use the default".
+    let field = |k: &str| match v.get_field(k) {
+        Value::None => None,
+        found => Some(found),
+    };
+    let text = |k: &str| field(k).and_then(|f| f.as_str().map(|s| s.to_string()));
+
+    let name = text("name")
+        .ok_or_else(|| EvalError::Message("@mcp.serve config needs a `name` field".into()))?;
+    let mut cfg = McpServeConfig::named(name);
+
+    if let Some(t) = field("transport") {
+        // An atom or a string, so both `transport: #http` and `transport: "http"`
+        // work — `to_display` resolves the atom to its name.
+        let spelling = t
+            .as_str()
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| t.to_display(atoms));
+        cfg.transport = match spelling.trim_start_matches('#') {
+            "stdio" => McpTransport::Stdio,
+            "http" => McpTransport::Http,
+            other => {
+                return Err(EvalError::Message(format!(
+                    "@mcp.serve: unknown transport `{other}` (expected #stdio or #http)"
+                )))
+            }
+        };
+    }
+    if let Some(v) = text("version") {
+        cfg.version = v;
+    }
+    if let Some(a) = text("addr") {
+        cfg.addr = a;
+    }
+    if let Some(i) = text("instructions") {
+        cfg.instructions = Some(i);
+    }
+    if let Some(Value::Int(ms)) = field("list_ttl_ms") {
+        cfg.list_ttl_ms = ms;
+    }
+    Ok(cfg)
+}
+
 impl<'a> Evaluator<'a> {
     pub async fn eval_program(&mut self, ir: &ProgramIr) -> Result<Value, EvalError> {
         crate::register_functions(ir, self.ctx);
@@ -249,48 +310,8 @@ impl<'a> Evaluator<'a> {
                 // Middleware: `use @http.log` → Named, `use { |req, next| … }` → Function
                 let mut mw_specs: Vec<crate::value::HttpMiddleware> = Vec::new();
                 for m in middleware {
-                    match m {
-                        ExprIr::CapabilityCall { path, .. } => {
-                            let name = path.join(".");
-                            let short = name
-                                .strip_prefix("http.")
-                                .unwrap_or(name.as_str())
-                                .trim_start_matches('@')
-                                .to_string();
-                            mw_specs.push(crate::value::HttpMiddleware::Named(short));
-                        }
-                        ExprIr::NativeCall { name, .. } => {
-                            mw_specs.push(crate::value::HttpMiddleware::Named(name.clone()));
-                        }
-                        ExprIr::Global(name) => {
-                            mw_specs.push(crate::value::HttpMiddleware::Named(name.clone()));
-                        }
-                        ExprIr::Closure(_) => {
-                            let v = self.eval_operand(m).await?;
-                            if let Value::Function(c) = v {
-                                mw_specs.push(crate::value::HttpMiddleware::Function(c));
-                            }
-                        }
-                        other => {
-                            // Evaluate (e.g. already-resolved values) and classify
-                            let v = self.eval_operand(other).await?;
-                            match v {
-                                Value::Function(c) => {
-                                    mw_specs.push(crate::value::HttpMiddleware::Function(c));
-                                }
-                                Value::Atom(id) => {
-                                    let n = self.ctx.atoms.name(id);
-                                    let short =
-                                        n.strip_prefix("http.").unwrap_or(n.as_str()).to_string();
-                                    mw_specs.push(crate::value::HttpMiddleware::Named(short));
-                                }
-                                Value::String(s) => {
-                                    mw_specs
-                                        .push(crate::value::HttpMiddleware::Named(s.to_string()));
-                                }
-                                _ => {}
-                            }
-                        }
+                    if let Some(spec) = self.middleware_spec("http.", m).await? {
+                        mw_specs.push(spec);
                     }
                 }
                 // Build route table with real Rite bodies for per-request evaluation
@@ -321,6 +342,59 @@ impl<'a> Evaluator<'a> {
                     )
                     .await
             }
+            ExprIr::McpServe {
+                config,
+                decls,
+                middleware,
+                ..
+            } => {
+                let config_value = self.eval_operand(config).await?;
+                let cfg = mcp_config_from(&config_value, &self.ctx.atoms)?;
+
+                let mut mw_specs: Vec<crate::value::HttpMiddleware> = Vec::new();
+                for m in middleware {
+                    if let Some(spec) = self.middleware_spec("mcp.", m).await? {
+                        mw_specs.push(spec);
+                    }
+                }
+
+                // Split by kind here rather than in the host: each list method answers
+                // from one of these directly, and declaration order — which the spec
+                // now asks servers to keep stable for client-side caching — is just
+                // the order they were written in.
+                let mut tools = Vec::new();
+                let mut resources = Vec::new();
+                let mut prompts = Vec::new();
+                for d in decls {
+                    match d.kind.as_str() {
+                        "tool" => tools.push(d.clone()),
+                        "resource" => resources.push(d.clone()),
+                        "prompt" => prompts.push(d.clone()),
+                        other => {
+                            return Err(EvalError::Message(format!(
+                                "unknown @mcp declaration kind `{other}`"
+                            )))
+                        }
+                    }
+                }
+
+                self.ctx.pending_mcp = Some(PendingMcpServer {
+                    config: cfg,
+                    tools,
+                    resources,
+                    prompts,
+                    middleware: mw_specs,
+                });
+                self.ctx
+                    .capabilities
+                    .call(
+                        &["mcp".into(), "serve".into()],
+                        vec![config_value],
+                        true,
+                        self.ctx,
+                    )
+                    .await
+            }
             ExprIr::Seq(xs, _) => {
                 let mut last = Value::None;
                 for x in xs {
@@ -330,6 +404,46 @@ impl<'a> Evaluator<'a> {
             }
         }
     } // end eval_expr_inner
+
+    /// Classify one `use …` marker into a middleware spec.
+    ///
+    /// Extracted from the `ExprIr::HttpListen` arm so `@mcp` reads its `use @mcp.log`
+    /// through exactly the same rules. `prefix` is the capability prefix to strip from
+    /// a named marker (`"http."` / `"mcp."`) so `use @http.log` and `use @mcp.log`
+    /// both come out as `Named("log")`.
+    pub(super) async fn middleware_spec(
+        &mut self,
+        prefix: &str,
+        m: &ExprIr,
+    ) -> Result<Option<crate::value::HttpMiddleware>, EvalError> {
+        Ok(match m {
+            ExprIr::CapabilityCall { path, .. } => {
+                let name = path.join(".");
+                let short = name
+                    .strip_prefix(prefix)
+                    .unwrap_or(name.as_str())
+                    .trim_start_matches('@')
+                    .to_string();
+                Some(crate::value::HttpMiddleware::Named(short))
+            }
+            ExprIr::NativeCall { name, .. } | ExprIr::Global(name) => {
+                Some(crate::value::HttpMiddleware::Named(name.clone()))
+            }
+            // Anything else — including an already-resolved value — is evaluated and
+            // classified by what it turns out to be.
+            other => match self.eval_operand(other).await? {
+                Value::Function(c) => Some(crate::value::HttpMiddleware::Function(c)),
+                Value::Atom(id) => {
+                    let n = self.ctx.atoms.name(id);
+                    Some(crate::value::HttpMiddleware::Named(
+                        n.strip_prefix(prefix).unwrap_or(n.as_str()).to_string(),
+                    ))
+                }
+                Value::String(s) => Some(crate::value::HttpMiddleware::Named(s.to_string())),
+                _ => None,
+            },
+        })
+    }
 
     pub(super) async fn eval_pipeline_stage(
         &mut self,

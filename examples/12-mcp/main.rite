@@ -1,0 +1,34 @@
+//! An MCP server: tools, a resource, and a prompt, over stdio.
+//! Run: rite run examples/12-mcp/main.rite
+//! Watch for: rite: mcp server calculator on stdio   (on stderr)
+//! Then, on stdin: {"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}
+//!
+//! Each tool's JSON Schema is derived from the types written on its parameters, so
+//! there is no second description to keep in step.
+
+! @mcp.serve "calculator" ⟦
+  ⊏ @mcp.log
+
+  tool "add" "Add two numbers" |a: int, b: int| ⟦
+    ^ a + b
+  ⟧
+
+  tool "stats" "Summarise a list of numbers" |xs: [int]| ⟦
+    ^ ⟨count: xs → count, total: xs → sum⟩
+  ⟧
+
+  tool "divide" "Divide, refusing a zero divisor" |a: int, b: int| ⟦
+    ? b = 0 ⟦
+      ^ err(⟨kind: "bad_input", message: "cannot divide by zero"⟩)
+    ⟧
+    ^ a / b
+  ⟧
+
+  resource "config://server" "What this server is" ⟦
+    ^ ⟨name: "calculator", tools: 3⟩
+  ⟧
+
+  prompt "explain" "Ask for an explanation of a result" |topic: string| ⟦
+    ^ "Explain this result in one paragraph: " + topic
+  ⟧
+⟧

@@ -60,6 +60,7 @@ fn is_sync(expr: &ExprIr) -> bool {
         | ExprIr::Block(_)
         | ExprIr::Return(..)
         | ExprIr::HttpListen { .. }
+        | ExprIr::McpServe { .. }
         | ExprIr::Placeholder(_) => false,
     }
 }
@@ -264,6 +265,14 @@ pub struct RuntimeContext {
     /// so two requests — or two servers — cannot see each other's `next`, and a stale
     /// one cannot outlive the chain that made it.
     pub http_next: Option<HttpNextInvoker>,
+    /// Staged by the evaluator immediately before it calls `@mcp.serve`, read by the
+    /// capability. See [`PendingMcpServer`].
+    pub pending_mcp: Option<PendingMcpServer>,
+    /// Installed by the MCP host on the fresh context it builds for one request, so
+    /// `@mcp.progress` inside a tool body reaches that request's stream. `None`
+    /// everywhere else, which is what makes calling it outside a tool an error rather
+    /// than a silent no-op.
+    pub mcp_notify: Option<McpNotifier>,
 }
 
 /// A server that `@http.listen` is about to start.
@@ -280,6 +289,74 @@ pub struct PendingHttpServer {
     pub routes: Vec<rite_sem::RouteIr>,
     pub middleware: Vec<crate::value::HttpMiddleware>,
 }
+
+/// A server that `@mcp.serve` is about to start.
+///
+/// Staged on the context for the same reason as [`PendingHttpServer`]: the declaration
+/// bodies are `BlockIr` and cannot travel as `Value` arguments through
+/// `CapabilityHost::call`. Declarations are split by kind here rather than in the host
+/// so the host receives three tables it can answer `tools/list`, `resources/list` and
+/// `prompts/list` from directly, each already in declaration order.
+#[derive(Clone)]
+pub struct PendingMcpServer {
+    pub config: McpServeConfig,
+    pub tools: Vec<rite_sem::McpDeclIr>,
+    pub resources: Vec<rite_sem::McpDeclIr>,
+    pub prompts: Vec<rite_sem::McpDeclIr>,
+    /// Reuses `@http`'s middleware value: the shape is identical, and `use @mcp.log`
+    /// is classified by the same code that classifies `use @http.log`.
+    pub middleware: Vec<crate::value::HttpMiddleware>,
+}
+
+/// Where an MCP server listens.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum McpTransport {
+    /// Newline-delimited JSON-RPC on the process's own stdin/stdout. The default,
+    /// because it is the form a local MCP client launches directly.
+    Stdio,
+    /// Streamable HTTP: a single POST endpoint. Stateless since the 2026-07-28
+    /// revision, so there is no session to keep.
+    Http,
+}
+
+/// The normalized `@mcp.serve` configuration.
+///
+/// The source may write a bare string (the server name) or a record; both arrive here
+/// as the same struct, resolved in the evaluator where the atom interner is reachable.
+#[derive(Clone, Debug)]
+pub struct McpServeConfig {
+    pub name: String,
+    pub version: String,
+    pub transport: McpTransport,
+    /// Only meaningful for [`McpTransport::Http`].
+    pub addr: String,
+    pub instructions: Option<String>,
+    /// The `ttlMs` freshness hint stamped on list results. The declaration tables are
+    /// fixed once `serve` starts, so they are safely cacheable for a long time.
+    pub list_ttl_ms: i64,
+}
+
+impl McpServeConfig {
+    /// Everything but the name has a usable default, so `@mcp.serve "name"` works.
+    pub fn named(name: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            version: "0.1.0".into(),
+            transport: McpTransport::Stdio,
+            addr: "127.0.0.1:0".into(),
+            instructions: None,
+            list_ttl_ms: 3_600_000,
+        }
+    }
+}
+
+/// Emits a server-to-client notification for the request being served.
+///
+/// Deliberately simpler than [`HttpNextInvoker`]: a notification has no response, so
+/// this is synchronous and fire-and-forget, and `@mcp.progress` can stay an ordinary
+/// capability call instead of needing a callable `Value::Handle` and an arm in
+/// `call_value`.
+pub type McpNotifier = Arc<dyn Fn(serde_json::Value) + Send + Sync>;
 
 /// Next id for a freshly constructed closure.
 pub fn next_closure_id() -> u64 {
@@ -314,6 +391,8 @@ impl RuntimeContext {
             console_allowed: true,
             script_args: Vec::new(),
             pending_http: None,
+            pending_mcp: None,
+            mcp_notify: None,
             http_next: None,
             sink: None,
             handles: Arc::new(crate::handles::HandleTable::default()),
@@ -360,6 +439,8 @@ impl RuntimeContext {
             console_allowed: self.console_allowed,
             script_args: self.script_args.clone(),
             pending_http: None,
+            pending_mcp: None,
+            mcp_notify: None,
             http_next: None,
             sink: None,
             // Shared, like the capability host: a handle opened before the fork

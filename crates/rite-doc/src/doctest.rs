@@ -157,6 +157,15 @@ async fn run_block(file: &Path, block: &FenceBlock) -> DocTestResult {
                     message: "skipped listen (parse ok)".into(),
                 };
             }
+            if block.code.contains("@mcp.serve") || block.code.contains("host.mcp.serve") {
+                return DocTestResult {
+                    file: file_s,
+                    line: block.line,
+                    mode: block.mode.clone(),
+                    ok: true,
+                    message: "skipped serve (parse ok)".into(),
+                };
+            }
             if block.code.contains("@process") {
                 return DocTestResult {
                     file: file_s,

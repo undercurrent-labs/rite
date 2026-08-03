@@ -319,10 +319,16 @@ fn capability_hover(word: &str) -> Option<HoverInfo> {
             "Digests, HMAC, base64/hex. Pure except random_bytes, which needs `random`.",
         ),
         ("@game", "Text RPG entity and event runtime."),
+        (
+            "@mcp",
+            "Model Context Protocol server. Tool schemas are derived from declared \
+             parameter types. Native-only; stdio needs no grant, an HTTP bind needs net.",
+        ),
         ("console", "See @console"),
         ("fs", "See @fs"),
         ("json", "See @json"),
         ("http", "See @http"),
+        ("mcp", "See @mcp"),
     ]
     .into_iter()
     .collect();
@@ -382,6 +388,7 @@ fn builtin_completions() -> Vec<CompletionItem> {
         ("@random", "capability", "@random"),
         ("@crypto", "capability", "@crypto"),
         ("@game", "capability", "@game"),
+        ("@mcp", "capability", "@mcp"),
         ("true", "constant", "true"),
         ("false", "constant", "false"),
         ("none", "constant", "none"),

@@ -213,6 +213,33 @@ impl Desugar {
 
     fn push_scope_params(&mut self) {}
 
+    /// Lower one `tool` / `resource` / `prompt` declaration.
+    ///
+    /// The parameter list is carried across whole. Every other lowering path in this
+    /// file reduces a parameter to a fresh local and drops the annotation, which is
+    /// right when the annotation is only a contract to check — here it is also the
+    /// schema the server publishes, so it has to reach the host.
+    fn desugar_mcp_decl(&mut self, d: &rite_syntax::McpDeclExpr) -> McpDeclIr {
+        McpDeclIr {
+            kind: d.kind.as_str().to_string(),
+            name: rite_syntax::unescape_braces(&d.name),
+            description: d
+                .description
+                .as_ref()
+                .map(|s| rite_syntax::unescape_braces(s)),
+            params: d
+                .params
+                .iter()
+                .map(|p| McpParamIr {
+                    name: p.name.name.clone(),
+                    ty: p.ty.clone(),
+                })
+                .collect(),
+            body: self.desugar_block(&d.body),
+            span: d.span,
+        }
+    }
+
     fn desugar_block(&mut self, block: &Block) -> BlockIr {
         let mut params = Vec::new();
         for _ in &block.params {
@@ -711,6 +738,53 @@ impl Desugar {
                     span: h.span,
                 }
             }
+            Expr::McpServe(m) => {
+                let mut decls = Vec::new();
+                let mut middleware = Vec::new();
+                for item in &m.body.body {
+                    if let Item::Statement(Stmt::Expr(e)) = item {
+                        match e {
+                            Expr::McpDecl(d) => decls.push(self.desugar_mcp_decl(d)),
+                            Expr::Call(c)
+                                if matches!(
+                                    c.callee.as_ref(),
+                                    Expr::Ident(i) if i.name == "__middleware_use"
+                                ) =>
+                            {
+                                if let Some(arg) = c.args.first() {
+                                    middleware.push(self.desugar_expr(arg));
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+                ExprIr::McpServe {
+                    config: Box::new(self.desugar_expr(&m.config)),
+                    decls,
+                    middleware,
+                    span: m.span,
+                }
+            }
+            // A declaration outside a serve body has nothing to register with. It
+            // describes itself as a record so the shape is still inspectable, matching
+            // what a stray `Expr::Route` does.
+            Expr::McpDecl(d) => ExprIr::BuildRecord(
+                vec![
+                    (
+                        KeyIr::Ident("kind".into()),
+                        ExprIr::Atom(d.kind.as_str().into(), d.span),
+                    ),
+                    (
+                        KeyIr::Ident("name".into()),
+                        ExprIr::Constant(ValueLiteral::String(
+                            rite_syntax::unescape_braces(&d.name),
+                            d.span,
+                        )),
+                    ),
+                ],
+                d.span,
+            ),
             Expr::Route(r) => {
                 // standalone route shouldn't appear; wrap as record
                 ExprIr::BuildRecord(

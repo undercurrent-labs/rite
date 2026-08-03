@@ -2,6 +2,72 @@
 
 ## [Unreleased]
 
+An MCP release. A Rite script could expose an HTTP service in a dozen lines but had no
+way to be a Model Context Protocol server: the only route was to hand-roll JSON-RPC
+framing over `@console.read_line`, which nobody was going to do. The shape below is the
+`@http.listen` shape, because being an MCP server should cost what serving HTTP costs.
+
+### Added
+
+- **`@mcp.serve`** starts an MCP server and blocks until shutdown, over stdio (the
+  default) or Streamable HTTP. The body is a declaration table — `tool`, `resource` and
+  `prompt`, each with an ordinary Rite body:
+
+  ```rite
+  ! @mcp.serve "calculator" ⟦
+    tool "add" "Add two numbers" |a: int, b: int| ⟦ ^ a + b ⟧
+  ⟧
+  ```
+
+  Effectful, and unlike `@http.listen` it is held to that: the `!` is required. Serving
+  over stdio needs no grant, being the process's own streams; an HTTP bind goes through
+  the same policy as `@http.listen`, so loopback is free and anything else needs
+  `--allow net=<host>`.
+
+- **A tool's JSON Schema is derived from the types already declared on it.** `|a: int,
+  b: [string]|` publishes an object schema requiring an integer and an array of strings;
+  an unannotated parameter publishes the empty schema and stays required. There is no
+  second description to keep in step, and argument validation is the same contract check
+  a typed Rite call gets — so a client passing the wrong type receives the tool's own
+  error, in band, with `isError: true` rather than as a dead connection.
+
+- **`@mcp.tool_schema(f)`** answers the schema a function would be published with. Pure,
+  so you can see what a tool advertises without starting anything.
+
+- **`@mcp.progress(fraction, message)`** sends a `notifications/progress` on the stream
+  of the call being served. Only meaningful inside a tool body; elsewhere it fails
+  rather than reporting progress nobody could receive.
+
+- **`use @mcp.log`** writes one structured JSON line per request to stderr. Stderr and
+  not the protocol's own logging notifications, which the specification has deprecated —
+  logging to stderr is its own suggested migration, and under stdio it is the only thing
+  that works, because stdout is the wire.
+
+  For that reason, everything a tool body prints goes to stderr while an stdio server is
+  running. You do not have to arrange it; `! @console.println` inside a tool simply does
+  not reach the protocol stream.
+
+- **`docs/book/mcp.md`** and `examples/12-mcp/`.
+
+The 2026-07-28 revision is implemented natively — stateless, with `server/discover` as
+the one mandatory call and cache hints on the list results — and clients still speaking
+`2025-06-18` are answered by a compatibility layer that engages when they send
+`initialize`. Not implemented, deliberately: `subscriptions/listen` (a Rite server's
+tables cannot change while it runs, so the capability is not advertised rather than
+advertised and never fired), `notifications/message`, and Multi Round-Trip Requests.
+
+### Fixed — `rite fmt` no longer discards type annotations
+
+Formatting a file dropped declared types in two places, which for an `@mcp` declaration
+would have silently changed the schema a server publishes:
+
+- A route's parameter annotation was never printed at all, so `|req: any|` came back as
+  `|req|`.
+- `result<int>` printed as bare `result` and `⟨a: int, b: string⟩` as bare `record`,
+  neither of which reparses to what was written.
+
+Both now round-trip, in either dialect.
+
 ## [0.6.1] — 2026-08-01
 
 An HTTP release. A Rite server could not return HTML: the media type was inferred

@@ -135,6 +135,22 @@ fn strip_block(b: &Block) -> serde_json::Value {
     })
 }
 
+/// A span-free view of a type annotation, so two spellings of the same type compare
+/// equal and a *lost* type does not.
+fn strip_type(t: &TypeExpr) -> serde_json::Value {
+    match t {
+        TypeExpr::Named(i) => serde_json::json!({"named": i.name}),
+        TypeExpr::List(inner) => serde_json::json!({"list": strip_type(inner)}),
+        TypeExpr::Result(inner) => serde_json::json!({"result": strip_type(inner)}),
+        TypeExpr::Record(fields) => serde_json::json!({
+            "record": fields.iter()
+                .map(|(k, v)| serde_json::json!({"key": k.name, "ty": strip_type(v)}))
+                .collect::<Vec<_>>(),
+        }),
+        TypeExpr::Any(_) => serde_json::json!({"any": true}),
+    }
+}
+
 fn strip_expr(e: &Expr) -> serde_json::Value {
     match e {
         Expr::Literal(l) => serde_json::json!({"lit": format!("{:?}", l.kind)}),
@@ -201,6 +217,23 @@ fn strip_expr(e: &Expr) -> serde_json::Value {
         Expr::Route(r) => serde_json::json!({
             "route": format!("{:?}", r.method),
             "path": r.path,
+        }),
+        Expr::McpServe(m) => serde_json::json!({
+            "mcp_serve": strip_expr(&m.config),
+            "body": strip_block(&m.body),
+        }),
+        // The parameter *types* are part of the comparison, unlike `strip_block`'s
+        // name-only view: they are what the declaration publishes as its schema, so a
+        // round trip that drops an annotation has to read as a difference here.
+        Expr::McpDecl(d) => serde_json::json!({
+            "mcp_decl": d.kind.as_str(),
+            "name": d.name,
+            "description": d.description,
+            "params": d.params.iter().map(|p| serde_json::json!({
+                "name": p.name.name,
+                "ty": p.ty.as_ref().map(strip_type),
+            })).collect::<Vec<_>>(),
+            "body": strip_block(&d.body),
         }),
         Expr::Group(g) => strip_expr(&g.expr),
         Expr::Coalesce(c) => serde_json::json!({

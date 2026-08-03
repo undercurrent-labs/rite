@@ -1,0 +1,5 @@
+// `@mcp.progress` reports progress on the stream of the call being served, so outside
+// an `@mcp.serve` body there is no stream to write to. It fails with a message saying
+// so rather than silently doing nothing, which would leave a script believing it had
+// reported progress that nobody could have received.
+! @mcp.progress(0.5, "halfway")

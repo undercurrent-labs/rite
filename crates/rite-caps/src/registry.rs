@@ -8,6 +8,7 @@ use crate::fs::FsCap;
 use crate::game::GameCap;
 use crate::http::HttpCap;
 use crate::json::JsonCap;
+use crate::mcp::McpCap;
 use crate::permissions::PermissionSet;
 use crate::process::ProcessCap;
 use crate::random::RandomCap;
@@ -50,6 +51,7 @@ pub struct HostCapabilities {
     pub process: ProcessCap,
     pub random: Arc<RwLock<RandomCap>>,
     pub http: HttpCap,
+    pub mcp: McpCap,
     pub udp: UdpCap,
     pub tcp: TcpCap,
     pub game: Arc<RwLock<GameCap>>,
@@ -70,6 +72,7 @@ impl HostCapabilities {
             process: ProcessCap,
             random: Arc::new(RwLock::new(RandomCap::from_entropy())),
             http: HttpCap::new(),
+            mcp: McpCap::new(),
             udp: UdpCap::new(),
             tcp: TcpCap::new(),
             game: Arc::new(RwLock::new(GameCap::new())),
@@ -91,6 +94,7 @@ impl HostCapabilities {
             ("process", ProcessCap::DESCRIPTORS),
             ("random", RandomCap::DESCRIPTORS),
             ("http", HttpCap::DESCRIPTORS),
+            ("mcp", McpCap::DESCRIPTORS),
             ("udp", UdpCap::DESCRIPTORS),
             ("tcp", TcpCap::DESCRIPTORS),
             ("game", GameCap::DESCRIPTORS),
@@ -151,6 +155,7 @@ impl CapabilityHost for HostCapabilities {
                 rng.call(method, args, &self.perms)
             }
             "http" => self.http.call(method, args, &self.perms, ctx).await,
+            "mcp" => self.mcp.call(method, args, &self.perms, ctx).await,
             "udp" => self.udp.call(method, args, &self.perms).await,
             // `listen` needs the context: its handler block is a closure that must
             // resolve the module scope it was written in, exactly as `@http` does.

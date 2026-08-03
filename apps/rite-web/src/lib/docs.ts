@@ -28,6 +28,7 @@ export const DOC_CHAPTERS: DocChapter[] = [
   { slug: "db", title: "Databases", file: "db.md" },
   { slug: "http", title: "Network: HTTP services", file: "http.md" },
   { slug: "sockets", title: "Network: sockets", file: "sockets.md" },
+  { slug: "mcp", title: "Model Context Protocol servers", file: "mcp.md" },
   { slug: "environment", title: "Environment", file: "environment.md" },
   { slug: "processes", title: "Processes", file: "processes.md" },
   { slug: "modules", title: "Modules", file: "modules.md" },

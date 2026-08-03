@@ -23,16 +23,17 @@ This book is a linear path. You can stop after any chapter and experiment in [St
 15. [Databases](db.md) — `@db` (DuckDB), SQL, transactions
 16. [Network: HTTP services](http.md) — `@http.listen`, routes, middleware, client calls
 17. [Network: sockets](sockets.md) — `@udp` datagrams, `@tcp` streams, bytes on the wire
-18. [Environment](environment.md) — `@env`, `@clock`, `@random`, `@store`
-19. [Processes](processes.md) — `@process`, running commands, script arguments
-20. [Modules](modules.md) — `use`, `pub`, relative paths, aliases
-21. [Compiling to Rust](compiling.md) — `rite build`, IR, parity
-22. [Text RPG](rpg.md) — `@game` tutorial
-23. [Embedding](embedding.md) — `RiteEngine` from Rust
-24. [Browser & Studio](browser.md) — hosted site, WASM limits
-25. [Agents & the skill bundle](agents.md) — skill install, self-update, VS Code extension
-26. [Testing](testing.md) — `◆ test`, `expect`, `rite test`
-27. [Contributing tests](contributing-tests.md) — suite map, HTTP I/O capture, PR checklist
+18. [Model Context Protocol servers](mcp.md) — `@mcp.serve`, tools, resources, prompts
+19. [Environment](environment.md) — `@env`, `@clock`, `@random`, `@store`
+20. [Processes](processes.md) — `@process`, running commands, script arguments
+21. [Modules](modules.md) — `use`, `pub`, relative paths, aliases
+22. [Compiling to Rust](compiling.md) — `rite build`, IR, parity
+23. [Text RPG](rpg.md) — `@game` tutorial
+24. [Embedding](embedding.md) — `RiteEngine` from Rust
+25. [Browser & Studio](browser.md) — hosted site, WASM limits
+26. [Agents & the skill bundle](agents.md) — skill install, self-update, VS Code extension
+27. [Testing](testing.md) — `◆ test`, `expect`, `rite test`
+28. [Contributing tests](contributing-tests.md) — suite map, HTTP I/O capture, PR checklist
 
 ## Where each capability is covered
 
@@ -45,6 +46,7 @@ This book is a linear path. You can stop after any chapter and experiment in [St
 | `@db` | [Databases](db.md) | denied |
 | `@http` | [Network: HTTP services](http.md) | denied |
 | `@udp` · `@tcp` | [Network: sockets](sockets.md) | denied |
+| `@mcp` | [Model Context Protocol servers](mcp.md) | stdio allowed; HTTP bind denied |
 | `@env` | [Environment](environment.md) | denied |
 | `@process` | [Processes](processes.md) | denied |
 | `@clock` · `@random` | [Environment](environment.md) | allowed |

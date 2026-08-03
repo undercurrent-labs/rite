@@ -1258,19 +1258,34 @@ impl<'a> Formatter<'a> {
                 self.out.push_str(&r.path);
                 self.out.push('"');
                 // The handler's parameter list binds `req`: dropping it turns a
-                // working route into `undefined name` at resolve time.
-                if !r.params.is_empty() {
-                    self.out.push_str(" |");
-                    for (i, p) in r.params.iter().enumerate() {
-                        if i > 0 {
-                            self.out.push_str(", ");
-                        }
-                        self.out.push_str(&p.name.name);
-                    }
-                    self.out.push('|');
-                }
+                // working route into `undefined name` at resolve time. It also carries
+                // any annotation on that parameter, which this used to discard.
+                self.param_header(&r.params);
                 self.out.push(' ');
                 self.block(&r.body);
+            }
+            Expr::McpServe(m) => {
+                self.out.push_str(&self.sigil("@", "host."));
+                self.out.push_str("mcp.serve ");
+                self.expr(&m.config);
+                self.out.push(' ');
+                self.block(&m.body);
+            }
+            Expr::McpDecl(d) => {
+                self.out.push_str(d.kind.as_str());
+                self.out.push_str(" \"");
+                self.out.push_str(&d.name);
+                self.out.push('"');
+                if let Some(desc) = &d.description {
+                    self.out.push_str(" \"");
+                    self.out.push_str(desc);
+                    self.out.push('"');
+                }
+                // The annotations here are the declaration's published schema, so this
+                // header is load-bearing in a way a lambda's is not.
+                self.param_header(&d.params);
+                self.out.push(' ');
+                self.block(&d.body);
             }
             Expr::Group(g) => {
                 self.out.push('(');
@@ -1359,10 +1374,49 @@ impl<'a> Formatter<'a> {
                 self.type_expr(inner);
                 self.out.push(']');
             }
-            rite_syntax::TypeExpr::Result(_) => self.out.push_str("result"),
-            rite_syntax::TypeExpr::Record(_) => self.out.push_str("record"),
+            // Both of these used to print the bare head — `result<int>` came back as
+            // `result` and `⟨a: int⟩` as `record`, neither of which reparses to what
+            // was written. A dropped annotation is not cosmetic: it is the contract
+            // the runtime checks, and for an `@mcp` declaration it is also the JSON
+            // Schema the server publishes.
+            rite_syntax::TypeExpr::Result(inner) => {
+                self.out.push_str("result<");
+                self.type_expr(inner);
+                self.out.push('>');
+            }
+            rite_syntax::TypeExpr::Record(fields) => {
+                self.out.push_str(&self.sigil("⟨", "<<"));
+                for (i, (name, ty)) in fields.iter().enumerate() {
+                    if i > 0 {
+                        self.out.push_str(", ");
+                    }
+                    self.out.push_str(&name.name);
+                    self.out.push_str(": ");
+                    self.type_expr(ty);
+                }
+                self.out.push_str(&self.sigil("⟩", ">>"));
+            }
             rite_syntax::TypeExpr::Any(_) => self.out.push_str("any"),
         }
+    }
+
+    /// `|a: int, b: string|`, or nothing when there are no parameters.
+    fn param_header(&mut self, params: &[rite_syntax::Param]) {
+        if params.is_empty() {
+            return;
+        }
+        self.out.push_str(" |");
+        for (i, p) in params.iter().enumerate() {
+            if i > 0 {
+                self.out.push_str(", ");
+            }
+            self.out.push_str(&p.name.name);
+            if let Some(ty) = &p.ty {
+                self.out.push_str(": ");
+                self.type_expr(ty);
+            }
+        }
+        self.out.push('|');
     }
 }
 

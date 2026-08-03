@@ -1,0 +1,9 @@
+// The HTTP transport binds a socket, so it goes through the same bind policy as
+// `@http.listen` and `@tcp.listen`: loopback is allowed by default, anything else
+// needs `--allow net=<host>`. The check runs before the bind, so this never blocks.
+//
+// The stdio transport needs no grant at all — it is the process's own streams — which
+// is why the denial case has to name `#http` explicitly.
+! @mcp.serve ⟨name: "calculator", transport: #http, addr: "0.0.0.0:0"⟩ ⟦
+  tool "add" "Add two numbers" |a: int, b: int| ⟦ ^ a + b ⟧
+⟧

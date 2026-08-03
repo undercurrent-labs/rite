@@ -588,6 +588,40 @@ Middleware: convert handler panics/errors into JSON 500 responses. Enable with `
 - effectful: false
 - permission: 
 
+## @mcp
+
+### serve
+
+Serve the Model Context Protocol and block until shutdown. Takes a server name, or a config record `⟨name, version, transport, addr, instructions⟩` where `transport` is `#stdio` (the default) or `#http`. Each `tool`, `resource` and `prompt` in the block is published to the client, with its JSON Schema derived from the parameter types declared on it. Under `#http` the bind address needs `--allow net=<host>` unless it is loopback; `#stdio` needs no grant, being the process's own streams.
+
+- arity: 2
+- effectful: true
+- permission: net
+
+### progress
+
+Report progress from inside a tool body: `! @mcp.progress(0.5, "halfway")`. Sends a `notifications/progress` on the stream of the call being served. Only valid inside an `@mcp.serve` body — elsewhere it fails rather than silently doing nothing.
+
+- arity: 2
+- effectful: true
+- permission: 
+
+### log
+
+Middleware marker: `use @mcp.log` inside an `@mcp.serve` block writes one structured JSON line per request to stderr. Stderr rather than the protocol's own logging notifications, which are deprecated, and because under `#stdio` stdout carries the wire.
+
+- arity: 0
+- effectful: false
+- permission: 
+
+### tool_schema
+
+The JSON Schema a function would be published with, derived from its declared parameter types: `@mcp.tool_schema(add)`. Pure — for checking what a tool advertises without starting a server.
+
+- arity: 1
+- effectful: false
+- permission: 
+
 ## @udp
 
 ### bind

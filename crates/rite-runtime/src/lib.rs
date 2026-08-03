@@ -8,6 +8,7 @@ pub mod eval;
 pub mod handles;
 pub mod ops;
 pub mod patterns;
+pub mod schema;
 pub mod value;
 
 pub use atom::AtomInterner;

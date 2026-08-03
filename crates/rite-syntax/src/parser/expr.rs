@@ -896,11 +896,162 @@ impl Parser {
             });
         }
 
+        // `@mcp.serve config ⟦ tool … ⟧` — the `@http.listen` shape: a declaration
+        // table, not a call. Unlike `@http.listen` it is still held to effect
+        // discipline; `resolve` requires the `!` on it explicitly, because bypassing
+        // the check is a property of not being a `Call` rather than a decision anyone
+        // made about `listen`.
+        if path.len() >= 2 && path[0] == "mcp" && path[1] == "serve" {
+            let config = self.parse_listen_addr();
+            let body = self.parse_mcp_body();
+            let span = start.merge(body.span);
+            return Expr::McpServe(McpServeExpr {
+                config: Box::new(config),
+                body,
+                span,
+            });
+        }
+
         let end = self.prev_span();
         Expr::Capability(CapabilityRef {
             path,
             span: start.merge(end),
         })
+    }
+
+    /// The body of `@mcp.serve` — [`parse_block`] plus the three declaration forms.
+    ///
+    /// `tool` / `resource` / `prompt` are deliberately **not** tokens. They are ordinary
+    /// lowercase words a script may well want as names (`tool ← "hammer"`), so they are
+    /// matched here as identifiers, and only when a string literal follows — which is
+    /// what keeps that binding parsing as a binding. `parse_route` sets the precedent by
+    /// accepting an `Ident` whose text is `GET`.
+    pub(super) fn parse_mcp_body(&mut self) -> Block {
+        let start = self.current_span();
+        let open = self.peek_kind();
+        if open != TokenKind::BlockOpen && open != TokenKind::LBrace {
+            self.error_expected("block");
+            return Block {
+                params: vec![],
+                has_param_list: false,
+                body: vec![],
+                span: start,
+            };
+        }
+        self.advance();
+
+        let mut body = Vec::new();
+        while !self.is_eof() && !self.check(TokenKind::BlockClose) && !self.check(TokenKind::RBrace)
+        {
+            if self.check(TokenKind::Semicolon) {
+                self.advance();
+                continue;
+            }
+            // `use @mcp.log` / `⊏ @mcp.log`, exactly as the `@http.listen` body reads it.
+            if self.check(TokenKind::Use) {
+                let checkpoint = self.pos;
+                self.advance();
+                if self.check(TokenKind::Host)
+                    || self.check(TokenKind::LBrace)
+                    || self.check(TokenKind::BlockOpen)
+                {
+                    let expr = self.parse_expression();
+                    body.push(Item::Statement(Stmt::Expr(Expr::Call(CallExpr {
+                        callee: Box::new(Expr::Ident(Ident {
+                            name: "__middleware_use".into(),
+                            span: expr.span(),
+                        })),
+                        args: vec![expr],
+                        span: start,
+                        trailing_block: false,
+                    }))));
+                    continue;
+                }
+                self.pos = checkpoint;
+            }
+
+            if let Some(kind) = self.peek_mcp_decl_kind() {
+                let decl = self.parse_mcp_decl(kind);
+                body.push(Item::Statement(Stmt::Expr(Expr::McpDecl(decl))));
+                continue;
+            }
+
+            if let Some(item) = self.parse_item_or_stmt() {
+                body.push(item);
+            } else {
+                self.advance();
+            }
+        }
+
+        if self.check(TokenKind::BlockClose) || self.check(TokenKind::RBrace) {
+            self.advance();
+        } else {
+            self.diagnostics.push(simple_error(
+                E012_UNCLOSED_DELIMITER,
+                "unclosed block",
+                self.file,
+                start,
+                "expected ⟧, ]], or }",
+            ));
+        }
+        let end = self.prev_span();
+        Block {
+            params: vec![],
+            has_param_list: false,
+            body,
+            span: start.merge(end),
+        }
+    }
+
+    /// A declaration keyword only when a string literal follows it, so that `tool` and
+    /// `resource` stay usable as ordinary names inside the block.
+    fn peek_mcp_decl_kind(&self) -> Option<McpDeclKind> {
+        if !self.check(TokenKind::Ident) {
+            return None;
+        }
+        let kind = match self.peek().text.as_str() {
+            "tool" => McpDeclKind::Tool,
+            "resource" => McpDeclKind::Resource,
+            "prompt" => McpDeclKind::Prompt,
+            _ => return None,
+        };
+        let followed_by_string = self.check_nth(1, TokenKind::String)
+            || self.check_nth(1, TokenKind::MultilineString)
+            || self.check_nth(1, TokenKind::RawString);
+        followed_by_string.then_some(kind)
+    }
+
+    /// `tool "name" "description"? |params|? ⟦ body ⟧`
+    ///
+    /// The description is optional and positional: a second string literal before the
+    /// parameter list. Parameter annotations are kept whole — they are the schema this
+    /// declaration publishes.
+    pub(super) fn parse_mcp_decl(&mut self, kind: McpDeclKind) -> McpDeclExpr {
+        let start = self.advance().span; // tool / resource / prompt
+        let name = self.advance().text.clone();
+        let description = if matches!(
+            self.peek_kind(),
+            TokenKind::String | TokenKind::MultilineString | TokenKind::RawString
+        ) {
+            Some(self.advance().text.clone())
+        } else {
+            None
+        };
+        let params = if self.check(TokenKind::Pipe) {
+            self.parse_block_params()
+        } else {
+            vec![]
+        };
+        let body = self.parse_block();
+        let span = start.merge(body.span);
+        McpDeclExpr {
+            kind,
+            name,
+            description,
+            params,
+            body,
+            span,
+        }
     }
 
     /// The address in `@http.listen addr ⟦…⟧` / `@tcp.listen addr ⟦…⟧`.

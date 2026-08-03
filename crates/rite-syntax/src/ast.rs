@@ -164,6 +164,8 @@ pub enum Expr {
     Try(TryExpr),
     HttpListen(HttpListenExpr),
     Route(RouteExpr),
+    McpServe(McpServeExpr),
+    McpDecl(McpDeclExpr),
     Group(GroupExpr),
     Coalesce(CoalesceExpr),
 }
@@ -190,6 +192,8 @@ impl Expr {
             Expr::Try(t) => t.span,
             Expr::HttpListen(h) => h.span,
             Expr::Route(r) => r.span,
+            Expr::McpServe(m) => m.span,
+            Expr::McpDecl(d) => d.span,
             Expr::Group(g) => g.span,
             Expr::Coalesce(c) => c.span,
         }
@@ -397,6 +401,53 @@ pub enum HttpMethod {
     Delete,
     Head,
     Options,
+}
+
+/// `@mcp.serve config ⟦ tool … resource … prompt … ⟧`.
+///
+/// The sibling of [`HttpListenExpr`]: a declaration table, not a call. `config` is
+/// either a bare string (the server name, served over stdio) or a record naming the
+/// transport and address — resolved by the capability, not here.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct McpServeExpr {
+    pub config: Box<Expr>,
+    pub body: Block,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum McpDeclKind {
+    Tool,
+    Resource,
+    Prompt,
+}
+
+impl McpDeclKind {
+    /// The spelling used in the source, the IR, and the MCP wire format alike.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            McpDeclKind::Tool => "tool",
+            McpDeclKind::Resource => "resource",
+            McpDeclKind::Prompt => "prompt",
+        }
+    }
+}
+
+/// One `tool` / `resource` / `prompt` declaration inside an [`McpServeExpr`] body.
+///
+/// `params` keeps its [`Param`]s whole rather than reducing them to names the way
+/// [`RouteExpr`] effectively does downstream: the declared types *are* the tool's
+/// published JSON Schema, so dropping an annotation silently changes the contract the
+/// server advertises.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct McpDeclExpr {
+    pub kind: McpDeclKind,
+    /// The tool or prompt name, or the resource URI.
+    pub name: String,
+    pub description: Option<String>,
+    pub params: Vec<Param>,
+    pub body: Block,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

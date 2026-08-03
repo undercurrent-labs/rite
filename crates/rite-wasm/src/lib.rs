@@ -276,6 +276,24 @@ pub async fn run(source: &str, options: RunOptions) -> ExecutionResult {
                 virtual_http: None,
             };
         }
+        // `@mcp` is refused at `serve` rather than by namespace: serving needs process
+        // streams or a socket and the browser has neither, but `@mcp.tool_schema` is a
+        // pure projection of declared types, and showing a script what schema its tools
+        // would publish is exactly the kind of thing Studio should be able to do.
+        if source.contains("@mcp.serve") || source.contains("host.mcp.serve") {
+            return ExecutionResult {
+                ok: false,
+                value: serde_json::Value::Null,
+                stdout: String::new(),
+                stderr: String::new(),
+                error: Some(
+                    "@mcp.serve is native-only: the browser runtime has no process \
+                     streams and no socket layer"
+                        .into(),
+                ),
+                virtual_http: None,
+            };
+        }
     }
 
     let virtual_http = if source.contains("@http.listen") || source.contains("host.http.listen") {

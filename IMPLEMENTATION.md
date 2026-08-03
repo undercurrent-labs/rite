@@ -144,6 +144,25 @@ Tracks implementation status for the Rite language and V1 tooling. Detailed desi
     number a bytecode VM would move.
 13. **VS Code VSIX in CI** — package.json ready; not produced by a release job.  
 14. **Example 07/08 HTTP** — blocks until shutdown (correct for servers); e2e ladder skips them.
+15. **`@mcp` is server-only, and partial by choice.** No client: a Rite script cannot
+    call *other* MCP servers, which is the obvious next piece. Of the protocol itself,
+    three things are deliberately absent. `subscriptions/listen` and the `*ListChanged`
+    notifications are not advertised, because a server's tool, resource and prompt
+    tables are fixed when `@mcp.serve` starts and cannot change while it runs — the
+    capability would be a claim a client could act on and never see honoured.
+    `notifications/message` is not implemented because the Logging feature is deprecated
+    upstream; `use @mcp.log` writes to stderr, which is that deprecation's own suggested
+    migration and the only thing that works under stdio. Multi Round-Trip Requests
+    (`resultType: "input_required"`) are not implemented, though every result is stamped
+    through one encoder so adding the other value is a new arm rather than a refactor.
+    Progress notifications reach the client on stdio; over HTTP a plain JSON response
+    has no stream to carry them, so they are surfaced on stderr under `use @mcp.log`
+    instead. Backward compatibility covers exactly one older revision (`2025-06-18`),
+    engaged when a client sends `initialize`.
+16. **`@mcp.serve` requires its `!`; `@http.listen` still does not.** The older
+    construct escapes effect discipline only because it is not a `Call` — an accident of
+    shape rather than a decision. The new one checks explicitly. Aligning `@http.listen`
+    would break every existing script, so the two differ for now.
 
 #### P2 — Explicitly V2
 

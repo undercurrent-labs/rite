@@ -1,0 +1,7 @@
+// `@mcp.serve` claims a transport and then runs script bodies on demand for an outside
+// caller, so it is held to effect discipline and needs its `!`. This is deliberately
+// stricter than `@http.listen`, which escapes the check only because it is not a call
+// — an accident of shape rather than a decision about servers.
+@mcp.serve "calculator" ⟦
+  tool "add" "Add two numbers" |a: int, b: int| ⟦ ^ a + b ⟧
+⟧

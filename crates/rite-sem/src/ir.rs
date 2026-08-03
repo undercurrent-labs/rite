@@ -1,7 +1,9 @@
 //! Shared semantic intermediate representation for interpreter and compiler.
 
 use rite_core::Span;
-pub use rite_syntax::TypeExpr;
+// `Ident` travels with `TypeExpr` — it is what `TypeExpr::Named` holds — so anything
+// that can read a declared type can also name one without depending on `rite-syntax`.
+pub use rite_syntax::{Ident, TypeExpr};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -158,6 +160,12 @@ pub enum ExprIr {
         middleware: Vec<ExprIr>,
         span: Span,
     },
+    McpServe {
+        config: Box<ExprIr>,
+        decls: Vec<McpDeclIr>,
+        middleware: Vec<ExprIr>,
+        span: Span,
+    },
     /// Sequence of expressions; value is last.
     Seq(Vec<ExprIr>, Span),
 }
@@ -187,6 +195,7 @@ impl ExprIr {
             | ExprIr::Atom(_, span)
             | ExprIr::Placeholder(span)
             | ExprIr::HttpListen { span, .. }
+            | ExprIr::McpServe { span, .. }
             | ExprIr::Seq(_, span) => *span,
             ExprIr::Closure(c) => c.span,
             ExprIr::Block(b) => b.span,
@@ -254,6 +263,41 @@ pub struct RouteIr {
     pub method: String,
     pub path: String,
     pub param: Option<LocalId>,
+    pub body: BlockIr,
+    pub span: Span,
+}
+
+/// One parameter of an MCP declaration.
+///
+/// Both the name and the declared type survive into the IR: the name is the key an MCP
+/// client sends the argument under, and the type is the JSON Schema the server
+/// publishes for it. [`RouteIr`] keeps neither — it carries a `LocalId` that the host
+/// then ignores in favour of the conventional `req` — which is affordable for a route
+/// and not for a tool, whose parameter names and types *are* its public contract.
+///
+/// There is no `LocalId` here because there is nothing to do with one: an identifier
+/// desugars to `ExprIr::Global(name)` and `call_block` binds arguments with
+/// `define_name`, so the name is what the body actually looks up.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct McpParamIr {
+    pub name: String,
+    /// `#[serde(default)]` for the same reason `FunctionIr::param_types` carries it:
+    /// the IR is embedded as JSON in every crate `rite build` generates, and a binary
+    /// built before this field existed must still deserialise.
+    #[serde(default)]
+    pub ty: Option<TypeExpr>,
+}
+
+/// A `tool` / `resource` / `prompt` declaration from an `@mcp.serve` body.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct McpDeclIr {
+    /// `"tool"`, `"resource"`, or `"prompt"` — the spelling used on the wire.
+    pub kind: String,
+    /// The tool or prompt name, or the resource URI.
+    pub name: String,
+    #[serde(default)]
+    pub description: Option<String>,
+    pub params: Vec<McpParamIr>,
     pub body: BlockIr,
     pub span: Span,
 }

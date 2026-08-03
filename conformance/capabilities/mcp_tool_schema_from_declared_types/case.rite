@@ -1,0 +1,12 @@
+// A tool's published JSON Schema is a projection of the types already written on it,
+// not a second description to keep in step by hand. `@mcp.tool_schema` is the pure
+// half of that derivation, so the mapping is pinned here — running interpreted and
+// through IR — rather than only reachable by starting a server that blocks.
+//
+// An unannotated parameter is the empty schema, `⟨⟩`: any value is acceptable, but one
+// still has to be sent, so it stays in `required`.
+◆ add(a: int, b: int) ⟦ ^ a + b ⟧
+◆ tally(xs: [string], who: ⟨name: string, age: int⟩) ⟦ ^ 0 ⟧
+◆ loose(x) ⟦ ^ x ⟧
+
+^ [@mcp.tool_schema(add), @mcp.tool_schema(tally), @mcp.tool_schema(loose)]
