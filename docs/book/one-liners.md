@@ -27,7 +27,7 @@ rite repl --allow-all                  # full host for local exploration
 
 ```text
 $ rite repl
-Rite 0.6.1 — type :help for commands
+Rite 0.6.2 — type :help for commands
 rite〉1 + 2
 3
 rite〉xs ← [1, 2, 3, 4, 5]
