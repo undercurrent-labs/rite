@@ -21,6 +21,7 @@ use rite_core::{FileId, SourceFile};
 use rite_runtime::{EvalError, ExecutionBudget, RuntimeContext, Value};
 
 use crate::{check, CheckResult, Expansion};
+use cant_sem::ExpandOptions;
 
 /// How to run a program.
 pub struct RunOptions {
@@ -33,6 +34,13 @@ pub struct RunOptions {
     pub budget: ExecutionBudget,
     /// Everything after `--`, readable with `! @process.args`.
     pub args: Vec<String>,
+    /// Run the traced expansion and report per-node emission counts.
+    pub trace: bool,
+    /// Verbatim Rite lines emitted before the generated functions — the
+    /// REPL's session bindings (`x <- 5`). Top-level bindings are visible
+    /// inside generated defs, which is what makes a bound name usable in a
+    /// stage.
+    pub preamble: Vec<String>,
     /// Where the guest's `@console` output goes. `None` means the host's own
     /// streams, which is what a CLI wants.
     pub output: Option<rite_runtime::OutputSink>,
@@ -41,6 +49,8 @@ pub struct RunOptions {
 impl Default for RunOptions {
     fn default() -> Self {
         Self {
+            trace: false,
+            preamble: Vec::new(),
             script_dir: None,
             permissions: PermissionSet::default_secure(),
             budget: ExecutionBudget::new(),
@@ -58,6 +68,9 @@ pub struct ExecutionResult {
     pub value: Option<Value>,
     pub diagnostics: CantDiagnostics,
     pub exit_code: u8,
+    /// Per-node emission counts, present exactly when tracing was asked for
+    /// and the run succeeded. Keys are graph node ids (`n0`, `n1`, …).
+    pub trace: Option<Vec<(String, i64)>>,
     /// The Rite that was executed, so a caller can show it when something went
     /// wrong.
     pub expansion: Option<Expansion>,
@@ -77,7 +90,7 @@ impl ExecutionResult {
 
 /// Expand a Cant program and run it on Rite's runtime.
 pub async fn run(name: &str, text: &str, options: RunOptions) -> ExecutionResult {
-    let checked = check(name, text);
+    let checked = crate::check_with(name, text, &options.preamble, options.script_dir.as_deref());
     if checked.has_errors() {
         let exit_code = checked.exit_code();
         return ExecutionResult {
@@ -85,22 +98,42 @@ pub async fn run(name: &str, text: &str, options: RunOptions) -> ExecutionResult
             value: None,
             diagnostics: checked.diagnostics.clone(),
             exit_code,
+            trace: None,
             expansion: checked.expansion.clone(),
             check: checked,
         };
     }
 
-    let Some(expansion) = checked.expansion.clone() else {
+    let Some(mut expansion) = checked.expansion.clone() else {
         // `check` reported nothing and produced nothing: there was no program.
         return ExecutionResult {
             display: None,
             value: None,
             diagnostics: checked.diagnostics.clone(),
             exit_code: 0,
+            trace: None,
             expansion: None,
             check: checked,
         };
     };
+
+    if options.trace || !options.preamble.is_empty() {
+        // Re-expand with instrumentation and/or the session preamble. The
+        // graph is the one `check` built; only the generated Rite differs.
+        if let Some(graph) = checked.analysis.graph.as_ref() {
+            let mut imports: Vec<String> = graph.uses.iter().map(|u| format!("use {u}")).collect();
+            imports.extend(options.preamble.iter().cloned());
+            expansion = cant_sem::expand(
+                graph,
+                text,
+                &ExpandOptions {
+                    source_name: name.to_string(),
+                    imports,
+                    trace: options.trace,
+                },
+            );
+        }
+    }
 
     let mut ctx = RuntimeContext::new();
     ctx.budget = options.budget.clone();
@@ -129,6 +162,11 @@ pub async fn run(name: &str, text: &str, options: RunOptions) -> ExecutionResult
     let mut diagnostics = CantDiagnostics::new();
     match outcome {
         Ok(value) => {
+            let (value, trace) = if options.trace {
+                unwrap_trace(value)
+            } else {
+                (value, None)
+            };
             let display = if matches!(value, Value::None) {
                 None
             } else {
@@ -139,6 +177,7 @@ pub async fn run(name: &str, text: &str, options: RunOptions) -> ExecutionResult
                 value: Some(value),
                 diagnostics,
                 exit_code: 0,
+                trace,
                 expansion: Some(expansion),
                 check: checked,
             }
@@ -160,10 +199,54 @@ pub async fn run(name: &str, text: &str, options: RunOptions) -> ExecutionResult
                 value: None,
                 diagnostics,
                 exit_code,
+                trace: None,
                 expansion: Some(expansion),
                 check: checked,
             }
         }
+    }
+}
+
+/// The traced main returns `<< trace: <<…>>, value: … >>`; take it apart.
+///
+/// A run that was asked to trace and did not answer that shape is a bug in the
+/// instrumentation, not in the program — the value is returned as-is rather
+/// than lost, and the missing trace is the visible symptom.
+fn unwrap_trace(value: Value) -> (Value, Option<Vec<(String, i64)>>) {
+    let Value::Record(record) = value else {
+        return (value, None);
+    };
+    let mut trace = None;
+    let mut inner = None;
+    for (key, field) in record.iter() {
+        match key {
+            rite_runtime::Key::String(name) if name == "trace" => {
+                if let Value::Record(counts) = field {
+                    let mut entries: Vec<(String, i64)> = counts
+                        .iter()
+                        .filter_map(|(k, v)| match (k, v) {
+                            (rite_runtime::Key::String(id), Value::Int(n)) => {
+                                Some((id.clone(), *n))
+                            }
+                            _ => None,
+                        })
+                        .collect();
+                    entries.sort_by(|a, b| {
+                        let num = |s: &str| s.trim_start_matches('n').parse::<u64>().unwrap_or(0);
+                        num(&a.0).cmp(&num(&b.0))
+                    });
+                    trace = Some(entries);
+                }
+            }
+            rite_runtime::Key::String(name) if name == "value" => {
+                inner = Some(field.clone());
+            }
+            _ => {}
+        }
+    }
+    match (inner, trace) {
+        (Some(v), t) => (v, t),
+        (None, _) => (Value::Record(record), None),
     }
 }
 

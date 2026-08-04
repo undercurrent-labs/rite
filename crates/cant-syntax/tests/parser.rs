@@ -321,3 +321,50 @@ fn exit_codes_follow_rites_contract() {
     let (clean, _) = parse_source("t.cant", "a -> b");
     assert_eq!(clean.diagnostics.rejection_exit_code(), 0);
 }
+
+// ---- use lines
+
+#[test]
+fn leading_use_lines_are_imports_not_leaf_text() {
+    let program = ok("use mathy\nuse strings\n[1] -> * -> mathy.square($) -> []");
+    assert_eq!(
+        program
+            .uses
+            .iter()
+            .map(|u| u.name.as_str())
+            .collect::<Vec<_>>(),
+        ["mathy", "strings"]
+    );
+    // The flow is untouched by the preamble: source, scatter, stage, collect.
+    assert_eq!(program.flow.stages.len(), 4);
+}
+
+#[test]
+fn a_use_without_a_module_name_is_a_parse_error() {
+    let (result, _) = parse_source("t.cant", "use\n[1] -> * -> []");
+    let diagnostic = result
+        .diagnostics
+        .errors()
+        .next()
+        .expect("a bare `use` should have been rejected");
+    assert_eq!(diagnostic.code.to_string(), "CANT-P002");
+    assert!(
+        diagnostic.title.contains("module name"),
+        "{}",
+        diagnostic.title
+    );
+}
+
+#[test]
+fn use_lines_join_the_span_free_structure() {
+    // Two spellings of one program, imports included, compare equal.
+    assert_eq!(
+        shape("use m\n[1] -> * -> m.f($) -> []"),
+        shape("use m\n[1] → ⋇ → m.f($) → ⌁")
+    );
+    // And a program with imports differs from the same flow without them.
+    assert_ne!(
+        shape("use m\n[1] -> * -> m.f($) -> []"),
+        shape("[1] -> * -> m.f($) -> []")
+    );
+}

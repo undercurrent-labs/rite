@@ -264,7 +264,8 @@ const SHARED_FILES: &[(&str, &str)] = &[
     ),
     (
         "xtask/src/main.rs",
-        "the `cant-og` command, and `cant-wasm` from the `wasm-check` list",
+        "the `cant-og` and `sigil-og` commands, and `cant-wasm` from the \
+         `wasm-check` list",
     ),
     ("CLAUDE.md", "`cant-wasm` from the browser-build note"),
     ("package.json", "four pnpm scripts"),

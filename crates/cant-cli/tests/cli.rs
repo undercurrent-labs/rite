@@ -633,9 +633,9 @@ fn the_repl_runs_each_line_as_a_whole_program() {
 }
 
 #[test]
-fn the_repl_says_up_front_that_nothing_persists() {
+fn the_repl_says_up_front_what_persists_and_what_cannot() {
     let out = repl_session("");
-    assert!(out.contains("nothing persists between them"), "{out}");
+    assert!(out.contains("Values can persist; programs cannot"), "{out}");
 }
 
 #[test]
@@ -720,4 +720,269 @@ fn every_command_is_advertised_and_all_of_them_work() {
         let sub = cant(&[present, "--help"]);
         assert_eq!(code(&sub), 0, "`cant {present} --help` failed");
     }
+}
+
+/// The shell-citizen contract (`@stdin`): data arrives on the pipe, the
+/// program on `-e` — `cat log | cant -e '…'`, the form every peer tool has.
+#[test]
+fn data_can_come_from_standard_input() {
+    let mut child = Command::new(env!("CARGO_BIN_EXE_cant"))
+        .args(["run", "-e", "!@stdin.lines -> * -> upper -> []"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("cant binary");
+    child
+        .stdin
+        .as_mut()
+        .expect("stdin")
+        .write_all(b"hello\nworld\n")
+        .expect("write");
+    let out = child.wait_with_output().expect("wait");
+    assert_eq!(code(&out), 0, "{}", stderr(&out));
+    assert_eq!(stdout(&out).trim(), "[HELLO, WORLD]");
+}
+
+/// Allowed by default, and revocable — `--deny stdin` is a permission failure,
+/// exit 5, not an empty read.
+#[test]
+fn denied_stdin_is_a_permission_failure_not_an_empty_pipe() {
+    let mut child = Command::new(env!("CARGO_BIN_EXE_cant"))
+        .args(["run", "--deny", "stdin", "-e", "!@stdin.lines -> * -> []"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("cant binary");
+    child
+        .stdin
+        .as_mut()
+        .expect("stdin")
+        .write_all(b"secret\n")
+        .expect("write");
+    let out = child.wait_with_output().expect("wait");
+    assert_ne!(code(&out), 0);
+    assert!(
+        stderr(&out).contains("permission"),
+        "expected a permission failure, got: {}",
+        stderr(&out)
+    );
+}
+
+/// `cant test`: the exit contract's 7 is a wrong *answer*; a broken program
+/// keeps its own exit; a match is 0 and says so.
+#[test]
+fn cant_test_compares_the_printed_value() {
+    let ok = Command::new(env!("CARGO_BIN_EXE_cant"))
+        .args([
+            "test",
+            "-e",
+            "[1, 2] -> * -> $ * 2 -> []",
+            "--expect",
+            "[2, 4]",
+        ])
+        .output()
+        .expect("cant binary");
+    assert_eq!(code(&ok), 0, "{}", stderr(&ok));
+    assert_eq!(stdout(&ok).trim(), "ok");
+
+    let wrong = Command::new(env!("CARGO_BIN_EXE_cant"))
+        .args([
+            "test",
+            "-e",
+            "[1, 2] -> * -> $ * 2 -> []",
+            "--expect",
+            "[9]",
+        ])
+        .output()
+        .expect("cant binary");
+    assert_eq!(code(&wrong), 7);
+    assert!(
+        stderr(&wrong).contains("expected: [9]"),
+        "{}",
+        stderr(&wrong)
+    );
+    assert!(
+        stderr(&wrong).contains("actual:   [2, 4]"),
+        "{}",
+        stderr(&wrong)
+    );
+
+    let broken = Command::new(env!("CARGO_BIN_EXE_cant"))
+        .args(["test", "-e", "[1 -> ", "--expect", "[1]"])
+        .output()
+        .expect("cant binary");
+    assert_ne!(code(&broken), 0);
+    assert_ne!(code(&broken), 7, "a parse failure is not a wrong answer");
+}
+
+/// The sidecar form: `<source>.expect` beside the file, so a directory of
+/// programs can carry its own expectations.
+#[test]
+fn cant_test_reads_a_sidecar_expectation() {
+    let dir = std::env::temp_dir().join("cant-test-sidecar");
+    std::fs::create_dir_all(&dir).expect("temp dir");
+    std::fs::write(dir.join("p.cant"), "[3, 4] -> * -> $ + 1 -> []\n").expect("write");
+    std::fs::write(dir.join("p.expect"), "[4, 5]\n").expect("write");
+    let out = Command::new(env!("CARGO_BIN_EXE_cant"))
+        .args(["test"])
+        .arg(dir.join("p.cant"))
+        .output()
+        .expect("cant binary");
+    assert_eq!(code(&out), 0, "{}", stderr(&out));
+}
+
+/// The trace pair: `cant run --trace-out` writes a cant.trace document whose
+/// counts are per-node emissions, and `cant sigil --weights` draws it.
+#[test]
+fn a_traced_run_weights_a_sigil() {
+    let dir = std::env::temp_dir().join("cant-trace-weights");
+    std::fs::create_dir_all(&dir).expect("temp dir");
+    let program = dir.join("p.cant");
+    std::fs::write(&program, "[1, 2, 3] -> * -> ?{ $ > 1 } -> $ * 10 -> []\n").expect("write");
+    let trace = dir.join("p.trace.json");
+
+    let run = Command::new(env!("CARGO_BIN_EXE_cant"))
+        .args(["run", "--trace-out"])
+        .arg(&trace)
+        .arg(&program)
+        .output()
+        .expect("cant binary");
+    assert_eq!(code(&run), 0, "{}", stderr(&run));
+    // The value on stdout is exactly what an untraced run prints.
+    assert_eq!(stdout(&run).trim(), "[20, 30]");
+
+    let doc: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&trace).expect("trace written"))
+            .expect("trace is JSON");
+    assert_eq!(doc["schema"], serde_json::json!("cant.trace"));
+    // The scatter emitted three; the ward passed two.
+    assert_eq!(doc["nodes"]["n1"], serde_json::json!(3));
+    assert_eq!(doc["nodes"]["n2"], serde_json::json!(2));
+
+    let svg_path = dir.join("p.sigil.svg");
+    let sigil = Command::new(env!("CARGO_BIN_EXE_cant"))
+        .args(["sigil"])
+        .arg(&program)
+        .args(["--weights"])
+        .arg(&trace)
+        .args(["--canonical", "--output"])
+        .arg(&svg_path)
+        .output()
+        .expect("cant binary");
+    assert_eq!(code(&sigil), 0, "{}", stderr(&sigil));
+    let svg = std::fs::read_to_string(&svg_path).expect("svg written");
+    assert!(
+        svg.contains("stroke-opacity"),
+        "the weighted render did not scale its edges"
+    );
+}
+
+/// `cant sigil --diff`: the review picture — old ghosted beneath new,
+/// canonical orientation required so nothing reads as a move that is not one.
+#[test]
+fn sigil_diff_ghosts_the_old_program() {
+    let dir = std::env::temp_dir().join("cant-sigil-diff");
+    std::fs::create_dir_all(&dir).expect("temp dir");
+    let old = dir.join("old.cant");
+    let new = dir.join("new.cant");
+    std::fs::write(&old, "[1, 2] -> * -> $ + 1 -> []\n").expect("write");
+    std::fs::write(&new, "[1, 2] -> * -> ?{ $ > 1 } -> $ + 1 -> []\n").expect("write");
+    let out_path = dir.join("d.svg");
+
+    let missing_flag = Command::new(env!("CARGO_BIN_EXE_cant"))
+        .args(["sigil"])
+        .arg(&new)
+        .args(["--diff"])
+        .arg(&old)
+        .output()
+        .expect("cant binary");
+    assert_eq!(
+        code(&missing_flag),
+        2,
+        "without --canonical this must refuse"
+    );
+
+    let ok = Command::new(env!("CARGO_BIN_EXE_cant"))
+        .args(["sigil"])
+        .arg(&new)
+        .args(["--diff"])
+        .arg(&old)
+        .args(["--canonical", "--output"])
+        .arg(&out_path)
+        .output()
+        .expect("cant binary");
+    assert_eq!(code(&ok), 0, "{}", stderr(&ok));
+    let svg = std::fs::read_to_string(&out_path).expect("svg written");
+    assert!(svg.contains("sigil-ghost"));
+    assert!(svg.contains("svg-diff"));
+}
+
+/// The `[[` trap teaches itself: a nested list without spaces fails with a
+/// help that names the fix, not just Rite's "expected RBracket".
+#[test]
+fn the_double_bracket_trap_names_its_own_fix() {
+    let out = Command::new(env!("CARGO_BIN_EXE_cant"))
+        .args(["check", "-e", "[[1, 2], [3]] -> * -> []"])
+        .output()
+        .expect("cant binary");
+    assert_ne!(code(&out), 0);
+    let text = format!("{}{}", stdout(&out), stderr(&out));
+    assert!(
+        text.contains("put a space between nested list brackets"),
+        "{text}"
+    );
+    // And a program that does not hit the trap gains no such help.
+    let clean = Command::new(env!("CARGO_BIN_EXE_cant"))
+        .args(["check", "-e", "not_a_function(] -> []"])
+        .output()
+        .expect("cant binary");
+    let clean_text = format!("{}{}", stdout(&clean), stderr(&clean));
+    assert!(!clean_text.contains("put a space between"), "{clean_text}");
+}
+
+/// The REPL workbench: `:let` keeps a value, a bound name works in a later
+/// flow, `it` is the last answer — and none of it is language syntax.
+#[test]
+fn the_repl_workbench_binds_values_not_programs() {
+    let mut child = Command::new(env!("CARGO_BIN_EXE_cant"))
+        .args(["repl"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("cant binary");
+    child
+        .stdin
+        .as_mut()
+        .expect("stdin")
+        .write_all(
+            // The binding arrow is sugar for `:let`; `~>` for `:trace`.
+            b"evens <- [1, 2, 3, 4] -> * -> ?{ $ % 2 = 0 } -> []\n\
+              ~> evens -> * -> $ * 10 -> []\n\
+              it -> count\n\
+              :quit\n",
+        )
+        .expect("write");
+    let out = child.wait_with_output().expect("wait");
+    assert_eq!(code(&out), 0, "{}", stderr(&out));
+    let text = stdout(&out);
+    assert!(text.contains("[2, 4]"), "{text}");
+    assert!(text.contains("[20, 40]"), "{text}");
+    assert!(
+        text.contains("trace "),
+        "the trace arrow should report counts:\n{text}"
+    );
+    assert!(text.contains('\n'), "{text}");
+    assert!(
+        text.lines().any(|l| l.trim() == "2"),
+        "`it -> count` should answer 2:\n{text}"
+    );
+    // And `:let` in a *file* is not a program.
+    let file_check = Command::new(env!("CARGO_BIN_EXE_cant"))
+        .args(["check", "-e", ":let x = [1]"])
+        .output()
+        .expect("cant binary");
+    assert_ne!(code(&file_check), 0, "`:let` must not parse as Cant");
 }

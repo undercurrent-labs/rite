@@ -133,6 +133,16 @@ router walks a fixed candidate order until one clears — deterministically, wit
 the least-bad candidate as the fallback. The scene records the choice in
 `metadata.tracery`, and it joins the render fingerprint.
 
+### Weights
+
+A traced run (`cant run --trace`) can weight a render: each graph node carries
+its observed emission count, and every edge element gets `weight` — the count
+of the node it leaves, normalized to the heaviest node, `0.0` never ran, `1.0`
+ran the most. The serializer scales stroke width and opacity with the square
+root of the weight; nothing moves, because weight is presentation, not layout
+(ADR 0004). Absent entirely on an untraced render, so goldens predating the
+field are byte-identical.
+
 ## Layers
 
 Paint order, back to front:

@@ -34,6 +34,8 @@ fn rite_of(source: &str) -> String {
 /// "does this parse" with "does this run", and the answer to the second is what
 /// `conformance/cant/lowering` is for.
 fn corpus() -> Vec<(String, String)> {
+    // (name, source); the name is a real path for on-disk programs, so a
+    // checker can resolve `use` imports from the program's own directory.
     let mut out: Vec<(String, String)> = EXTRA
         .iter()
         .map(|s| ("<inline>".to_string(), s.to_string()))
@@ -148,7 +150,10 @@ const EXTRA: &[&str] = &[
 fn every_expansion_passes_rite_check() {
     let mut failures = Vec::new();
     for (name, source) in corpus() {
-        let result = check(&name, &source);
+        // A program that imports modules resolves them beside itself — the
+        // 08-modules example is the case that caught check ignoring this.
+        let dir = std::path::Path::new(&name).parent().filter(|d| d.is_dir());
+        let result = cant::check_with(&name, &source, &[], dir);
         if result.has_errors() {
             failures.push(format!("{name}: {}", result.render()));
         }

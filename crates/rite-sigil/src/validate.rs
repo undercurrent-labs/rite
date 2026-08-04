@@ -354,6 +354,21 @@ fn check_numbers_and_spans(graph: &SigilGraph, d: &mut Diagnostics) {
     let source_length = graph.metadata.source_length;
 
     for node in &graph.nodes {
+        // A weight is an observed count: non-negative and finite, or it is not
+        // an observation. Rejected rather than clamped — a NaN that became 0
+        // would render as "this node never ran", which is a claim.
+        if let Some(weight) = node.weight {
+            if !weight.is_finite() || weight < 0.0 {
+                d.push(SigilDiagnostic::error(
+                    SIGIL_S008_MALFORMED_SPAN,
+                    GraphRef::Node(node.id.0.clone()),
+                    format!("weight `{weight}` is not a finite non-negative count"),
+                ));
+            }
+        }
+    }
+
+    for node in &graph.nodes {
         let Some(source) = &node.source else { continue };
         let (start, end) = (source.span.start.as_usize(), source.span.end.as_usize());
         if end < start {

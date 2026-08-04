@@ -97,8 +97,8 @@ pub use scene::{
 #[cfg(feature = "png")]
 pub use svg::render_png;
 pub use svg::{
-    render_svg, Background, DisclosureMode, MetadataMode, RenderFingerprint, RenderedSvg,
-    SvgOptions,
+    render_diff, render_svg, Background, DisclosureMode, MetadataMode, RenderFingerprint,
+    RenderedSvg, SvgOptions,
 };
 pub use theme::{Theme, ThemeId, THEME_VERSION};
 pub use tracery::Tracery;

@@ -139,6 +139,7 @@ fn element(id: String, layer: SceneLayerKind, geometry: Geometry, bounds: Rect) 
         title: None,
         legend_key: None,
         ends: None,
+        weight: None,
         bounds,
     }
 }

@@ -186,6 +186,7 @@ impl Parser<'_> {
     // ---- grammar
 
     fn parse_program(&mut self) -> Option<CantProgramAst> {
+        let uses = self.parse_uses();
         let flow = self.parse_flow();
 
         // Whatever is left over is one mistake, not many: reporting only the
@@ -230,8 +231,41 @@ impl Parser<'_> {
         }
         Some(CantProgramAst {
             span: flow.span,
+            uses,
             flow,
         })
+    }
+
+    /// Leading `use math` lines, before the flow begins.
+    ///
+    /// `use` is a Rite keyword, so no leaf can legitimately begin with it —
+    /// which is what makes the preamble unambiguous without the parser ever
+    /// seeing a newline. The module name is one identifier; resolution is
+    /// Rite's entirely.
+    fn parse_uses(&mut self) -> Vec<crate::ast::UseDecl> {
+        let mut uses = Vec::new();
+        while self.at(K::Ident) && self.current().text == "use" {
+            let use_span = self.current().span;
+            self.advance();
+            if self.at(K::Ident) && self.current().text != "use" {
+                let name = self.current().text.clone();
+                let end = self.current().span.end.as_usize();
+                self.advance();
+                uses.push(crate::ast::UseDecl {
+                    name,
+                    span: Span::from_range(use_span.start.as_usize(), end),
+                });
+            } else {
+                self.error(
+                    CANT_P002_EXPECTED_STAGE,
+                    "expected a module name after `use`",
+                    use_span,
+                    "`use` imports a Rite module by name: `use math`",
+                );
+                break;
+            }
+        }
+        uses
     }
 
     fn parse_flow(&mut self) -> Flow {

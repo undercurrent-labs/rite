@@ -320,6 +320,10 @@ pub struct SceneElement {
     /// For an edge, the nodes it joins. Absent on everything else.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ends: Option<EdgeEnds>,
+    /// Traced-run weight, normalized to the heaviest node: `0.0` never ran,
+    /// `1.0` ran the most. Present only on the edges of a weighted render.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub weight: Option<f64>,
     /// Axis-aligned bounds, for the bounds pass and for hit testing.
     pub bounds: Rect,
 }

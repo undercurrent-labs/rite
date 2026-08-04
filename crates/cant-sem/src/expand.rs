@@ -118,6 +118,15 @@ pub struct ExpandOptions {
     pub source_name: String,
     /// `use` lines to emit before the generated functions, verbatim.
     pub imports: Vec<String>,
+    /// Instrument the expansion to count emissions per node.
+    ///
+    /// Counts accumulate in a `@store` namespace derived from the hygiene
+    /// prefix, and `main` returns `<< trace: <<…>>, value: … >>` instead of
+    /// the bare value — the host unwraps it. Instrumented stages are marked
+    /// effectful, because a `@store` write is one; nothing else about the
+    /// program's meaning changes, which is what makes a traced run's *value*
+    /// comparable to an untraced one.
+    pub trace: bool,
 }
 
 impl Default for ExpandOptions {
@@ -125,6 +134,7 @@ impl Default for ExpandOptions {
         Self {
             source_name: "program.cant".to_string(),
             imports: Vec::new(),
+            trace: false,
         }
     }
 }
@@ -137,6 +147,7 @@ pub fn expand(graph: &CantProgram, source: &str, options: &ExpandOptions) -> Exp
         out: String::new(),
         map: SourceMap::default(),
         effectful: HashSet::new(),
+        trace: options.trace,
     };
     w.compute_effects();
     w.program(options);
@@ -168,6 +179,7 @@ struct Writer<'a> {
     out: String,
     map: SourceMap,
     effectful: HashSet<NodeId>,
+    trace: bool,
 }
 
 impl Writer<'_> {
@@ -232,18 +244,47 @@ impl Writer<'_> {
     }
 
     fn node_is_effectful(&self, id: NodeId) -> bool {
+        // Under tracing, a structural node's body calls its subgraphs' chains,
+        // and every chain is effectful then (it carries the `@store` counts) —
+        // so the node that calls one is too. Leaves are untouched: an honest
+        // `def` stays a `def`, because over-claiming an effect is a lie Rite's
+        // analysis would reject.
+        if self.trace && self.graph.subgraphs.iter().any(|sub| sub.owner == id) {
+            return true;
+        }
         self.effectful.contains(&id)
     }
 
     fn subgraph_is_effectful(&self, id: SubgraphId) -> bool {
-        self.graph
-            .subgraph(id)
-            .map(|s| s.nodes.iter().any(|n| self.effectful.contains(n)))
-            .unwrap_or(false)
+        // Under tracing every chain carries `@store` writes, so every chain is
+        // effectful — the definitions and every call site agree through here.
+        self.trace
+            || self
+                .graph
+                .subgraph(id)
+                .map(|s| s.nodes.iter().any(|n| self.effectful.contains(n)))
+                .unwrap_or(false)
     }
 
     fn any_effect(&self) -> bool {
-        !self.effectful.is_empty()
+        self.trace || !self.effectful.is_empty()
+    }
+
+    /// The `@store` namespace trace counts accumulate in. Prefixed like every
+    /// generated name, so a program using `@store` itself cannot collide.
+    fn trace_namespace(&self) -> String {
+        format!("{}_trace", self.prefix)
+    }
+
+    /// The instrumentation line after a node call: add this call's emission
+    /// count to the node's total. Accumulating (not assigning) is what makes
+    /// an orbit body's repeated runs sum rather than overwrite.
+    fn trace_line(&self, id: NodeId, indent: &str) -> String {
+        let ns = self.trace_namespace();
+        format!(
+            "{indent}! @store.set(\"{ns}\", \"n{}\", (@store.get(\"{ns}\", \"n{}\")? ?? 0) + count(__v))\n",
+            id.0, id.0
+        )
     }
 
     /// `def!` or `def`, and the `!` a caller needs.
@@ -503,6 +544,10 @@ impl Writer<'_> {
             let call = self.node_fn(*node);
             let marker = self.call_marker(self.node_is_effectful(*node));
             self.push(&format!("  __v := {marker}{call}(__v)\n"));
+            if self.trace {
+                let line = self.trace_line(*node, "  ");
+                self.push(&line);
+            }
         }
         self.push("  ^ __v\n]]\n");
     }
@@ -543,8 +588,30 @@ impl Writer<'_> {
             let call = self.node_fn(*node);
             let marker = self.call_marker(self.node_is_effectful(*node));
             self.push(&format!("  __v := {marker}{call}(__v)\n"));
+            if self.trace {
+                let line = self.trace_line(*node, "  ");
+                self.push(&line);
+            }
         }
-        self.push(&format!("  ^ {boundary}(__v)\n]]\n\n"));
+        if self.trace {
+            // The wrapper the host unwraps: the program's value beside the
+            // per-node counts, read back from the store by the ids this
+            // expansion knows statically.
+            let ns = self.trace_namespace();
+            let mut ids: Vec<NodeId> = self.graph.nodes.iter().map(|n| n.id).collect();
+            ids.sort();
+            let entries = ids
+                .iter()
+                .map(|id| format!("n{}: @store.get(\"{ns}\", \"n{}\")? ?? 0", id.0, id.0))
+                .collect::<Vec<_>>()
+                .join(", ");
+            self.push(&format!("  __result <- {boundary}(__v)\n"));
+            self.push(&format!(
+                "  ^ << trace: << {entries} >>, value: __result >>\n]]\n\n"
+            ));
+        } else {
+            self.push(&format!("  ^ {boundary}(__v)\n]]\n\n"));
+        }
         self.push(&format!("{}{name}()\n", self.call_marker(effectful)));
     }
 
@@ -794,8 +861,26 @@ pub fn remap_diagnostic(
     for note in &diagnostic.notes {
         out = out.with_note(note.clone());
     }
+    // The `[[` trap, taught at the moment it bites. Rite lexes `[[` as its
+    // block opener, so a nested list written without spaces fails with a
+    // parse error naming `]]` — accurate, and useless to someone who has not
+    // read the one paragraph that explains it. Detected from the Rite
+    // diagnostic's own text, because the trap has exactly one symptom.
+    let hits_bracket_trap = code == CANT_S004_LEAF_NOT_VALID_RITE
+        && std::iter::once(diagnostic.title.as_str())
+            .chain(diagnostic.labels.iter().map(|l| l.message.as_str()))
+            .any(|text| {
+                text.contains("]]")
+                    || text.contains("[[")
+                    || text.contains("⟦")
+                    || text.contains("⟧")
+            });
     if let Some(help) = &diagnostic.help {
         out = out.with_help(help.clone());
+    } else if hits_bracket_trap {
+        out = out.with_help(
+            "Rite lexes `[[` as its block opener and `]]` as its closer — put a space between nested list brackets: `[ [1, 2], [3] ]`",
+        );
     }
     out.with_rite_origin(RiteOrigin {
         code: diagnostic.code.to_string(),

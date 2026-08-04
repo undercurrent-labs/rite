@@ -51,6 +51,16 @@ labels.
 - `--background theme|transparent|#rrggbb`.
 - `--simplify` draws skeleton marks only, for a graph too dense for full
   variation.
+- `--weights PATH` — a `cant.trace` document from `cant run --trace-out`. The
+  render becomes a picture of what the program *did*: every trace scales with
+  how many emissions left its source node, hot paths bright, never-ran branches
+  faint. Positions do not move (ADR 0004) and the weights join the graph, so a
+  weighted render has its own fingerprint.
+- `--diff OLD.cant` — the review picture: the old program's semantic geometry
+  ghosted beneath the new render, anonymous and faint. Layout determinism is
+  what makes it honest — everything unchanged sits exactly under its ghost —
+  so `--canonical` is required (two seeded rotations would read as everything
+  moving) and the output is SVG, fingerprinted `format=svg-diff`.
 
 ## Disclosure and metadata
 

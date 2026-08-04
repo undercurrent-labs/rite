@@ -385,6 +385,12 @@ pub struct SigilNode {
     pub source: Option<SourceRef>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub effect: Option<EffectMetadata>,
+    /// Observed emission count from a traced run (`cant run --trace`), for a
+    /// weighted render. Presentation data, not meaning: it scales the traces
+    /// that leave this node and moves nothing (ADR 0004). Absent when the
+    /// render is of the program rather than of a run.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub weight: Option<f64>,
     /// The region that owns this node, if any.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub region: Option<RegionId>,
@@ -404,6 +410,7 @@ impl SigilNode {
             short_label: None,
             source: None,
             effect: None,
+            weight: None,
             region: None,
             attributes: BTreeMap::new(),
         }

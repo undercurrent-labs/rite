@@ -150,7 +150,25 @@ impl CheckResult {
 
 /// Parse, build the graph, expand, and run the result through Rite's front end.
 pub fn check(name: &str, text: &str) -> CheckResult {
-    let (expansion, analysis) = expand(name, text);
+    check_with(name, text, &[], None)
+}
+
+/// [`check`], with extra generated-Rite preamble lines in the expansion — the
+/// REPL's session bindings — and the directory `use` imports resolve from.
+///
+/// The directory matters: check compiles the generated Rite, and a `use
+/// helpers` in it must find `helpers.rite` beside the *program*, not beside
+/// whatever the process's working directory happens to be. Without it,
+/// checking a module-importing program from any other directory reported
+/// "module not found" for a module that was right there — and `cant run`
+/// checks before it runs, so the run failed too.
+pub fn check_with(
+    name: &str,
+    text: &str,
+    preamble: &[String],
+    module_root: Option<&std::path::Path>,
+) -> CheckResult {
+    let (expansion, analysis) = expand_with(name, text, preamble);
     let mut diagnostics = analysis.diagnostics.clone();
 
     if let Some(expansion) = &expansion {
@@ -161,7 +179,10 @@ pub fn check(name: &str, text: &str) -> CheckResult {
             .map(|f| f.id)
             .unwrap_or(FileId(0));
         let generated = SourceFile::new(FileId(u32::MAX - 1), "<generated>.rite", &expansion.rite);
-        let (_, rite_diagnostics) = rite_sem::compile_to_ir(&generated);
+        let roots: Vec<std::path::PathBuf> = module_root
+            .map(|d| vec![d.to_path_buf()])
+            .unwrap_or_default();
+        let (_, rite_diagnostics) = rite_sem::compile_to_ir_with_roots(&generated, None, &roots);
         let remapped: Vec<_> = rite_diagnostics
             .iter()
             .map(|d| cant_sem::remap_diagnostic(d, &expansion.map, file))
@@ -189,17 +210,29 @@ pub fn check(name: &str, text: &str) -> CheckResult {
 /// rejected would be a guess, and printing it as though it were the program is
 /// how an audit tool starts lying.
 pub fn expand(name: &str, text: &str) -> (Option<Expansion>, AnalyzeResult) {
+    expand_with(name, text, &[])
+}
+
+/// [`expand`], with extra preamble lines after the `use` imports.
+pub fn expand_with(
+    name: &str,
+    text: &str,
+    preamble: &[String],
+) -> (Option<Expansion>, AnalyzeResult) {
     let analysis = analyze(name, text);
     if analysis.has_errors() {
         return (None, analysis);
     }
     let expansion = analysis.graph.as_ref().map(|g| {
+        let mut imports: Vec<String> = g.uses.iter().map(|u| format!("use {u}")).collect();
+        imports.extend(preamble.iter().cloned());
         cant_sem::expand(
             g,
             text,
             &ExpandOptions {
                 source_name: name.to_string(),
-                imports: Vec::new(),
+                imports,
+                trace: false,
             },
         )
     });

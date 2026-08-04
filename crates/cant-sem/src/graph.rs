@@ -306,6 +306,11 @@ pub struct CantProgram {
     /// What wrote this graph. Diagnostic metadata, not part of its meaning.
     #[serde(default)]
     pub producer: Producer,
+    /// Leading `use` imports of Rite modules, emitted verbatim into the
+    /// expansion. Absent when there are none, so graphs predating the field
+    /// serialize as they always did.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub uses: Vec<String>,
     /// The first node of the top-level flow.
     pub entry: NodeId,
     /// The last node of the top-level flow — where program-boundary collection
@@ -401,6 +406,7 @@ impl CantProgram {
         Self {
             schema: GRAPH_SCHEMA_NAME.to_string(),
             producer: Producer::default(),
+            uses: Vec::new(),
             version: GRAPH_SCHEMA_VERSION.to_string(),
             language_version: crate::CANT_LANGUAGE_VERSION.to_string(),
             entry: NodeId(0),

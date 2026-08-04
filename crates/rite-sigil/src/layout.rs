@@ -784,6 +784,7 @@ fn emit_background(elements: &mut Vec<SceneElement>) {
         title: Some("host boundary".to_string()),
         legend_key: None,
         ends: None,
+        weight: None,
         bounds: Rect::new(CENTER - radius, CENTER - radius, radius * 2.0, radius * 2.0),
     });
 }
@@ -824,6 +825,7 @@ fn emit_regions(
             title: Some("orbit ring".to_string()),
             legend_key: Some(format!("region/{}", region.id)),
             ends: None,
+            weight: None,
             bounds: Rect::new(
                 owner.x - radius,
                 owner.y - radius,
@@ -857,6 +859,22 @@ fn emit_edges(
     // shape that does not cross an earlier one — §11.6, within the positions
     // the layout already committed to.
     let mut traces: Vec<crate::tracery::RoutedTrace> = Vec::with_capacity(graph.edges.len());
+
+    // A traced run's counts, normalized to the heaviest node. An edge carries
+    // the weight of the node it leaves — emissions travel outward — so a hot
+    // path is a bright path and a branch that never ran is faint.
+    let heaviest = graph
+        .nodes
+        .iter()
+        .filter_map(|n| n.weight)
+        .fold(0.0_f64, f64::max);
+    let weight_of = |id: &NodeId| -> Option<f64> {
+        if heaviest <= 0.0 {
+            return None;
+        }
+        let raw = graph.node(id).and_then(|n| n.weight).unwrap_or(0.0);
+        Some((raw / heaviest).clamp(0.0, 1.0))
+    };
 
     for edge in &graph.edges {
         let (Some(from), Some(to)) = (positions.get(&edge.from.node), positions.get(&edge.to.node))
@@ -898,6 +916,7 @@ fn emit_edges(
                 from: edge.from.node.0.clone(),
                 to: edge.to.node.0.clone(),
             }),
+            weight: weight_of(&edge.from.node),
             bounds: routed.bounds,
         });
     }
@@ -962,6 +981,7 @@ fn emit_nodes(
             title: Some(title_for(node)),
             legend_key: Some(legend_key.clone()),
             ends: None,
+            weight: None,
             bounds: Rect::new(position.x - size, position.y - size, size * 2.0, size * 2.0),
         });
 
@@ -1027,6 +1047,7 @@ fn emit_inscriptions(
             title: None,
             legend_key: Some(format!("node/{}", node.id)),
             ends: None,
+            weight: None,
             bounds: Rect::new(anchor.x - 90.0, anchor.y - 12.0, 180.0, 24.0),
         });
     }

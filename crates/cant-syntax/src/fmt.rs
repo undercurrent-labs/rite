@@ -245,6 +245,14 @@ impl Printer<'_> {
     fn program(&mut self, program: &CantProgramAst) {
         // The shebang, if there is one, is trivia at byte 0 and goes first.
         self.flush_comments_before(program.span.start.as_usize(), 0);
+        // `use` lines, one per line, before the flow — the only place the
+        // grammar allows them. They have no glyph spelling, so both dialects
+        // print them identically.
+        for import in &program.uses {
+            self.out.push_str("use ");
+            self.out.push_str(&import.name);
+            self.out.push('\n');
+        }
         let rendered = self.flow(&program.flow, 0, self.options.indent_width);
         self.out.push_str(&rendered);
     }

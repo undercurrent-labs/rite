@@ -288,6 +288,104 @@ pub fn render_svg(scene: &SigilScene, options: &SvgOptions) -> RenderedSvg {
     }
 }
 
+/// Render two scenes as one artifact: `old` ghosted beneath, `new` drawn over
+/// it — the "what changed" picture for a review.
+///
+/// The ghost is semantic geometry only (regions, traces, marks) at low
+/// opacity, with no identifiers: ornament and inscriptions from the old render
+/// would read as noise, and ghost ids would collide with the real ones.
+/// Because layout is deterministic, everything unchanged sits exactly under
+/// its ghost and reads as one crisp shape; what moved shows as a pair; what
+/// vanished has only the ghost; what appeared has none. Callers should build
+/// both scenes canonically — two seeded rotations would turn every element
+/// into a "move".
+pub fn render_diff(old: &SigilScene, new: &SigilScene, options: &SvgOptions) -> RenderedSvg {
+    let theme = options.theme.resolve();
+    let fingerprint = RenderFingerprint {
+        graph: new.metadata.graph_fingerprint.clone(),
+        renderer_version: new.metadata.renderer_version.clone(),
+        theme: options.theme.name().to_string(),
+        theme_version: THEME_VERSION,
+        tracery: new.metadata.tracery.clone(),
+        seed: new.metadata.seed,
+        disclosure: options.disclosure.name().to_string(),
+        metadata: options.metadata.name().to_string(),
+        format: "svg-diff".to_string(),
+    };
+
+    let mut out = String::with_capacity(8192);
+    let vb = new.view_box;
+    out.push_str("<svg xmlns=\"http://www.w3.org/2000/svg\"");
+    if let (Some(w), Some(h)) = (options.width, options.height) {
+        let _ = write!(out, " width=\"{}\" height=\"{}\"", num(w), num(h));
+    } else if let Some(w) = options.width {
+        let _ = write!(out, " width=\"{}\" height=\"{}\"", num(w), num(w));
+    }
+    let _ = writeln!(
+        out,
+        " viewBox=\"{} {} {} {}\" role=\"img\">",
+        num(vb.x),
+        num(vb.y),
+        num(vb.width),
+        num(vb.height)
+    );
+    if options.metadata.allows_titles() {
+        let _ = writeln!(
+            out,
+            "<title>Before and after: {}</title>",
+            escape(&new.summary())
+        );
+    }
+
+    write_defs(&mut out, &theme);
+    write_style(&mut out, &theme);
+    write_background(&mut out, new, options, &theme);
+
+    // The ghost: the old composition's semantic layers, faint, anonymous.
+    let ghost_options = SvgOptions {
+        metadata: MetadataMode::None,
+        ..options.clone()
+    };
+    out.push_str("<g class=\"sigil-ghost\" opacity=\"0.17\">\n");
+    for layer in [
+        SceneLayerKind::SemanticRegions,
+        SceneLayerKind::SemanticEdges,
+        SceneLayerKind::SemanticNodes,
+    ] {
+        for element in old.elements.iter().filter(|e| e.layer == layer) {
+            write_element(&mut out, element, old, &ghost_options, &theme);
+        }
+    }
+    out.push_str("</g>\n");
+
+    for layer in SceneLayerKind::ALL {
+        let elements: Vec<&SceneElement> =
+            new.elements.iter().filter(|e| e.layer == *layer).collect();
+        if elements.is_empty() {
+            continue;
+        }
+        let _ = writeln!(
+            out,
+            "<g class=\"sigil-layer sigil-layer-{}\">",
+            layer.name()
+        );
+        for element in elements {
+            write_element(&mut out, element, new, options, &theme);
+        }
+        out.push_str("</g>\n");
+    }
+
+    if options.metadata.allows_fingerprint() {
+        let _ = writeln!(out, "<desc>{}</desc>", escape(&fingerprint.to_line()));
+    }
+    out.push_str("</svg>\n");
+
+    RenderedSvg {
+        svg: out,
+        fingerprint,
+    }
+}
+
 fn write_defs(out: &mut String, theme: &Theme) {
     if theme.glow <= 0.0 {
         return;
@@ -388,6 +486,21 @@ fn write_element(
     if let SemanticKind::Edge(kind) = &element.semantic {
         if let Some(dash) = theme.edge_dash(*kind) {
             let _ = write!(attrs, " stroke-dasharray=\"{dash}\"");
+        }
+        // A weighted render: the trace carries how often this edge's source
+        // node emitted. Width grows with the square root — counts spread over
+        // orders of magnitude, and linear width makes one hot edge a bar and
+        // everything else a hairline — and a path that never ran stays
+        // visible but unmistakably cold.
+        if let Some(weight) = element.weight {
+            let width = theme.edge_stroke_width * (0.55 + 1.65 * weight.sqrt());
+            let opacity = 0.30 + 0.70 * weight.sqrt();
+            let _ = write!(
+                attrs,
+                " stroke-width=\"{}\" stroke-opacity=\"{}\"",
+                num(width),
+                num(opacity)
+            );
         }
     }
     if theme.glow > 0.0 && matches!(element.semantic, SemanticKind::Node(_)) {
@@ -873,5 +986,149 @@ mod tests {
         assert!(MetadataMode::Minimal.allows_fingerprint());
         assert!(!MetadataMode::None.allows_fingerprint());
         assert!(!MetadataMode::None.allows_ids());
+    }
+}
+#[cfg(test)]
+mod weight_tests {
+    use super::*;
+    use crate::graph::{
+        EdgeId, EdgeKind, NodeId, PortRef, SigilEdge, SigilGraph, SigilNode, SigilNodeKind,
+        SourceLanguage,
+    };
+    use crate::{build_scene, normalize, LayoutOptions, NormalizeOptions};
+
+    fn weighted(on: bool) -> String {
+        let mut g = SigilGraph::new(SourceLanguage::Cant, "n0");
+        let mut a = SigilNode::new("n0", SigilNodeKind::Source);
+        let mut b = SigilNode::new("n1", SigilNodeKind::Output);
+        if on {
+            a.weight = Some(10.0);
+            b.weight = Some(2.0);
+        }
+        g.nodes.push(a);
+        g.nodes.push(b);
+        g.exits.push("n1".into());
+        g.edges.push(SigilEdge {
+            id: EdgeId::new("e0"),
+            from: PortRef::new(NodeId::new("n0"), 0),
+            to: PortRef::new(NodeId::new("n1"), 0),
+            ordinal: 0,
+            kind: EdgeKind::Flow,
+            region: None,
+        });
+        let normalized = normalize(g, &NormalizeOptions::default()).expect("normalizes");
+        let scene = build_scene(&normalized, &LayoutOptions::canonical());
+        render_svg(&scene, &SvgOptions::default()).svg
+    }
+
+    /// Weights scale the trace and nothing else; their absence changes nothing.
+    #[test]
+    fn weights_reach_the_edge_stroke_and_absence_leaves_it_alone() {
+        let edge_lines = |svg: &str| -> Vec<String> {
+            svg.lines()
+                .filter(|l| l.trim_start().starts_with("<path") && l.contains("sigil-edge"))
+                .map(str::to_string)
+                .collect()
+        };
+        let plain = edge_lines(&weighted(false));
+        assert!(
+            plain.iter().all(|l| !l.contains("stroke-opacity")),
+            "unweighted edges gained opacity: {plain:?}"
+        );
+        let traced = edge_lines(&weighted(true));
+        assert!(
+            traced.iter().all(|l| l.contains("stroke-opacity")),
+            "weighted edges did not scale: {traced:?}"
+        );
+    }
+
+    /// A weight the trace never counted is zero — cold, not invisible, and
+    /// never NaN: the weighted render still draws every edge.
+    #[test]
+    fn a_zero_weight_edge_is_faint_but_present() {
+        let mut g = SigilGraph::new(SourceLanguage::Cant, "n0");
+        let mut a = SigilNode::new("n0", SigilNodeKind::Source);
+        a.weight = Some(4.0);
+        let mut b = SigilNode::new("n1", SigilNodeKind::Stage);
+        b.weight = Some(0.0);
+        let c = SigilNode::new("n2", SigilNodeKind::Output);
+        g.nodes.push(a);
+        g.nodes.push(b);
+        g.nodes.push(c);
+        g.exits.push("n2".into());
+        for (i, (from, to)) in [("n0", "n1"), ("n1", "n2")].into_iter().enumerate() {
+            g.edges.push(SigilEdge {
+                id: EdgeId::new(format!("e{i}")),
+                from: PortRef::new(NodeId::new(from), 0),
+                to: PortRef::new(NodeId::new(to), 0),
+                ordinal: 0,
+                kind: EdgeKind::Flow,
+                region: None,
+            });
+        }
+        let normalized = normalize(g, &NormalizeOptions::default()).expect("normalizes");
+        let scene = build_scene(&normalized, &LayoutOptions::canonical());
+        let edges: Vec<_> = scene.elements.iter().filter(|e| e.ends.is_some()).collect();
+        assert_eq!(edges.len(), 2);
+        assert!(edges.iter().all(|e| e.weight.is_some()));
+        let svg = render_svg(&scene, &SvgOptions::default()).svg;
+        let cold: Vec<&str> = svg
+            .lines()
+            .filter(|l| {
+                l.trim_start().starts_with("<path")
+                    && l.contains("sigil-edge")
+                    && l.contains("stroke-opacity=\"0.3\"")
+            })
+            .collect();
+        assert_eq!(cold.len(), 1, "expected exactly one cold edge:\n{svg}");
+    }
+}
+#[cfg(test)]
+mod diff_tests {
+    use super::*;
+    use crate::graph::{
+        EdgeId, EdgeKind, NodeId, PortRef, SigilEdge, SigilGraph, SigilNode, SigilNodeKind,
+        SourceLanguage,
+    };
+    use crate::{build_scene, normalize, LayoutOptions, NormalizeOptions};
+
+    fn scene_of(n: usize) -> crate::SigilScene {
+        let mut g = SigilGraph::new(SourceLanguage::Cant, "n0");
+        g.nodes.push(SigilNode::new("n0", SigilNodeKind::Source));
+        for i in 1..n {
+            g.nodes
+                .push(SigilNode::new(format!("n{i}"), SigilNodeKind::Stage));
+            g.edges.push(SigilEdge {
+                id: EdgeId::new(format!("e{i}")),
+                from: PortRef::new(NodeId::new(format!("n{}", i - 1)), 0),
+                to: PortRef::new(NodeId::new(format!("n{i}")), 0),
+                ordinal: 0,
+                kind: EdgeKind::Flow,
+                region: None,
+            });
+        }
+        g.exits.push(format!("n{}", n - 1).into());
+        let normalized = normalize(g, &NormalizeOptions::default()).expect("normalizes");
+        build_scene(&normalized, &LayoutOptions::canonical())
+    }
+
+    /// The ghost is anonymous and beneath; the new render is identified and
+    /// above; the whole is deterministic and marked as a diff.
+    #[test]
+    fn a_diff_ghosts_the_old_render_beneath_the_new() {
+        let old = scene_of(3);
+        let new = scene_of(5);
+        let rendered = render_diff(&old, &new, &SvgOptions::default());
+        let svg = &rendered.svg;
+
+        let ghost_start = svg.find("sigil-ghost").expect("a ghost group");
+        let ghost_end = svg[ghost_start..].find("</g>").expect("closed") + ghost_start;
+        let ghost = &svg[ghost_start..ghost_end];
+        assert!(!ghost.contains("id=\""), "ghost elements must be anonymous");
+        // The new render keeps its identifiers, after the ghost.
+        assert!(svg[ghost_end..].contains("id=\"node-n4\""));
+        assert_eq!(rendered.fingerprint.format, "svg-diff");
+        // Deterministic, like every other artifact.
+        assert_eq!(svg, &render_diff(&old, &new, &SvgOptions::default()).svg);
     }
 }

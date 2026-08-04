@@ -43,6 +43,10 @@ pub struct SigilArgs {
     pub background: String,
     pub ornament: String,
     pub tracery: String,
+    /// A `cant.trace` document (`cant run --trace-out`), for a weighted render.
+    pub weights: Option<PathBuf>,
+    /// An older version of the program, ghosted beneath the render.
+    pub diff: Option<PathBuf>,
     pub width: Option<f64>,
     pub scale: f64,
     pub embed_scene: bool,
@@ -168,7 +172,10 @@ fn render(args: &SigilArgs) -> Result<Artifact, Failure> {
         limits.limits.max_nodes = max;
     }
 
-    let (graph, source_name) = load_graph(args, adapt)?;
+    let (mut graph, source_name) = load_graph(args, adapt)?;
+    if let Some(path) = &args.weights {
+        apply_weights(&mut graph, path)?;
+    }
 
     let normalized = normalize(graph, &limits).map_err(|diagnostics| Failure {
         message: diagnostics.to_string(),
@@ -192,6 +199,73 @@ fn render(args: &SigilArgs) -> Result<Artifact, Failure> {
     let scene = build_scene(&normalized, &layout);
     for warning in &scene.warnings {
         eprintln!("warning[SIGIL-L001]: {warning}");
+    }
+
+    // The diff render: the old program's scene ghosted beneath this one.
+    // Canonical for both — two seeded rotations would turn everything into a
+    // "move" — and SVG only, because the ghost is an overlay of vector layers.
+    if let Some(old_path) = &args.diff {
+        if args.format != "svg" {
+            return Err(Failure::usage(
+                "--diff renders SVG only — drop --format or set it to svg",
+            ));
+        }
+        if !args.canonical {
+            return Err(Failure::usage(
+                "--diff needs --canonical: with seeded rotation, every element becomes a \"move\"",
+            ));
+        }
+        let old_text = std::fs::read_to_string(old_path).map_err(|e| Failure {
+            message: format!("cant: could not read {}: {e}", old_path.display()),
+            exit: 2,
+        })?;
+        let (old_parsed, old_sources) =
+            cant_syntax::parse_source(&old_path.display().to_string(), &old_text);
+        if old_parsed.has_errors() {
+            return Err(Failure {
+                message: old_parsed.diagnostics.render_all(&old_sources),
+                exit: 3,
+            });
+        }
+        let old_program = cant_sem::lower(
+            &old_parsed.program.expect("no errors, so a program"),
+            &old_path.display().to_string(),
+            old_text.len(),
+        );
+        let old_graph = cant_sem::to_sigil_graph(&old_program, cant_sem::AdaptOptions::default());
+        let old_normalized = normalize(old_graph, &limits).map_err(|diagnostics| Failure {
+            message: diagnostics.to_string(),
+            exit: diagnostics.exit_code().max(1),
+        })?;
+        // No ornament on the ghost's scene: its seed differs, so its ornament
+        // would be unrelated noise under the real render's.
+        let old_scene = build_scene(
+            &old_normalized,
+            &LayoutOptions {
+                ornament: rite_sigil::OrnamentLevel::None,
+                tracery: layout.tracery,
+                ..LayoutOptions::canonical()
+            },
+        );
+        let svg_options = SvgOptions {
+            theme,
+            disclosure,
+            metadata,
+            background,
+            mark_detail: if args.simplify {
+                MarkDetail::Minimal
+            } else {
+                MarkDetail::Full
+            },
+            width: args.width,
+            height: args.width,
+        };
+        let rendered = rite_sigil::render_diff(&old_scene, &scene, &svg_options);
+        return Ok(Artifact {
+            bytes: rendered.svg.into_bytes(),
+            extension: "sigil.diff.svg",
+            fingerprint: rendered.fingerprint.to_line(),
+        });
     }
 
     if args.format == "scene-json" {
@@ -271,6 +345,58 @@ fn render(args: &SigilArgs) -> Result<Artifact, Failure> {
 }
 
 /// Cant source or graph JSON into a normalized graph.
+/// Read a `cant.trace` document and put its counts on the graph.
+///
+/// Ids the graph does not have are reported rather than dropped — a trace from
+/// last week's program silently half-applying is how a picture lies. Nodes the
+/// trace does not name ran zero times, which is a fact worth drawing.
+fn apply_weights(graph: &mut rite_sigil::SigilGraph, path: &Path) -> Result<(), Failure> {
+    let text = std::fs::read_to_string(path).map_err(|e| Failure {
+        message: format!("cant: could not read the trace: {}: {e}", path.display()),
+        exit: 2,
+    })?;
+    let doc: serde_json::Value = serde_json::from_str(&text).map_err(|e| Failure {
+        message: format!("cant: {} is not JSON: {e}", path.display()),
+        exit: 2,
+    })?;
+    if doc.get("schema").and_then(|v| v.as_str()) != Some("cant.trace") {
+        return Err(Failure {
+            message: format!(
+                "cant: {} is not a cant.trace document — write one with `cant run --trace-out`",
+                path.display()
+            ),
+            exit: 2,
+        });
+    }
+    let counts = doc
+        .get("nodes")
+        .and_then(|v| v.as_object())
+        .ok_or_else(|| Failure {
+            message: format!("cant: {} has no `nodes` object", path.display()),
+            exit: 2,
+        })?;
+
+    let known: std::collections::BTreeSet<&str> =
+        graph.nodes.iter().map(|n| n.id.as_str()).collect();
+    for id in counts.keys() {
+        if !known.contains(id.as_str()) {
+            eprintln!(
+                "warning[SIGIL-W002]: the trace counts `{id}`, which this program does not have — \
+                 is the trace from an older version of it?"
+            );
+        }
+    }
+    for node in &mut graph.nodes {
+        node.weight = Some(
+            counts
+                .get(node.id.as_str())
+                .and_then(|v| v.as_f64())
+                .unwrap_or(0.0),
+        );
+    }
+    Ok(())
+}
+
 fn load_graph(
     args: &SigilArgs,
     adapt: cant_sem::AdaptOptions,

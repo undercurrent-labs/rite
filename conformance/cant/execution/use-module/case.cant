@@ -1,0 +1,2 @@
+use mathy
+[1, 2, 3] -> * -> mathy.square($) -> []

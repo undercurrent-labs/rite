@@ -145,6 +145,27 @@ enum Commands {
         #[arg(long = "json-errors")]
         json_errors: bool,
     },
+    /// Run a program and compare its value against an expectation
+    ///
+    /// The expectation comes from `--expect`, or from the sidecar file
+    /// `<source>.expect` beside the program. A mismatch exits 7 — the exit the
+    /// contract reserves for test failures — with both values shown; any other
+    /// failure keeps its own exit code.
+    Test {
+        /// Source file, or `-` for standard input
+        source: Option<PathBuf>,
+        /// Test this expression instead of a file — quote it
+        #[arg(
+            long,
+            short = 'e',
+            value_name = "EXPRESSION",
+            allow_hyphen_values = true
+        )]
+        expr: Option<String>,
+        /// The expected final value, as `cant run` would print it
+        #[arg(long, value_name = "TEXT", allow_hyphen_values = true)]
+        expect: Option<String>,
+    },
     /// Format Cant source
     ///
     /// Idempotent, and refuses rather than risks losing a comment: the formatter
@@ -227,6 +248,12 @@ enum Commands {
         /// Report diagnostics as JSON on stdout instead of rendered text
         #[arg(long = "json-errors")]
         json_errors: bool,
+        /// Report per-node emission counts after the run (cant.trace JSON on stderr)
+        #[arg(long)]
+        trace: bool,
+        /// Write the trace to a file instead of standard error; implies --trace
+        #[arg(long = "trace-out", value_name = "PATH")]
+        trace_out: Option<PathBuf>,
         /// Program arguments (after `--`), readable with `! @process.args`
         #[arg(last = true)]
         args: Vec<String>,
@@ -392,6 +419,12 @@ enum Commands {
             value_name = "flowing|concentric|circuit"
         )]
         tracery: String,
+        /// Weight the render with a traced run (`cant run --trace-out PATH`)
+        #[arg(long, value_name = "PATH")]
+        weights: Option<PathBuf>,
+        /// Ghost an older version of the program beneath the render (needs --canonical)
+        #[arg(long, value_name = "OLD.cant")]
+        diff: Option<PathBuf>,
         /// Pixel width (the canvas is square, so this sets both dimensions)
         #[arg(long)]
         width: Option<f64>,
@@ -494,6 +527,8 @@ async fn main() -> ExitCode {
             source,
             expr,
             json_errors,
+            trace,
+            trace_out,
             args,
         } => {
             // `cant -e` and `cant run -e` are the same thing; taking either is
@@ -507,7 +542,7 @@ async fn main() -> ExitCode {
                         .filter(|p| p.as_os_str() != "-")
                         .and_then(|p| p.parent())
                         .map(|p| p.to_path_buf());
-                    run_program_in(input, dir, options, json_errors, args).await
+                    run_program_in(input, dir, options, json_errors, args, trace, trace_out).await
                 }
                 Err(usage) => usage_error(&usage),
             }
@@ -573,6 +608,8 @@ async fn main() -> ExitCode {
             background,
             ornament,
             tracery,
+            weights,
+            diff,
             width,
             scale,
             embed_scene,
@@ -593,6 +630,8 @@ async fn main() -> ExitCode {
             background,
             ornament,
             tracery,
+            weights,
+            diff,
             width,
             scale,
             embed_scene,
@@ -600,6 +639,25 @@ async fn main() -> ExitCode {
             max_nodes,
             check,
         }),
+        Commands::Test {
+            source,
+            expr,
+            expect,
+        } => match load_source(source.as_deref(), expr.as_deref()) {
+            Ok(input) => {
+                let dir = source
+                    .as_deref()
+                    .filter(|p| p.as_os_str() != "-")
+                    .and_then(|p| p.parent())
+                    .map(|p| p.to_path_buf());
+                let sidecar = source
+                    .as_deref()
+                    .filter(|p| p.as_os_str() != "-")
+                    .map(|p| p.with_extension("expect"));
+                run_test(input, dir, options, expect, sidecar).await
+            }
+            Err(usage) => usage_error(&usage),
+        },
         Commands::Fmt {
             source,
             expr,
@@ -839,7 +897,7 @@ async fn run_program(
     json_errors: bool,
     args: Vec<String>,
 ) -> ExitCode {
-    run_program_in(input, None, options, json_errors, args).await
+    run_program_in(input, None, options, json_errors, args, false, None).await
 }
 
 async fn run_program_in(
@@ -848,7 +906,105 @@ async fn run_program_in(
     options: rite::RuntimeOptions,
     json_errors: bool,
     args: Vec<String>,
+    trace: bool,
+    trace_out: Option<PathBuf>,
 ) -> ExitCode {
+    let permissions = match options.permissions() {
+        Ok(perms) => perms,
+        Err(e) => return usage_error(&e),
+    };
+    let budget = match options.budget() {
+        Ok(budget) => budget,
+        Err(e) => return usage_error(&e),
+    };
+
+    let tracing = trace || trace_out.is_some();
+    let result = cant::run(
+        &input.name,
+        &input.text,
+        cant::RunOptions {
+            script_dir,
+            permissions,
+            budget,
+            args,
+            output: None,
+            trace: tracing,
+            preamble: Vec::new(),
+        },
+    )
+    .await;
+
+    // The trace before the value: it goes to stderr (or a file), so the value
+    // on stdout stays exactly what an untraced run prints — pipeable either way.
+    if tracing {
+        if let Some(counts) = &result.trace {
+            let nodes: Vec<String> = counts
+                .iter()
+                .map(|(id, n)| format!("    \"{id}\": {n}"))
+                .collect();
+            let json = format!(
+                "{{\n  \"schema\": \"cant.trace\",\n  \"version\": \"1\",\n  \"source\": {},\n  \"nodes\": {{\n{}\n  }}\n}}\n",
+                serde_json::json!(input.name),
+                nodes.join(",\n")
+            );
+            match &trace_out {
+                Some(path) => {
+                    if let Err(e) = std::fs::write(path, &json) {
+                        eprintln!("cant: could not write the trace: {}: {e}", path.display());
+                        return ExitCode::from(1);
+                    }
+                }
+                None => eprint!("{json}"),
+            }
+        }
+    }
+
+    report(
+        &result.diagnostics,
+        &result.check.analysis.sources,
+        json_errors,
+    );
+    // The value is printed whenever it is not `none`, after whatever the program
+    // itself wrote — the same rule `rite run` follows.
+    if let Some(display) = &result.display {
+        println!("{display}");
+    }
+    ExitCode::from(result.exit_code)
+}
+
+/// `cant test`: run, compare, and exit 7 on a mismatch (§ the exit contract).
+///
+/// The comparison is over the *printed* value — the same text `cant run` shows
+/// — trimmed of trailing whitespace on both sides, so a sidecar file ending in
+/// a newline compares equal to the value it names. `none` is spelled `none`,
+/// so a program expected to answer nothing can say so.
+async fn run_test(
+    input: Input,
+    script_dir: Option<PathBuf>,
+    options: rite::RuntimeOptions,
+    expect: Option<String>,
+    sidecar: Option<PathBuf>,
+) -> ExitCode {
+    let expected = match expect {
+        Some(text) => text,
+        None => match sidecar {
+            Some(path) => match std::fs::read_to_string(&path) {
+                Ok(text) => text,
+                Err(e) => {
+                    return usage_error(&format!(
+                        "cant test: no --expect and no sidecar: {}: {e}",
+                        path.display()
+                    ))
+                }
+            },
+            None => {
+                return usage_error(
+                    "cant test: an expression needs --expect — there is no file to put a sidecar beside",
+                )
+            }
+        },
+    };
+
     let permissions = match options.permissions() {
         Ok(perms) => perms,
         Err(e) => return usage_error(&e),
@@ -865,23 +1021,31 @@ async fn run_program_in(
             script_dir,
             permissions,
             budget,
-            args,
+            args: Vec::new(),
             output: None,
+            trace: false,
+            preamble: Vec::new(),
         },
     )
     .await;
 
-    report(
-        &result.diagnostics,
-        &result.check.analysis.sources,
-        json_errors,
-    );
-    // The value is printed whenever it is not `none`, after whatever the program
-    // itself wrote — the same rule `rite run` follows.
-    if let Some(display) = &result.display {
-        println!("{display}");
+    if !result.succeeded() {
+        // The program failed before there was a value to compare. Its own
+        // failure is the report, and its own exit code stands — a broken
+        // program is not the same finding as a wrong answer.
+        report(&result.diagnostics, &result.check.analysis.sources, false);
+        return ExitCode::from(result.exit_code);
     }
-    ExitCode::from(result.exit_code)
+
+    let actual = result.display.unwrap_or_else(|| "none".to_string());
+    if actual.trim_end() == expected.trim_end() {
+        println!("ok");
+        return ExitCode::SUCCESS;
+    }
+    eprintln!("test failed: {}", input.name);
+    eprintln!("  expected: {}", expected.trim_end());
+    eprintln!("  actual:   {}", actual.trim_end());
+    ExitCode::from(7)
 }
 
 fn build_program(

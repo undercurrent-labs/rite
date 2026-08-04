@@ -14,7 +14,19 @@ use serde::{Deserialize, Serialize};
 /// A whole `.cant` source: one flow.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CantProgramAst {
+    /// Leading `use` imports of Rite modules, before the flow. Cant does not
+    /// resolve them — the names are emitted verbatim into the generated Rite,
+    /// and Rite's module system does the rest (open question 1, answered P4).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub uses: Vec<UseDecl>,
     pub flow: Flow,
+    pub span: Span,
+}
+
+/// `use math` — one leading import of a Rite module.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct UseDecl {
+    pub name: String,
     pub span: Span,
 }
 
@@ -114,7 +126,16 @@ pub struct Modifier {
 /// it keeps structure, leaf text and modifier names, and drops every span.
 /// Rite's `parse_both_equivalent` does the same thing for the same reason.
 pub fn structure(program: &CantProgramAst) -> serde_json::Value {
-    flow_structure(&program.flow)
+    let flow = flow_structure(&program.flow);
+    if program.uses.is_empty() {
+        // The historical shape, so a program without imports compares as it
+        // always did.
+        return flow;
+    }
+    serde_json::json!({
+        "uses": program.uses.iter().map(|u| u.name.clone()).collect::<Vec<_>>(),
+        "flow": flow,
+    })
 }
 
 fn flow_structure(flow: &Flow) -> serde_json::Value {

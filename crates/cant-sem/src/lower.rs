@@ -37,6 +37,7 @@ pub fn lower(ast: &CantProgramAst, source_name: &str, source_len: usize) -> Cant
     };
     let mut program = CantProgram::new_empty(source);
     program.version = GRAPH_SCHEMA_VERSION.to_string();
+    program.uses = ast.uses.iter().map(|u| u.name.clone()).collect();
     program.entry = flow.entry.unwrap_or(NodeId(0));
     program.exit = flow.exit.unwrap_or(program.entry);
     program.nodes = builder.nodes;

@@ -1,0 +1,1 @@
+["no-such-file.txt", "data.txt"] -> * -> !@fs.read($) -> ?{ is_ok($) } -> unwrap_or($, "") -> trim -> []

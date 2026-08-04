@@ -452,3 +452,40 @@ proptest! {
         prop_assert_eq!(round, ascii);
     }
 }
+
+#[test]
+fn use_lines_survive_formatting_in_both_dialects() {
+    let source = "use mathy\n[1, 2] -> * -> mathy.square($) -> []";
+    let ascii = cant_syntax::fmt::format(
+        source,
+        FormatOptions {
+            dialect: Dialect::Ascii,
+            ..Default::default()
+        },
+    )
+    .expect("formats");
+    assert!(
+        ascii.text.starts_with("use mathy\n"),
+        "the formatter dropped the import:\n{}",
+        ascii.text
+    );
+    let glyph = cant_syntax::fmt::format(
+        source,
+        FormatOptions {
+            dialect: Dialect::Glyph,
+            ..Default::default()
+        },
+    )
+    .expect("formats");
+    assert!(glyph.text.starts_with("use mathy\n"), "{}", glyph.text);
+    // Idempotent: formatting the formatted output changes nothing.
+    let again = cant_syntax::fmt::format(
+        &ascii.text,
+        FormatOptions {
+            dialect: Dialect::Ascii,
+            ..Default::default()
+        },
+    )
+    .expect("formats");
+    assert_eq!(again.text, ascii.text);
+}
