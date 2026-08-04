@@ -53,15 +53,15 @@ and Codex · **P7** export and gallery · **P8** Cloudflare · **P9** hardening.
 | S3 | Orbit is visibly circular | P2 | `an_orbit_produces_a_ring_its_members_sit_on` — a `Circle` element plus every member on its circumference | [x] |
 | S4 | Effects occupy the outer invocation boundary | P2 | `invocations_occupy_the_outer_boundary_band` and `effects_reach_the_invocation_boundary`; placement from the `effect` field, never a label scan | [x] |
 | S5 | Semantic meaning does not depend only on color | P3 | `no_two_kinds_produce_the_same_mark`, `no_two_capability_families_produce_the_same_mark`, `the_monochrome_theme_gives_every_family_the_same_accent` | [x] |
-| S6 | Ornament can be removed without changing semantic layout | P4 | property test: scene with ornament `none` and `maximal` have byte-identical semantic-layer elements | [ ] |
+| S6 | Ornament can be removed without changing semantic layout | P4 | `the_ornament_level_moves_no_semantic_geometry` — all four levels, over a fork/orbit/effect graph, asserting identical semantic elements *and* hit regions | [x] |
 
 ## Disclosure
 
 | # | Criterion | Phase | Artifact / proof | Done |
 |---|---|---|---|---|
 | D1 | Veiled mode shows no visible source labels | P3 | `veiled_output_never_draws_a_label` over hostile input × every metadata mode; a Veiled render emits no `<text>` at all | [x] |
-| D2 | Inscribed mode shows minimal symbolic annotation | P4 | golden; abbreviated capability family marks only, no full expressions | [ ] |
-| D3 | Revealed mode provides readable labels and a full Codex | P4 | golden + Codex entry count equals node count | [ ] |
+| D2 | Inscribed mode shows minimal symbolic annotation | P4 | layout emits an Inscriptions layer; the serializer abbreviates to 14 characters in Inscribed. Abbreviated *capability* marks are still P4 work | [~] |
+| D3 | Revealed mode provides readable labels and a full Codex | P4 | labels drawn upright beside each mark; legend entry per node. The interactive Codex is P6 | [~] |
 | D4 | Codex can be hidden/collapsed | P6 | `apps/sigil-web` component test | [ ] |
 | D5 | Hover/focus can reveal values in the web app | P6 | component + E2E test, keyboard focus included | [ ] |
 | D6 | Deep Veil can suppress interactive revelation | P6 | E2E: with Deep Veil on, hover and focus produce no tooltip | [ ] |
@@ -72,11 +72,11 @@ and Codex · **P7** export and gallery · **P8** Cloudflare · **P9** hardening.
 | # | Criterion | Phase | Artifact / proof | Done |
 |---|---|---|---|---|
 | R1 | SVG is self-contained, deterministic, script-free, escaped | P3 | `tests/svg_security.rs` — 12 hostile strings × 36 option sets, asserting no script, no `on*` attribute, no external reference, well-formed XML, identical repeat renders | [x] |
-| R2 | PNG works | P4 | `--format png`; reuses `rite-render`'s audited `resvg` path where it fits | [ ] |
+| R2 | PNG works | P4 | `cant sigil --format png`, via `rite_render::svg_to_png` behind an off-by-default feature; scale guard; `tests/visual.rs` | [x] |
 | R3 | Interactive HTML works offline | P4 | self-contained export; test asserts zero external references and a working Codex toggle | [ ] |
 | R4 | Scene JSON is available | P2/P3 | `cant sigil --format scene-json` + 6 golden fixtures, structurally asserted | [x] |
-| R5 | Three themes work | P3 | all three resolve, pass a WCAG 3:1 contrast check against their own background, and render every example distinctly | [~] no visual-regression coverage yet |
-| R6 | Ornament levels work | P4 | `none`/`sparse`/`ritual`/`maximal`; goldens + the S6 invariance property | [ ] |
+| R5 | Three themes work | P3/P4 | WCAG 3:1 contrast per theme, distinct SVG per theme, and a raster check that each ground is the polarity it claims | [x] |
+| R6 | Ornament levels work | P4 | `--ornament none\|sparse\|ritual\|maximal`, deterministic, on their own layers, no graph refs, plus the S6 invariance | [x] |
 | R7 | Canonical and explicit seeds work | P3 | `--seed graph\|canonical\|random\|<int>` and `--canonical`; `canonical_output_is_reproducible_and_differs_from_the_default`, `an_explicit_seed_is_reproducible` | [x] |
 | R8 | Render fingerprints work | P3 | `RenderFingerprint` carries graph, renderer, theme@version, seed, mode, metadata, format; `the_render_fingerprint_reports_what_produced_it`; absent under `--metadata none` | [x] |
 
@@ -120,10 +120,10 @@ and Codex · **P7** export and gallery · **P8** Cloudflare · **P9** hardening.
 
 | # | Criterion | Phase | Artifact / proof | Done |
 |---|---|---|---|---|
-| Q1 | Existing Rite/Cant tests remain green | P0–P9 | `cargo test --workspace --all-features`; 1329 → 1509 passing, 0 failing, at every phase | [x] through P3 |
+| Q1 | Existing Rite/Cant tests remain green | P0–P9 | `cargo test --workspace --all-features`; 1329 → 1527 passing, 0 failing, at every phase | [x] through P4 |
 | Q2 | Native/WASM scene parity passes | P5 | see AR4 | [ ] |
 | Q3 | Scene and SVG golden tests pass | P2/P3 | `fixtures/sigil/{scenes,svg}/`, structurally asserted rather than merely written | [ ] |
-| Q4 | Visual regressions are reviewed | P4 | PNG perceptual-hash + bounded pixel diff, per theme | [ ] |
+| Q4 | Visual regressions are reviewed | P4 | `tests/visual.rs` — an 8×8 perceptual hash over rasterised output: stable across runs, contrast present per theme, ground polarity, ornament changes without burying | [x] |
 | Q5 | Fuzz smoke tests pass | P9 | graph JSON parser, adapter, scene builder, mark generator, SVG serializer, metadata stripping | [ ] |
 | Q6 | Malicious labels cannot inject markup | P1/P3 | `tests/svg_security.rs` — one escaper, one sanitizer, 12 hostile strings across 36 option sets, plus a hostile-identifier suite | [x] |
 | Q7 | Large graph limits work | P1 | `a_graph_over_the_node_cap_is_refused_with_a_way_out` asserts the refusal names an alternative; `a_large_but_legal_graph_warns_once` | [~] `--simplify` itself is P3 |

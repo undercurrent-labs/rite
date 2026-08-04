@@ -138,6 +138,9 @@ codes! {
     SIGIL_S008_MALFORMED_SPAN = (Security, 8, "A source span ends before it starts, or runs past the source length.");
     SIGIL_S009_ID_NOT_REPRESENTABLE = (Security, 9, "An identifier contains characters that cannot be made into a stable element ID.");
 
+    // CLI and configuration.
+    SIGIL_C001_CONTRADICTORY_DISCLOSURE = (Cli, 1, "The disclosure mode draws labels the metadata mode was asked not to embed.");
+
     // Version compatibility.
     SIGIL_V001_UNSUPPORTED_GRAPH_SCHEMA = (Version, 1, "The input names a graph schema this renderer does not read.");
     SIGIL_V002_UNSUPPORTED_SCHEMA_VERSION = (Version, 2, "The input names a major schema version this renderer does not read.");

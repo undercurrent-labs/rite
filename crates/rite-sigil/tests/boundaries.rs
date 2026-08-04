@@ -85,6 +85,13 @@ fn rite_sigil_does_not_know_what_cant_is() {
     }
     // And the same rule from Rite's side: the renderer does not parse or resolve
     // a language either.
+    //
+    // `rite-render` is deliberately absent from this list. It is the one Rite
+    // crate `rite-sigil` may depend on, behind the off-by-default `png` feature,
+    // because `svg_to_png` is arbitrary SVG to PNG — the part of that crate that
+    // was never about Rite source. Reuse of an audited function, not a shared
+    // abstraction bent to fit two renderers. `rite_sigil_cannot_execute_anything`
+    // still keeps the rasteriser out of any build that did not ask for it.
     for forbidden in ["rite-syntax", "rite-sem", "rite-fmt", "rite-analysis"] {
         assert!(
             !declares(&m, forbidden),
@@ -158,6 +165,30 @@ fn no_rite_crate_depends_on_sigil() {
 
 /// The crate is a workspace member, so `cargo test --workspace` runs its tests.
 /// A crate outside the members list is a crate CI does not check.
+/// The rasteriser is optional, so the default build — and every WASM build —
+/// has no `resvg` and no font stack in it.
+#[test]
+fn the_rasteriser_is_behind_an_off_by_default_feature() {
+    let m = manifest("rite-sigil");
+    assert!(
+        declares(&m, "png"),
+        "rite-sigil lost its `png` feature; the rasteriser must stay optional"
+    );
+    let line = dependency_lines(&m)
+        .into_iter()
+        .find(|l| l.starts_with("rite-render"))
+        .expect("rite-render is declared");
+    assert!(
+        line.contains("optional = true"),
+        "rite-render is not optional: {line}"
+    );
+    assert!(
+        line.contains("default-features = false"),
+        "rite-render without `default-features = false`: cargo ignores it on a \
+         workspace dependency, which is how a wasm32 build once acquired axum"
+    );
+}
+
 #[test]
 fn rite_sigil_is_a_workspace_member() {
     let text = std::fs::read_to_string(repo_root().join("Cargo.toml")).expect("workspace manifest");

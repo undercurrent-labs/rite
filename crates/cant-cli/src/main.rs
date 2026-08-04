@@ -346,7 +346,7 @@ enum Commands {
         #[arg(long, short)]
         output: Option<PathBuf>,
         /// Output format
-        #[arg(long, default_value = "svg", value_name = "svg|scene-json")]
+        #[arg(long, default_value = "svg", value_name = "svg|png|scene-json")]
         format: String,
         /// Visual theme
         #[arg(
@@ -378,9 +378,19 @@ enum Commands {
         /// Background: `theme`, `transparent`, or a `#rrggbb` colour
         #[arg(long, default_value = "theme", value_name = "theme|transparent|HEX")]
         background: String,
+        /// How much non-semantic decoration to draw
+        #[arg(
+            long,
+            default_value = "ritual",
+            value_name = "none|sparse|ritual|maximal"
+        )]
+        ornament: String,
         /// Pixel width (the canvas is square, so this sets both dimensions)
         #[arg(long)]
         width: Option<f64>,
+        /// PNG rasterisation scale, when `--width` is not given
+        #[arg(long, default_value_t = 1.0)]
+        scale: f64,
         /// Draw skeleton marks only — for a graph too dense for full variation
         #[arg(long)]
         simplify: bool,
@@ -551,7 +561,9 @@ async fn main() -> ExitCode {
             seed,
             canonical,
             background,
+            ornament,
             width,
+            scale,
             simplify,
             max_nodes,
             check,
@@ -567,7 +579,9 @@ async fn main() -> ExitCode {
             seed,
             canonical,
             background,
+            ornament,
             width,
+            scale,
             simplify,
             max_nodes,
             check,

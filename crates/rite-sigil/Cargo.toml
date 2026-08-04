@@ -9,6 +9,12 @@ license.workspace = true
 description = "Deterministic semantic renderer: a program's topology as a ritual artifact"
 repository.workspace = true
 
+[features]
+# PNG rasterisation, off by default — the same pattern `rite-render` uses and for
+# the same reason: the browser build must not pull a rasteriser and a font stack
+# it cannot use. `cant-cli` turns it on.
+png = ["dep:rite-render"]
+
 # The dependency list is the architecture, and `tests/boundaries.rs` reads this
 # file to prove it. Nothing here parses a language, executes anything, opens a
 # file, or knows what Cant is:
@@ -22,6 +28,13 @@ repository.workspace = true
 # range would mean two span types that must agree forever.
 [dependencies]
 rite-core = { workspace = true }
+# PNG only. `rite-render::svg_to_png` is arbitrary SVG to PNG — the part of that
+# crate that was never about Rite source — so this is reuse of audited behaviour
+# rather than a shared abstraction bent to fit two renderers. Path form with
+# explicit `default-features = false`, because cargo ignores that on a workspace
+# dependency whose table does not specify it, which is how a wasm32 build once
+# acquired axum and failed inside `mio`.
+rite-render = { path = "../rite-render", optional = true, default-features = false, features = ["png"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }

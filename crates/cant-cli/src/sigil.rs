@@ -23,7 +23,7 @@ use std::process::ExitCode;
 
 use rite_sigil::{
     build_scene, normalize, render_svg, Background, DisclosureMode, LayoutOptions, MarkDetail,
-    MetadataMode, NormalizeOptions, Orientation, SvgOptions, ThemeId,
+    MetadataMode, NormalizeOptions, Orientation, OrnamentLevel, SvgOptions, ThemeId,
 };
 
 /// Everything `cant sigil` accepts. Mirrors §17.1.
@@ -40,7 +40,9 @@ pub struct SigilArgs {
     pub seed: String,
     pub canonical: bool,
     pub background: String,
+    pub ornament: String,
     pub width: Option<f64>,
+    pub scale: f64,
     pub simplify: bool,
     pub max_nodes: Option<usize>,
     pub check: bool,
@@ -100,16 +102,35 @@ fn render(args: &SigilArgs) -> Result<Artifact, Failure> {
             args.metadata
         ))
     })?;
+    let ornament = OrnamentLevel::parse(&args.ornament).ok_or_else(|| {
+        Failure::usage(format!(
+            "unknown --ornament `{}` — expected none, sparse, ritual, or maximal",
+            args.ornament
+        ))
+    })?;
     let background = match args.background.as_str() {
         "theme" => Background::Theme,
         "transparent" => Background::Transparent,
         hex => Background::hex(hex).map_err(|e| Failure::usage(format!("--background: {e}")))?,
     };
-    if args.format != "svg" && args.format != "scene-json" {
+    if !matches!(args.format.as_str(), "svg" | "png" | "scene-json") {
         return Err(Failure::usage(format!(
-            "unknown --format `{}` — expected svg or scene-json (png and html are not implemented yet)",
+            "unknown --format `{}` — expected svg, png, or scene-json (html is not implemented yet)",
             args.format
         )));
+    }
+
+    // A contradictory pair, warned about rather than silently resolved. The two
+    // axes are orthogonal by design (ADR 0007), so this combination is
+    // *meaningful* — draw the labels, embed nothing — but it is also what
+    // someone picks when they have confused "hide it" with "do not embed it",
+    // and the artifact they get has their source written across it.
+    if metadata == MetadataMode::None && disclosure != DisclosureMode::Veiled {
+        eprintln!(
+            "warning[SIGIL-C001]: --metadata none embeds nothing, but --mode {} draws \
+             labels into the artifact; use --mode veiled for a source-free picture",
+            disclosure.name()
+        );
     }
 
     // Labels only travel when they will be drawn or embedded. The privacy
@@ -148,6 +169,7 @@ fn render(args: &SigilArgs) -> Result<Artifact, Failure> {
             Orientation::Seeded
         },
         legend: true,
+        ornament,
     };
     let scene = build_scene(&normalized, &layout);
     for warning in &scene.warnings {
@@ -166,23 +188,43 @@ fn render(args: &SigilArgs) -> Result<Artifact, Failure> {
         });
     }
 
-    let rendered = render_svg(
-        &scene,
-        &SvgOptions {
-            theme,
-            disclosure,
-            metadata,
-            background,
-            mark_detail: if args.simplify {
-                MarkDetail::Minimal
-            } else {
-                MarkDetail::Full
-            },
-            width: args.width,
-            height: args.width,
+    let svg_options = SvgOptions {
+        theme,
+        disclosure,
+        metadata,
+        background,
+        mark_detail: if args.simplify {
+            MarkDetail::Minimal
+        } else {
+            MarkDetail::Full
         },
-    );
+        width: args.width,
+        height: args.width,
+    };
+    let rendered = render_svg(&scene, &svg_options);
     let _ = source_name;
+
+    if args.format == "png" {
+        // Width, when given, sets the scale: the canvas is 1600 square, so a
+        // `--width 3200` is a 2× render. Expressing it as a scale rather than
+        // resampling afterwards keeps the strokes crisp.
+        let scale = match args.width {
+            Some(width) => (width / rite_sigil::layout::VIEW_SIZE) as f32,
+            None => args.scale as f32,
+        };
+        let bytes = rite_sigil::render_png(&scene, &svg_options, scale).map_err(|e| Failure {
+            message: format!("error[SIGIL-R001]: {e}"),
+            exit: 1,
+        })?;
+        return Ok(Artifact {
+            bytes,
+            extension: "sigil.png",
+            fingerprint: rendered
+                .fingerprint
+                .to_line()
+                .replace("format=svg", "format=png"),
+        });
+    }
 
     Ok(Artifact {
         bytes: rendered.svg.into_bytes(),

@@ -154,8 +154,16 @@ fn no_standard_svg_contains_a_script_or_an_event_handler() {
         for options in every_option_set() {
             let svg = render(text, &options);
             let lower = svg.to_lowercase();
+            // `<script` over the whole document: escaping turns a hostile
+            // `<script>` into `&lt;script&gt;`, so a literal one would be real.
             assert!(!lower.contains("<script"), "script in output for {text:?}");
-            assert!(!lower.contains("javascript:"), "js url for {text:?}");
+            // A URL scheme is only dangerous in an attribute. In element text it
+            // is a string someone asked to have drawn, and Revealed mode draws
+            // exactly what it was given.
+            assert!(
+                !tags(&lower).iter().any(|t| t.contains("javascript:")),
+                "javascript: URL in an attribute for {text:?}"
+            );
             // Attribute syntax, not the substring. A sanitized element ID may
             // legitimately contain the letters `onload` — `id="s_-onload-1-"`
             // is a name, not a handler — and banning the substring would be a
@@ -248,12 +256,19 @@ fn veiled_output_never_draws_a_label() {
     }
 }
 
-/// `--metadata none` removes labels and snippets entirely (§13.5), and there is
-/// no disclosure mode that reintroduces them.
+/// `--metadata none` embeds nothing (§13.5).
+///
+/// **Embedding is not drawing.** The two axes are orthogonal on purpose, so
+/// `--mode revealed --metadata none` means "draw the labels, embed nothing" and
+/// the drawn labels are there because the disclosure mode asked for them. What
+/// `none` guarantees is that nothing is carried *invisibly*: no title, no desc,
+/// no graph-derived identifier, no snippet.
+///
+/// The combination is contradictory as an intent, and `cant sigil` warns about
+/// it rather than silently resolving it one way — see
+/// `metadata_none_with_a_revealing_mode_warns` in `cant-cli`.
 #[test]
-fn metadata_none_contains_no_label_snippet_or_identifier() {
-    // A distinctive label, so its absence is a real check rather than a search
-    // for punctuation that would have been escaped anyway.
+fn metadata_none_embeds_nothing_invisible() {
     const SECRET: &str = "ZZQQ_SECRET_LABEL_ZZQQ";
     for disclosure in [
         DisclosureMode::Veiled,
@@ -268,10 +283,12 @@ fn metadata_none_contains_no_label_snippet_or_identifier() {
                 ..Default::default()
             },
         );
-        assert!(
-            !svg.contains(SECRET),
-            "metadata=none leaked the label in {disclosure:?}"
-        );
+        if disclosure == DisclosureMode::Veiled {
+            assert!(
+                !svg.contains(SECRET),
+                "metadata=none + veiled leaked the label"
+            );
+        }
         assert!(!svg.contains("<title"), "metadata=none emitted a title");
         assert!(!svg.contains("<desc"), "metadata=none emitted a desc");
         // Graph-derived identifiers specifically. The glow filter carries an
@@ -320,23 +337,58 @@ fn hostile_identifiers_survive_sanitization_into_valid_ids() {
     }
 }
 
-/// `on<letters>=` preceded by whitespace: the attribute form, which is the
-/// actual prohibition.
+/// `on<letters>=` preceded by whitespace, **inside a tag**.
+///
+/// An event handler is an attribute, and an attribute only exists between `<`
+/// and `>`. Scanning the whole document also matched element *text*: an
+/// inscription drawn from the label `' onload='alert(1)` serializes as
+/// `&apos; onload=&apos;alert(1)` inside a `<text>` element, which is inert —
+/// the quotes are escaped, so nothing can close an attribute — but contains the
+/// literal ` onload=`. A checker that cannot tell the two apart fails on the
+/// escaper working correctly, which is the failure mode that gets a security
+/// test deleted.
 fn has_event_handler(lower: &str) -> bool {
-    let bytes = lower.as_bytes();
-    for (i, _) in lower.match_indices("on") {
-        if i == 0 || !bytes[i - 1].is_ascii_whitespace() {
-            continue;
-        }
-        let mut j = i + 2;
-        while j < bytes.len() && bytes[j].is_ascii_alphabetic() {
-            j += 1;
-        }
-        if j > i + 2 && bytes.get(j) == Some(&b'=') {
-            return true;
+    for tag in tags(lower) {
+        let bytes = tag.as_bytes();
+        for (i, _) in tag.match_indices("on") {
+            if i == 0 || !bytes[i - 1].is_ascii_whitespace() {
+                continue;
+            }
+            let mut j = i + 2;
+            while j < bytes.len() && bytes[j].is_ascii_alphabetic() {
+                j += 1;
+            }
+            if j > i + 2 && bytes.get(j) == Some(&b'=') {
+                return true;
+            }
         }
     }
     false
+}
+
+/// Every `<...>` region, exclusive of the angle brackets.
+fn tags(text: &str) -> Vec<&str> {
+    let mut out = Vec::new();
+    let mut rest = text;
+    while let Some(start) = rest.find('<') {
+        let after = &rest[start + 1..];
+        let Some(end) = after.find('>') else { break };
+        out.push(&after[..end]);
+        rest = &after[end + 1..];
+    }
+    out
+}
+
+#[test]
+fn the_event_handler_check_looks_only_inside_tags() {
+    assert!(has_event_handler("<rect onload=\"x\"/>"));
+    assert!(has_event_handler("<a b=\"1\" onmouseover=\"y\">"));
+    // Escaped text content is not an attribute.
+    assert!(!has_event_handler(
+        "<text>&apos; onload=&apos;alert(1)</text>"
+    ));
+    assert!(!has_event_handler("<path id=\"s-onload-1\"/>"));
+    assert!(!has_event_handler("plain onload= text"));
 }
 
 /// A validated background cannot escape its attribute, and an invalid one is

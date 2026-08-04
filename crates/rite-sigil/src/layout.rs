@@ -52,6 +52,7 @@ use std::f64::consts::{PI, TAU};
 use crate::analysis::{analyze, Placement, Topology};
 use crate::canonical::Prng;
 use crate::graph::{EdgeKind, NodeId, RegionKind, SigilGraph, SigilNode, SigilNodeKind};
+use crate::ornament::{self, OrnamentLevel};
 use crate::scene::*;
 use crate::NormalizedGraph;
 
@@ -117,6 +118,11 @@ pub struct LayoutOptions {
     /// size of the scene rather than about privacy — a legend entry never
     /// contains a label the graph did not carry.
     pub legend: bool,
+    /// How much non-semantic geometry to generate.
+    ///
+    /// Generated last, from the seed alone, and appended — so changing it moves
+    /// nothing semantic. See `ornament`.
+    pub ornament: OrnamentLevel,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -137,6 +143,7 @@ impl LayoutOptions {
             seed: 0,
             orientation: Orientation::Canonical,
             legend: true,
+            ornament: OrnamentLevel::default(),
         }
     }
 
@@ -145,6 +152,7 @@ impl LayoutOptions {
             seed: graph.seed(),
             orientation: Orientation::Seeded,
             legend: true,
+            ornament: OrnamentLevel::default(),
         }
     }
 
@@ -205,6 +213,13 @@ pub fn build_scene(graph: &NormalizedGraph, options: &LayoutOptions) -> SigilSce
         &mut hit_regions,
         &mut legend,
     );
+
+    emit_inscriptions(&graph.graph, &positions, &mut elements);
+
+    // Last, and from the seed alone. Appending rather than interleaving is what
+    // makes "remove the ornament" a filter over layers rather than a relayout
+    // (ADR 0004) — nothing above this line has seen the ornament level.
+    elements.extend(ornament::generate(options.ornament, options.seed));
 
     check_bounds(&elements, &mut warnings);
 
@@ -837,6 +852,57 @@ fn emit_nodes(
     }
 }
 
+/// Text beside a node, for Inscribed and Revealed.
+///
+/// Emitted whenever the graph carried a label — and the graph only carries one
+/// when labels were asked for, so a Veiled render has nothing to emit rather
+/// than something to suppress. The serializer refuses to draw text in Veiled
+/// mode as well; two independent guards, because this is the one that a scene
+/// JSON export also passes through.
+///
+/// Placed outward of the mark along the radial, so an inscription never lands
+/// between a node and the centre where the flow traces are.
+fn emit_inscriptions(
+    graph: &SigilGraph,
+    positions: &BTreeMap<NodeId, Point>,
+    elements: &mut Vec<SceneElement>,
+) {
+    for node in &graph.nodes {
+        let Some(label) = node.label.as_ref() else {
+            continue;
+        };
+        let Some(position) = positions.get(&node.id) else {
+            continue;
+        };
+
+        let outward = (position.y - CENTER).atan2(position.x - CENTER);
+        let offset = mark_size(&node.kind, Placement::Flow) + 22.0;
+        let anchor = Point::new(
+            position.x + offset * outward.cos(),
+            position.y + offset * outward.sin(),
+        );
+
+        // Kept upright. A label rotated to the radial is unreadable on the left
+        // half of the circle, and §20.9 warns against illegible ornamental text
+        // — an inscription is there to be read or it should not be there.
+        elements.push(SceneElement {
+            id: format!("inscription/{}", sanitize(node.id.as_str())),
+            layer: SceneLayerKind::Inscriptions,
+            semantic: SemanticKind::Node(node.kind.clone()),
+            graph_ref: Some(SceneRef::Node(node.id.0.clone())),
+            geometry: Geometry::Text {
+                anchor,
+                content: label.clone(),
+                size: 15.0,
+                rotation: 0.0,
+            },
+            title: None,
+            legend_key: Some(format!("node/{}", node.id)),
+            bounds: Rect::new(anchor.x - 90.0, anchor.y - 12.0, 180.0, 24.0),
+        });
+    }
+}
+
 /// What a node is, in words that are always safe to show.
 fn title_for(node: &SigilNode) -> String {
     match &node.kind {
@@ -1243,10 +1309,129 @@ mod tests {
         );
     }
 
-    /// ADR 0004's testable form: nothing on a non-semantic layer moves anything
-    /// on a semantic one. Phase 2 emits no ornament, so this asserts the layer
-    /// separation the invariance will rest on — and it will keep asserting it
-    /// when Phase 4 starts emitting.
+    /// ADR 0004's central claim, in the form that can actually fail: the
+    /// ornament level changes no semantic coordinate. Not "not much" — not one.
+    ///
+    /// Run against `maximal` because that is the level most likely to break it,
+    /// and over a graph with every construct in it because a linear chain has no
+    /// collisions to perturb.
+    #[test]
+    fn the_ornament_level_moves_no_semantic_geometry() {
+        let graph = fork_orbit_and_effect();
+        let base: Vec<SceneElement> = build_scene(
+            &graph,
+            &LayoutOptions {
+                ornament: OrnamentLevel::None,
+                ..LayoutOptions::canonical()
+            },
+        )
+        .elements
+        .into_iter()
+        .filter(|e| !e.is_ornament())
+        .collect();
+        assert!(!base.is_empty());
+
+        for level in OrnamentLevel::ALL {
+            let scene = build_scene(
+                &graph,
+                &LayoutOptions {
+                    ornament: *level,
+                    ..LayoutOptions::canonical()
+                },
+            );
+            let semantic: Vec<SceneElement> = scene
+                .elements
+                .iter()
+                .filter(|e| !e.is_ornament())
+                .cloned()
+                .collect();
+            assert_eq!(
+                semantic,
+                base,
+                "ornament level `{}` moved semantic geometry",
+                level.name()
+            );
+            // And the hit regions, which are what a user actually interacts
+            // with — an ornament that shifted those would be worse than one
+            // that shifted a stroke.
+            assert_eq!(
+                scene.hit_regions.len(),
+                base.iter()
+                    .filter(|e| e.layer == SceneLayerKind::SemanticNodes)
+                    .count()
+            );
+        }
+    }
+
+    /// Ornament appears only at the levels that ask for it, and never on a
+    /// semantic layer.
+    #[test]
+    fn ornament_arrives_on_its_own_layers_only() {
+        let graph = linear();
+        for level in OrnamentLevel::ALL {
+            let scene = build_scene(
+                &graph,
+                &LayoutOptions {
+                    ornament: *level,
+                    ..LayoutOptions::canonical()
+                },
+            );
+            let count = scene.ornament_elements().count();
+            if *level == OrnamentLevel::None {
+                assert_eq!(count, 0, "`none` drew ornament");
+            } else {
+                assert!(count > 0, "`{}` drew none", level.name());
+            }
+            for element in scene.ornament_elements() {
+                assert!(element.graph_ref.is_none(), "{}", element.id);
+            }
+        }
+    }
+
+    /// A graph with a fork, an orbit and an invocation — the shapes whose
+    /// placement the collision pass actually perturbs.
+    fn fork_orbit_and_effect() -> NormalizedGraph {
+        let mut g = chain(&[
+            ("n0", SigilNodeKind::Source),
+            ("fork", SigilNodeKind::Fork),
+            ("orbit", SigilNodeKind::Orbit),
+            ("io", SigilNodeKind::Stage),
+            ("out", SigilNodeKind::Output),
+        ]);
+        g.nodes[3].effect = Some(EffectMetadata {
+            performs: true,
+            capabilities: vec![Capability::anonymous(CapabilityFamily::Fs)],
+        });
+        for (i, (region, kind, owner)) in [
+            ("b0", RegionKind::Branch, "fork"),
+            ("b1", RegionKind::Branch, "fork"),
+            ("ring", RegionKind::Orbit, "orbit"),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let member = format!("m{i}");
+            g.nodes
+                .push(SigilNode::new(member.clone(), SigilNodeKind::Stage));
+            g.nodes.last_mut().expect("just pushed").region = Some(RegionId::new(region));
+            let mut r = SigilRegion::new(region, kind);
+            r.owner = Some(NodeId::new(owner));
+            r.ordinal = i as u32;
+            r.members.push(NodeId::new(member.clone()));
+            g.regions.push(r);
+            g.edges.push(SigilEdge {
+                id: EdgeId::new(format!("enter{i}")),
+                from: PortRef::new(owner, i as u32 + 1),
+                to: PortRef::new(member, 0),
+                ordinal: i as u32,
+                kind: EdgeKind::Enter,
+                region: Some(RegionId::new(region)),
+            });
+        }
+        normalized(g)
+    }
+
+    /// The layer separation the invariance rests on.
     #[test]
     fn semantic_geometry_is_independent_of_the_ornament_layers() {
         let scene = build_scene(&linear(), &LayoutOptions::canonical());
@@ -1389,7 +1574,7 @@ mod tests {
             &LayoutOptions {
                 seed: 12345,
                 orientation: Orientation::Seeded,
-                legend: true,
+                ..LayoutOptions::canonical()
             },
         );
         for id in ["n0", "n1", "n2", "n3"] {

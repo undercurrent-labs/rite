@@ -64,6 +64,7 @@ pub mod graph;
 pub mod layout;
 pub mod limits;
 pub mod marks;
+pub mod ornament;
 pub mod scene;
 pub mod svg;
 pub mod theme;
@@ -84,10 +85,13 @@ pub use graph::{
 pub use layout::{build_scene, LayoutOptions, Orientation};
 pub use limits::{NormalizeOptions, RenderLimits};
 pub use marks::{Mark, MarkDetail};
+pub use ornament::OrnamentLevel;
 pub use scene::{
     Geometry, HitRegion, LegendEntry, PathCommand, Point, Rect, SceneElement, SceneLayerKind,
     SceneMetadata, SceneRef, SemanticKind, SigilScene, SCENE_SCHEMA_NAME, SCENE_SCHEMA_VERSION,
 };
+#[cfg(feature = "png")]
+pub use svg::render_png;
 pub use svg::{
     render_svg, Background, DisclosureMode, MetadataMode, RenderFingerprint, RenderedSvg,
     SvgOptions,

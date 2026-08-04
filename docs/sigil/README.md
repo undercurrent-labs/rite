@@ -60,7 +60,7 @@ a presentation of the scene.
 
 ## Status
 
-**Phase 0–3 of nine.** `cant sigil` renders SVG and scene JSON in three themes. See [the implementation checklist](checklist.md) for every
+**Phase 0–4 of nine.** `cant sigil` renders SVG, PNG and scene JSON in three themes, four ornament levels and three disclosure modes. See [the implementation checklist](checklist.md) for every
 MVP acceptance criterion against the artifact that satisfies it, and
 [the implementation log](implementation-log.md) for what was decided, deviated
 from, or discovered along the way.

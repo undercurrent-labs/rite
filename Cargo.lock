@@ -2725,6 +2725,7 @@ dependencies = [
  "hex",
  "proptest",
  "rite-core",
+ "rite-render",
  "serde",
  "serde_json",
  "sha2",

@@ -413,7 +413,89 @@ diagnostic type would have passed while the user-visible behaviour stayed broken
 - The `void` and `parchment` themes exist and are contrast-checked but have no
   visual-regression coverage.
 
+---
+
+## Phase 4 — ornament, inscriptions, PNG, visual regression
+
+**Status: partial.** Ornament, inscriptions, PNG and visual-regression tests
+have landed. Interactive HTML and the embedded metadata block have not.
+
+`ornament.rs` (four levels), inscriptions in `layout.rs`, `render_png` behind an
+off-by-default feature, `tests/visual.rs`.
+
+### Ornament is generated after placement, and that is the design
+
+ADR 0004 requires ornament to be removable without relayout. The way to make
+that true rather than careful is that `ornament::generate` takes the level and
+the seed and **nothing from the placed scene** — it cannot avoid a node, because
+it cannot see one. "Draw filigree in the gaps" would have needed to know where
+the gaps are, and a gap depends on where the nodes landed, so an ornament that
+avoided collisions would have made the semantic layout depend on the ornament
+level through the collision pass.
+
+`the_ornament_level_moves_no_semantic_geometry` asserts it over all four levels
+against a graph with a fork, an orbit and an invocation in it — a linear chain
+has no collisions to perturb, so it would have proved nothing.
+
+### PNG is `rite-render`'s, and that was the point of the audit
+
+`rite_render::svg_to_png` is arbitrary SVG to PNG — the part of that crate that
+was never about Rite source, extracted for the Cant social card. Sigil calls it
+behind an off-by-default `png` feature, the same pattern and for the same reason:
+the browser build must not acquire a rasteriser and a font stack.
+
+This is the reuse the Phase 0 audit was looking for and did not find in the
+*rendering* model. The two renderers still share no abstraction — `rite-render`
+draws highlighted text at column positions, Sigil draws layered geometry — and
+forcing one would have distorted both. One audited function is the whole of it.
+
+### The visual tests assert what a raster can actually answer
+
+The first version asserted that the three themes produce distinct perceptual
+hashes. They do not, and should not: a perceptual hash thresholds each cell
+against the image's own mean, so it is blind to recolouring by construction —
+which is exactly what makes it a good *composition* check. `neon-ritual` and
+`void` draw the same shapes and hash identically.
+
+So the raster asserts what only it can see: each theme's ground is the polarity
+it claims (dark for two, light for parchment), each render has contrast in it
+rather than being uniform, `maximal` ornament changes the picture without
+burying it, and a graph twice the size is a different picture.
+
+The PNG decoder and DEFLATE reader in that file are about two hundred lines and
+exist so no dev-dependency is needed to read bytes this process just wrote.
+
+### Findings
+
+**`--mode revealed --metadata none` is contradictory, and now says so.** The two
+axes are orthogonal by design, so the combination is meaningful — draw the
+labels, embed nothing — but it is also what someone picks having confused "hide
+it" with "do not embed it", and the artifact they get has their source written
+across it. `cant sigil` warns (`SIGIL-C001`) rather than silently resolving it.
+
+**The security checks had to learn where an attribute is.** Once inscriptions
+existed, a label of `' onload='alert(1)` drew as escaped text containing the
+literal ` onload=`, and a label of `javascript:alert(1)` drew as that string.
+Both are inert — the quotes are escaped — but a whole-document substring search
+cannot tell them from an attribute. The checks now scan only inside `<…>`, which
+is where an attribute can exist. A security test that fires on the escaper
+working correctly is one that gets deleted.
+
+**A duplicated CSS class.** Ornament's layer class and its semantic class are
+both `sigil-ornament`, so every ornament element carried
+`class="sigil-ornament sigil-ornament"`. Valid, and visibly sloppy in an artifact
+meant to be looked at.
+
+### Known limitations at the end of Phase 4 so far
+
+- No interactive HTML export.
+- `--metadata full` still embeds no snippets; there is no metadata block.
+- Inscribed abbreviates labels but has no abbreviated *capability* marks.
+- No WASM, no web app, no Codex UI.
+- `--legend`, `--orientation`, `--embed-graph`, `--embed-scene`, `--open` are
+  specified and unimplemented.
+
 ### Next milestone
 
-Inscriptions, so Inscribed and Revealed stop being inert, then Phase 4's
-ornament, PNG and interactive HTML.
+Interactive HTML and the metadata block, which close Phase 4, then Phase 5's
+`rite-sigil-wasm` and the web application.

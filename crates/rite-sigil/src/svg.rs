@@ -369,11 +369,15 @@ fn write_element(
     if options.metadata.allows_ids() {
         let _ = write!(attrs, " id=\"{}\"", sanitize_id(&element.id));
     }
-    let _ = write!(
-        attrs,
-        " class=\"{class} sigil-{}\"",
-        sanitize_id(&element.semantic.class())
-    );
+    // Ornament's layer class and its semantic class are both `sigil-ornament`,
+    // so writing both produced `class="sigil-ornament sigil-ornament"` — valid,
+    // and visibly sloppy in an artifact someone is meant to look at.
+    let semantic_class = format!("sigil-{}", sanitize_id(&element.semantic.class()));
+    if semantic_class == class {
+        let _ = write!(attrs, " class=\"{class}\"");
+    } else {
+        let _ = write!(attrs, " class=\"{class} {semantic_class}\"");
+    }
     if !matches!(element.semantic, SemanticKind::InvocationBoundary) {
         let _ = write!(attrs, " stroke=\"{stroke}\"");
     }
@@ -636,6 +640,31 @@ fn arc_path(center: Point, radius: f64, start: f64, end: f64) -> String {
         num(b.x),
         num(b.y)
     )
+}
+
+/// Rasterise a rendered SVG.
+///
+/// Delegates to `rite_render::svg_to_png`, which is arbitrary-SVG-to-PNG and was
+/// already audited for the Cant social card. Sigil does not own a rasteriser and
+/// should not: the alternative was a second `resvg` integration with its own
+/// font handling, differing in ways nobody would notice until an artifact came
+/// out wrong.
+///
+/// Determinism is "within practical rasterisation limits" (§16.2): the same SVG
+/// and scale give the same bytes on one machine, and `resvg`'s antialiasing is
+/// deterministic, but a different `resvg` release may differ by a subpixel. That
+/// is why the visual-regression tests compare a perceptual hash rather than
+/// bytes, and why SVG rather than PNG is the canonical format.
+#[cfg(feature = "png")]
+pub fn render_png(scene: &SigilScene, options: &SvgOptions, scale: f32) -> Result<Vec<u8>, String> {
+    if !(0.05..=32.0).contains(&scale) {
+        return Err(format!(
+            "scale {scale} is outside the supported range 0.05..=32 — a huge \
+             canvas is a denial-of-service, not a picture"
+        ));
+    }
+    let rendered = render_svg(scene, options);
+    rite_render::svg_to_png(&rendered.svg, scale).map_err(|e| e.to_string())
 }
 
 /// A number, rounded and without a trailing `.0`.

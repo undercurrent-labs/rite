@@ -110,6 +110,11 @@ const SHARED_FILES: &[(&str, &str)] = &[
         "one doc comment recommending `cant graph` for a graph too large to draw",
     ),
     (
+        "crates/rite-sigil/src/svg.rs",
+        "one doc comment citing the Cant social card as `svg_to_png`'s first \
+         caller; the PNG path itself is Rite's and stays",
+    ),
+    (
         "crates/rite-sigil/src/validate.rs",
         "one doc comment citing `validate_deserialized`",
     ),
