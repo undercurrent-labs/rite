@@ -1,5 +1,7 @@
 # Changelog
 
+## [Unreleased]
+
 ## [0.8.0] — 2026-08-04
 
 Cant programs become artifacts. Sigil renders a program's semantic topology as
