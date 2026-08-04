@@ -134,6 +134,10 @@ const SHARED_FILES: &[(&str, &str)] = &[
         "`SourceLanguage::Cant` in the generated fixture",
     ),
     (
+        "crates/rite-sigil/tests/svg_security.rs",
+        "`SourceLanguage::Cant` in the hostile-input fixtures",
+    ),
+    (
         "docs/sigil/README.md",
         "the pipeline diagram and the Cant references in it",
     ),

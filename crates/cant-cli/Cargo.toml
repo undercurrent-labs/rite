@@ -19,6 +19,10 @@ rite-caps = { workspace = true }
 rite-core = { workspace = true }
 rite-runtime = { workspace = true }
 cant-sem = { workspace = true }
+# The renderer. `cant sigil` is a thin caller: everything that decides what the
+# picture looks like lives in `rite-sigil`, so the CLI and the browser cannot
+# disagree (ADR 0005).
+rite-sigil = { workspace = true }
 rustyline = { workspace = true }
 tokio = { workspace = true }
 clap = { workspace = true }

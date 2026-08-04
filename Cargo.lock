@@ -485,6 +485,7 @@ dependencies = [
  "rite-caps",
  "rite-core",
  "rite-runtime",
+ "rite-sigil",
  "rustyline",
  "serde_json",
  "tokio",

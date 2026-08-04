@@ -38,8 +38,8 @@ and Codex · **P7** export and gallery · **P8** Cloudflare · **P9** hardening.
 
 | # | Criterion | Phase | Artifact / proof | Done |
 |---|---|---|---|---|
-| I1 | Cant source renders through `cant sigil` | P3 | `cant sigil <file>`, `-`, `-e`; `cant-cli/tests/` | [ ] |
-| I2 | Graph JSON renders | P1/P3 | `cant sigil --graph <file\|->`; adapter reads `cant.graph` v1 JSON with no parser present | [ ] |
+| I1 | Cant source renders through `cant sigil` | P3 | file, `-`, and `-e`; `cant-cli/tests/sigil.rs` | [x] |
+| I2 | Graph JSON renders | P1/P3 | `cant sigil --graph`; `graph_json_renders_without_any_source` pipes `cant graph` into it | [x] |
 | I3 | Invalid graph input produces structured diagnostics | P1 | 22 `SIGIL-*` codes, each carrying a `GraphRef` and an optional span; a test per rule in `validate.rs`; `no_two_codes_collide` and `every_code_has_documentation` | [x] |
 | I4 | Schema versions are checked | P1 | `cant.graph` name-then-version in `validate_deserialized`; `rite.sigil.graph` via `SIGIL-V001`/`SIGIL-V002` | [x] |
 | I5 | Unknown supported node kinds degrade safely | P1/P2 | `SigilNodeKind::Unknown(String)`; `an_unknown_kind_warns_by_default_and_errors_when_strict`, `an_unknown_node_kind_lays_out_without_panicking` | [x] |
@@ -48,45 +48,45 @@ and Codex · **P7** export and gallery · **P8** Cloudflare · **P9** hardening.
 
 | # | Criterion | Phase | Artifact / proof | Done |
 |---|---|---|---|---|
-| S1 | Source, stage, flow, ward, scatter, collect, fork, orbit, effect, output, unknown have distinct visual grammar | P2/P3 | one scene golden per kind; a shape-distinctness test over generated mark path data | [ ] |
+| S1 | Source, stage, flow, ward, scatter, collect, fork, orbit, effect, output, unknown have distinct visual grammar | P2/P3 | a skeleton per kind in `marks.rs`, asserted pairwise distinct over path data; every kind produces a scene element | [x] |
 | S2 | Fork order is spatially stable | P2 | `fork_branches_occupy_sectors_in_ordinal_order` asserts clockwise order *and* that reversing the region array moves nothing | [x] |
 | S3 | Orbit is visibly circular | P2 | `an_orbit_produces_a_ring_its_members_sit_on` — a `Circle` element plus every member on its circumference | [x] |
 | S4 | Effects occupy the outer invocation boundary | P2 | `invocations_occupy_the_outer_boundary_band` and `effects_reach_the_invocation_boundary`; placement from the `effect` field, never a label scan | [x] |
-| S5 | Semantic meaning does not depend only on color | P3 | monochrome (`void` theme) golden; every kind distinguishable by path geometry alone | [ ] |
+| S5 | Semantic meaning does not depend only on color | P3 | `no_two_kinds_produce_the_same_mark`, `no_two_capability_families_produce_the_same_mark`, `the_monochrome_theme_gives_every_family_the_same_accent` | [x] |
 | S6 | Ornament can be removed without changing semantic layout | P4 | property test: scene with ornament `none` and `maximal` have byte-identical semantic-layer elements | [ ] |
 
 ## Disclosure
 
 | # | Criterion | Phase | Artifact / proof | Done |
 |---|---|---|---|---|
-| D1 | Veiled mode shows no visible source labels | P3 | ADR 0007; golden SVG suite asserts no visible text node carries label content | [ ] |
+| D1 | Veiled mode shows no visible source labels | P3 | `veiled_output_never_draws_a_label` over hostile input × every metadata mode; a Veiled render emits no `<text>` at all | [x] |
 | D2 | Inscribed mode shows minimal symbolic annotation | P4 | golden; abbreviated capability family marks only, no full expressions | [ ] |
 | D3 | Revealed mode provides readable labels and a full Codex | P4 | golden + Codex entry count equals node count | [ ] |
 | D4 | Codex can be hidden/collapsed | P6 | `apps/sigil-web` component test | [ ] |
 | D5 | Hover/focus can reveal values in the web app | P6 | component + E2E test, keyboard focus included | [ ] |
 | D6 | Deep Veil can suppress interactive revelation | P6 | E2E: with Deep Veil on, hover and focus produce no tooltip | [ ] |
-| D7 | Metadata can be stripped completely | P4 | `--metadata none`; property test over the malicious-label fixture set asserts no source snippet survives anywhere in the output | [ ] |
+| D7 | Metadata can be stripped completely | P3 | `metadata_none_contains_no_label_snippet_or_identifier` — no label, no title, no desc, no graph-derived id | [x] |
 
 ## Rendering
 
 | # | Criterion | Phase | Artifact / proof | Done |
 |---|---|---|---|---|
-| R1 | SVG is self-contained, deterministic, script-free, escaped | P3 | canonical SVG goldens; assertions: parses in a strict XML parser, no `<script>`, no `on*` attribute, no external reference, no `foreignObject` | [ ] |
+| R1 | SVG is self-contained, deterministic, script-free, escaped | P3 | `tests/svg_security.rs` — 12 hostile strings × 36 option sets, asserting no script, no `on*` attribute, no external reference, well-formed XML, identical repeat renders | [x] |
 | R2 | PNG works | P4 | `--format png`; reuses `rite-render`'s audited `resvg` path where it fits | [ ] |
 | R3 | Interactive HTML works offline | P4 | self-contained export; test asserts zero external references and a working Codex toggle | [ ] |
-| R4 | Scene JSON is available | P2 | `rite_sigil::build_scene` + 6 golden fixtures, structurally asserted. **CLI surface is P3** — the format exists, `cant sigil` does not yet | [~] |
-| R5 | Three themes work | P4 | `neon-ritual`, `void`, `parchment`; a golden and a contrast check each | [ ] |
+| R4 | Scene JSON is available | P2/P3 | `cant sigil --format scene-json` + 6 golden fixtures, structurally asserted | [x] |
+| R5 | Three themes work | P3 | all three resolve, pass a WCAG 3:1 contrast check against their own background, and render every example distinctly | [~] no visual-regression coverage yet |
 | R6 | Ornament levels work | P4 | `none`/`sparse`/`ritual`/`maximal`; goldens + the S6 invariance property | [ ] |
-| R7 | Canonical and explicit seeds work | P3 | `--seed graph\|canonical\|<int>\|random`; determinism property test | [ ] |
-| R8 | Render fingerprints work | P3 | graph fingerprint + renderer version + theme version + seed + mode + geometry options; stable across runs, absent under `--metadata none` | [ ] |
+| R7 | Canonical and explicit seeds work | P3 | `--seed graph\|canonical\|random\|<int>` and `--canonical`; `canonical_output_is_reproducible_and_differs_from_the_default`, `an_explicit_seed_is_reproducible` | [x] |
+| R8 | Render fingerprints work | P3 | `RenderFingerprint` carries graph, renderer, theme@version, seed, mode, metadata, format; `the_render_fingerprint_reports_what_produced_it`; absent under `--metadata none` | [x] |
 
 ## CLI
 
 | # | Criterion | Phase | Artifact / proof | Done |
 |---|---|---|---|---|
-| C1 | `cant sigil` accepts files, stdin, one-liners, graph JSON | P3 | `cant-cli/tests/` — four input forms | [ ] |
-| C2 | Required format/theme/mode/legend/metadata/seed options work | P3/P4 | one test per option; defaults asserted: svg, neon-ritual, veiled, safe, graph seed, ritual ornament | [ ] |
-| C3 | Diagnostics use stable `SIGIL-*` codes | P1–P3 | code table in `rite-sigil`; a test asserts every emitted code is documented | [ ] |
+| C1 | `cant sigil` accepts files, stdin, one-liners, graph JSON | P3 | four input forms, each its own test in `cant-cli/tests/sigil.rs` | [x] |
+| C2 | Required format/theme/mode/legend/metadata/seed options work | P3/P4 | every value accepted and every bad value a usage error; defaults asserted through the fingerprint. `--legend`, `--ornament`, `--orientation`, `--embed-*`, `--open` are P4 | [~] |
+| C3 | Diagnostics use stable `SIGIL-*` codes | P1–P3 | 22 codes, no collisions, all documented, all round-tripping through their rendered form; exit statuses follow Rite's contract | [x] |
 | C4 | Cross-platform output paths and stdout behavior tested | P9 | `<basename>.sigil.svg` default, `-o -` for stdout; separator-neutral assertions, as the existing Windows-portable tests do | [ ] |
 
 ## Web application
@@ -120,12 +120,12 @@ and Codex · **P7** export and gallery · **P8** Cloudflare · **P9** hardening.
 
 | # | Criterion | Phase | Artifact / proof | Done |
 |---|---|---|---|---|
-| Q1 | Existing Rite/Cant tests remain green | P0–P9 | `cargo test --workspace --all-features`; 1329 → 1442 passing, 0 failing, at every phase | [x] through P2 |
+| Q1 | Existing Rite/Cant tests remain green | P0–P9 | `cargo test --workspace --all-features`; 1329 → 1509 passing, 0 failing, at every phase | [x] through P3 |
 | Q2 | Native/WASM scene parity passes | P5 | see AR4 | [ ] |
 | Q3 | Scene and SVG golden tests pass | P2/P3 | `fixtures/sigil/{scenes,svg}/`, structurally asserted rather than merely written | [ ] |
 | Q4 | Visual regressions are reviewed | P4 | PNG perceptual-hash + bounded pixel diff, per theme | [ ] |
 | Q5 | Fuzz smoke tests pass | P9 | graph JSON parser, adapter, scene builder, mark generator, SVG serializer, metadata stripping | [ ] |
-| Q6 | Malicious labels cannot inject markup | P1/P3 | `malicious_labels_do_not_escape_into_element_ids`, `a_hostile_identifier_is_sanitized_in_the_element_id`; SVG escaping is P3 | [~] |
+| Q6 | Malicious labels cannot inject markup | P1/P3 | `tests/svg_security.rs` — one escaper, one sanitizer, 12 hostile strings across 36 option sets, plus a hostile-identifier suite | [x] |
 | Q7 | Large graph limits work | P1 | `a_graph_over_the_node_cap_is_refused_with_a_way_out` asserts the refusal names an alternative; `a_large_but_legal_graph_warns_once` | [~] `--simplify` itself is P3 |
 | Q8 | Accessibility checklist passes | P6 | keyboard selection, focus indicators, structured Codex, reduced motion, no colour-only differentiation, screen-reader graph summary | [ ] |
 | Q9 | Documentation examples are generated and tested | P7 | `examples/sigil/*.cant` → graph JSON, scene JSON, veiled + revealed SVG, PNG thumbnail, in CI | [ ] |

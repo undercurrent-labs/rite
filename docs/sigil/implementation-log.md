@@ -330,8 +330,8 @@ renderer, and a test that fails randomly gets disabled rather than investigated.
 
 ## Phase 3 — procedural marks and canonical SVG
 
-**Status: partial.** Marks, themes and the SVG serializer have landed with their
-tests and goldens. `cant sigil` has not.
+**Status: complete except for inscriptions.** Marks, themes, the SVG serializer
+and `cant sigil` have landed with their tests and goldens.
 
 `marks.rs` (the constrained generator), `theme.rs` (three themes, contrast-gated),
 `svg.rs` (the layered serializer). Six Veiled SVG goldens beside the scene ones,
@@ -392,10 +392,22 @@ across 36 option combinations and asserts, on the bytes: no script, no event
 handler attribute, no external reference, well-formed XML, no visible label in
 Veiled, nothing in `metadata none`, and byte-identical repeat renders.
 
-### Known limitations at the end of Phase 3 so far
+### A second finding, from the CLI
 
-- No `cant sigil` command. The library renders; the CLI does not call it.
+**A diagnostic's notes were never printed.** `SIGIL-S001` carries "try
+`--simplify`, or use `cant graph` for a technical view" — the actionable half —
+and `Display for SigilDiagnostic` rendered only the headline. A user over the
+node cap got a number and no way forward. Caught by a CLI test asserting the
+refusal names an alternative, which is the sort of thing a unit test on the
+diagnostic type would have passed while the user-visible behaviour stayed broken.
+
+### Known limitations at the end of Phase 3
+
 - No PNG, no interactive HTML, no ornament, no Codex, no WASM, no web app.
+- `--legend`, `--ornament`, `--orientation`, `--embed-graph`, `--embed-scene`,
+  `--open`, `--height` and `--scale` are declared in the specification but not
+  yet implemented; `cant sigil` rejects `--format png|html` explicitly rather
+  than accepting and ignoring them.
 - Inscriptions are not emitted, so two of three disclosure modes are inert.
 - `--metadata full` embeds no snippets.
 - The `void` and `parchment` themes exist and are contrast-checked but have no
@@ -403,5 +415,5 @@ Veiled, nothing in `metadata none`, and byte-identical repeat renders.
 
 ### Next milestone
 
-`cant sigil`, then inscriptions so Inscribed and Revealed become real, then
-Phase 4's ornament, PNG and interactive HTML.
+Inscriptions, so Inscribed and Revealed stop being inert, then Phase 4's
+ornament, PNG and interactive HTML.

@@ -259,6 +259,13 @@ impl fmt::Display for SigilDiagnostic {
             GraphRef::Region(id) => write!(f, " (region `{id}`)")?,
             GraphRef::Graph => {}
         }
+        // Notes, not just the headline. A refusal carries the way out — "try
+        // `--simplify`, or use `cant graph`" — and a `Display` that dropped it
+        // left the user with a cap and no suggestion, which is most of what a
+        // note is for.
+        for note in &self.notes {
+            write!(f, "\n  note: {note}")?;
+        }
         Ok(())
     }
 }
@@ -400,6 +407,23 @@ mod tests {
         assert_eq!(json["graph_ref"]["id"], serde_json::json!("e3"));
         let back: SigilDiagnostic = serde_json::from_value(json).expect("round trips");
         assert_eq!(back, d);
+    }
+
+    /// A note is the actionable half of a diagnostic. Rendering only the
+    /// headline left `SIGIL-S001` telling a user their graph was too large and
+    /// nothing about what to do next.
+    #[test]
+    fn rendering_a_diagnostic_includes_its_notes() {
+        let d = SigilDiagnostic::error(
+            SIGIL_S001_TOO_MANY_NODES,
+            GraphRef::Graph,
+            "2001 nodes, cap is 2000",
+        )
+        .with_note("try `--simplify`, or use `cant graph` for a technical view");
+        let rendered = d.to_string();
+        assert!(rendered.contains("SIGIL-S001"), "{rendered}");
+        assert!(rendered.contains("cant graph"), "{rendered}");
+        assert!(rendered.contains("note:"), "{rendered}");
     }
 
     #[test]

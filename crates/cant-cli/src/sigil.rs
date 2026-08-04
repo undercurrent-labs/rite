@@ -1,0 +1,342 @@
+//! `cant sigil` — render a program's topology as an artifact.
+//!
+//! The command is thin on purpose. Everything that decides what the picture
+//! looks like lives in `rite-sigil`, so the CLI and the browser produce the same
+//! bytes (ADR 0005); this file parses flags, reads a file, and writes one.
+//!
+//! # Two input paths, one renderer
+//!
+//! Cant source goes through the parser and the adapter. Graph JSON skips both —
+//! it is read as `cant.graph` and adapted, which is what makes `cant graph … |
+//! cant sigil --graph -` work and what proves the adapter is a real boundary
+//! rather than a function call in disguise.
+//!
+//! # Diagnostics
+//!
+//! `SIGIL-*` codes, with the exit status the category maps to. Parse failures
+//! keep Cant's own codes and Cant's exit statuses — a syntax error is a syntax
+//! error whichever command found it.
+
+use std::io::Write as _;
+use std::path::{Path, PathBuf};
+use std::process::ExitCode;
+
+use rite_sigil::{
+    build_scene, normalize, render_svg, Background, DisclosureMode, LayoutOptions, MarkDetail,
+    MetadataMode, NormalizeOptions, Orientation, SvgOptions, ThemeId,
+};
+
+/// Everything `cant sigil` accepts. Mirrors §17.1.
+#[derive(Debug, Clone)]
+pub struct SigilArgs {
+    pub source: Option<PathBuf>,
+    pub expr: Option<String>,
+    pub graph: Option<PathBuf>,
+    pub output: Option<PathBuf>,
+    pub format: String,
+    pub theme: String,
+    pub mode: String,
+    pub metadata: String,
+    pub seed: String,
+    pub canonical: bool,
+    pub background: String,
+    pub width: Option<f64>,
+    pub simplify: bool,
+    pub max_nodes: Option<usize>,
+    pub check: bool,
+}
+
+/// The rendered bytes and how to describe them.
+struct Artifact {
+    bytes: Vec<u8>,
+    /// The extension the default output path gets.
+    extension: &'static str,
+    fingerprint: String,
+}
+
+pub fn run(args: SigilArgs) -> ExitCode {
+    match render(&args) {
+        Ok(artifact) => write_artifact(&args, artifact),
+        Err(failure) => {
+            eprintln!("{}", failure.message);
+            ExitCode::from(failure.exit)
+        }
+    }
+}
+
+struct Failure {
+    message: String,
+    exit: u8,
+}
+
+impl Failure {
+    fn usage(message: impl Into<String>) -> Self {
+        Failure {
+            message: format!("cant: {}", message.into()),
+            exit: 2,
+        }
+    }
+}
+
+fn render(args: &SigilArgs) -> Result<Artifact, Failure> {
+    // Options first, so a typo in `--theme` is reported before a file is read.
+    // Nothing is more annoying than waiting for a parse to discover a flag was
+    // misspelled.
+    let theme = ThemeId::parse(&args.theme).ok_or_else(|| {
+        Failure::usage(format!(
+            "unknown --theme `{}` — expected neon-ritual, void, or parchment",
+            args.theme
+        ))
+    })?;
+    let disclosure = DisclosureMode::parse(&args.mode).ok_or_else(|| {
+        Failure::usage(format!(
+            "unknown --mode `{}` — expected veiled, inscribed, or revealed",
+            args.mode
+        ))
+    })?;
+    let metadata = MetadataMode::parse(&args.metadata).ok_or_else(|| {
+        Failure::usage(format!(
+            "unknown --metadata `{}` — expected full, safe, minimal, or none",
+            args.metadata
+        ))
+    })?;
+    let background = match args.background.as_str() {
+        "theme" => Background::Theme,
+        "transparent" => Background::Transparent,
+        hex => Background::hex(hex).map_err(|e| Failure::usage(format!("--background: {e}")))?,
+    };
+    if args.format != "svg" && args.format != "scene-json" {
+        return Err(Failure::usage(format!(
+            "unknown --format `{}` — expected svg or scene-json (png and html are not implemented yet)",
+            args.format
+        )));
+    }
+
+    // Labels only travel when they will be drawn or embedded. The privacy
+    // decision is made here, at the adapter, rather than filtered out later —
+    // see `docs/adr/0007-veil-and-source-privacy.md`.
+    let wants_labels = disclosure != DisclosureMode::Veiled || metadata == MetadataMode::Full;
+    let adapt = if wants_labels {
+        cant_sem::AdaptOptions::with_labels()
+    } else {
+        cant_sem::AdaptOptions::default()
+    };
+
+    let mut limits = NormalizeOptions {
+        keep_snippets: metadata == MetadataMode::Full,
+        ..Default::default()
+    };
+    if let Some(max) = args.max_nodes {
+        limits.limits.max_nodes = max;
+    }
+
+    let (graph, source_name) = load_graph(args, adapt)?;
+
+    let normalized = normalize(graph, &limits).map_err(|diagnostics| Failure {
+        message: diagnostics.to_string(),
+        exit: diagnostics.exit_code().max(1),
+    })?;
+    for warning in normalized.diagnostics.iter() {
+        eprintln!("{warning}");
+    }
+
+    let layout = LayoutOptions {
+        seed: resolve_seed(args, &normalized)?,
+        orientation: if args.canonical {
+            Orientation::Canonical
+        } else {
+            Orientation::Seeded
+        },
+        legend: true,
+    };
+    let scene = build_scene(&normalized, &layout);
+    for warning in &scene.warnings {
+        eprintln!("warning[SIGIL-L001]: {warning}");
+    }
+
+    if args.format == "scene-json" {
+        let json = serde_json::to_string_pretty(&scene).map_err(|e| Failure {
+            message: format!("cant: could not serialize the scene: {e}"),
+            exit: 1,
+        })?;
+        return Ok(Artifact {
+            bytes: json.into_bytes(),
+            extension: "sigil.json",
+            fingerprint: scene.metadata.graph_fingerprint.clone(),
+        });
+    }
+
+    let rendered = render_svg(
+        &scene,
+        &SvgOptions {
+            theme,
+            disclosure,
+            metadata,
+            background,
+            mark_detail: if args.simplify {
+                MarkDetail::Minimal
+            } else {
+                MarkDetail::Full
+            },
+            width: args.width,
+            height: args.width,
+        },
+    );
+    let _ = source_name;
+
+    Ok(Artifact {
+        bytes: rendered.svg.into_bytes(),
+        extension: "sigil.svg",
+        fingerprint: rendered.fingerprint.to_line(),
+    })
+}
+
+/// Cant source or graph JSON into a normalized graph.
+fn load_graph(
+    args: &SigilArgs,
+    adapt: cant_sem::AdaptOptions,
+) -> Result<(rite_sigil::SigilGraph, String), Failure> {
+    if let Some(path) = &args.graph {
+        let text = read_input(path)?;
+        let analysis =
+            cant_sem::validate_deserialized(&text, rite_core::FileId(0)).map_err(|e| Failure {
+                message: format!("error[SIGIL-V001]: {e}"),
+                exit: 4,
+            })?;
+        if analysis.diagnostics.has_errors() {
+            return Err(Failure {
+                message: "error[SIGIL-G002]: the graph does not validate".to_string(),
+                exit: 4,
+            });
+        }
+        let name = analysis.graph.source.name.clone();
+        return Ok((cant_sem::to_sigil_graph(&analysis.graph, adapt), name));
+    }
+
+    let (name, text) = match (&args.source, &args.expr) {
+        (Some(_), Some(_)) => return Err(Failure::usage("give a source file or `-e`, not both")),
+        (None, None) => {
+            return Err(Failure::usage(
+                "no source: pass a file, `-` for standard input, `-e 'expression'`, or `--graph`",
+            ))
+        }
+        (None, Some(expr)) => ("<expr>".to_string(), expr.clone()),
+        (Some(path), None) => (path.display().to_string(), read_input(path)?),
+    };
+
+    let analysis = cant::analyze(&name, &text);
+    if !analysis.diagnostics.is_empty() {
+        eprintln!("{}", analysis.render());
+    }
+    let Some(graph) = analysis.graph else {
+        return Err(Failure {
+            message: String::new(),
+            exit: analysis.diagnostics.rejection_exit_code().max(1),
+        });
+    };
+    if analysis.diagnostics.has_errors() {
+        return Err(Failure {
+            message: String::new(),
+            exit: analysis.diagnostics.rejection_exit_code(),
+        });
+    }
+
+    Ok((cant_sem::to_sigil_graph(&graph, adapt), name))
+}
+
+fn read_input(path: &Path) -> Result<String, Failure> {
+    if path.as_os_str() == "-" {
+        let mut text = String::new();
+        std::io::Read::read_to_string(&mut std::io::stdin(), &mut text).map_err(|e| Failure {
+            message: format!("cant: cannot read standard input: {e}"),
+            exit: 2,
+        })?;
+        return Ok(text);
+    }
+    std::fs::read_to_string(path).map_err(|e| Failure {
+        message: format!("cant: cannot read {}: {e}", path.display()),
+        exit: 2,
+    })
+}
+
+/// `--seed graph|canonical|random|<integer>`.
+fn resolve_seed(
+    args: &SigilArgs,
+    normalized: &rite_sigil::NormalizedGraph,
+) -> Result<u64, Failure> {
+    if args.canonical {
+        return Ok(0);
+    }
+    match args.seed.as_str() {
+        "graph" => Ok(normalized.seed()),
+        // A documented fixed value, so `--seed canonical` and `--canonical`
+        // agree about what canonical means.
+        "canonical" => Ok(0),
+        "random" => {
+            // Time-derived rather than from a CSPRNG: this seeds an ornament
+            // pattern, not a key, and pulling in a random-number dependency for
+            // it would put one in a crate whose whole argument is a small
+            // dependency graph. The value is reported, so a render is still
+            // reproducible.
+            let nanos = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos() as u64)
+                .unwrap_or(0);
+            eprintln!("note: --seed random chose {nanos}");
+            Ok(nanos)
+        }
+        other => other.parse::<u64>().map_err(|_| {
+            Failure::usage(format!(
+                "unknown --seed `{other}` — expected graph, canonical, random, or an integer"
+            ))
+        }),
+    }
+}
+
+/// Write the artifact, or check it without writing.
+fn write_artifact(args: &SigilArgs, artifact: Artifact) -> ExitCode {
+    if args.check {
+        // `--check` renders and reports, so a build can assert an artifact is
+        // producible without producing one.
+        println!("{}", artifact.fingerprint);
+        return ExitCode::SUCCESS;
+    }
+
+    let target = match &args.output {
+        Some(path) if path.as_os_str() == "-" => None,
+        Some(path) => Some(path.clone()),
+        // §17.3: `<source-basename>.sigil.svg` for a file, stdout otherwise —
+        // writing a file for `-e` would leave artifacts in whatever directory
+        // someone happened to be in.
+        None => args
+            .source
+            .as_ref()
+            .filter(|p| p.as_os_str() != "-")
+            .map(|p| p.with_extension(artifact.extension))
+            .or_else(|| {
+                args.graph
+                    .as_ref()
+                    .filter(|p| p.as_os_str() != "-")
+                    .map(|p| p.with_extension(artifact.extension))
+            }),
+    };
+
+    match target {
+        Some(path) => {
+            if let Err(e) = std::fs::write(&path, &artifact.bytes) {
+                eprintln!("cant: cannot write {}: {e}", path.display());
+                return ExitCode::from(1);
+            }
+            eprintln!("{} written", path.display());
+            ExitCode::SUCCESS
+        }
+        None => {
+            let mut out = std::io::stdout().lock();
+            if let Err(e) = out.write_all(&artifact.bytes) {
+                eprintln!("cant: cannot write to standard output: {e}");
+                return ExitCode::from(1);
+            }
+            ExitCode::SUCCESS
+        }
+    }
+}
