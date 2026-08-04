@@ -118,7 +118,7 @@ pub fn route(
         from_id,
         to_id,
     } = *span;
-    let chord = (from.x - to.x).hypot(from.y - to.y);
+    let chord = dist(from.x - to.x, from.y - to.y);
 
     // Only marks near enough to this edge to matter. Every router's detours
     // stay within roughly half a chord of the direct line, except a concentric
@@ -241,13 +241,24 @@ fn worst_clearance(samples: &[Point], obstacles: &[(Point, f64)]) -> f64 {
     let mut worst = f64::INFINITY;
     for s in samples {
         for (p, clearance) in obstacles {
-            let margin = (s.x - p.x).hypot(s.y - p.y) - clearance;
+            let margin = dist(s.x - p.x, s.y - p.y) - clearance;
             if margin < worst {
                 worst = margin;
             }
         }
     }
     worst
+}
+
+/// `sqrt(dx² + dy²)`, deliberately not `f64::hypot`.
+///
+/// `hypot` goes through the platform's libm, whose last bit differs between
+/// Linux and macOS — a control point computed through it broke the
+/// cross-platform scene goldens by one ULP. Squaring and `sqrt` are exact
+/// IEEE operations, identical everywhere, and the magnitudes here are canvas
+/// units, so the overflow protection `hypot` buys is not needed.
+fn dist(dx: f64, dy: f64) -> f64 {
+    (dx * dx + dy * dy).sqrt()
 }
 
 fn distance_to_segment(p: Point, a: Point, b: Point) -> f64 {
@@ -258,7 +269,7 @@ fn distance_to_segment(p: Point, a: Point, b: Point) -> f64 {
     } else {
         (((p.x - a.x) * dx + (p.y - a.y) * dy) / length_sq).clamp(0.0, 1.0)
     };
-    (p.x - (a.x + t * dx)).hypot(p.y - (a.y + t * dy))
+    dist(p.x - (a.x + t * dx), p.y - (a.y + t * dy))
 }
 
 // ---------------------------------------------------------------- flowing
@@ -297,8 +308,8 @@ fn bowed_cubic(from: Point, to: Point, bow: f64, slide: f64) -> Candidate {
         (from.y + to.y) / 2.0 + (to.y - from.y) * slide,
     );
     let (tx, ty) = (CENTER - mid.x, CENTER - mid.y);
-    let length = tx.hypot(ty).max(1e-9);
-    let pull = (from.x - to.x).hypot(from.y - to.y) * bow;
+    let length = dist(tx, ty).max(1e-9);
+    let pull = dist(from.x - to.x, from.y - to.y) * bow;
     let control = Point::new(mid.x + tx / length * pull, mid.y + ty / length * pull);
 
     let c1 = Point::new(
@@ -503,7 +514,7 @@ fn via_dot(center: Point) -> Vec<PathCommand> {
 
 fn polar(p: Point) -> (f64, f64) {
     (
-        (p.x - CENTER).hypot(p.y - CENTER),
+        dist(p.x - CENTER, p.y - CENTER),
         (p.y - CENTER).atan2(p.x - CENTER),
     )
 }
