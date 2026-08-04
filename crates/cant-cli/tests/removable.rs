@@ -143,6 +143,30 @@ const SHARED_FILES: &[(&str, &str)] = &[
         "`SourceLanguage::Cant` in the hostile-input fixtures",
     ),
     (
+        "crates/rite-sigil/tests/visual.rs",
+        "`SourceLanguage::Cant` in the rasterised sample graph",
+    ),
+    (
+        "crates/rite-sigil/tests/html_export.rs",
+        "`SourceLanguage::Cant` in the hostile-input fixtures",
+    ),
+    (
+        "crates/rite-sigil/src/html.rs",
+        "nothing — it names no Cant type",
+    ),
+    (
+        "crates/rite-sigil/src/ornament.rs",
+        "nothing — it names no Cant type",
+    ),
+    (
+        "crates/rite-sigil/src/marks.rs",
+        "nothing — it names no Cant type",
+    ),
+    (
+        "crates/rite-sigil/src/theme.rs",
+        "nothing — it names no Cant type",
+    ),
+    (
         "docs/sigil/README.md",
         "the pipeline diagram and the Cant references in it",
     ),

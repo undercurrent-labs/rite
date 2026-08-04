@@ -417,8 +417,8 @@ diagnostic type would have passed while the user-visible behaviour stayed broken
 
 ## Phase 4 — ornament, inscriptions, PNG, visual regression
 
-**Status: partial.** Ornament, inscriptions, PNG and visual-regression tests
-have landed. Interactive HTML and the embedded metadata block have not.
+**Status: complete except for the embedded metadata block.** Ornament,
+inscriptions, PNG, interactive HTML and visual-regression tests have landed.
 
 `ornament.rs` (four levels), inscriptions in `layout.rs`, `render_png` behind an
 off-by-default feature, `tests/visual.rs`.
@@ -486,9 +486,22 @@ both `sigil-ornament`, so every ornament element carried
 `class="sigil-ornament sigil-ornament"`. Valid, and visibly sloppy in an artifact
 meant to be looked at.
 
-### Known limitations at the end of Phase 4 so far
+### A third finding, from the HTML Codex
 
-- No interactive HTML export.
+**The Codex leaked capability names under `--metadata none`.** The label was
+gated on the metadata mode; the `touches` line one row below it was not, and a
+legend entry's capability list carries the *name* — `@fs.read` — whenever the
+graph carried one. So `none` kept the user's text out of one line and let it
+back in through the next.
+
+This is the third leak in the same family: the family name in a `<title>`
+(Phase 3), the capability name in the graph model (Phase 1), and now this. Each
+was a place where something that *looked* like renderer vocabulary was actually
+the producer's string. The pattern is worth naming: whenever a field can hold
+either, the gate has to be on the field, not on the concept.
+
+### Known limitations at the end of Phase 4
+
 - `--metadata full` still embeds no snippets; there is no metadata block.
 - Inscribed abbreviates labels but has no abbreviated *capability* marks.
 - No WASM, no web app, no Codex UI.
@@ -497,5 +510,5 @@ meant to be looked at.
 
 ### Next milestone
 
-Interactive HTML and the metadata block, which close Phase 4, then Phase 5's
-`rite-sigil-wasm` and the web application.
+Phase 5: `rite-sigil-wasm` and the web application foundation, with native/WASM
+scene parity as the gate.

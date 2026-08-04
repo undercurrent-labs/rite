@@ -347,6 +347,110 @@ fn simplify_produces_a_smaller_artifact() {
     );
 }
 
+/// PNG and HTML are formats now, and each is what it claims to be.
+#[test]
+fn png_and_html_are_formats() {
+    let dir = std::env::temp_dir().join("cant-sigil-formats");
+    let _ = std::fs::create_dir_all(&dir);
+
+    let png = dir.join("a.png");
+    let out = cant(&[
+        "sigil",
+        EXAMPLE,
+        "--format",
+        "png",
+        "-o",
+        png.to_str().expect("utf-8"),
+    ]);
+    assert_eq!(code(&out), 0, "{}", stderr(&out));
+    let bytes = std::fs::read(&png).expect("read png");
+    assert_eq!(&bytes[..8], b"\x89PNG\r\n\x1a\n", "not a PNG");
+
+    let out = cant(&["sigil", EXAMPLE, "--format", "html", "-o", "-"]);
+    assert_eq!(code(&out), 0, "{}", stderr(&out));
+    let page = stdout(&out);
+    assert!(
+        page.starts_with("<!doctype html>"),
+        "{}",
+        &page[..60.min(page.len())]
+    );
+    assert!(
+        page.contains("id=\"sigil-codex\""),
+        "no Codex in the export"
+    );
+    assert!(page.contains("<svg"), "no inline SVG in the export");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// §16.3: the interactive export works offline. Nothing to fetch.
+#[test]
+fn an_html_export_references_nothing_remote() {
+    let out = cant(&["sigil", EXAMPLE, "--format", "html", "-o", "-"]);
+    let page = stdout(&out).to_lowercase();
+    let without_ns = page.replace("xmlns=\"http://www.w3.org/2000/svg\"", "");
+    for banned in ["http://", "https://", "<link", "@import", "fetch("] {
+        assert!(!without_ns.contains(banned), "remote reference `{banned}`");
+    }
+}
+
+/// A veiled HTML export is a veiled picture with a decodable Codex beside it —
+/// §13.4's web default — so the canvas draws nothing and the panel decodes.
+#[test]
+fn a_veiled_html_export_still_has_a_populated_codex() {
+    let out = cant(&["sigil", EXAMPLE, "--format", "html", "-o", "-"]);
+    let page = stdout(&out);
+    assert!(!page.contains("<text"), "the veiled canvas drew text");
+    assert!(page.contains("class=\"kind\""), "the Codex is empty");
+}
+
+/// `--ornament` is accepted at every level and changes how much is drawn.
+#[test]
+fn every_ornament_level_is_accepted_and_changes_the_density() {
+    let mut sizes = Vec::new();
+    for level in ["none", "sparse", "ritual", "maximal"] {
+        let out = cant(&["sigil", EXAMPLE, "--ornament", level, "-o", "-"]);
+        assert_eq!(code(&out), 0, "{level}: {}", stderr(&out));
+        // The class *attribute*, not the stylesheet rule — `.sigil-ornament{…}`
+        // is emitted whatever the level, and counting it would make `none`
+        // look like it drew one.
+        sizes.push(stdout(&out).matches("class=\"sigil-ornament\"").count());
+    }
+    assert_eq!(sizes[0], 0, "`none` drew ornament");
+    assert!(
+        sizes[1] < sizes[2] && sizes[2] < sizes[3],
+        "levels do not increase: {sizes:?}"
+    );
+
+    let bad = cant(&["sigil", EXAMPLE, "--ornament", "baroque", "-o", "-"]);
+    assert_eq!(code(&bad), 2);
+}
+
+/// The contradictory pair warns rather than silently resolving.
+#[test]
+fn metadata_none_with_a_revealing_mode_warns() {
+    let out = cant(&[
+        "sigil",
+        EXAMPLE,
+        "--mode",
+        "revealed",
+        "--metadata",
+        "none",
+        "-o",
+        "-",
+    ]);
+    assert_eq!(code(&out), 0, "{}", stderr(&out));
+    let err = stderr(&out);
+    assert!(err.contains("SIGIL-C001"), "{err}");
+    assert!(
+        err.contains("veiled"),
+        "the warning must say what to do: {err}"
+    );
+
+    // And the sensible pairing is silent.
+    let quiet = cant(&["sigil", EXAMPLE, "--metadata", "none", "-o", "-"]);
+    assert!(!stderr(&quiet).contains("SIGIL-C001"), "{}", stderr(&quiet));
+}
+
 /// The command is advertised in `--help`. A subcommand nobody can discover is a
 /// subcommand nobody uses.
 #[test]

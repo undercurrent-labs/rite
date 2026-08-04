@@ -346,7 +346,7 @@ enum Commands {
         #[arg(long, short)]
         output: Option<PathBuf>,
         /// Output format
-        #[arg(long, default_value = "svg", value_name = "svg|png|scene-json")]
+        #[arg(long, default_value = "svg", value_name = "svg|png|html|scene-json")]
         format: String,
         /// Visual theme
         #[arg(
@@ -391,6 +391,9 @@ enum Commands {
         /// PNG rasterisation scale, when `--width` is not given
         #[arg(long, default_value_t = 1.0)]
         scale: f64,
+        /// Embed the scene JSON in an HTML export (needs `--metadata full`)
+        #[arg(long = "embed-scene")]
+        embed_scene: bool,
         /// Draw skeleton marks only — for a graph too dense for full variation
         #[arg(long)]
         simplify: bool,
@@ -564,6 +567,7 @@ async fn main() -> ExitCode {
             ornament,
             width,
             scale,
+            embed_scene,
             simplify,
             max_nodes,
             check,
@@ -582,6 +586,7 @@ async fn main() -> ExitCode {
             ornament,
             width,
             scale,
+            embed_scene,
             simplify,
             max_nodes,
             check,

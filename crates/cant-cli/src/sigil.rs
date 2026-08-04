@@ -22,8 +22,8 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use rite_sigil::{
-    build_scene, normalize, render_svg, Background, DisclosureMode, LayoutOptions, MarkDetail,
-    MetadataMode, NormalizeOptions, Orientation, OrnamentLevel, SvgOptions, ThemeId,
+    build_scene, normalize, render_svg, Background, DisclosureMode, HtmlOptions, LayoutOptions,
+    MarkDetail, MetadataMode, NormalizeOptions, Orientation, OrnamentLevel, SvgOptions, ThemeId,
 };
 
 /// Everything `cant sigil` accepts. Mirrors §17.1.
@@ -43,6 +43,7 @@ pub struct SigilArgs {
     pub ornament: String,
     pub width: Option<f64>,
     pub scale: f64,
+    pub embed_scene: bool,
     pub simplify: bool,
     pub max_nodes: Option<usize>,
     pub check: bool,
@@ -113,9 +114,9 @@ fn render(args: &SigilArgs) -> Result<Artifact, Failure> {
         "transparent" => Background::Transparent,
         hex => Background::hex(hex).map_err(|e| Failure::usage(format!("--background: {e}")))?,
     };
-    if !matches!(args.format.as_str(), "svg" | "png" | "scene-json") {
+    if !matches!(args.format.as_str(), "svg" | "png" | "html" | "scene-json") {
         return Err(Failure::usage(format!(
-            "unknown --format `{}` — expected svg, png, or scene-json (html is not implemented yet)",
+            "unknown --format `{}` — expected svg, png, html, or scene-json",
             args.format
         )));
     }
@@ -133,10 +134,18 @@ fn render(args: &SigilArgs) -> Result<Artifact, Failure> {
         );
     }
 
+    // HTML always wants labels: its Codex is the point of the format, and a
+    // Codex with nothing in it is a panel. Disclosure still governs what the
+    // *canvas* draws, so `--format html --mode veiled` is a veiled picture with
+    // a decodable Codex beside it — which is §13.4's web default.
+    let html_needs_labels = args.format == "html";
+
     // Labels only travel when they will be drawn or embedded. The privacy
     // decision is made here, at the adapter, rather than filtered out later —
     // see `docs/adr/0007-veil-and-source-privacy.md`.
-    let wants_labels = disclosure != DisclosureMode::Veiled || metadata == MetadataMode::Full;
+    let wants_labels = disclosure != DisclosureMode::Veiled
+        || metadata == MetadataMode::Full
+        || (html_needs_labels && metadata != MetadataMode::None);
     let adapt = if wants_labels {
         cant_sem::AdaptOptions::with_labels()
     } else {
@@ -203,6 +212,25 @@ fn render(args: &SigilArgs) -> Result<Artifact, Failure> {
     };
     let rendered = render_svg(&scene, &svg_options);
     let _ = source_name;
+
+    if args.format == "html" {
+        let page = rite_sigil::render_html(
+            &scene,
+            &HtmlOptions {
+                svg: svg_options,
+                codex: true,
+                embed_scene: args.embed_scene,
+            },
+        );
+        return Ok(Artifact {
+            bytes: page.into_bytes(),
+            extension: "sigil.html",
+            fingerprint: rendered
+                .fingerprint
+                .to_line()
+                .replace("format=svg", "format=html"),
+        });
+    }
 
     if args.format == "png" {
         // Width, when given, sets the scale: the canvas is 1600 square, so a

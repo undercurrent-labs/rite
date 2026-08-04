@@ -60,8 +60,8 @@ and Codex · **P7** export and gallery · **P8** Cloudflare · **P9** hardening.
 | # | Criterion | Phase | Artifact / proof | Done |
 |---|---|---|---|---|
 | D1 | Veiled mode shows no visible source labels | P3 | `veiled_output_never_draws_a_label` over hostile input × every metadata mode; a Veiled render emits no `<text>` at all | [x] |
-| D2 | Inscribed mode shows minimal symbolic annotation | P4 | layout emits an Inscriptions layer; the serializer abbreviates to 14 characters in Inscribed. Abbreviated *capability* marks are still P4 work | [~] |
-| D3 | Revealed mode provides readable labels and a full Codex | P4 | labels drawn upright beside each mark; legend entry per node. The interactive Codex is P6 | [~] |
+| D2 | Inscribed mode shows minimal symbolic annotation | P4 | Inscriptions layer, abbreviated to 14 characters. Abbreviated *capability* marks remain unimplemented | [~] |
+| D3 | Revealed mode provides readable labels and a full Codex | P4 | labels drawn upright beside each mark; a Codex per node in the HTML export. The in-app Codex is P6 | [x] |
 | D4 | Codex can be hidden/collapsed | P6 | `apps/sigil-web` component test | [ ] |
 | D5 | Hover/focus can reveal values in the web app | P6 | component + E2E test, keyboard focus included | [ ] |
 | D6 | Deep Veil can suppress interactive revelation | P6 | E2E: with Deep Veil on, hover and focus produce no tooltip | [ ] |
@@ -73,7 +73,7 @@ and Codex · **P7** export and gallery · **P8** Cloudflare · **P9** hardening.
 |---|---|---|---|---|
 | R1 | SVG is self-contained, deterministic, script-free, escaped | P3 | `tests/svg_security.rs` — 12 hostile strings × 36 option sets, asserting no script, no `on*` attribute, no external reference, well-formed XML, identical repeat renders | [x] |
 | R2 | PNG works | P4 | `cant sigil --format png`, via `rite_render::svg_to_png` behind an off-by-default feature; scale guard; `tests/visual.rs` | [x] |
-| R3 | Interactive HTML works offline | P4 | self-contained export; test asserts zero external references and a working Codex toggle | [ ] |
+| R3 | Interactive HTML works offline | P4 | `cant sigil --format html`; `tests/html_export.rs` asserts no remote reference, one managed script, no inline handlers, no user text in executable position, collapsed Codex | [x] |
 | R4 | Scene JSON is available | P2/P3 | `cant sigil --format scene-json` + 6 golden fixtures, structurally asserted | [x] |
 | R5 | Three themes work | P3/P4 | WCAG 3:1 contrast per theme, distinct SVG per theme, and a raster check that each ground is the polarity it claims | [x] |
 | R6 | Ornament levels work | P4 | `--ornament none\|sparse\|ritual\|maximal`, deterministic, on their own layers, no graph refs, plus the S6 invariance | [x] |
@@ -120,7 +120,7 @@ and Codex · **P7** export and gallery · **P8** Cloudflare · **P9** hardening.
 
 | # | Criterion | Phase | Artifact / proof | Done |
 |---|---|---|---|---|
-| Q1 | Existing Rite/Cant tests remain green | P0–P9 | `cargo test --workspace --all-features`; 1329 → 1527 passing, 0 failing, at every phase | [x] through P4 |
+| Q1 | Existing Rite/Cant tests remain green | P0–P9 | `cargo test --workspace --all-features`; 1329 → 1545 passing, 0 failing, at every phase | [x] through P4 |
 | Q2 | Native/WASM scene parity passes | P5 | see AR4 | [ ] |
 | Q3 | Scene and SVG golden tests pass | P2/P3 | `fixtures/sigil/{scenes,svg}/`, structurally asserted rather than merely written | [ ] |
 | Q4 | Visual regressions are reviewed | P4 | `tests/visual.rs` — an 8×8 perceptual hash over rasterised output: stable across runs, contrast present per theme, ground polarity, ornament changes without burying | [x] |

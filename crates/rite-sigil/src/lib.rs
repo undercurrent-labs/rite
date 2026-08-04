@@ -61,6 +61,7 @@ pub mod analysis;
 pub mod canonical;
 pub mod diagnostic;
 pub mod graph;
+pub mod html;
 pub mod layout;
 pub mod limits;
 pub mod marks;
@@ -82,6 +83,7 @@ pub use graph::{
     RegionId, RegionKind, SigilEdge, SigilGraph, SigilNode, SigilNodeKind, SigilRegion,
     SourceLanguage, SourceRef, SourceSchema, GRAPH_SCHEMA_NAME, GRAPH_SCHEMA_VERSION,
 };
+pub use html::{render_html, HtmlOptions};
 pub use layout::{build_scene, LayoutOptions, Orientation};
 pub use limits::{NormalizeOptions, RenderLimits};
 pub use marks::{Mark, MarkDetail};
