@@ -18,10 +18,13 @@ import {
   nextGeneration,
   renderCant,
   renderGraph,
+  renderHtml,
   version,
   type Diagnostic,
   type RenderResult,
 } from "./lib/renderer";
+import { CANT_URL, GITHUB_URL, RITE_URL, SIGIL_VERSION } from "./lib/site";
+import CantEditor from "./components/CantEditor.vue";
 import SigilCanvas from "./components/SigilCanvas.vue";
 import CodexPanel from "./components/CodexPanel.vue";
 import ControlBar from "./components/ControlBar.vue";
@@ -30,7 +33,9 @@ import GalleryPanel from "./components/GalleryPanel.vue";
 const examples = __SIGIL_EXAMPLES__;
 
 const tab = ref<"cant" | "graph">("cant");
-const source = ref(examples.find((e) => e.name === "complex")?.source ?? examples[0]?.source ?? "");
+const source = ref(
+  examples.find((e) => e.name === "ceremony")?.source ?? examples[0]?.source ?? ""
+);
 const graphText = ref("");
 const options = ref(defaultOptions());
 const liveRender = ref(true);
@@ -155,6 +160,19 @@ function exportScene() {
 }
 
 /**
+ * The interactive page (§16, W8). Rendered on demand rather than kept from the
+ * last render — it embeds the SVG and stylesheet over again, and an export
+ * click can afford the few milliseconds a keystroke cannot.
+ */
+async function exportHtml() {
+  const page =
+    tab.value === "cant"
+      ? await renderHtml("cant", "sigil.cant", source.value, options.value)
+      : await renderHtml("graph", graphText.value, "", options.value);
+  if (page.html) download(page.html, "sigil.html", "text/html");
+}
+
+/**
  * PNG through a canvas, in this tab.
  *
  * The native CLI rasterises with `resvg`; the browser has a rasteriser already
@@ -206,14 +224,27 @@ async function copyFingerprint() {
 <template>
   <div class="flex h-screen flex-col overflow-hidden">
     <header
-      class="panel flex shrink-0 flex-wrap items-center gap-x-4 gap-y-2 border-b px-4 py-2"
+      class="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-b border-sigil-border
+             bg-sigil-bg/90 px-4 py-2.5 backdrop-blur"
     >
-      <h1 class="text-sm tracking-[0.3em] text-cyan">SIGIL</h1>
-      <p class="hidden text-[0.65rem] text-spectral/40 sm:block">
+      <!-- The wordmark takes the sibling sites' shape: the mark in a rounded
+           tile, the name in the site's own accent. Violet here, cyan on Rite,
+           pink on Cant — one family, three notes. -->
+      <h1 class="flex shrink-0 items-center gap-2 font-semibold tracking-wide">
+        <img
+          src="/brand/logo.svg"
+          alt=""
+          width="28"
+          height="28"
+          class="h-7 w-7 rounded-md border border-sigil-accent/30 bg-sigil-panel object-cover"
+        />
+        <span class="text-sigil-accent">Sigil</span>
+      </h1>
+      <p class="hidden text-xs text-sigil-muted md:block">
         a program&rsquo;s topology as a ritual artifact
       </p>
 
-      <div class="ml-auto flex items-center gap-2">
+      <div class="ml-auto flex items-center gap-1.5">
         <button
           class="instrument"
           :aria-pressed="showSource"
@@ -231,9 +262,33 @@ async function copyFingerprint() {
         >
           Gallery
         </button>
-        <span class="hidden text-[0.6rem] text-spectral/30 lg:inline">
-          {{ versions?.renderer ? `renderer ${versions.renderer}` : "" }}
-        </span>
+
+        <span class="mx-1.5 hidden h-4 w-px bg-sigil-border sm:block" aria-hidden="true" />
+
+        <!-- Each sibling link wears that site's accent, the same way the Cant
+             site points back at Rite in cyan. -->
+        <a
+          :href="CANT_URL"
+          class="hidden items-center rounded-md border border-sigil-pink/30 px-2.5 py-1 text-xs
+                 text-sigil-pink transition-colors hover:bg-sigil-pink/10 sm:inline-flex"
+        >
+          Cant ↗
+        </a>
+        <a
+          :href="RITE_URL"
+          class="hidden items-center rounded-md border border-sigil-cyan/30 px-2.5 py-1 text-xs
+                 text-sigil-cyan transition-colors hover:bg-sigil-cyan/10 sm:inline-flex"
+        >
+          Rite ↗
+        </a>
+        <a
+          :href="GITHUB_URL"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="rounded-md px-2.5 py-1 text-xs text-slate-400 transition-colors hover:text-slate-100"
+        >
+          GitHub
+        </a>
       </div>
     </header>
 
@@ -248,7 +303,7 @@ async function copyFingerprint() {
                lg:border-r lg:border-t-0"
         aria-label="Source"
       >
-        <div class="flex shrink-0 gap-1 border-b border-ultraviolet/20 px-2 py-1.5">
+        <div class="flex shrink-0 gap-1 border-b border-sigil-border px-2 py-1.5">
           <button
             class="instrument"
             :class="{ 'is-active': tab === 'cant' }"
@@ -266,25 +321,18 @@ async function copyFingerprint() {
           <button class="instrument ml-auto" @click="render">Render</button>
         </div>
 
-        <textarea
-          v-if="tab === 'cant'"
-          v-model="source"
-          spellcheck="false"
-          aria-label="Cant source"
-          class="min-h-[10rem] flex-1 resize-none bg-transparent p-3 text-xs leading-relaxed
-                 text-spectral/90 outline-none"
-        />
+        <CantEditor v-if="tab === 'cant'" v-model="source" aria-label="Cant source" />
         <textarea
           v-else
           v-model="graphText"
           spellcheck="false"
           aria-label="Cant graph JSON"
           placeholder="Paste the output of `cant graph program.cant --format json`"
-          class="min-h-[10rem] flex-1 resize-none bg-transparent p-3 text-xs leading-relaxed
-                 text-spectral/90 outline-none placeholder:text-spectral/25"
+          class="min-h-[10rem] flex-1 resize-none bg-transparent p-3 font-mono text-xs
+                 leading-relaxed text-slate-200 outline-none placeholder:text-slate-600"
         />
 
-        <div class="shrink-0 border-t border-ultraviolet/20 p-2">
+        <div class="shrink-0 border-t border-sigil-border p-2">
           <span class="instrument-label">Examples</span>
           <div class="flex flex-wrap gap-1">
             <button
@@ -300,12 +348,13 @@ async function copyFingerprint() {
 
         <div
           v-if="errors.length || warnings.length"
-          class="max-h-40 shrink-0 overflow-y-auto border-t border-ultraviolet/20 p-2 text-[0.65rem]"
+          class="max-h-40 shrink-0 overflow-y-auto border-t border-sigil-border p-2 font-mono
+                 text-[0.65rem]"
         >
           <p v-for="(d, i) in errors" :key="`e${i}`" class="mb-1 text-ember">
             <span class="opacity-60">{{ d.code }}</span> {{ d.message }}
           </p>
-          <p v-for="(d, i) in warnings" :key="`w${i}`" class="mb-1 text-gold/80">
+          <p v-for="(d, i) in warnings" :key="`w${i}`" class="mb-1 text-sigil-amber/90">
             <span class="opacity-60">{{ d.code }}</span> {{ d.message }}
           </p>
         </div>
@@ -346,13 +395,22 @@ async function copyFingerprint() {
     />
 
     <footer
-      class="panel flex shrink-0 flex-wrap items-center gap-2 border-t px-3 py-1.5 text-[0.65rem]"
+      class="panel flex shrink-0 flex-wrap items-center gap-x-2 gap-y-1.5 border-t px-3 py-2
+             text-[0.65rem]"
     >
-      <span class="text-spectral/35">Export</span>
+      <span class="text-[0.6rem] uppercase tracking-[0.18em] text-sigil-muted">Export</span>
       <button class="instrument" :disabled="!result?.svg" @click="exportSvg">SVG</button>
       <button class="instrument" :disabled="!result?.svg" @click="exportPng">PNG</button>
       <button class="instrument" :disabled="!result?.sceneJson" @click="exportScene">
         Scene
+      </button>
+      <button
+        class="instrument"
+        :disabled="!result?.svg"
+        title="A self-contained interactive page: the picture, pan and zoom, and a Codex that decodes it. Labels travel unless metadata is none."
+        @click="exportHtml"
+      >
+        HTML
       </button>
       <button class="instrument" :disabled="!result?.svg" @click="copySvg">Copy SVG</button>
       <button class="instrument" :disabled="!result?.fingerprint" @click="copyFingerprint">
@@ -360,18 +418,22 @@ async function copyFingerprint() {
       </button>
 
       <span
-        class="ml-3 border-l border-ultraviolet/20 pl-3"
-        :class="exportNotice.tone === 'warn' ? 'text-ember/80' : 'text-spectral/40'"
+        class="ml-2 border-l border-sigil-border pl-3"
+        :class="exportNotice.tone === 'warn' ? 'text-sigil-amber/90' : 'text-sigil-muted'"
       >
         {{ exportNotice.text }}
       </span>
 
-      <label class="ml-auto flex items-center gap-1.5 text-spectral/40">
-        <input v-model="liveRender" type="checkbox" class="accent-cyan" />
+      <label class="ml-auto flex items-center gap-1.5 text-sigil-muted">
+        <input v-model="liveRender" type="checkbox" class="accent-[#c792ea]" />
         live
       </label>
-      <span class="text-gold/60" title="Nothing here is uploaded.">
+      <span class="text-sigil-green/80" title="Nothing here is uploaded.">
         renders in this tab &middot; source never leaves it
+      </span>
+      <span class="hidden border-l border-sigil-border pl-3 font-mono text-sigil-muted sm:inline">
+        sigil {{ SIGIL_VERSION }}
+        <template v-if="versions?.renderer"> &middot; renderer {{ versions.renderer }}</template>
       </span>
     </footer>
   </div>

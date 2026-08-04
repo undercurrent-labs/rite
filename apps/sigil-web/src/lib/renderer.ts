@@ -20,6 +20,8 @@ export interface RenderOptions {
   mode: string;
   metadata: string;
   ornament: string;
+  /** How traces are drawn: flowing, concentric, or circuit. */
+  tracery: string;
   seed: string;
   background: string;
   canonical: boolean;
@@ -41,6 +43,8 @@ export interface RenderResult {
   svg?: string;
   sceneJson?: string;
   graphJson?: string;
+  /** The self-contained interactive page; present only from renderHtml. */
+  html?: string;
   fingerprint?: string;
   summary?: string;
   diagnostics: Diagnostic[];
@@ -60,6 +64,7 @@ export const defaultOptions = (): RenderOptions => ({
   mode: "veiled",
   metadata: "safe",
   ornament: "ritual",
+  tracery: "flowing",
   seed: "graph",
   background: "theme",
   canonical: false,
@@ -70,6 +75,8 @@ type Wasm = {
   default: (input?: unknown) => Promise<unknown>;
   renderCant: (name: string, source: string, options?: string) => string;
   renderGraph: (graphJson: string, options?: string) => string;
+  renderCantHtml: (name: string, source: string, options?: string) => string;
+  renderGraphHtml: (graphJson: string, options?: string) => string;
   validateGraph: (graphJson: string) => string;
   version: () => string;
   supportedSchemas: () => string;
@@ -191,6 +198,36 @@ export async function renderGraph(
     const result = parse(wasm.renderGraph(graphJson, JSON.stringify(options)));
     result.elapsedMs = performance.now() - started;
     return result;
+  } catch (error) {
+    return failure(`the renderer failed: ${String(error)}`);
+  }
+}
+
+/**
+ * Render to a self-contained interactive HTML page (§16, W8).
+ *
+ * A separate call rather than a field on every render: the page embeds the
+ * SVG and a stylesheet over again, and exports are rare while renders are
+ * constant. Built in this tab like everything else — nothing is uploaded.
+ */
+export async function renderHtml(
+  tab: "cant" | "graph",
+  nameOrJson: string,
+  sourceOrNothing: string,
+  options: RenderOptions
+): Promise<RenderResult> {
+  let wasm: Wasm;
+  try {
+    wasm = await load();
+  } catch (error) {
+    return failure(String(error));
+  }
+  try {
+    const json =
+      tab === "cant"
+        ? wasm.renderCantHtml(nameOrJson, sourceOrNothing, JSON.stringify(options))
+        : wasm.renderGraphHtml(nameOrJson, JSON.stringify(options));
+    return parse(json);
   } catch (error) {
     return failure(`the renderer failed: ${String(error)}`);
   }

@@ -18,6 +18,11 @@ const modes = [
   { id: "revealed", hint: "Readable labels." },
 ];
 const themes = ["neon-ritual", "void", "parchment"];
+const traceries = [
+  { id: "flowing", hint: "Curves bowed with the composition." },
+  { id: "concentric", hint: "Radial runs and concentric arcs, sharp joints." },
+  { id: "circuit", hint: "Right angles, with a via dot at every bend." },
+];
 const ornaments = ["none", "sparse", "ritual", "maximal"];
 const metadata = ["full", "safe", "minimal", "none"];
 </script>
@@ -60,6 +65,22 @@ const metadata = ["full", "safe", "minimal", "none"];
     </div>
 
     <div>
+      <span class="instrument-label">Tracery</span>
+      <div class="flex gap-1">
+        <button
+          v-for="tracery in traceries"
+          :key="tracery.id"
+          class="instrument"
+          :class="{ 'is-active': options.tracery === tracery.id }"
+          :title="tracery.hint"
+          @click="set('tracery', tracery.id)"
+        >
+          {{ tracery.id }}
+        </button>
+      </div>
+    </div>
+
+    <div>
       <span class="instrument-label">Ornament</span>
       <div class="flex gap-1">
         <button
@@ -90,7 +111,7 @@ const metadata = ["full", "safe", "minimal", "none"];
       <label class="instrument-label" for="sigil-seed">Seed</label>
       <input
         id="sigil-seed"
-        class="instrument w-28"
+        class="instrument w-28 font-mono"
         :value="options.seed"
         @change="set('seed', ($event.target as HTMLInputElement).value)"
       />

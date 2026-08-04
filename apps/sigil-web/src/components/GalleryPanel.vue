@@ -76,35 +76,38 @@ onMounted(async () => {
     aria-label="Gallery"
   >
     <div class="mb-3 flex items-center">
-      <h2 class="text-[0.6rem] uppercase tracking-[0.25em] text-spectral/40">Gallery</h2>
+      <h2 class="text-[0.6rem] uppercase tracking-[0.25em] text-sigil-muted">Gallery</h2>
       <button class="instrument ml-auto" @click="emit('close')">close</button>
     </div>
 
     <ul class="grid grid-cols-2 gap-2">
       <li v-for="card in cards" :key="card.name">
         <button
-          class="group w-full border border-ultraviolet/25 p-1.5 text-left transition-colors
-                 hover:border-cyan focus-visible:border-cyan"
+          class="group w-full rounded-lg border border-sigil-border bg-sigil-card p-1.5 text-left
+                 transition-colors hover:border-sigil-accent/60 focus-visible:border-sigil-accent"
           @click="emit('open', card.name)"
         >
           <span
             v-if="card.svg"
-            class="block aspect-square w-full overflow-hidden bg-abyss [&_svg]:h-full [&_svg]:w-full"
+            class="block aspect-square w-full overflow-hidden rounded-md bg-abyss
+                   [&_svg]:h-full [&_svg]:w-full"
             aria-hidden="true"
             v-html="card.svg"
           />
-          <span v-else class="block aspect-square w-full animate-pulse bg-violet/40" />
-          <span class="mt-1 block text-[0.7rem] text-spectral/80 group-hover:text-cyan">
+          <span v-else class="block aspect-square w-full animate-pulse rounded-md bg-abyss" />
+          <span
+            class="mt-1 block font-mono text-[0.7rem] text-slate-200 group-hover:text-sigil-accent"
+          >
             {{ card.name }}
           </span>
-          <span class="mt-0.5 block text-[0.55rem] leading-tight text-spectral/35">
+          <span class="mt-0.5 block text-[0.55rem] leading-tight text-sigil-muted">
             {{ card.tags.join(" · ") || "…" }}
           </span>
         </button>
       </li>
     </ul>
 
-    <p class="mt-3 text-[0.6rem] leading-relaxed text-spectral/30">
+    <p class="mt-3 text-[0.6rem] leading-relaxed text-sigil-muted">
       Rendered here, from the examples in the repository — veiled, canonical seed.
     </p>
   </aside>

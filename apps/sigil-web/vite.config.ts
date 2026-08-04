@@ -48,6 +48,61 @@ function buildInfo() {
   };
 }
 
+/**
+ * The Cant operator vocabulary, read from `grammar/cant/operators.toml` at
+ * build time — the same file `cant-syntax` and the Cant site read, parsed with
+ * the same restricted-TOML reader the Cant site uses. The source panel's
+ * highlighter is driven by this, so it colours exactly the operators the lexer
+ * recognises rather than a hand-listed copy that can drift.
+ */
+function cantOperators(): { ascii: string; glyph: string | null }[] {
+  const text = fs.readFileSync(path.join(repoRoot, "grammar/cant/operators.toml"), "utf8");
+  const operators: { ascii: string; glyph: string | null }[] = [];
+  let current: Record<string, string | boolean> | null = null;
+
+  const stripComment = (line: string): string => {
+    let inString = false;
+    for (let i = 0; i < line.length; i++) {
+      if (line[i] === '"') inString = !inString;
+      else if (line[i] === "#" && !inString) return line.slice(0, i);
+    }
+    return line;
+  };
+
+  const push = () => {
+    if (!current) return;
+    if (typeof current.ascii !== "string") {
+      throw new Error("grammar/cant/operators.toml: operator missing `ascii`");
+    }
+    operators.push({
+      ascii: current.ascii,
+      glyph: typeof current.glyph === "string" ? current.glyph : null,
+    });
+    current = null;
+  };
+
+  for (const raw of text.split("\n")) {
+    const line = stripComment(raw).trim();
+    if (!line) continue;
+    if (line === "[[operator]]") {
+      push();
+      current = {};
+      continue;
+    }
+    if (line.startsWith("[")) throw new Error(`unsupported table header: ${line}`);
+    const eq = line.indexOf("=");
+    if (eq < 0) throw new Error(`expected \`key = value\`, found: ${line}`);
+    const key = line.slice(0, eq).trim();
+    const rest = line.slice(eq + 1).trim();
+    const value = rest === "true" ? true : rest === "false" ? false : rest.replace(/^"|"$/g, "");
+    if (current) current[key] = value;
+  }
+  push();
+
+  if (operators.length === 0) throw new Error("grammar/cant/operators.toml has no operators");
+  return operators;
+}
+
 /** A host from `site.toml`, so no domain is hardcoded in three places. */
 function host(key: string): string {
   const manifest = fs.readFileSync(path.join(repoRoot, "site.toml"), "utf8");
@@ -89,6 +144,7 @@ export default defineConfig({
     __CANT_HOST__: JSON.stringify(host("cant")),
     __SIGIL_EXAMPLES__: JSON.stringify(examples()),
     __SIGIL_BUILD__: JSON.stringify(buildInfo()),
+    __CANT_OPERATORS__: JSON.stringify(cantOperators()),
   },
   plugins: [vue()],
   resolve: {

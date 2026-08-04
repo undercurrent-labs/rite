@@ -48,17 +48,17 @@ const entries = computed<Entry[]>(() => {
            lg:border-t-0"
     aria-label="Codex"
   >
-    <div class="flex shrink-0 items-center border-b border-ultraviolet/20 px-3 py-2">
-      <h2 class="text-[0.6rem] uppercase tracking-[0.25em] text-spectral/40">Codex</h2>
+    <div class="flex shrink-0 items-center border-b border-sigil-border px-3 py-2">
+      <h2 class="text-[0.6rem] uppercase tracking-[0.25em] text-sigil-muted">Codex</h2>
       <button class="instrument ml-auto" @click="$emit('close')">close</button>
     </div>
 
-    <p v-if="summary" class="shrink-0 border-b border-ultraviolet/20 p-3 text-[0.7rem] text-spectral/60">
+    <p v-if="summary" class="shrink-0 border-b border-sigil-border p-3 text-[0.7rem] text-slate-400">
       {{ summary }}
     </p>
     <p
       v-if="deepVeil"
-      class="shrink-0 border-b border-ultraviolet/20 px-3 py-2 text-[0.65rem] text-gold/60"
+      class="shrink-0 border-b border-sigil-border px-3 py-2 text-[0.65rem] text-sigil-amber/80"
     >
       Deep Veil — kinds only, no labels.
     </p>
@@ -67,32 +67,39 @@ const entries = computed<Entry[]>(() => {
       <li
         v-for="entry in entries"
         :key="entry.key"
-        class="mb-1 cursor-pointer border border-transparent p-2 hover:border-cyan/40"
-        :class="{ 'border-cyan bg-cyan/5': entry.graph_ref?.id === selected }"
+        class="mb-1 cursor-pointer rounded-md border border-transparent p-2 transition-colors
+               hover:border-sigil-accent/40"
+        :class="{ 'border-sigil-accent bg-sigil-accent/5': entry.graph_ref?.id === selected }"
         :aria-current="entry.graph_ref?.id === selected ? 'true' : 'false'"
         tabindex="0"
         @click="$emit('select', entry.graph_ref?.id === selected ? null : (entry.graph_ref?.id ?? null))"
         @keydown.enter.prevent="$emit('select', entry.graph_ref?.id ?? null)"
         @keydown.space.prevent="$emit('select', entry.graph_ref?.id ?? null)"
       >
-        <span class="text-[0.6rem] uppercase tracking-widest text-cyan">{{ entry.summary }}</span>
+        <span class="text-[0.6rem] uppercase tracking-widest text-sigil-accent">{{
+          entry.summary
+        }}</span>
         <span
           v-if="entry.label && !deepVeil"
-          class="mt-0.5 block break-words text-spectral/70"
+          class="mt-0.5 block break-words font-mono text-slate-300"
         >
           {{ entry.label }}
         </span>
-        <span v-if="entry.capabilities?.length && !deepVeil" class="mt-0.5 block text-gold/60">
+        <span
+          v-if="entry.capabilities?.length && !deepVeil"
+          class="mt-0.5 block font-mono text-sigil-amber/80"
+        >
           touches {{ entry.capabilities.join(", ") }}
         </span>
         <span v-for="w in entry.warnings" :key="w" class="mt-0.5 block text-ember/80">{{ w }}</span>
       </li>
-      <li v-if="!entries.length" class="p-2 text-spectral/30">nothing decoded yet</li>
+      <li v-if="!entries.length" class="p-2 text-sigil-muted">nothing decoded yet</li>
     </ul>
 
     <div
       v-if="fingerprint"
-      class="shrink-0 border-t border-ultraviolet/20 p-2 text-[0.6rem] leading-relaxed text-spectral/30"
+      class="shrink-0 border-t border-sigil-border p-2 font-mono text-[0.6rem] leading-relaxed
+             text-sigil-muted"
     >
       <p class="break-all">{{ fingerprint }}</p>
       <p v-if="elapsedMs !== undefined">rendered in {{ elapsedMs.toFixed(1) }} ms</p>

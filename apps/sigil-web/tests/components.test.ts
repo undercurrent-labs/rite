@@ -15,6 +15,7 @@ vi.mock("../src/lib/renderer", () => ({
     mode: "veiled",
     metadata: "safe",
     ornament: "ritual",
+    tracery: "flowing",
     seed: "graph",
     background: "theme",
     canonical: false,
@@ -39,6 +40,11 @@ vi.mock("../src/lib/renderer", () => ({
     diagnostics: [],
   })),
   renderGraph: vi.fn(async () => ({ ok: true, diagnostics: [] })),
+  renderHtml: vi.fn(async () => ({
+    ok: true,
+    html: "<!doctype html>\n<html><body>codex</body></html>",
+    diagnostics: [],
+  })),
   version: vi.fn(async () => ({
     renderer: "0.1.0",
     graphSchema: 1,
@@ -59,6 +65,7 @@ const options = {
   mode: "veiled",
   metadata: "safe",
   ornament: "ritual",
+  tracery: "flowing",
   seed: "graph",
   background: "theme",
   canonical: false,
@@ -79,11 +86,14 @@ describe("ControlBar", () => {
     expect(bar.emitted("update:options")?.[0][0]).toMatchObject({ mode: "revealed" });
   });
 
-  it("offers every documented theme and ornament level", () => {
+  it("offers every documented theme, tracery, and ornament level", () => {
     const bar = mount(ControlBar, { props: { options, deepVeil: false } });
     const labels = bar.findAll("button").map((b) => b.text());
     for (const theme of ["neon-ritual", "void", "parchment"]) {
       expect(labels).toContain(theme);
+    }
+    for (const tracery of ["flowing", "concentric", "circuit"]) {
+      expect(labels).toContain(tracery);
     }
     for (const level of ["none", "sparse", "ritual", "maximal"]) {
       expect(labels).toContain(level);
@@ -183,6 +193,15 @@ describe("App", () => {
     await revealed?.trigger("click");
     await flush();
     expect(app.text()).toContain("draws labels into the artifact");
+  });
+
+  /** W8: the HTML export is offered, and enabled once there is an artifact. */
+  it("offers an HTML export beside the others", async () => {
+    const app = mount(App);
+    await flush();
+    const html = app.findAll("button").find((b) => b.text() === "HTML");
+    expect(html).toBeTruthy();
+    expect(html?.attributes("disabled")).toBeUndefined();
   });
 
   /** The privacy claim, asserted the only way that means anything. */

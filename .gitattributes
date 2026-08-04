@@ -12,3 +12,4 @@
 *.gz   binary
 *.vsix binary
 *.wasm binary
+*.woff2 binary

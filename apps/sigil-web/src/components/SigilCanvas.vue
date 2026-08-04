@@ -226,20 +226,21 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKey));
       <div
         v-if="svg"
         ref="host"
-        class="h-full w-full max-h-full max-w-full origin-center transition-transform duration-75"
+        class="sigil-stage h-full w-full max-h-full max-w-full origin-center
+               transition-transform duration-75"
         :style="{ transform }"
         v-html="svg"
       />
       <p v-else-if="error" class="max-w-md px-6 text-center text-xs text-ember">{{ error }}</p>
-      <p v-else class="text-xs text-spectral/30">
+      <p v-else class="text-xs text-spectral/40">
         {{ rendering ? "inscribing…" : "nothing to draw" }}
       </p>
     </div>
 
     <div
       v-if="tip"
-      class="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-full border
-             border-cyan/60 bg-abyss/95 px-2 py-1 text-[0.7rem] text-cyan"
+      class="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-full rounded border
+             border-glow/60 bg-abyss/95 px-2 py-1 font-mono text-[0.7rem] text-glow"
       :style="{ left: `${tip.x}px`, top: `${tip.y}px` }"
       role="status"
       aria-live="polite"
@@ -256,7 +257,8 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKey));
 
     <span
       v-if="rendering"
-      class="absolute left-3 top-3 text-[0.65rem] tracking-widest text-cyan/60"
+      class="absolute left-3 top-3 animate-pulse font-mono text-[0.65rem] tracking-widest
+             text-glow/60"
     >
       inscribing…
     </span>

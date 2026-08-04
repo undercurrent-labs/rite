@@ -2,25 +2,112 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Self-hosted, because the CSP is `default-src 'self'` and means it: the page
+   fetches nothing from any other origin, fonts included. Same two families the
+   Rite and Cant sites load from Google Fonts. See public/fonts/README.md. */
+@font-face {
+  font-family: "DM Sans";
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url("/fonts/dm-sans-latin.woff2") format("woff2");
+}
+@font-face {
+  font-family: "IBM Plex Mono";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/ibm-plex-mono-latin-400.woff2") format("woff2");
+}
+@font-face {
+  font-family: "IBM Plex Mono";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("/fonts/ibm-plex-mono-latin-500.woff2") format("woff2");
+}
+
+/*
+ * Cant syntax colours, from grammar/palette.json by way of the Cant site's
+ * stylesheet — the same eleven values Studio, `rite render` and cant.rite.foo
+ * already agree on. The source panel here must read as the same language it
+ * does there.
+ */
+:root {
+  --c-op: #ff7edb;
+  --c-capability: #7ee0ff;
+  --c-string: #c3e88d;
+  --c-comment: #8b9bb4;
+  --c-number: #f78c6c;
+  --c-atom: #ffcb6b;
+  --c-dollar: #89ddff;
+}
+
+.c-op {
+  color: var(--c-op);
+  font-weight: 500;
+}
+.c-capability {
+  color: var(--c-capability);
+}
+.c-string {
+  color: var(--c-string);
+}
+.c-comment {
+  color: var(--c-comment);
+  font-style: italic;
+}
+.c-number {
+  color: var(--c-number);
+}
+.c-atom {
+  color: var(--c-atom);
+}
+.c-dollar {
+  color: var(--c-dollar);
+}
+
+/*
+ * A fresh artifact materialises rather than appears: a brief brightening that
+ * settles, like ink searing in. It starts from partial rather than zero
+ * opacity because live renders re-run it on every keystroke pause, and a
+ * shimmer reads as re-inscription where a blink reads as flicker. The
+ * prefers-reduced-motion rule below truncates it to nothing.
+ */
+.sigil-stage svg {
+  animation: sigil-materialize 0.45s ease-out;
+  transform-origin: center;
+}
+
+@keyframes sigil-materialize {
+  0% {
+    opacity: 0.35;
+    transform: scale(0.99);
+    filter: brightness(1.8) saturate(1.15);
+  }
+  60% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+    filter: brightness(1);
+  }
+}
+
 @layer base {
   :root {
     color-scheme: dark;
   }
 
   body {
-    @apply bg-abyss text-spectral font-mono antialiased;
-    /* A faint circuit field, drawn rather than fetched: §22 forbids an external
-       asset and a background image would be one. */
-    background-image:
-      linear-gradient(rgba(142, 92, 255, 0.045) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(142, 92, 255, 0.045) 1px, transparent 1px);
-    background-size: 48px 48px;
+    @apply bg-sigil-bg font-sans text-slate-200 antialiased;
   }
 
   /* Focus is a ring, everywhere, because §23 requires a visible focus indicator
-     and the default one disappears against a near-black ground. */
+     and the default one disappears against a dark ground. */
   :focus-visible {
-    @apply outline-none ring-2 ring-cyan ring-offset-2 ring-offset-abyss;
+    @apply outline-none ring-2 ring-sigil-accent ring-offset-2 ring-offset-sigil-bg;
   }
 
   @media (prefers-reduced-motion: reduce) {
@@ -51,23 +138,33 @@
 }
 
 @layer components {
-  /* Controls read as instruments rather than form fields: square, hairline,
-     lit when active. §20.9. */
+  /* Controls read as instruments: one shape, lit in the accent when active.
+     §20.9 — and the same height, radius and border as the Studio toolbars on
+     the sibling sites, so the family's tools feel like one workshop. */
   .instrument {
-    @apply border border-ultraviolet/30 bg-violet/60 px-2.5 py-1.5 text-xs
-           tracking-wide text-spectral/80 transition-colors;
+    @apply rounded-md border border-sigil-border bg-sigil-panel px-2.5 py-1 text-xs
+           text-slate-300 transition-colors;
   }
-  .instrument:hover {
-    @apply border-cyan/60 text-spectral;
+  .instrument:hover:not(:disabled) {
+    @apply border-slate-600 text-slate-100;
+  }
+  .instrument:disabled {
+    @apply cursor-not-allowed opacity-40;
   }
   .instrument[aria-pressed="true"],
   .instrument.is-active {
-    @apply border-cyan bg-cyan/10 text-cyan;
+    @apply border-sigil-accent/60 bg-sigil-accent/10 font-medium text-sigil-accent;
+  }
+  select.instrument {
+    @apply appearance-none pr-6;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5' fill='none'%3E%3Cpath d='M1 1l3 3 3-3' stroke='%238b9bb4' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-position: right 0.5rem center;
+    background-repeat: no-repeat;
   }
   .instrument-label {
-    @apply mb-1 block text-[0.6rem] uppercase tracking-[0.22em] text-spectral/35;
+    @apply mb-1 block text-[0.6rem] uppercase tracking-[0.18em] text-sigil-muted;
   }
   .panel {
-    @apply border-ultraviolet/20 bg-violet/40 backdrop-blur-sm;
+    @apply border-sigil-border bg-sigil-panel/95 backdrop-blur;
   }
 }
