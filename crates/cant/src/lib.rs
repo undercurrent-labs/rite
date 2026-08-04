@@ -46,10 +46,11 @@ pub const TOOL_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// The Rite version Cant was built against.
 ///
-/// Cant and Rite share a workspace version today, so this is the same string.
-/// It is reported separately anyway: the two are free to diverge, and a user
-/// debugging an expansion needs to know which Rite is on the other side of it.
-pub const RITE_VERSION: &str = env!("CARGO_PKG_VERSION");
+/// Read from `rite-core` rather than from this crate: Cant versions
+/// independently, so its own number says nothing about the Rite on the other
+/// side of an expansion — and that is the number someone debugging generated
+/// code needs.
+pub const RITE_VERSION: &str = rite_core::VERSION;
 
 /// Parse a Cant source file.
 pub fn parse(file: &SourceFile) -> ParseResult {
@@ -243,7 +244,10 @@ mod tests {
         let v = version_info();
         assert!(!v.tool.is_empty());
         assert_eq!(v.language, "0");
-        assert_eq!(v.rite, v.tool, "one workspace version today");
+        // Independent numbers, and this asserts the *source* rather than the
+        // values so it keeps meaning something if they ever coincide.
+        assert_eq!(v.rite, rite_core::VERSION);
+        assert_eq!(v.tool, TOOL_VERSION);
         assert_eq!(v.to_json()["cant_language_version"], serde_json::json!("0"));
     }
 

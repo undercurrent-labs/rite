@@ -6,17 +6,25 @@ import path from "node:path";
 const repoRoot = path.resolve(__dirname, "../..");
 
 /**
- * The version the site advertises, read from the workspace manifest.
+ * The version the site advertises, read from the crate that ships the binary.
  *
- * Same reasoning as `apps/rite-web/vite.config.ts`: hardcoding it drifted to
- * three different numbers there once already, and a second site is a second
- * place for that to happen.
+ * **Cant's own version, not the workspace's.** Cant versions independently of
+ * Rite (ADR 0001, Amendment 2), so reading `[workspace.package]` here would put
+ * Rite's number under Cant's name — which is exactly the claim the separate
+ * version exists to avoid. Read rather than hardcoded for the reason the Rite
+ * site reads its own: a hardcoded number drifted to three different values
+ * there once already.
  */
-function workspaceVersion(): string {
-  const manifest = fs.readFileSync(path.join(repoRoot, "Cargo.toml"), "utf8");
-  const section = manifest.split(/^\[workspace\.package\]$/m)[1];
-  const found = section?.match(/^\s*version\s*=\s*"([^"]+)"/m)?.[1];
-  if (!found) throw new Error("could not read [workspace.package] version from Cargo.toml");
+function cantVersion(): string {
+  const manifest = fs.readFileSync(path.join(repoRoot, "crates/cant-cli/Cargo.toml"), "utf8");
+  const section = manifest.split(/^\[package\]$/m)[1] ?? manifest;
+  const found = section.match(/^\s*version\s*=\s*"([^"]+)"/m)?.[1];
+  if (!found) {
+    throw new Error(
+      "could not read a literal version from crates/cant-cli/Cargo.toml — if it " +
+        "went back to `version.workspace = true`, the site would advertise Rite's number"
+    );
+  }
   return `v${found}`;
 }
 
@@ -108,7 +116,7 @@ function cantOperators(): OperatorSpec[] {
 
 export default defineConfig({
   define: {
-    __CANT_VERSION__: JSON.stringify(workspaceVersion()),
+    __CANT_VERSION__: JSON.stringify(cantVersion()),
     __RITE_HOST__: JSON.stringify(riteHost()),
     __CANT_OPERATORS__: JSON.stringify(cantOperators()),
   },

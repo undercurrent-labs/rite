@@ -35,8 +35,10 @@ fn version_reports_cant_the_language_and_the_rite_it_targets() {
     assert!(text.starts_with("cant "), "{text}");
     assert!(text.contains("cant_language_version: 0"), "{text}");
     assert!(text.contains("cant_graph_schema_version: 0"), "{text}");
+    // `rite-core`'s version, not this crate's: Cant versions independently, so
+    // `CARGO_PKG_VERSION` here is Cant's number and would never match.
     assert!(
-        text.contains(&format!("rite: {}", env!("CARGO_PKG_VERSION"))),
+        text.contains(&format!("rite: {}", rite_core::VERSION)),
         "{text}"
     );
 }

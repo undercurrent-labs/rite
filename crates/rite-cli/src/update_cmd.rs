@@ -176,32 +176,35 @@ async fn install_cli_from_release(release: &github::Release) -> anyhow::Result<(
     fs::create_dir_all(&extract_dir)?;
     extract_cli_archive(&archive_path, &extract_dir)?;
 
-    let (rite_bin, lsp_bin) = find_bins(&extract_dir)?;
+    let rite_bin = find_bin(&extract_dir, "rite")?
+        .with_context(|| format!("rite binary not found in {}", extract_dir.display()))?;
     fs::create_dir_all(&dest_dir)?;
 
-    let dest_rite = dest_dir.join(if cfg!(windows) { "rite.exe" } else { "rite" });
-    let dest_lsp = dest_dir.join(if cfg!(windows) {
-        "rite-lsp.exe"
-    } else {
-        "rite-lsp"
-    });
-
+    let dest_rite = dest_dir.join(exe_name("rite"));
     replace_binary(&rite_bin, &dest_rite)?;
-    if lsp_bin.exists() {
-        let _ = replace_binary(&lsp_bin, &dest_lsp);
-    }
+    make_executable(&dest_rite)?;
 
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let mut perms = fs::metadata(&dest_rite)?.permissions();
-        perms.set_mode(0o755);
-        fs::set_permissions(&dest_rite, perms)?;
-        if dest_lsp.exists() {
-            let mut perms = fs::metadata(&dest_lsp)?.permissions();
-            perms.set_mode(0o755);
-            fs::set_permissions(&dest_lsp, perms)?;
+    // Everything else executable in the archive comes too.
+    //
+    // A list of names would have to be edited every time the release gains a
+    // binary, and the edit that gets forgotten leaves an installed tool frozen
+    // at whatever version it was first installed at — paired with a `rite` that
+    // has moved on. "Whatever the archive contains" needs no maintenance and
+    // cannot fall behind what the release actually ships.
+    //
+    // Executable-only, so a README or a licence file in a future archive does
+    // not end up on someone's PATH.
+    for src in companions(&extract_dir, &rite_bin)? {
+        let Some(name) = src.file_name().and_then(|s| s.to_str()) else {
+            continue;
+        };
+        let dest = dest_dir.join(name);
+        if let Err(e) = replace_binary(&src, &dest) {
+            eprintln!("  warning: could not install {name}: {e}");
+            continue;
         }
+        make_executable(&dest)?;
+        println!("  installed {}", dest.display());
     }
 
     let _ = fs::remove_dir_all(&tmp);
@@ -290,32 +293,89 @@ fn looks_like_build_tree(path: &Path) -> bool {
     false
 }
 
-fn find_bins(root: &Path) -> anyhow::Result<(PathBuf, PathBuf)> {
-    let mut rite = None;
-    let mut lsp = None;
-    fn walk(
-        dir: &Path,
-        rite: &mut Option<PathBuf>,
-        lsp: &mut Option<PathBuf>,
-    ) -> anyhow::Result<()> {
+fn exe_name(stem: &str) -> String {
+    if cfg!(windows) {
+        format!("{stem}.exe")
+    } else {
+        stem.to_string()
+    }
+}
+
+/// Find one binary anywhere under `root`, by stem.
+///
+/// `None` rather than an error when it is absent: an archive that predates a
+/// companion is a normal thing to install, not a failure.
+fn find_bin(root: &Path, stem: &str) -> anyhow::Result<Option<PathBuf>> {
+    let wanted = exe_name(stem);
+    fn walk(dir: &Path, wanted: &str, found: &mut Option<PathBuf>) -> anyhow::Result<()> {
         for e in fs::read_dir(dir)? {
             let p = e?.path();
             if p.is_dir() {
-                walk(&p, rite, lsp)?;
-            } else if let Some(name) = p.file_name().and_then(|s| s.to_str()) {
-                if name == "rite" || name == "rite.exe" {
-                    *rite = Some(p.clone());
-                } else if name == "rite-lsp" || name == "rite-lsp.exe" {
-                    *lsp = Some(p.clone());
-                }
+                walk(&p, wanted, found)?;
+            } else if p.file_name().and_then(|s| s.to_str()) == Some(wanted) {
+                *found = Some(p);
             }
         }
         Ok(())
     }
-    walk(root, &mut rite, &mut lsp)?;
-    let rite = rite.with_context(|| format!("rite binary not found in {}", root.display()))?;
-    let lsp = lsp.unwrap_or_else(|| root.join("rite-lsp"));
-    Ok((rite, lsp))
+    let mut found = None;
+    walk(root, &wanted, &mut found)?;
+    Ok(found)
+}
+
+/// Every executable in the archive except `rite` itself, sorted for a stable
+/// install order.
+///
+/// Deliberately not a list of known names: see the caller.
+fn companions(root: &Path, rite_bin: &Path) -> anyhow::Result<Vec<PathBuf>> {
+    fn walk(dir: &Path, out: &mut Vec<PathBuf>) -> anyhow::Result<()> {
+        for e in fs::read_dir(dir)? {
+            let p = e?.path();
+            if p.is_dir() {
+                walk(&p, out)?;
+            } else if is_executable(&p) {
+                out.push(p);
+            }
+        }
+        Ok(())
+    }
+    let mut out = Vec::new();
+    walk(root, &mut out)?;
+    out.retain(|p| p != rite_bin);
+    out.sort();
+    Ok(out)
+}
+
+/// The executable bit. The release archives set it on every binary they carry.
+#[cfg(unix)]
+fn is_executable(path: &Path) -> bool {
+    use std::os::unix::fs::PermissionsExt;
+    fs::metadata(path)
+        .map(|m| m.is_file() && m.permissions().mode() & 0o111 != 0)
+        .unwrap_or(false)
+}
+
+/// Windows has no executable bit, so the extension is the only signal.
+#[cfg(not(unix))]
+fn is_executable(path: &Path) -> bool {
+    path.is_file()
+        && path
+            .extension()
+            .and_then(|e| e.to_str())
+            .is_some_and(|e| e.eq_ignore_ascii_case("exe"))
+}
+
+fn make_executable(path: &Path) -> anyhow::Result<()> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut perms = fs::metadata(path)?.permissions();
+        perms.set_mode(0o755);
+        fs::set_permissions(path, perms)?;
+    }
+    #[cfg(not(unix))]
+    let _ = path;
+    Ok(())
 }
 
 fn install_dir() -> anyhow::Result<PathBuf> {
@@ -418,6 +478,49 @@ mod tests {
         let _ = fs::remove_dir_all(&p);
         fs::create_dir_all(&p).unwrap();
         p
+    }
+
+    #[cfg(unix)]
+    fn write_executable(path: &Path) {
+        use std::os::unix::fs::PermissionsExt;
+        fs::write(path, b"#!/bin/sh\n").unwrap();
+        fs::set_permissions(path, fs::Permissions::from_mode(0o755)).unwrap();
+    }
+
+    /// Whatever else the archive carries is installed alongside `rite`.
+    ///
+    /// The rule is "every executable", not a list of names, so a release that
+    /// gains a binary keeps working with no edit here — and an installed tool
+    /// cannot be left behind at an old version while `rite` moves on.
+    #[cfg(unix)]
+    #[test]
+    fn every_executable_beside_rite_is_a_companion() {
+        let root = scratch("companions");
+        let nested = root.join("rite-x86_64-unknown-linux-gnu");
+        fs::create_dir_all(&nested).unwrap();
+        let rite = nested.join("rite");
+        for name in ["rite", "rite-lsp", "some-future-tool"] {
+            write_executable(&nested.join(name));
+        }
+        // Not executable: documentation that happens to travel with the binaries.
+        fs::write(nested.join("README.md"), b"hello").unwrap();
+
+        let found = companions(&root, &rite).unwrap();
+        let names: Vec<_> = found
+            .iter()
+            .map(|p| p.file_name().unwrap().to_str().unwrap())
+            .collect();
+        assert_eq!(names, vec!["rite-lsp", "some-future-tool"]);
+    }
+
+    /// An archive with nothing but `rite` in it installs cleanly.
+    #[cfg(unix)]
+    #[test]
+    fn an_archive_with_no_companions_is_fine() {
+        let root = scratch("companions_none");
+        let rite = root.join("rite");
+        write_executable(&rite);
+        assert!(companions(&root, &rite).unwrap().is_empty());
     }
 
     #[test]

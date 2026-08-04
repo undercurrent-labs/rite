@@ -39,15 +39,31 @@ trade `awk`, `sed` and `jq` make.
 
 ```bash
 $ cant version
-cant 0.6.2
+cant 0.1.0
 cant_language_version: 0
 cant_graph_schema_version: 0
-rite: 0.6.2
+rite: 0.7.0
 ```
 
-Four numbers because they are free to move independently: the tool, the language
-it implements, the graph JSON schema a consumer may have stored, and the Rite
-that expansion targets. `--json` emits the same as an object.
+Four numbers because they move independently: the tool, the language it
+implements, the graph JSON schema a consumer may have stored, and the Rite that
+expansion targets. `--json` emits the same as an object.
+
+**Cant's version is not Rite's.** `cant` ships inside the Rite release archive,
+but it is a v0 language on its own number — the release tag you downloaded is
+Rite's. Both are in the release's `version-manifest.json` if you need to know
+what an archive contains without unpacking it.
+
+### `cant update`
+
+There isn't one. `cant` comes with `rite`, and
+
+```bash
+rite update
+```
+
+replaces every binary in the archive, so the pair cannot drift on your machine.
+Running `cant update` prints that and exits 2.
 
 ### `cant check [source]`
 

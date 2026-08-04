@@ -235,6 +235,19 @@ jobs:
               [[ -f "$f" ]] && sha256sum "$f" >> SHA256SUMS
             done) || true
           fi
+          # Cant's own version. The release tag is Rite's; `cant` ships in the
+          # same archive on its own number (ADR 0001, Amendment 2), so a consumer
+          # reading this manifest can tell which `cant` an archive contains
+          # without unpacking it and running the binary.
+          CANT_VERSION="$(awk '/^\[package\]/{p=1} p && /^version = "/{gsub(/[^0-9.]/,"",$3); print $3; exit}' crates/cant-cli/Cargo.toml)"
+          if [[ -z "$CANT_VERSION" ]]; then
+            echo "::error::could not read the cant version from crates/cant-cli/Cargo.toml"
+            exit 1
+          fi
+          # Rite's version is the tag, minus its `v`.
+          RITE_VERSION="${{ steps.ver.outputs.version }}"
+          RITE_VERSION="${RITE_VERSION#v}"
+          echo "rite ${RITE_VERSION}, cant ${CANT_VERSION}"
           # Version manifest
           cat > dist/version-manifest.json <<EOF
           {
@@ -242,6 +255,10 @@ jobs:
             "commit": "${{ github.sha }}",
             "repo": "${{ github.repository }}",
             "binaries": ["rite", "rite-lsp", "cant"],
+            "versions": {
+              "rite": "${RITE_VERSION}",
+              "cant": "${CANT_VERSION}"
+            },
             "languages": {
               "rite": { "language_version": "1" },
               "cant": { "language_version": "0", "graph_schema_version": "0", "stability": "experimental" }
@@ -282,7 +299,17 @@ jobs:
             curl -fsSL https://rite.foo/install | RITE_VERSION=${{ steps.ver.outputs.version }} bash
             ```
 
-            Binaries install to `~/.local/bin` by default (`rite` + `rite-lsp`).
+            Binaries install to `~/.local/bin` by default: `rite`, `rite-lsp`, and
+            `cant`.
+
+            ### Cant
+
+            The archive also carries **`cant`**, a graph-oriented sibling language that
+            lowers to Rite. It versions on its own number — see
+            `version-manifest.json` for the one in this archive — and has no updater of
+            its own: `rite update` keeps the pair in step.
+
+            Docs: https://cant.rite.foo
 
             ### Windows
 

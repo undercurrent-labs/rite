@@ -18,6 +18,22 @@
 
 ### Added
 
+- **Cant versions on its own number, starting at `0.1.0`.** It shipped in Rite's
+  `0.7.0` archive wearing Rite's version, which claimed seven minor cycles of
+  stability for a v0 language whose operator vocabulary can still change. The
+  release is still Rite's tag and `cant` still rides in it — one archive, two
+  numbers, both in `version-manifest.json`. `cant version` reports its own
+  beside the Rite it lowers to, and `cant::RITE_VERSION` now reads
+  `rite_core::VERSION` so the second number is Rite's rather than a relabelling
+  of the first. See ADR 0001, Amendment 2.
+
+- **`rite update` installs every binary in the release archive**, not just
+  `rite` and `rite-lsp`. The rule is "whatever the archive contains and is
+  executable" rather than a list of names, so a release that gains a binary needs
+  no edit — and nothing installed can be left frozen at an old version while
+  `rite` moves on. This is how `cant` stays current: it has no updater of its
+  own, and `cant update` says so and exits 2.
+
 - **Cant Studio** — `cant.rite.foo/studio`. The real engine, compiled to
   WebAssembly: it checks as you type, draws the flow graph, shows the generated
   Rite, and runs the program. Execution goes through the expansion, exactly as

@@ -10,6 +10,15 @@ pub use error_codes::*;
 pub use source::*;
 pub use span::*;
 
+/// The Rite version this build is part of.
+///
+/// Every `rite-*` crate shares the workspace version, so any of them answers the
+/// question — this one because it is the crate everything else already depends
+/// on. It exists so a tool that embeds Rite and versions on its own number can
+/// report which Rite it embeds, rather than reporting its own version under
+/// Rite's name or hard-coding one that then drifts.
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+
 /// Result type used across Rite front-end crates.
 pub type RiteResult<T> = Result<T, Diagnostic>;
 

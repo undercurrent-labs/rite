@@ -1,6 +1,6 @@
 # ADR 0001 — Cant is a sibling front end, not a Rite dialect
 
-- **Status:** Accepted, amended 2026-08-03 (see [Amendment 1](#amendment-1--one-pipeline-two-workers))
+- **Status:** Accepted, amended 2026-08-03 (see [Amendment 1](#amendment-1--one-pipeline-two-workers), [Amendment 2](#amendment-2--cant-carries-its-own-version))
 - **Date:** 2026-08-03
 - **Supersedes:** nothing
 - **Related:** [ADR 0002 — Cant lowers through canonical Rite](0002-cant-lowers-through-rite.md)
@@ -148,3 +148,41 @@ Consequences for the requirements above:
   for anything that reaches users, and was always optimistic — `cant` ships inside
   the Rite archive. It stays true where it matters: Cant's vocabulary and graph
   schema can change without touching Rite's grammar, IR or gates.
+
+## Amendment 2 — Cant carries its own version
+
+**Date:** 2026-08-03. Revises one sentence of Amendment 1 — "one repository with
+one version number and one tag" is now one repository, **two** version numbers,
+one tag. Everything else there stands, including the reasoning that a separately
+*released* Cant would need its own compatibility statement: that is the reason a
+second number is not a second release.
+
+Cant shipped inside Rite's 0.7.0 archive wearing Rite's version number, because
+every crate in the workspace takes `version.workspace = true`. That number was a
+claim nobody meant to make: it said Cant had been through seven minor cycles of
+whatever stability Rite's version implies, when Cant is a v0 language whose
+operator vocabulary and graph schema are still allowed to change.
+
+**The Cant crates version independently.** They start at `0.1.0` and move on
+Cant's own terms. Rite's version continues to come from `[workspace.package]`.
+
+This does not reopen Amendment 1. Shipping together and versioning together are
+different things:
+
+- **One tag, one archive.** A release is still Rite's tag, and `cant` still rides
+  in it. There is no separate Cant release, and no separate release cadence.
+- **Two numbers in it.** `version-manifest.json` carries both, so a consumer can
+  tell which `cant` an archive contains without unpacking it, and `cant version`
+  reports its own number beside the Rite it lowers to.
+- **`cant` has no updater.** `rite update` installs every binary in the archive,
+  Cant included, so the two cannot drift on a machine. `cant update` exists only
+  to say so. A Cant that updated itself could pair a new expansion with an old
+  runtime, which is the one failure the shared archive exists to prevent.
+
+`cant::RITE_VERSION` therefore reads `rite_core::VERSION` rather than its own
+package version. A Cant number says nothing about the Rite on the other side of
+an expansion, and that is the number someone debugging generated code needs.
+
+**Cost.** Two numbers to explain, and a version-bump checklist with two entries
+instead of one. The alternative was a version that lies, and there is no
+reading of "0.7.0" that is true of Cant today.

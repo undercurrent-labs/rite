@@ -1,6 +1,8 @@
 [package]
 name = "cant-syntax"
-version.workspace = true
+# Cant's own version, not the workspace's: it is a separate language with its own
+# vocabulary and its own compatibility story. See ADR 0001, Amendment 2.
+version = "0.1.0"
 edition.workspace = true
 license.workspace = true
 description = "Operator manifest, lexer, parser, and AST for Cant"

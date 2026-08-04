@@ -212,9 +212,18 @@ Refuse to install without checksums."
     info "version check:"
     "${INSTALL_DIR}/rite" version 2>/dev/null || "${INSTALL_DIR}/rite" --version 2>/dev/null || true
   fi
+  # Cant versions independently of Rite, so its number is not implied by the one
+  # above and is worth printing on its own.
+  if [[ -x "${INSTALL_DIR}/cant" ]]; then
+    "${INSTALL_DIR}/cant" version 2>/dev/null | head -1 || true
+  fi
 
   printf '\n%sRite is installed.%s Docs: https://rite.foo/docs\n' "$GREEN" "$RESET"
   printf 'Studio (no install): https://rite.foo/studio\n'
+  if [[ -x "${INSTALL_DIR}/cant" ]]; then
+    printf 'Cant, the sibling language, came with it: https://cant.rite.foo\n'
+  fi
+  printf 'Update everything later with: rite update\n'
 }
 
 main "$@"

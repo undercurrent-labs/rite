@@ -286,6 +286,13 @@ enum Commands {
     /// Each line is a whole program. Nothing persists between them, because Cant
     /// has no bindings — see `docs/cant/cli.md`.
     Repl,
+    /// Refuses, and says to use `rite update`
+    ///
+    /// `cant` ships inside the Rite release archive and has no updater of its
+    /// own. Present as a command rather than absent so the answer is a sentence
+    /// instead of clap's "unrecognized subcommand" — someone typing this has a
+    /// reasonable question, and the reasonable answer is one line long.
+    Update,
     /// Print the flow graph
     ///
     /// JSON is the machine format; DOT is for looking at the topology before
@@ -429,6 +436,11 @@ async fn main() -> ExitCode {
             Ok(input) => print_explanation(input, verbose),
             Err(usage) => usage_error(&usage),
         },
+        Commands::Update => usage_error(concat!(
+            "`cant` has no updater — it ships inside the Rite release archive.\n\n",
+            "  rite update\n\n",
+            "updates both, so they stay in step by construction."
+        )),
         Commands::Repl => {
             let permissions = match options.permissions() {
                 Ok(perms) => perms,
