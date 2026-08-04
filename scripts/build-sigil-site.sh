@@ -26,6 +26,13 @@ for asset in cant_sigil_wasm.js cant_sigil_wasm_bg.wasm; do
   fi
 done
 
+# The Worker's /api/version and /api/schema read this asset; without it they
+# answer "build info unavailable" in production while every test passes.
+if [[ ! -f "$ROOT/apps/sigil-web/dist/build-info.json" ]]; then
+  echo "error: build-info.json missing from dist — the Worker's version endpoints would go dark" >&2
+  exit 1
+fi
+
 # The Worker must be deployable. A dry run catches a broken `wrangler.jsonc`
 # here rather than at the moment someone tries to publish.
 if command -v npx >/dev/null 2>&1; then

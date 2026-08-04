@@ -7,25 +7,36 @@
  * something it *does not* have: an endpoint that accepts a program. A behavioural
  * test cannot prove absence; reading the file can.
  */
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-vi.stubGlobal("__SIGIL_VERSION__", "v0.1.0");
-vi.stubGlobal("__SIGIL_BUILD__", {
-  commit: "abc1234",
-  renderer: "v0.1.0",
-  schemas: { "cant.graph": ["1"], "rite.sigil.graph": [1], "rite.sigil.scene": [1] },
-});
-
 const worker = (await import("../src/worker/index")).default;
+
+// The Worker reads versions from `build-info.json` in its assets — the same
+// path production takes. It used to read Vite-`define`d globals, which the
+// tests stubbed and the deployed Worker never had, so the first deploy
+// answered `/api/version` with an exception while this file stayed green.
+const buildInfo = {
+  app: "v0.1.0",
+  renderer: "v0.1.0",
+  commit: "abc1234",
+  schemas: { "cant.graph": ["1"], "rite.sigil.graph": [1], "rite.sigil.scene": [1] },
+};
 
 const env = {
   ASSETS: {
-    fetch: async (request: Request) =>
-      new Response(`<!doctype html><title>asset for ${new URL(request.url).pathname}</title>`, {
+    fetch: async (request: Request) => {
+      const path = new URL(request.url).pathname;
+      if (path === "/build-info.json") {
+        return new Response(JSON.stringify(buildInfo), {
+          headers: { "content-type": "application/json" },
+        });
+      }
+      return new Response(`<!doctype html><title>asset for ${path}</title>`, {
         headers: { "content-type": "text/html" },
-      }),
+      });
+    },
   },
 };
 

@@ -15,9 +15,33 @@ interface Env {
   ASSETS: { fetch: (request: Request) => Promise<Response> };
 }
 
-/** Injected at build time from the crate versions. See `vite.config.ts`. */
-declare const __SIGIL_VERSION__: string;
-declare const __SIGIL_BUILD__: { commit: string; renderer: string; schemas: Record<string, unknown> };
+/**
+ * Version and schema facts, read from `build-info.json` in the deployed
+ * assets — Vite writes it at build time from the crate versions.
+ *
+ * Read from an asset rather than injected as globals, because the Worker is
+ * bundled by wrangler, not by Vite: `define`d constants exist in the app
+ * bundle and in the test runner but never in the deployed Worker, and the
+ * first production deploy answered `/api/version` with an exception while the
+ * tests — which stubbed the same globals — stayed green. An asset exists in
+ * exactly one place, and both the Worker and the tests read it the same way.
+ */
+interface BuildInfo {
+  app: string;
+  renderer: string;
+  commit: string;
+  schemas: Record<string, unknown>;
+}
+
+async function readBuildInfo(env: Env, origin: string): Promise<BuildInfo | null> {
+  try {
+    const response = await env.ASSETS.fetch(new Request(new URL("/build-info.json", origin)));
+    if (!response.ok) return null;
+    return (await response.json()) as BuildInfo;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Headers on every response.
@@ -78,17 +102,16 @@ export default {
       switch (url.pathname) {
         case "/api/health":
           return json({ status: "ok" }, 0);
-        case "/api/version":
-          return json(
-            {
-              app: __SIGIL_VERSION__,
-              renderer: __SIGIL_BUILD__.renderer,
-              commit: __SIGIL_BUILD__.commit,
-            },
-            60
-          );
-        case "/api/schema":
-          return json(__SIGIL_BUILD__.schemas, 60);
+        case "/api/version": {
+          const info = await readBuildInfo(env, url.origin);
+          if (!info) return json({ error: "build info unavailable" }, 0);
+          return json({ app: info.app, renderer: info.renderer, commit: info.commit }, 60);
+        }
+        case "/api/schema": {
+          const info = await readBuildInfo(env, url.origin);
+          if (!info) return json({ error: "build info unavailable" }, 0);
+          return json(info.schemas, 60);
+        }
         default:
           return json({ error: "not found" }, 0);
       }

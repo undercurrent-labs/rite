@@ -146,7 +146,23 @@ export default defineConfig({
     __SIGIL_BUILD__: JSON.stringify(buildInfo()),
     __CANT_OPERATORS__: JSON.stringify(cantOperators()),
   },
-  plugins: [vue()],
+  plugins: [
+    vue(),
+    // `build-info.json`, for the Worker's `/api/version` and `/api/schema`.
+    // An emitted asset rather than a `define`: the Worker is bundled by
+    // wrangler and never sees Vite's constants — which is how the first deploy
+    // answered version queries with an exception while the tests stayed green.
+    {
+      name: "sigil-build-info",
+      generateBundle() {
+        this.emitFile({
+          type: "asset",
+          fileName: "build-info.json",
+          source: JSON.stringify({ app: sigilVersion(), ...buildInfo() }, null, 2),
+        });
+      },
+    },
+  ],
   resolve: {
     alias: { "@sigil": path.resolve(__dirname, "./src") },
   },
