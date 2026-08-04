@@ -242,6 +242,12 @@ impl CapabilityFamily {
         }
     }
 
+    /// The family's name, including the producer's own string for `Other`.
+    ///
+    /// **This can be user text.** `Other` carries whatever namespace the
+    /// producer wrote, so anything that puts this in front of a viewer must
+    /// decide whether that is allowed. Use [`CapabilityFamily::safe_name`]
+    /// anywhere disclosure has not been checked.
     pub fn name(&self) -> &str {
         match self {
             CapabilityFamily::Fs => "fs",
@@ -254,6 +260,32 @@ impl CapabilityFamily {
             CapabilityFamily::Process => "process",
             CapabilityFamily::Mcp => "mcp",
             CapabilityFamily::Other(name) => name,
+        }
+    }
+
+    /// A name that is always safe to show, in any disclosure mode.
+    ///
+    /// Identical to [`CapabilityFamily::name`] for every known family — those
+    /// are words this renderer invented, not the user's source — and a fixed
+    /// word for `Other`, whose string came from the producer.
+    ///
+    /// The distinction is not academic. `title_for` used `name()`, so a graph
+    /// declaring a capability namespace of `' onload='alert(1)` put that text
+    /// into a Veiled render's `<title>` — visible to a screen reader, present in
+    /// the file, and past every check that was looking at *labels*. A family is
+    /// a classification; only the known ones are classifications *we* made.
+    pub fn safe_name(&self) -> &'static str {
+        match self {
+            CapabilityFamily::Fs => "fs",
+            CapabilityFamily::Net => "net",
+            CapabilityFamily::Db => "db",
+            CapabilityFamily::Console => "console",
+            CapabilityFamily::Clock => "clock",
+            CapabilityFamily::Random => "random",
+            CapabilityFamily::Env => "env",
+            CapabilityFamily::Process => "process",
+            CapabilityFamily::Mcp => "mcp",
+            CapabilityFamily::Other(_) => "custom",
         }
     }
 
@@ -316,9 +348,10 @@ impl Capability {
         Capability { name: None, family }
     }
 
-    /// What is safe to show in any mode: the family, never the name.
-    pub fn safe_summary(&self) -> &str {
-        self.family.name()
+    /// What is safe to show in any mode: the family's *own* word, never the
+    /// capability's name and never a producer-supplied namespace.
+    pub fn safe_summary(&self) -> &'static str {
+        self.family.safe_name()
     }
 }
 

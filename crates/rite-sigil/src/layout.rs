@@ -842,7 +842,10 @@ fn title_for(node: &SigilNode) -> String {
     match &node.kind {
         SigilNodeKind::Unknown(name) => format!("unknown node kind ({name})"),
         kind if node.is_invocation() => {
-            let families: Vec<&str> = node.families().into_iter().map(|f| f.name()).collect();
+            // `safe_name`, not `name`: `Other` carries the producer's own
+            // namespace string, and a title is read aloud by a screen reader in
+            // Veiled mode. See `CapabilityFamily::safe_name`.
+            let families: Vec<&str> = node.families().into_iter().map(|f| f.safe_name()).collect();
             if families.is_empty() {
                 format!("{} invocation", kind.name())
             } else {
@@ -1290,6 +1293,27 @@ mod tests {
             }
         }
         assert!(scene.warnings.is_empty(), "{:?}", scene.warnings);
+    }
+
+    /// A producer-supplied capability namespace is user text, and it used to
+    /// reach `<title>` through `CapabilityFamily::name`. A screen reader would
+    /// have read it aloud from a Veiled render.
+    #[test]
+    fn scene_titles_never_carry_a_producer_supplied_family_name() {
+        let mut g = chain(&[("n0", SigilNodeKind::Source), ("io", SigilNodeKind::Output)]);
+        g.nodes[1].effect = Some(EffectMetadata {
+            performs: true,
+            capabilities: vec![Capability {
+                name: Some("@ZZSECRET.read".into()),
+                family: CapabilityFamily::Other("ZZSECRET".into()),
+            }],
+        });
+        let scene = build_scene(&normalized(g), &LayoutOptions::canonical());
+        for element in &scene.elements {
+            if let Some(title) = &element.title {
+                assert!(!title.contains("ZZSECRET"), "leaked into a title: {title}");
+            }
+        }
     }
 
     /// A title carrying source text would put it in a Veiled render's

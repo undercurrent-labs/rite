@@ -63,7 +63,10 @@ pub mod diagnostic;
 pub mod graph;
 pub mod layout;
 pub mod limits;
+pub mod marks;
 pub mod scene;
+pub mod svg;
+pub mod theme;
 pub mod validate;
 
 pub use analysis::{analyze, Placement, Topology};
@@ -80,10 +83,16 @@ pub use graph::{
 };
 pub use layout::{build_scene, LayoutOptions, Orientation};
 pub use limits::{NormalizeOptions, RenderLimits};
+pub use marks::{Mark, MarkDetail};
 pub use scene::{
     Geometry, HitRegion, LegendEntry, PathCommand, Point, Rect, SceneElement, SceneLayerKind,
     SceneMetadata, SceneRef, SemanticKind, SigilScene, SCENE_SCHEMA_NAME, SCENE_SCHEMA_VERSION,
 };
+pub use svg::{
+    render_svg, Background, DisclosureMode, MetadataMode, RenderFingerprint, RenderedSvg,
+    SvgOptions,
+};
+pub use theme::{Theme, ThemeId, THEME_VERSION};
 pub use validate::Validated;
 
 /// This renderer's version, reported in every render fingerprint.

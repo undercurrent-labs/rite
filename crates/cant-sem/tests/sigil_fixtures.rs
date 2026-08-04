@@ -22,7 +22,8 @@ use std::path::{Path, PathBuf};
 use cant_sem::{to_sigil_graph, AdaptOptions};
 use cant_syntax::parse_source;
 use rite_sigil::{
-    build_scene, normalize, Geometry, LayoutOptions, NormalizeOptions, SigilNodeKind,
+    build_scene, normalize, render_svg, Geometry, LayoutOptions, NormalizeOptions, SigilNodeKind,
+    SvgOptions, ThemeId,
 };
 
 fn repo_root() -> PathBuf {
@@ -277,6 +278,89 @@ fn every_example_produces_an_accessible_summary() {
         assert!(summary.ends_with('.'), "{name}: {summary}");
         assert!(summary.len() > 25, "{name}: uselessly short: {summary}");
     }
+}
+
+/// Every example renders to SVG, and the artifact is the same bytes every time.
+///
+/// The SVG goldens live beside the scene goldens because they fail differently:
+/// a scene diff means the layout moved, an SVG diff with an unchanged scene
+/// means the serializer or a theme did.
+#[test]
+fn every_example_matches_its_svg_fixture() {
+    for name in EXAMPLES {
+        let scene = scene_of(name);
+        let rendered = render_svg(&scene, &SvgOptions::default());
+        let path = repo_root()
+            .join("fixtures/sigil/svg")
+            .join(format!("{name}.veiled.svg"));
+
+        if std::env::var_os("SIGIL_BLESS").is_some() {
+            std::fs::create_dir_all(path.parent().expect("parent")).expect("mkdir");
+            std::fs::write(&path, &rendered.svg).expect("write");
+            continue;
+        }
+        let expected = std::fs::read_to_string(&path).unwrap_or_else(|e| {
+            panic!(
+                "missing SVG fixture {}: {e}\nregenerate with SIGIL_BLESS=1",
+                path.display()
+            )
+        });
+        assert_eq!(expected, rendered.svg, "{name}'s SVG changed");
+
+        // And the same options twice are the same bytes.
+        assert_eq!(rendered.svg, render_svg(&scene, &SvgOptions::default()).svg);
+    }
+}
+
+/// Every theme renders every example without a panic, and the three produce
+/// visibly different artifacts — a theme that changed nothing would be a theme
+/// nobody could tell they had selected.
+#[test]
+fn every_theme_renders_every_example_distinctly() {
+    for name in EXAMPLES {
+        let scene = scene_of(name);
+        let mut seen = Vec::new();
+        for theme in ThemeId::ALL {
+            let svg = render_svg(
+                &scene,
+                &SvgOptions {
+                    theme: *theme,
+                    ..Default::default()
+                },
+            )
+            .svg;
+            assert!(svg.starts_with("<svg"), "{name}/{}", theme.name());
+            assert!(
+                !seen.contains(&svg),
+                "{name}: two themes render identically"
+            );
+            seen.push(svg);
+        }
+    }
+}
+
+/// The render fingerprint reports everything §12.3 requires, and changing any
+/// geometry-affecting option changes it.
+#[test]
+fn the_render_fingerprint_reports_what_produced_it() {
+    let scene = scene_of("complex");
+    let base = render_svg(&scene, &SvgOptions::default()).fingerprint;
+    assert_eq!(base.graph, scene.metadata.graph_fingerprint);
+    assert_eq!(base.theme, "neon-ritual");
+    assert_eq!(base.disclosure, "veiled");
+    assert_eq!(base.metadata, "safe");
+    assert_eq!(base.format, "svg");
+    assert!(base.to_line().contains("sigil/"));
+
+    let other = render_svg(
+        &scene,
+        &SvgOptions {
+            theme: ThemeId::Void,
+            ..Default::default()
+        },
+    )
+    .fingerprint;
+    assert_ne!(base, other, "a theme change left the fingerprint unmoved");
 }
 
 /// A hostile label must not reach an element ID, and must survive round-tripping

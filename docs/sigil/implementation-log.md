@@ -326,13 +326,82 @@ renderer, and a test that fails randomly gets disabled rather than investigated.
   re-normalized, so deep nesting will get cramped before it gets illegible.
 - `report_ring_overlaps` is O(n²) and runs on every render.
 
+---
+
+## Phase 3 — procedural marks and canonical SVG
+
+**Status: partial.** Marks, themes and the SVG serializer have landed with their
+tests and goldens. `cant sigil` has not.
+
+`marks.rs` (the constrained generator), `theme.rs` (three themes, contrast-gated),
+`svg.rs` (the layered serializer). Six Veiled SVG goldens beside the scene ones,
+in `fixtures/sigil/svg/`.
+
+### The one finding that mattered
+
+**A capability family's name leaked into a Veiled render's accessibility tree.**
+
+`CapabilityFamily::Other(String)` carries whatever namespace the producer wrote.
+`title_for` built an element title from `family.name()`, and for `Other` that
+returns the producer's string — so a graph declaring a capability namespace of
+`' onload='alert(1)` put that text into `<title>`, where a screen reader would
+read it aloud from an artifact whose whole promise is that it shows nothing.
+
+It got past the existing guard because that guard checked *labels*. A family
+looked like renderer vocabulary — and for the nine known families it is. `Other`
+is the one that is not, and it is the one nobody thinks about.
+
+The fix is `CapabilityFamily::safe_name()`, which returns the family's own word
+for the known nine and the fixed string `custom` for `Other`. The producer's
+string is still available through `name()`, which is now documented as returning
+user text, and it reaches the Codex where metadata mode governs it.
+
+Found by the hostile-input matrix in `tests/svg_security.rs` — every disclosure
+mode × every metadata mode × every theme, over twelve strings — which is the
+argument for running that matrix rather than the default configuration.
+
+### Deviations
+
+**`--metadata full` does not embed source snippets yet.** The mode exists and
+gates correctly, but nothing writes a metadata block, so `full` currently differs
+from `safe` only in what it permits. The block arrives with the Codex in Phase 4.
+`metadata_none_contains_no_label_snippet_or_identifier` is written so that it
+keeps meaning what it means once data flows through.
+
+**Inscribed and Revealed produce the same bytes as Veiled.** The serializer
+honours them — it will not draw a `Text` element in Veiled mode and abbreviates
+in Inscribed — but layout emits no `Text` elements at all, so there is nothing
+for them to differ about. Inscriptions are the next thing to land, and D2/D3
+stay unticked until they do.
+
+**Themes are typed Rust constants, not a manifest.** `grammar/palette.json` is a
+manifest because two independent implementations read it and drift is invisible.
+Sigil has one renderer (ADR 0005), so a manifest would add a parse, a failure
+mode, and a file to keep in sync with nothing on the other side.
+
+### Test status
+
+| Gate | Result |
+|---|---|
+| `cargo fmt --all -- --check` | clean |
+| `cargo clippy --workspace --all-targets -- -D warnings` | clean |
+| `cargo test --workspace --all-features --no-fail-fast` | **1484 passed, 0 failed, 6 ignored** |
+
+40 tests added in this phase. The security suite alone renders 12 hostile strings
+across 36 option combinations and asserts, on the bytes: no script, no event
+handler attribute, no external reference, well-formed XML, no visible label in
+Veiled, nothing in `metadata none`, and byte-identical repeat renders.
+
+### Known limitations at the end of Phase 3 so far
+
+- No `cant sigil` command. The library renders; the CLI does not call it.
+- No PNG, no interactive HTML, no ornament, no Codex, no WASM, no web app.
+- Inscriptions are not emitted, so two of three disclosure modes are inert.
+- `--metadata full` embeds no snippets.
+- The `void` and `parchment` themes exist and are contrast-checked but have no
+  visual-regression coverage.
+
 ### Next milestone
 
-**Phase 3 — procedural marks and canonical SVG.** In order: the base semantic
-mark grammar (a constrained generator, not arbitrary noise), deterministic
-variation from the per-node PRNG stream that already exists, layered SVG
-serialization, Veiled mode, stable IDs and classes, the `neon-ritual` theme,
-canonical SVG snapshots, and `cant sigil`.
-
-The scene boundary is stable and the workspace is green, which is the condition
-for starting it.
+`cant sigil`, then inscriptions so Inscribed and Revealed become real, then
+Phase 4's ornament, PNG and interactive HTML.
