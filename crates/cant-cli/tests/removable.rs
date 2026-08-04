@@ -157,6 +157,14 @@ const SHARED_FILES: &[(&str, &str)] = &[
         "`SourceLanguage::Cant` in the rasterised sample graph",
     ),
     (
+        "crates/rite-sigil/tests/fuzz.rs",
+        "`SourceLanguage::Cant` in the generated graphs",
+    ),
+    (
+        "docs/sigil/deployment.md",
+        "two sentences comparing the Sigil worker to Cant's",
+    ),
+    (
         "crates/rite-sigil/tests/html_export.rs",
         "`SourceLanguage::Cant` in the hostile-input fixtures",
     ),
