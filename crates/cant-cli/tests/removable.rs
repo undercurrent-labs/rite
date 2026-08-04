@@ -59,6 +59,7 @@ const CANT_PATHS: &[&str] = &[
     "apps/sigil-web",
     "scripts/build-sigil-wasm.sh",
     "scripts/build-sigil-site.sh",
+    "scripts/check-sigil-wasm-parity.mjs",
     "scripts/build-cant-site.sh",
     "scripts/build-cant-graphs.sh",
     "scripts/build-cant-wasm.sh",
@@ -200,6 +201,26 @@ const SHARED_FILES: &[(&str, &str)] = &[
     (
         "docs/sigil/implementation-log.md",
         "nothing — a log records what happened",
+    ),
+    (
+        "docs/sigil/visual-language.md",
+        "one sentence naming the Cant pipeline; the visual grammar is the renderer's",
+    ),
+    (
+        "docs/sigil/cli.md",
+        "the whole page — it documents `cant sigil`, which is removed with Cant",
+    ),
+    (
+        "docs/sigil/themes.md",
+        "nothing — themes belong to the renderer",
+    ),
+    (
+        "docs/sigil/accessibility.md",
+        "nothing — the summary and titles belong to the renderer",
+    ),
+    (
+        "docs/sigil/internals.md",
+        "the pipeline diagram's Cant stages and the parity-gate paragraph",
     ),
     (
         "docs/adr/0003-sigil-is-a-renderer-not-a-runtime.md",

@@ -21,7 +21,7 @@ and Codex · **P7** export and gallery · **P8** Cloudflare · **P9** hardening.
 | AR1 | Sigil does not execute programs | P1 | ADR 0003; `rite_sigil_cannot_execute_anything` reads the manifest and fails on `rite-runtime`, `rite-caps`, `rite-compiler`, `rite-repl`, `rite-lsp`, `tokio`, `axum`, `hyper`, `reqwest` | [x] |
 | AR2 | Rite language semantics are unchanged | P0–P9 | ADR 0003; `grammar/aliases.json`, `rite.ebnf`, the lexer, `rite_sem::ExprIr` untouched; the existing Rite suite green at every phase | [x] |
 | AR3 | Layout is non-semantic | P2 | ADR 0004; `the_graph_model_declares_no_coordinate_fields` scans the type, `a_serialized_graph_carries_no_geometry` scans an instance, `semantic_geometry_is_independent_of_the_ornament_layers` asserts the invariance; `LayoutHint` is not read | [x] |
-| AR4 | Native and browser use the same Rust scene/layout renderer | P5 | `cant-sigil-wasm/tests/parity.rs` — 6 programs × 37 option sets, SVG and scene, plus both input paths agreeing. Does not yet compare a *browser-executed* build against a native fixture | [~] |
+| AR4 | Native and browser use the same Rust scene/layout renderer | P5 | `cant-sigil-wasm/tests/parity.rs` — 6 programs × 37 option sets, SVG and scene, plus both input paths agreeing. The *executed* wasm32 build too: `tests/browser_fixture.rs` pins a native render, `scripts/check-sigil-wasm-parity.mjs` runs the built bundle in Node against it byte-for-byte, from `build-sigil-site.sh` in CI and every release | [x] |
 | AR5 | `rite-sigil` does not depend on Cant parsing internals | P1 | ADR 0006; `rite_sigil_does_not_know_what_cant_is` (manifest) and `no_rite_sigil_source_mentions_cant` (every source line, comments stripped) | [x] |
 | AR6 | Cant adapts into a normalized Sigil graph | P1 | `cant_sem::sigil::to_sigil_graph`; `every_construct_adapts_into_something_renderable` over 8 programs × 2 option sets | [x] |
 | AR7 | Rite core crates do not depend on Sigil | P1 | `no_rite_crate_depends_on_sigil` scans every non-Sigil, non-Cant crate manifest | [x] |
@@ -100,7 +100,7 @@ and Codex · **P7** export and gallery · **P8** Cloudflare · **P9** hardening.
 | W5 | Pan/zoom/fit/fullscreen work | P6 | implemented with keyboard-operable buttons; no E2E yet | [~] |
 | W6 | Codex selection synchronizes with the canvas | P6 | both directions, plus Escape; `emits a selection and marks the current entry` | [x] |
 | W7 | Mobile alternatives to hover work | P6 | panels are bottom sheets under `lg`; selection is click/tap and Enter/Space, never hover. No mobile-viewport E2E yet | [~] |
-| W8 | Exports work | P7 | SVG, PNG (canvas), scene JSON, copy SVG, copy fingerprint in the app; HTML export is CLI-only | [~] |
+| W8 | Exports work | P7 | SVG, PNG (canvas), scene JSON, self-contained interactive HTML (`renderCantHtml`/`renderGraphHtml`, built in the tab like every render), copy SVG, copy fingerprint | [x] |
 | W9 | Built-in gallery works | P7 | sources read from `examples/sigil/` at build time, thumbnails rendered live by the same engine — stronger than baking, since a baked image can go stale against the renderer | [x] |
 | W10 | Source stays client-side | P5–P8 | ADR 0007; `issues no network request while rendering, switching modes, or exporting` spies on `fetch`. No E2E over a built site yet | [~] |
 
@@ -109,8 +109,8 @@ and Codex · **P7** export and gallery · **P8** Cloudflare · **P9** hardening.
 | # | Criterion | Phase | Artifact / proof | Done |
 |---|---|---|---|---|
 | CF1 | Separate Worker project exists | P8 | `apps/sigil-web/wrangler.jsonc`, worker `rite-sigil` | [x] |
-| CF2 | Workers Static Assets/Vite deployment works | P8 | `assets` binding with `run_worker_first` for `/api/*`; `pnpm sigil:build` runs a wrangler dry run. **Not yet deployed** | [~] |
-| CF3 | `sigil.rite.foo` is a Custom Domain | P8 | `custom_domain: true`; declared in `site.toml` and enforced by `site_domain_sync.rs`. Zone not attached | [~] |
+| CF2 | Workers Static Assets/Vite deployment works | P8 | `assets` binding with `run_worker_first` for `/api/*`; `pnpm sigil:build` runs a wrangler dry run; `release.yml`'s `sites` job builds and deploys the worker from every tag, beside the Rite and Cant sites. First live deploy lands with the next release | [~] |
+| CF3 | `sigil.rite.foo` is a Custom Domain | P8 | `custom_domain: true`; declared in `site.toml` and enforced by `site_domain_sync.rs`. The deploy is automated; attaching the zone in Cloudflare is the one manual step left | [~] |
 | CF4 | SPA fallback works | P8 | `not_found_handling: single-page-application`; `falls through to the SPA for an app route` | [x] |
 | CF5 | Health/version/schema endpoints work | P8 | all three, with versions read from the crates at build time; four Worker tests including the 405 on writes | [x] |
 | CF6 | Security headers are present | P8 | CSP granting `wasm-unsafe-eval` but not `unsafe-eval`, plus nosniff, Referrer-Policy, Permissions-Policy, frame-ancestors; three header tests | [x] |
@@ -121,7 +121,7 @@ and Codex · **P7** export and gallery · **P8** Cloudflare · **P9** hardening.
 | # | Criterion | Phase | Artifact / proof | Done |
 |---|---|---|---|---|
 | Q1 | Existing Rite/Cant tests remain green | P0–P9 | `cargo test --workspace --all-features`; 1329 → 1545 passing, 0 failing, at every phase | [x] through P4 |
-| Q2 | Native/WASM scene parity passes | P5 | see AR4 | [~] |
+| Q2 | Native/WASM scene parity passes | P5 | see AR4 — including the executed wasm32 build | [x] |
 | Q3 | Scene and SVG golden tests pass | P2/P3 | `fixtures/sigil/{scenes,svg}/`, structurally asserted rather than merely written | [x] |
 | Q4 | Visual regressions are reviewed | P4 | `tests/visual.rs` — an 8×8 perceptual hash over rasterised output: stable across runs, contrast present per theme, ground polarity, ornament changes without burying | [x] |
 | Q5 | Fuzz smoke tests pass | P9 | `tests/fuzz.rs` — 7 properties over generated graphs: no panic, finite coordinates, determinism, ornament invariance, no markup injection, veiled draws no text, caps hold. A `cargo-fuzz` target over the JSON reader is still absent | [~] |
@@ -139,8 +139,8 @@ worth showing. Carried here so they are not lost between phases.
 |---|---|---|
 | ~~OD1~~ | ~~The composition does not fill the circle.~~ **Fixed.** Three causes: the spine divided by its length rather than length−1, so the gap grew as the program got *shorter*; its radius came from whole-graph depth, so deep branches bunched the backbone at the centre; and — the structural one — it allocated an angular slot to every spine node and then relocated some of them, reserving space for marks that would not be there. The sweep is now divided over the nodes that stay on the spiral, and a relocated node borrows a position without consuming a slot. | |
 | ~~OD4~~ | ~~Selection reads edge endpoints out of the element id with a regex.~~ **Fixed.** `SceneElement::ends` carries them as fields. | |
-| OD2 | Edge routing minimizes nothing (§11.6). On a dense graph traces cross. | Crossings read as connections that are not there. |
-| OD3 | Nested fork-inside-fork sectors subdivide by weight but are not recursively renormalized. | Deep nesting gets cramped before it gets illegible. |
+| ~~OD2~~ | ~~Edge routing minimizes nothing (§11.6).~~ **Fixed, in two layers** (`crates/rite-sigil/src/tracery.rs`). Marks are hard obstacles: a trace that would clip a mark it does not end at walks a fixed candidate order until it clears. Earlier traces are soft obstacles: edges route in graph order, and among mark-clearing candidates the fewest crossings of already-routed traces wins — deterministic, no relaxation loop, no node moved. Traces sharing an endpoint are exempt; they meet at a mark, which is a junction. Crossings can still occur when every candidate crosses something, and that residue is accepted: eliminating it needs node movement, which ADR 0004 reserves for the layout. | Crossings read as connections that are not there. |
+| ~~OD3~~ | ~~Nested fork-inside-fork sectors subdivide by weight but are not recursively renormalized.~~ **Fixed.** Forks are placed outer-first (sorted by region nesting depth) and a nested fork's fan is capped to the sector its parent branch was allocated, floors yielding to the cap. Before this, a nested fork's branch regions — whose `parent` is the enclosing branch — were never sector-placed at all and fell to the leftover pass near the seal band. | Deep nesting gets cramped before it gets illegible. |
 
 ## Non-negotiables that are not criteria but gate every `[x]`
 

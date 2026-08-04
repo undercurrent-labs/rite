@@ -245,19 +245,22 @@ view and does not supply Sigil's geometry.
 - [`docs/sigil/implementation-log.md`](docs/sigil/implementation-log.md) —
   deviations, discovered constraints, per-phase test results
 
-Status: **Phases 0–8 complete, Phase 9 partial. Not yet deployed.**
+Status: **Phases 0–8 complete, Phase 9 partial. Deploys from the tag; first
+live deploy lands with the next release.**
 
 `cant sigil` renders SVG, PNG, interactive HTML and scene JSON in three themes,
-four ornament levels and three disclosure modes. `apps/sigil-web` runs the same
-renderer as WebAssembly in the browser, with selection, a Codex, and a gallery —
-and no server round trip: there is no render endpoint, and a test reads the
-Worker's source to keep it that way.
+three traceries, four ornament levels and three disclosure modes.
+`apps/sigil-web` runs the same renderer as WebAssembly in the browser — the
+executed wasm32 build is compared byte-for-byte against a native fixture on
+every site build — with selection, a Codex, a gallery, and every export the
+CLI has including the interactive HTML page. No server round trip: there is no
+render endpoint, and a test reads the Worker's source to keep it that way.
 
-Of 71 acceptance criteria: **52 met with a test behind them, 14 partial with the
-gap named, 5 not started.** The two that matter most are that the site has never
-been deployed — the Cloudflare configuration is written and dry-runs clean, but
-no zone is attached — and that five of the eight planned documentation pages are
-unwritten. `docs/sigil/checklist.md` is the per-criterion state and
+Of the checklist's criteria: **51 met with a test behind them, 14 partial with
+the gap named, 1 not started.** All ten documentation pages exist —
+`visual-language.md` is the one that teaches reading a sigil. What remains:
+attaching the `sigil.rite.foo` zone in Cloudflare (the deploy itself is in
+`release.yml`), and the partials named in `docs/sigil/checklist.md`;
 `docs/sigil/implementation-log.md` records what each phase cost.
 
 Two conflicts with the specification were resolved in the repository's favour and

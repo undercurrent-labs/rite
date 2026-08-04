@@ -120,6 +120,19 @@ A sorted single pass over a total order — placement, then radius, then angle,
 then identifier — rather than a relaxation loop, because a loop's result depends
 on how many iterations it happened to run.
 
+### Traceries
+
+How traces are drawn is an axis like theme or ornament: it changes every edge's
+shape and no mark's position (asserted by `traceries_are_distinct_and_move_no_mark`).
+Three exist — `flowing` (cubics bowed with the composition, the default),
+`concentric` (radial runs joined by arcs of circles centred on the composition,
+sharp at the joints), and `circuit` (orthogonal runs with a via dot at every
+bend). Every tracery routes around marks: a trace that clips a mark it does not
+end at reads as touching it, a relationship the graph never asserted, so each
+router walks a fixed candidate order until one clears — deterministically, with
+the least-bad candidate as the fallback. The scene records the choice in
+`metadata.tracery`, and it joins the render fingerprint.
+
 ## Layers
 
 Paint order, back to front:

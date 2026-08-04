@@ -349,12 +349,14 @@ jobs:
   # exist until a tag is published. Deploying here, after `publish`, means the
   # download the page offers is on disk before the page offers it.
   #
-  # One job, two workers, because this is one repository. ADR 0001 requires that
-  # Cant be *removable*, not that it ship on its own schedule: `rite-*` still
-  # depends on nothing of Cant's, and `apps/cant-web` is still its own worker with
-  # its own domain. Removing Cant deletes the two Cant steps below and the
-  # `cant-web` deploy. The two builds are also independent — a Cant site failure
-  # cannot stop the Rite site, because the Rite deploy runs first.
+  # One job, three workers, because this is one repository. ADR 0001 requires
+  # that Cant be *removable*, not that it ship on its own schedule: `rite-*`
+  # still depends on nothing of Cant's, and each app is still its own worker
+  # with its own domain. Removing Cant deletes everything from the "---- Cant"
+  # marker to the end of the job — the Cant site and the Sigil site, which
+  # renders Cant programs and goes with it. The builds are independent — a Cant
+  # or Sigil site failure cannot stop the Rite site, because the Rite deploy
+  # runs first.
   sites:
     name: Deploy sites (Cloudflare)
     needs: [publish]
@@ -408,6 +410,7 @@ jobs:
           pnpm --dir apps/rite-web typecheck
           pnpm --dir apps/rite-studio typecheck
           pnpm --dir apps/cant-web typecheck
+          pnpm --dir apps/sigil-web typecheck
 
       - name: build the Rite site
         run: bash scripts/build-site.sh
@@ -449,6 +452,21 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           workingDirectory: apps/cant-web
+          wranglerVersion: "4.28.0"
+          command: deploy
+
+      # `build-sigil-site.sh` builds its own WASM and ends with a wrangler dry
+      # run, so a broken `wrangler.jsonc` fails the build step rather than the
+      # deploy step.
+      - name: build the Sigil site
+        run: bash scripts/build-sigil-site.sh
+
+      - name: Deploy Worker (sigil-web → sigil.rite.foo)
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: apps/sigil-web
           wranglerVersion: "4.28.0"
           command: deploy
 

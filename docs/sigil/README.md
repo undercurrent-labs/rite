@@ -60,7 +60,7 @@ a presentation of the scene.
 
 ## Status
 
-**Phase 0–4 of nine.** `cant sigil` renders SVG, PNG and scene JSON in three themes, four ornament levels and three disclosure modes. See [the implementation checklist](checklist.md) for every
+**Phase 0–4 of nine.** `cant sigil` renders SVG, PNG and scene JSON in three themes, three traceries, four ornament levels and three disclosure modes. See [the implementation checklist](checklist.md) for every
 MVP acceptance criterion against the artifact that satisfies it, and
 [the implementation log](implementation-log.md) for what was decided, deviated
 from, or discovered along the way.
@@ -69,11 +69,13 @@ from, or discovered along the way.
 
 | Page | What it covers |
 |---|---|
+| [visual-language.md](visual-language.md) | How to read a sigil with every label removed |
+| [cli.md](cli.md) | `cant sigil` — inputs, formats, axes, determinism |
+| [themes.md](themes.md) | The three palettes and the rules every theme obeys |
+| [accessibility.md](accessibility.md) | The summary, titles, keyboard, and motion |
+| [internals.md](internals.md) | The pipeline, determinism, routing, and parity gates |
 | [checklist.md](checklist.md) | Every acceptance criterion, its artifact, and its proof |
 | [implementation-log.md](implementation-log.md) | Deviations, constraints found, test status |
 | [graph-contract.md](graph-contract.md) | The normalized `rite.sigil.graph` input model |
 | [scene.md](scene.md) | The `rite.sigil.scene` model and its layers |
 | [deployment.md](deployment.md) | The Worker, its headers, and what it deliberately cannot do |
-
-Pages still to write: `visual-language.md`, `cli.md`, `themes.md`,
-`accessibility.md`, `internals.md`.

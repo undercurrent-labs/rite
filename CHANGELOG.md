@@ -75,6 +75,59 @@
   no unescaped user text — asserted over twelve hostile strings across
   thirty-six option combinations.
 
+  **Three traceries.** How traces are drawn is its own axis, beside theme and
+  ornament: `--tracery flowing` (the default — cubics bowed with the
+  composition), `concentric` (radial runs joined by arcs of circles centred on
+  the composition, sharp at the joints, the way an astrolabe is), and `circuit`
+  (orthogonal runs at right angles with a via dot at every bend, and one on a
+  straight run). A tracery changes every edge's shape and no mark's position —
+  asserted, not assumed — and the choice is recorded in the scene's metadata
+  and the render fingerprint. The web app offers all three from the control
+  bar; the hostile-string suite runs against every tracery because their paths
+  carry commands the default never emits.
+
+  Traces route *around* marks. An edge's arc bows toward the centre, which is
+  exactly where the source mark sits, so on real programs traces sagged through
+  marks they did not connect — a relationship the graph never asserted. Each
+  edge now tries its house curve first and, only when that would clip a mark,
+  deepens or slides the bow through a fixed candidate order until it clears —
+  never flipping the bow's side, because a feedback arc that crossed to the
+  inside would stop reading as feedback. Deterministic, bounded, and inert for
+  any edge that was already clean.
+  `examples/sigil/ceremony.cant` joins the set as the densest example — two
+  readings, a decode, a warded fork carrying an effect and an orbit — and the
+  seventh pair of goldens.
+
+  Traces also avoid *each other* where they can (OD2): edges route in graph
+  order, earlier traces are soft obstacles, and among mark-clearing candidates
+  the fewest crossings wins — deterministically, without moving a node. Traces
+  sharing an endpoint are exempt; they meet at a mark, which is a junction.
+  And fork sectors renormalize recursively (OD3): a fork inside a branch now
+  subdivides the sector its parent was allocated rather than opening a
+  top-level fan across its siblings — before this, a nested fork's branches
+  were not sector-placed at all and fell to the leftover pass near the seal
+  band.
+
+  **The parity gate now executes the wasm.** `parity.rs` proved the CLI and
+  browser binding are one code path by calling both natively; it could not
+  prove the wasm32 *build* draws the same bytes. Now
+  `tests/browser_fixture.rs` pins a native render as a fixture and
+  `scripts/check-sigil-wasm-parity.mjs` runs the built bundle in Node against
+  it byte-for-byte, inside `build-sigil-site.sh` — so CI and every release
+  exercise the artifact that actually ships. AR4/Q2 close.
+
+  **The Sigil site deploys from the tag.** `release.yml`'s `sites` job builds
+  and deploys `apps/sigil-web` beside the Rite and Cant sites, inside the
+  Cant-removable section; attaching the `sigil.rite.foo` zone in Cloudflare is
+  the one manual step left. The app also gained the HTML export (W8):
+  `renderCantHtml`/`renderGraphHtml` build the same self-contained interactive
+  page the CLI writes, in the tab, uploaded nowhere.
+
+  **The five unwritten docs pages exist.** `visual-language.md` — the page
+  that teaches reading a sigil, promoted out of `marks.rs` doc comments —
+  plus `cli.md`, `themes.md`, `accessibility.md` and `internals.md`, each
+  registered with the removability gate.
+
 - **`sigil.rite.foo` — the Sigil web application.** `apps/sigil-web`: Vue 3,
   TypeScript, Tailwind, Cloudflare Workers Static Assets, and the same renderer
   compiled to WebAssembly through `cant-sigil-wasm`. Paste or open a Cant
@@ -90,6 +143,24 @@
   upstream-and-downstream path highlighting; a collapsible Codex that decodes a
   Veiled render, and Deep Veil to suppress that; a gallery rendered live from the
   repository's own examples; and SVG, PNG, scene JSON and copy exports.
+
+  The chrome follows the family rule the Cant site established: ground, panels,
+  borders and type byte-identical to the Rite and Cant sites, with the accent
+  moved — `keyword` violet from `grammar/palette.json`, alongside Rite's
+  capability cyan and Cant's glyph pink. The two typefaces are self-hosted
+  rather than loaded from Google Fonts, because this app's CSP is
+  `default-src 'self'` and the privacy claim covers fonts too. The canvas keeps
+  the renderer's own neon-ritual ground: the artifact sits on its stage, framed
+  by chrome that belongs to the family, and the header links each sibling in
+  that sibling's accent.
+
+  The source panel highlights Cant: the Cant site's scanner, ported whole and
+  driven by the same `grammar/cant/operators.toml` through a build-time define,
+  layered under a transparent textarea that keeps the caret and every native
+  editing behaviour. No editor dependency — the app still ships no third-party
+  code. A fresh render materialises with a brief brightening that settles,
+  starting from partial opacity so live re-renders read as re-inscription
+  rather than flicker, and `prefers-reduced-motion` truncates it to nothing.
 
 - **ADRs 0003–0009, for Sigil.** The semantic renderer that turns a Cant graph
   into a ritual artifact is being built, and the decisions that constrain it are
