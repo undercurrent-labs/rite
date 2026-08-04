@@ -1,0 +1,31 @@
+[package]
+name = "rite-sigil"
+# Sigil's own version. It renders Cant graphs and will render others; tying it to
+# either language's number would make a renderer release imply a language one.
+# Same reasoning as ADR 0001, Amendment 2.
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+description = "Deterministic semantic renderer: a program's topology as a ritual artifact"
+repository.workspace = true
+
+# The dependency list is the architecture, and `tests/boundaries.rs` reads this
+# file to prove it. Nothing here parses a language, executes anything, opens a
+# file, or knows what Cant is:
+#
+#   * no `rite-runtime`, `rite-caps`, `rite-compiler`  — ADR 0003, Sigil is not a runtime
+#   * no `cant-syntax`, `cant-sem`, `cant`             — ADR 0006, Sigil takes a normalized graph
+#   * no `rite-syntax`, `rite-sem`                     — the same rule from the other side
+#
+# `rite-core` is here for `Span` alone: a diagnostic that cannot point at the
+# source it came from is a diagnostic nobody can act on, and re-declaring a byte
+# range would mean two span types that must agree forever.
+[dependencies]
+rite-core = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+hex = { workspace = true }
+
+[dev-dependencies]
+proptest = { workspace = true }

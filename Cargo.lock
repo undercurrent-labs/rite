@@ -497,6 +497,7 @@ dependencies = [
  "cant-syntax",
  "proptest",
  "rite-core",
+ "rite-sigil",
  "serde",
  "serde_json",
 ]
@@ -2714,6 +2715,18 @@ dependencies = [
  "serde",
  "serde_json",
  "tempfile",
+]
+
+[[package]]
+name = "rite-sigil"
+version = "0.1.0"
+dependencies = [
+ "hex",
+ "proptest",
+ "rite-core",
+ "serde",
+ "serde_json",
+ "sha2",
 ]
 
 [[package]]

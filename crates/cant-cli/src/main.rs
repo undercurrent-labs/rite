@@ -295,8 +295,9 @@ enum Commands {
     Update,
     /// Print the flow graph
     ///
-    /// JSON is the machine format; DOT is for looking at the topology before
-    /// Sigil exists — pipe it to `dot -Tsvg`.
+    /// JSON is the machine format; DOT is the technical topology view — pipe it
+    /// to `dot -Tsvg`. `cant sigil` is the stylized one, and neither replaces
+    /// the other (ADR 0008).
     Graph {
         /// Source file, or `-` for standard input
         source: Option<PathBuf>,
