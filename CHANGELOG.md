@@ -1,5 +1,7 @@
 # Changelog
 
+## [Unreleased]
+
 ## [0.8.1] — 2026-08-04
 
 Cant becomes a shell citizen, and gets its missing library. `@stdin` puts the
