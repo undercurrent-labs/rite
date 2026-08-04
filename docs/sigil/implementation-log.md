@@ -1,0 +1,338 @@
+# Sigil implementation log
+
+What was decided, deviated from, or discovered while building Sigil, in the order
+it happened. The specification at `.internal/sigil_mvp.md` is authoritative and
+unchanged; this file records where the repository met it, where it did not, and
+why.
+
+Companion to [the acceptance checklist](checklist.md), which tracks *what* is
+done. This one records *what it cost and what it turned out to mean*.
+
+---
+
+## Phase 0 — audit, ADRs, terminology, contracts
+
+**Status: complete.** Baseline green before and after.
+
+### Test status
+
+| Gate | Before Phase 0 | After Phase 0 |
+|---|---|---|
+| `cargo fmt --all -- --check` | clean | clean |
+| `cargo clippy --workspace --all-targets -- -D warnings` | clean | clean |
+| `cargo test --workspace --all-features --no-fail-fast` | 1329 passed, 0 failed, 6 ignored, 139 binaries | 1332 passed, 0 failed, 6 ignored |
+| `pnpm --dir apps/{rite-web,rite-studio,cant-web} typecheck` | clean | clean |
+| `rite docs build` idempotent | yes | yes |
+
+The three added tests are the new schema-freeze cases: schema-name refusal,
+version-0 refusal, and per-node capability metadata.
+
+### What the audit found
+
+**The repository had already anticipated Sigil, and had done so correctly.**
+`cant_sem::graph`'s module documentation says lowering reads the graph rather
+than the AST specifically so that "what a future Sigil renderer displays is what
+actually executes", and `LayoutHint` was reserved in Phase 3 with a doc comment
+stating it is never semantic. ADR 0004 is therefore less an invention than a
+promotion of an existing comment to a binding rule — and an extension of it:
+Sigil does not read `LayoutHint` either, so a hostile or stale hint in a graph
+JSON file cannot move a semantic mark.
+
+**The `sigil` terminology footprint was smaller than expected and entirely
+mechanical.** `grammar/sigils.toml` is read by no code at all — only
+`crates/cant-cli/tests/boundaries.rs` names the path, to assert the file does not
+mention Cant. The load-bearing usage was the `"sigil"` token kind, which flows
+through `grammar/palette.json` → `rite_render::Kind::Sigil` → `.tok-sigil` →
+`highlight.ts`, with `crates/rite-cli/tests/palette_sync.rs` requiring all four to
+agree. That test made the rename safe: a partial migration fails CI rather than
+producing silently unstyled tokens. See ADR 0009.
+
+**`rite-render` is not reusable as a base for Sigil, and should not be forced
+to be.** It renders *highlighted source text* — its model is runs of coloured
+text at computed column positions, `Frame::{Text,Box,Window}` chrome, and a font
+size. There is no geometry layer to share. Two things are worth reusing and
+neither needs an extraction:
+
+- The `png` feature pattern. `rite-render` gates `resvg` behind an off-by-default
+  feature precisely so the browser build does not pull a rasteriser and a font
+  stack it cannot use. `rite-sigil` copies the pattern rather than the code.
+- `grammar/palette.json`'s discipline — one table, gated by a sync test — as the
+  model for Sigil's theme manifests.
+
+A shared SVG-serialization utility was considered and rejected for now:
+`rite-render`'s SVG is a flat sequence of `<rect>`/`<text>` with inline fills and
+no CSS classes, while Sigil's is layered groups with stable semantic IDs and
+classes. Extracting a common escaper is the only genuinely coherent piece, and it
+is four lines; duplicating it is cheaper than a crate boundary. Recorded here so
+the decision is not re-litigated silently.
+
+### Deviations from the specification
+
+**1. `grammar/sigils.toml` migrated, but its `[[sigil]]` table became
+`[[glyph]]`.** The spec asks for `grammar/glyphs.toml`; it does not name the
+table key. Renaming both keeps the file internally consistent. No reader exists,
+so nothing broke.
+
+**2. The Cant graph schema was bumped to version 1 in Phase 0, not Phase 1.**
+The spec's Phase 0 item 7 says "freeze or version the Cant graph contract needed
+by Sigil", and the gaps were small and precisely known, so versioning now was
+cheaper than carrying a documented gap into the adapter. What was added is in
+`docs/cant/graph-schema.md`; the reasoning is below.
+
+**3. No ADR was written for "Sigil is a semantic renderer" *and* "Graphviz stays
+the technical view" as one document.** The brief lists six required ADR subjects;
+they landed as seven documents (0003–0009), with terminology split out because it
+has its own costs — a renamed public enum variant and a shipped CSS class — that
+deserve their own consequences section.
+
+### Cant graph gaps found, and what was done
+
+The specification's §6.2 lists what the adapter must obtain. Measured against
+`cant.graph` version 0:
+
+| Required | Status before | Action |
+|---|---|---|
+| Graph schema identifier | **absent** — only a bare `version` | added `schema: "cant.graph"` |
+| Graph schema version | present (`version`) | unchanged |
+| Stable node IDs | present, depth-first in source order | unchanged |
+| Stable edge identity | no `id`, but deterministic from `(from, to, ordinal, role)` | no change; Sigil synthesizes edge IDs from the tuple |
+| Node kinds | present, closed enum | unchanged — `Effect`, `Output` and `Unknown` are Sigil's, derived by the adapter |
+| Directed edges | present | unchanged |
+| Branch ordering | present (`ordinal`, authoritative over array order) | unchanged |
+| Region ownership | present (`subgraph`, `subgraphs[]`) | unchanged |
+| Orbit/cycle metadata | present (`identity`, `max_items`, `orbit_feedback` role) | unchanged |
+| **Effect/capability metadata** | **partial** — a per-leaf `effectful` bool, plus a program-wide `capabilities()` that re-scanned leaf text on every call | added per-node `capabilities: [{name, family}]` |
+| Source spans | present, never dummy | unchanged |
+| Labels/snippets | present (leaf `text`) | unchanged |
+| Graph fingerprint | **absent** | not a Cant gap — the fingerprint is over the *normalized* graph and belongs to `rite-sigil` (ADR 0006) |
+
+The capability gap was the only one that mattered architecturally. Without it,
+Sigil deciding whether a node is a filesystem or a network invocation means
+pattern-matching `@fs.` out of leaf text — inferring semantics from a label,
+which the brief and ADR 0006 both prohibit by name, and which is wrong the first
+time a leaf contains `"@fs.read"` inside a string. `cant_sem` already had a
+careful textual scanner for its own summary; the fix was to run it once during
+lowering and store the answer, so a program-wide summary and a consumer walking
+nodes read the same field and cannot disagree.
+
+`producer` was added at the same time because a stored graph that cannot say what
+wrote it makes a bug report guesswork. It is explicitly excluded from anything a
+consumer hashes: a renderer keying artifacts on the producer version would
+invalidate every cached render on a release that changed no graph.
+
+Version 0 graphs are refused rather than upgraded. The schema is experimental and
+says so; a migration path for a format nobody has stored is cost with no reader.
+
+### Constraints discovered
+
+**The published-docs link gate.** `crates/cant-cli/tests/docs.rs` fails if a page
+published on the Cant site links a page that is not published, because the reader
+is on the site and the link lands there. `docs/cant/graph-schema.md` therefore
+refers to ADR 0006 as a repository path in a code span rather than as a link.
+Worth knowing before writing any published Sigil page.
+
+**The generation guard is strict and correct.** `rite docs build` writes both the
+agent bundle and the tracked generated reference, and CI fails if regenerating
+rewrites a tracked file. The CLI help text change ("Sigils, keywords…" →
+"Glyphs, keywords…") propagated to `docs/generated/cli.md`, which is tracked;
+regenerating twice confirmed idempotence.
+
+**`cant-wasm`'s dependency comment is a warning worth heeding.** It records that
+declaring a workspace dependency without `default-features = false` silently
+pulled axum, hyper, tokio and mio into a `wasm32` build and failed inside `mio`,
+because cargo ignores `default-features = false` on a workspace dependency whose
+table does not specify it. `rite-sigil` and `rite-sigil-wasm` take path
+dependencies with explicit `default-features = false` for this reason.
+
+### Left alone deliberately
+
+- `CHANGELOG.md`'s historical prose still says "sigil" where a released entry
+  said it. Rewriting shipped history to match new vocabulary would be a lie about
+  what was published.
+- `crates/rite-caps/tests/db_sandbox.rs` inserts the strings `'glyph'` and
+  `'sigil'` as arbitrary SQL row values. They are test data, not terminology.
+- `.internal/sigil_mvp.md` is unchanged, as instructed.
+
+### Stale comments corrected
+
+Two comments said Sigil "does not exist yet" and framed DOT export as a
+placeholder until it did. ADR 0008 makes that relationship permanent rather than
+transitional, so `crates/cant-sem/src/dot.rs` and the `cant graph` help text now
+say that Graphviz is the technical view and Sigil is the stylized one, and that
+neither replaces the other.
+
+---
+
+## Phase 1 — normalized graph
+
+**Status: complete.**
+
+Added `crates/rite-sigil` (`0.1.0`, its own version — it renders graphs from more
+than one producer, and tying it to either language's number would make a renderer
+release imply a language one), and the Cant adapter as `cant_sem::sigil`.
+
+| Module | What it owns |
+|---|---|
+| `graph.rs` | `SigilGraph` and everything in it |
+| `diagnostic.rs` | 22 `SIGIL-*` codes, `GraphRef`, `Diagnostics` |
+| `canonical.rs` | canonical JSON, the fingerprint, the seeded PRNG |
+| `limits.rs` | `RenderLimits`, `NormalizeOptions` |
+| `validate.rs` | the untrusted-input boundary |
+
+The dependency list is `rite-core`, `serde`, `serde_json`, `sha2`, `hex`, and
+`tests/boundaries.rs` reads the manifest to prove it.
+
+### Findings
+
+**A comment explaining a rule can trip the test that enforces it.**
+`crates/cant-cli/tests/boundaries.rs` scanned raw source text for `cant_sem` and
+`cant::` to catch a Rite crate importing Cant. `rite-sigil` is full of doc
+comments saying, by name, that it must not depend on `cant-sem` — which is ADR
+0006 — so the boundary test fired on its own explanation. Fixed by stripping
+comments before scanning, which is a correctness improvement: the test could not
+previously tell an import from a sentence about one. `rite-sigil`'s own boundary
+test assembles its needles with `concat!` so the file does not contain the
+strings it forbids.
+
+**`SIGIL-S006` (non-finite number) was written as a check and turned out to be
+unreachable.** §6.4 asks for non-finite values to be rejected; `serde_json`
+already does it, at a layer below. `1e400` fails to parse with "number out of
+range", `NaN` and `Infinity` are not JSON, and `Number::from_f64` returns `None`
+for both — so a non-finite value cannot be *constructed* in a `serde_json::Value`,
+let alone deserialized into one. The branch was removed rather than kept: an
+unreachable check wearing the appearance of a safety net is worse than no check,
+because it invites trust. `non_finite_numbers_cannot_reach_validation_at_all`
+pins the `serde_json` behaviour, so the omission becomes a real gap the moment
+that stops being true. The code is retained for the scene bounds pass, where
+`f64` arithmetic can genuinely produce one.
+
+**Capability names are source text, and the model had to say so.** The first
+version of `Capability` had a required `name: String`, and a fixture caught
+`@fs.read` reaching the Codex of a scene built with labels off. A family (`fs`) is
+a classification this renderer invented and layout cannot work without it; a name
+is text the user wrote. They are now different fields with different
+availability: `family` always, `name: Option<String>` only when labels were
+requested. The privacy decision is made once, at the adapter, rather than filtered
+out at each place that might display it.
+
+### Deviations
+
+**The adapter lives in `cant-sem`, not `cant`.** §5.1 permits either. `cant-sem`
+owns `CantProgram`, and `cant`'s `native` feature pulls the runtime — putting the
+adapter there would have made a browser build choose between the adapter and a
+clean dependency graph.
+
+---
+
+## Phase 2 — scene model and semantic layout
+
+**Status: complete.** Scene JSON only; no ornament, no SVG, as the phase requires.
+
+`scene.rs` (the model), `analysis.rs` (topology), `layout.rs` (radial layout and
+scene construction). Six golden fixtures under `fixtures/sigil/scenes/`, generated
+from `examples/sigil/*.cant`.
+
+The design and its reasoning are in [scene.md](scene.md).
+
+### Findings
+
+**Collision resolution destroyed orbit rings, and the fix was an ordering
+decision rather than a tweak.** The collision pass nudges in polar coordinates
+about the *canvas* centre. Applied to an orbit body member, that walks it
+straight off the circle it is supposed to sit on — a ring member ended up 169
+units from a ring of radius 52, and an orbit whose members are scattered *near* a
+circle no longer says "this may go round again", which is the entire acceptance
+criterion for S3.
+
+Rings are now laid out **after** collision resolution, from the orbit node's
+settled position, and settle as a unit. They need no separation pass of their own
+because `ring_radius` sizes the circumference to hold them by construction. What
+they can still do is overlap something outside the ring, and `report_ring_overlaps`
+says so rather than leaving it silent — §11.7's last resort.
+
+**`serde_json` does not round-trip every `f64` exactly, and this matters for
+parity.** Writing `927.9171087042969` and reading it back yields
+`927.9171087042968`. The writer emits the correct shortest representation; the
+parser mis-rounds.
+
+This was found by a fixture test asserting a scene equals itself after a JSON
+round trip. It is load-bearing for acceptance criterion Q2: "native scene JSON
+equals browser scene JSON" cannot be checked by deserializing both and comparing
+structures, because deserialization is the lossy step. Comparisons compare
+canonical text, produced from the live values on each side and never parsed back
+— which is what `canonical.rs` was already for.
+`float_round_trip_is_not_exact_which_is_why_text_is_canonical` pins it with the
+concrete value.
+
+**Depth had to be longest-path, not shortest.** A shortcut edge lets shortest-path
+depth place a node at the same radius as its own predecessor, and two nodes at
+the same radius on the same spoke overlap. Computed by bounded relaxation rather
+than topological sort, so it stays total on a graph containing a non-feedback
+cycle — which validation rejects, but which a caller using `analyze` directly
+could still hand over.
+
+### Deviations
+
+**Fork branch sector boundaries are not drawn.** §9.8 permits lightly inscribed
+boundaries and warns they must not resemble flow edges. In Phase 2 there is no
+stroke vocabulary yet to make that distinction with, so branch membership is
+expressed by where the members are. Revisit in Phase 3 with a real stroke
+language.
+
+**`SigilNodeKind::Literal` has no producer.** It is in the model because §7 lists
+it and because a Rite projection will want it; nothing emits it today. It lays
+out as ordinary flow.
+
+**`--simplify`, `--max-nodes` and the CLI generally are Phase 3.** The limits
+exist and are enforced; the flags that configure them do not.
+
+### Test status
+
+| Gate | Result |
+|---|---|
+| `cargo fmt --all -- --check` | clean |
+| `cargo clippy --workspace --all-targets -- -D warnings` | clean |
+| `cargo test --workspace --all-features --no-fail-fast` | **1442 passed, 0 failed, 6 ignored**, 143 binaries |
+| `pnpm --dir apps/{rite-web,rite-studio,cant-web} typecheck` | clean |
+| `rite docs build` idempotent | yes |
+
+113 tests added since the pre-Sigil baseline of 1329.
+
+### Measured performance
+
+Release build, scene construction including JSON serialization:
+
+| Nodes | Measured | §24 native target (scene + SVG) |
+|---|---|---|
+| 25 | < 1 ms | 25 ms |
+| 100 | 4 ms | 100 ms |
+| 500 | 46 ms | 1000 ms |
+
+Scene JSON runs about 1.1 KiB per node. `crates/rite-sigil/tests/performance.rs`
+measures rather than enforces, with assertions an order of magnitude loose: a
+tight timing assertion on shared CI hardware fails for reasons unrelated to the
+renderer, and a test that fails randomly gets disabled rather than investigated.
+
+### Known limitations at the end of Phase 2
+
+- No SVG, PNG, HTML, themes, ornament, marks, or disclosure modes. All Phase 3+.
+- No `cant sigil` command. The library API exists; the CLI does not.
+- No WASM crate and no web application.
+- Marks are placeholders: `Geometry::Mark` carries centre, size and rotation with
+  an empty `path`. Phase 3 fills it, which is why S1 and S5 are not `[x]`.
+- Edge routing is a single bowed cubic. It minimizes nothing; §11.6's crossing
+  minimization is not implemented, and on a dense graph traces will cross.
+- Nested fork-inside-fork sectors subdivide by weight but are not recursively
+  re-normalized, so deep nesting will get cramped before it gets illegible.
+- `report_ring_overlaps` is O(n²) and runs on every render.
+
+### Next milestone
+
+**Phase 3 — procedural marks and canonical SVG.** In order: the base semantic
+mark grammar (a constrained generator, not arbitrary noise), deterministic
+variation from the per-node PRNG stream that already exists, layered SVG
+serialization, Veiled mode, stable IDs and classes, the `neon-ritual` theme,
+canonical SVG snapshots, and `cant sigil`.
+
+The scene boundary is stable and the workspace is green, which is the condition
+for starting it.

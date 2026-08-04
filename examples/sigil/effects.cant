@@ -1,0 +1,1 @@
+["notes.txt", "log.txt"] -> * -> ! @fs.read($) -> []

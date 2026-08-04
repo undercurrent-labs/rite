@@ -14,9 +14,51 @@
 
 ### Changed
 
+- **A Rite token symbol is a *glyph*, not a *sigil*.** The word was in service
+  for two things at once — `◆` and, shortly, the visual artifact a whole program
+  renders to — and the collision is worst in exactly the documents that have to
+  explain both. `grammar/sigils.toml` is now `grammar/glyphs.toml`, the
+  `"sigil"` palette kind is `"glyph"`, `rite_render::Kind::Sigil` is
+  `Kind::Glyph`, and the Studio stylesheet's `.tok-sigil` is `.tok-glyph`.
+  No syntax, no semantics, and no spelling anyone types has changed. The
+  breaking parts are the enum variant, the palette key and the CSS class; all
+  three are in-repo. See ADR 0009.
+
+- **The Cant graph schema is version `1`.** Three additions, all so a consumer
+  never has to recover meaning from a label: a `schema` field naming the format
+  (`"cant.graph"`), a `producer` block saying what wrote the graph, and
+  per-node `capabilities` — each `{ name, family }`, so "does this node touch
+  the filesystem or the network?" is a field rather than a re-scan of leaf text.
+  `CantProgram::capabilities()` now reads those fields instead of re-scanning,
+  and `capability_families()` joins it. Version `0` graphs are refused rather
+  than upgraded, and a document whose `schema` is not `cant.graph` is refused
+  before its version is read. `docs/cant/graph-schema.md` has the shape.
+
 - The Rite site's footer no longer links Cant.
 
 ### Added
+
+- **`rite-sigil` — the semantic renderer's graph and scene layers.** A Cant
+  program's topology, normalized into a renderer-owned model (`rite.sigil.graph`
+  v1) and projected into a deterministic radial scene (`rite.sigil.scene` v1):
+  entry at the centre, flow spiralling outward, fork branches in ordered
+  clockwise sectors, orbits as closed rings their bodies sit on, and capability
+  invocations pulled to an outer host boundary. Same graph and options produce a
+  byte-identical scene. The crate parses nothing, executes nothing, and opens
+  nothing — `crates/rite-sigil/tests/boundaries.rs` reads the manifest and the
+  sources to keep it that way. Six golden scene fixtures under `fixtures/sigil/`,
+  generated from `examples/sigil/`, asserted structurally rather than merely
+  written. No SVG yet: that is the next phase. See `docs/sigil/`.
+
+- **ADRs 0003–0009, for Sigil.** The semantic renderer that turns a Cant graph
+  into a ritual artifact is being built, and the decisions that constrain it are
+  recorded before the code: Sigil is a renderer and never executes a program
+  (0003); its layout carries no execution meaning (0004); one renderer in Rust
+  serves both the CLI and the browser (0005); it consumes a normalized adapter
+  graph rather than Cant's own types (0006); Veiled rendering and source privacy
+  are first-class and separately enforced (0007); Graphviz stays the technical
+  topology view and does not supply Sigil's geometry (0008); and *glyph* names a
+  token while *Sigil* names an artifact (0009).
 
 - **Cant versions on its own number, starting at `0.1.0`.** It shipped in Rite's
   `0.7.0` archive wearing Rite's version, which claimed seven minor cycles of

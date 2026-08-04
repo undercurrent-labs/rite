@@ -1,0 +1,835 @@
+{
+  "schema": "rite.sigil.scene",
+  "version": 1,
+  "view_box": {
+    "x": 0.0,
+    "y": 0.0,
+    "width": 1600.0,
+    "height": 1600.0
+  },
+  "center": {
+    "x": 800.0,
+    "y": 800.0
+  },
+  "elements": [
+    {
+      "id": "boundary/host",
+      "layer": "semantic-regions",
+      "semantic": "invocation-boundary",
+      "geometry": "circle",
+      "center": {
+        "x": 800.0,
+        "y": 800.0
+      },
+      "radius": 595.0,
+      "title": "host boundary",
+      "bounds": {
+        "x": 205.0,
+        "y": 205.0,
+        "width": 1190.0,
+        "height": 1190.0
+      }
+    },
+    {
+      "id": "edge/e0_n0.0-_n1.0",
+      "layer": "semantic-edges",
+      "semantic": {
+        "edge": "flow"
+      },
+      "graph_ref": {
+        "kind": "edge",
+        "id": "e0:n0.0->n1.0"
+      },
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 800.0,
+          "y": 800.0
+        },
+        {
+          "op": "cubic_to",
+          "c1": {
+            "x": 820.0779990394238,
+            "y": 794.1668020496097
+          },
+          "c2": {
+            "x": 857.0180405621734,
+            "y": 783.4347278984588
+          },
+          "to": {
+            "x": 908.6471809492634,
+            "y": 768.4350760260268
+          }
+        }
+      ],
+      "bounds": {
+        "x": 743.4302325581396,
+        "y": 711.8653085841663,
+        "width": 221.78671583298433,
+        "height": 144.70445885769414
+      }
+    },
+    {
+      "id": "edge/e1_n2.1-_n3.0",
+      "layer": "semantic-edges",
+      "semantic": {
+        "edge": "enter"
+      },
+      "graph_ref": {
+        "kind": "edge",
+        "id": "e1:n2.1->n3.0"
+      },
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 1039.4398108260798,
+          "y": 1177.2967695004934
+        },
+        {
+          "op": "cubic_to",
+          "c1": {
+            "x": 1044.28302729729,
+            "y": 1084.0385425404645
+          },
+          "c2": {
+            "x": 1068.1453735175471,
+            "y": 1006.0021513394422
+          },
+          "to": {
+            "x": 1109.6231820621306,
+            "y": 947.7779718504278
+          }
+        }
+      ],
+      "bounds": {
+        "x": 919.4350358452597,
+        "y": 827.7731968696077,
+        "width": 310.192921197691,
+        "height": 469.52834761170584
+      }
+    },
+    {
+      "id": "edge/e2_n3.0-_n2.1",
+      "layer": "semantic-edges",
+      "semantic": {
+        "edge": "join"
+      },
+      "graph_ref": {
+        "kind": "edge",
+        "id": "e2:n3.0->n2.1"
+      },
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 1109.6231820621306,
+          "y": 947.7779718504278
+        },
+        {
+          "op": "cubic_to",
+          "c1": {
+            "x": 1068.1453735175471,
+            "y": 1006.0021513394422
+          },
+          "c2": {
+            "x": 1044.28302729729,
+            "y": 1084.0385425404645
+          },
+          "to": {
+            "x": 1039.4398108260798,
+            "y": 1177.2967695004934
+          }
+        }
+      ],
+      "bounds": {
+        "x": 919.4350358452597,
+        "y": 827.7731968696077,
+        "width": 310.192921197691,
+        "height": 469.52834761170584
+      }
+    },
+    {
+      "id": "edge/e3_n2.2-_n4.0",
+      "layer": "semantic-edges",
+      "semantic": {
+        "edge": "enter"
+      },
+      "graph_ref": {
+        "kind": "edge",
+        "id": "e3:n2.2->n4.0"
+      },
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 1039.4398108260798,
+          "y": 1177.2967695004934
+        },
+        {
+          "op": "cubic_to",
+          "c1": {
+            "x": 1017.1169550200483,
+            "y": 1142.1215772357507
+          },
+          "c2": {
+            "x": 999.6932383670394,
+            "y": 1114.6661930070718
+          },
+          "to": {
+            "x": 988.1935853760535,
+            "y": 1096.5456394161438
+          }
+        }
+      ],
+      "bounds": {
+        "x": 940.3738179341931,
+        "y": 1048.7258719742833,
+        "width": 146.88576033374716,
+        "height": 176.3906649680705
+      }
+    },
+    {
+      "id": "edge/e4_n4.0-_n2.1",
+      "layer": "semantic-edges",
+      "semantic": {
+        "edge": "join"
+      },
+      "graph_ref": {
+        "kind": "edge",
+        "id": "e4:n4.0->n2.1"
+      },
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 988.1935853760535,
+          "y": 1096.5456394161438
+        },
+        {
+          "op": "cubic_to",
+          "c1": {
+            "x": 999.6932383670394,
+            "y": 1114.6661930070718
+          },
+          "c2": {
+            "x": 1017.1169550200483,
+            "y": 1142.1215772357507
+          },
+          "to": {
+            "x": 1039.4398108260798,
+            "y": 1177.2967695004934
+          }
+        }
+      ],
+      "bounds": {
+        "x": 940.3738179341931,
+        "y": 1048.7258719742833,
+        "width": 146.88576033374716,
+        "height": 176.3906649680705
+      }
+    },
+    {
+      "id": "edge/e5_n2.3-_n5.0",
+      "layer": "semantic-edges",
+      "semantic": {
+        "edge": "enter"
+      },
+      "graph_ref": {
+        "kind": "edge",
+        "id": "e5:n2.3->n5.0"
+      },
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 1039.4398108260798,
+          "y": 1177.2967695004934
+        },
+        {
+          "op": "cubic_to",
+          "c1": {
+            "x": 953.2437503296071,
+            "y": 1147.4784388076644
+          },
+          "c2": {
+            "x": 872.5045875957801,
+            "y": 1141.3782562522863
+          },
+          "to": {
+            "x": 801.9716851383532,
+            "y": 1159.3550561023228
+          }
+        }
+      ],
+      "bounds": {
+        "x": 682.8992116219019,
+        "y": 1040.2825825858715,
+        "width": 475.6130727206292,
+        "height": 256.0866604310732
+      }
+    },
+    {
+      "id": "edge/e6_n5.0-_n2.1",
+      "layer": "semantic-edges",
+      "semantic": {
+        "edge": "join"
+      },
+      "graph_ref": {
+        "kind": "edge",
+        "id": "e6:n5.0->n2.1"
+      },
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 801.9716851383532,
+          "y": 1159.3550561023228
+        },
+        {
+          "op": "cubic_to",
+          "c1": {
+            "x": 872.5045875957801,
+            "y": 1141.3782562522863
+          },
+          "c2": {
+            "x": 953.2437503296071,
+            "y": 1147.4784388076644
+          },
+          "to": {
+            "x": 1039.4398108260798,
+            "y": 1177.2967695004934
+          }
+        }
+      ],
+      "bounds": {
+        "x": 682.8992116219019,
+        "y": 1040.2825825858715,
+        "width": 475.6130727206292,
+        "height": 256.0866604310732
+      }
+    },
+    {
+      "id": "edge/e7_n1.0-_n2.0",
+      "layer": "semantic-edges",
+      "semantic": {
+        "edge": "flow"
+      },
+      "graph_ref": {
+        "kind": "edge",
+        "id": "e7:n1.0->n2.0"
+      },
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 908.6471809492634,
+          "y": 768.4350760260268
+        },
+        {
+          "op": "cubic_to",
+          "c1": {
+            "x": 907.5852037751084,
+            "y": 859.4351050314369
+          },
+          "c2": {
+            "x": 952.054697933226,
+            "y": 998.4480808127555
+          },
+          "to": {
+            "x": 1039.4398108260798,
+            "y": 1177.2967695004934
+          }
+        }
+      ],
+      "bounds": {
+        "x": 694.0110956671617,
+        "y": 553.7989907439251,
+        "width": 560.0648004410198,
+        "height": 838.13386403867
+      }
+    },
+    {
+      "id": "edge/e8_n2.0-_n6.0",
+      "layer": "semantic-edges",
+      "semantic": {
+        "edge": "flow"
+      },
+      "graph_ref": {
+        "kind": "edge",
+        "id": "e8:n2.0->n6.0"
+      },
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 1039.4398108260798,
+          "y": 1177.2967695004934
+        },
+        {
+          "op": "cubic_to",
+          "c1": {
+            "x": 949.947223274208,
+            "y": 1186.5559724763639
+          },
+          "c2": {
+            "x": 868.5376875933409,
+            "y": 1236.7750708461963
+          },
+          "to": {
+            "x": 800.0,
+            "y": 1325.0
+          }
+        }
+      ],
+      "bounds": {
+        "x": 659.3340239179893,
+        "y": 1036.6307934184827,
+        "width": 520.7717629901013,
+        "height": 429.0351826635281
+      }
+    },
+    {
+      "id": "node/n0",
+      "layer": "semantic-nodes",
+      "semantic": {
+        "node": {
+          "kind": "source"
+        }
+      },
+      "graph_ref": {
+        "kind": "node",
+        "id": "n0"
+      },
+      "geometry": "mark",
+      "center": {
+        "x": 800.0,
+        "y": 800.0
+      },
+      "size": 54.0,
+      "rotation": 0.008098114249107927,
+      "title": "source",
+      "legend_key": "node/n0",
+      "bounds": {
+        "x": 746.0,
+        "y": 746.0,
+        "width": 108.0,
+        "height": 108.0
+      }
+    },
+    {
+      "id": "node/n1",
+      "layer": "semantic-nodes",
+      "semantic": {
+        "node": {
+          "kind": "scatter"
+        }
+      },
+      "graph_ref": {
+        "kind": "node",
+        "id": "n1"
+      },
+      "geometry": "mark",
+      "center": {
+        "x": 908.6471809492634,
+        "y": 768.4350760260268
+      },
+      "size": 24.0,
+      "rotation": -0.28497198318846756,
+      "title": "scatter",
+      "legend_key": "node/n1",
+      "bounds": {
+        "x": 884.6471809492634,
+        "y": 744.4350760260268,
+        "width": 48.0,
+        "height": 48.0
+      }
+    },
+    {
+      "id": "node/n2",
+      "layer": "semantic-nodes",
+      "semantic": {
+        "node": {
+          "kind": "fork"
+        }
+      },
+      "graph_ref": {
+        "kind": "node",
+        "id": "n2"
+      },
+      "geometry": "mark",
+      "center": {
+        "x": 1039.4398108260798,
+        "y": 1177.2967695004934
+      },
+      "size": 32.0,
+      "rotation": 1.0397142287076127,
+      "title": "fork",
+      "legend_key": "node/n2",
+      "bounds": {
+        "x": 1007.4398108260798,
+        "y": 1145.2967695004934,
+        "width": 64.0,
+        "height": 64.0
+      }
+    },
+    {
+      "id": "node/n3",
+      "layer": "semantic-nodes",
+      "semantic": {
+        "node": {
+          "kind": "stage"
+        }
+      },
+      "graph_ref": {
+        "kind": "node",
+        "id": "n3"
+      },
+      "geometry": "mark",
+      "center": {
+        "x": 1109.6231820621306,
+        "y": 947.7779718504278
+      },
+      "size": 24.0,
+      "rotation": 0.46226271635589156,
+      "title": "stage",
+      "legend_key": "node/n3",
+      "bounds": {
+        "x": 1085.6231820621306,
+        "y": 923.7779718504278,
+        "width": 48.0,
+        "height": 48.0
+      }
+    },
+    {
+      "id": "node/n4",
+      "layer": "semantic-nodes",
+      "semantic": {
+        "node": {
+          "kind": "stage"
+        }
+      },
+      "graph_ref": {
+        "kind": "node",
+        "id": "n4"
+      },
+      "geometry": "mark",
+      "center": {
+        "x": 988.1935853760535,
+        "y": 1096.5456394161438
+      },
+      "size": 24.0,
+      "rotation": 0.9813744591768581,
+      "title": "stage",
+      "legend_key": "node/n4",
+      "bounds": {
+        "x": 964.1935853760535,
+        "y": 1072.5456394161438,
+        "width": 48.0,
+        "height": 48.0
+      }
+    },
+    {
+      "id": "node/n5",
+      "layer": "semantic-nodes",
+      "semantic": {
+        "node": {
+          "kind": "stage"
+        }
+      },
+      "graph_ref": {
+        "kind": "node",
+        "id": "n5"
+      },
+      "geometry": "mark",
+      "center": {
+        "x": 801.9716851383532,
+        "y": 1159.3550561023228
+      },
+      "size": 24.0,
+      "rotation": 1.552242915203667,
+      "title": "stage",
+      "legend_key": "node/n5",
+      "bounds": {
+        "x": 777.9716851383532,
+        "y": 1135.3550561023228,
+        "width": 48.0,
+        "height": 48.0
+      }
+    },
+    {
+      "id": "node/n6",
+      "layer": "semantic-nodes",
+      "semantic": {
+        "node": {
+          "kind": "collect"
+        }
+      },
+      "graph_ref": {
+        "kind": "node",
+        "id": "n6"
+      },
+      "geometry": "mark",
+      "center": {
+        "x": 800.0,
+        "y": 1325.0
+      },
+      "size": 40.0,
+      "rotation": 1.5356550320507716,
+      "title": "collect",
+      "legend_key": "node/n6",
+      "bounds": {
+        "x": 760.0,
+        "y": 1285.0,
+        "width": 80.0,
+        "height": 80.0
+      }
+    }
+  ],
+  "hit_regions": [
+    {
+      "element_id": "node/n0",
+      "graph_ref": {
+        "kind": "node",
+        "id": "n0"
+      },
+      "center": {
+        "x": 800.0,
+        "y": 800.0
+      },
+      "radius": 54.0,
+      "tab_index": 0
+    },
+    {
+      "element_id": "node/n1",
+      "graph_ref": {
+        "kind": "node",
+        "id": "n1"
+      },
+      "center": {
+        "x": 908.6471809492634,
+        "y": 768.4350760260268
+      },
+      "radius": 24.0,
+      "tab_index": 1
+    },
+    {
+      "element_id": "node/n2",
+      "graph_ref": {
+        "kind": "node",
+        "id": "n2"
+      },
+      "center": {
+        "x": 1039.4398108260798,
+        "y": 1177.2967695004934
+      },
+      "radius": 32.0,
+      "tab_index": 2
+    },
+    {
+      "element_id": "node/n3",
+      "graph_ref": {
+        "kind": "node",
+        "id": "n3"
+      },
+      "center": {
+        "x": 1109.6231820621306,
+        "y": 947.7779718504278
+      },
+      "radius": 24.0,
+      "tab_index": 3
+    },
+    {
+      "element_id": "node/n4",
+      "graph_ref": {
+        "kind": "node",
+        "id": "n4"
+      },
+      "center": {
+        "x": 988.1935853760535,
+        "y": 1096.5456394161438
+      },
+      "radius": 24.0,
+      "tab_index": 4
+    },
+    {
+      "element_id": "node/n5",
+      "graph_ref": {
+        "kind": "node",
+        "id": "n5"
+      },
+      "center": {
+        "x": 801.9716851383532,
+        "y": 1159.3550561023228
+      },
+      "radius": 24.0,
+      "tab_index": 5
+    },
+    {
+      "element_id": "node/n6",
+      "graph_ref": {
+        "kind": "node",
+        "id": "n6"
+      },
+      "center": {
+        "x": 800.0,
+        "y": 1325.0
+      },
+      "radius": 40.0,
+      "tab_index": 6
+    }
+  ],
+  "legend": [
+    {
+      "key": "node/n0",
+      "graph_ref": {
+        "kind": "node",
+        "id": "n0"
+      },
+      "semantic": {
+        "node": {
+          "kind": "source"
+        }
+      },
+      "summary": "source",
+      "source_span": {
+        "start": 0,
+        "end": 9
+      }
+    },
+    {
+      "key": "node/n1",
+      "graph_ref": {
+        "kind": "node",
+        "id": "n1"
+      },
+      "semantic": {
+        "node": {
+          "kind": "scatter"
+        }
+      },
+      "summary": "scatter",
+      "source_span": {
+        "start": 13,
+        "end": 14
+      }
+    },
+    {
+      "key": "node/n2",
+      "graph_ref": {
+        "kind": "node",
+        "id": "n2"
+      },
+      "semantic": {
+        "node": {
+          "kind": "fork"
+        }
+      },
+      "summary": "fork",
+      "source_span": {
+        "start": 18,
+        "end": 45
+      }
+    },
+    {
+      "key": "node/n3",
+      "graph_ref": {
+        "kind": "node",
+        "id": "n3"
+      },
+      "semantic": {
+        "node": {
+          "kind": "stage"
+        }
+      },
+      "summary": "stage",
+      "source_span": {
+        "start": 21,
+        "end": 26
+      },
+      "region": "s0",
+      "branch_ordinal": 0,
+      "attributes": {
+        "placeholder": true
+      }
+    },
+    {
+      "key": "node/n4",
+      "graph_ref": {
+        "kind": "node",
+        "id": "n4"
+      },
+      "semantic": {
+        "node": {
+          "kind": "stage"
+        }
+      },
+      "summary": "stage",
+      "source_span": {
+        "start": 29,
+        "end": 35
+      },
+      "region": "s1",
+      "branch_ordinal": 1,
+      "attributes": {
+        "placeholder": true
+      }
+    },
+    {
+      "key": "node/n5",
+      "graph_ref": {
+        "kind": "node",
+        "id": "n5"
+      },
+      "semantic": {
+        "node": {
+          "kind": "stage"
+        }
+      },
+      "summary": "stage",
+      "source_span": {
+        "start": 38,
+        "end": 43
+      },
+      "region": "s2",
+      "branch_ordinal": 2,
+      "attributes": {
+        "placeholder": true
+      }
+    },
+    {
+      "key": "node/n6",
+      "graph_ref": {
+        "kind": "node",
+        "id": "n6"
+      },
+      "semantic": {
+        "node": {
+          "kind": "collect"
+        }
+      },
+      "summary": "collect",
+      "source_span": {
+        "start": 49,
+        "end": 51
+      }
+    }
+  ],
+  "metadata": {
+    "renderer_version": "0.1.0",
+    "graph_fingerprint": "6396115235aae2f53ec6374cee5d56cb",
+    "seed": 0,
+    "node_count": 7,
+    "edge_count": 9,
+    "region_count": 3,
+    "census": {
+      "collect": 1,
+      "fork": 1,
+      "scatter": 1,
+      "source": 1,
+      "stage": 3
+    },
+    "source_schema": "cant.graph@1"
+  }
+}
