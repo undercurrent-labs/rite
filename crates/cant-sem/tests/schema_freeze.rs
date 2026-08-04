@@ -1,4 +1,4 @@
-//! The graph JSON schema is frozen at version 0.
+//! The graph JSON schema is frozen at version 1.
 //!
 //! Frozen meaning: `docs/cant/graph-schema.md` is the contract, and a change to
 //! the shape must bump `version` and be a deliberate act. These tests are what
@@ -32,8 +32,13 @@ fn repo_root() -> PathBuf {
 const EVERYTHING: &str =
     "[1, 2] -> * -> |{ ?{ $ > 1 } ; ~{ ?{ $ < 8 } -> $ * 2 } :by str :max 64 } -> []";
 
-fn graph_json() -> serde_json::Value {
-    let (parsed, sources) = parse_source("schema.cant", EVERYTHING);
+/// `EVERYTHING` names no capability, so on its own it would leave the `capabilities`
+/// key untested — and a key that is `skip_serializing_if` empty is exactly the kind
+/// that vanishes from a freeze test without anyone noticing.
+const EFFECTFUL: &str = r#"["a.txt"] -> * -> ! @fs.read($) -> []"#;
+
+fn json_for(source: &str) -> serde_json::Value {
+    let (parsed, sources) = parse_source("schema.cant", source);
     assert!(
         !parsed.has_errors(),
         "{}",
@@ -42,15 +47,22 @@ fn graph_json() -> serde_json::Value {
     cant_sem::lower(
         &parsed.program.expect("program"),
         "schema.cant",
-        EVERYTHING.len(),
+        source.len(),
     )
     .to_json()
 }
 
+fn graph_json() -> serde_json::Value {
+    json_for(EVERYTHING)
+}
+
 #[test]
-fn the_schema_version_is_zero() {
-    assert_eq!(cant_sem::GRAPH_SCHEMA_VERSION, "0");
-    assert_eq!(graph_json()["version"], serde_json::json!("0"));
+fn the_schema_is_named_and_versioned() {
+    assert_eq!(cant_sem::GRAPH_SCHEMA_NAME, "cant.graph");
+    assert_eq!(cant_sem::GRAPH_SCHEMA_VERSION, "1");
+    let json = graph_json();
+    assert_eq!(json["schema"], serde_json::json!("cant.graph"));
+    assert_eq!(json["version"], serde_json::json!("1"));
 }
 
 /// Every key the schema emits, anywhere in the document, flattened.
@@ -70,15 +82,17 @@ fn keys(value: &serde_json::Value, into: &mut BTreeSet<String>) {
 /// The frozen key set. Adding to this is a schema change.
 const FROZEN_KEYS: &[&str] = &[
     // top level
+    "schema",
     "version",
     "language_version",
+    "producer",
     "entry",
     "exit",
     "nodes",
     "edges",
     "subgraphs",
     "source",
-    // source info
+    // source info, and the producer's — both use `name`
     "name",
     "length",
     // nodes
@@ -86,6 +100,9 @@ const FROZEN_KEYS: &[&str] = &[
     "kind",
     "span",
     "subgraph",
+    // per-node capability metadata
+    "capabilities",
+    "family",
     // node payloads
     "expr",
     "predicate",
@@ -115,6 +132,7 @@ const FROZEN_KEYS: &[&str] = &[
 fn the_key_set_is_frozen() {
     let mut found = BTreeSet::new();
     keys(&graph_json(), &mut found);
+    keys(&json_for(EFFECTFUL), &mut found);
     let frozen: BTreeSet<String> = FROZEN_KEYS.iter().map(|k| k.to_string()).collect();
 
     let added: Vec<_> = found.difference(&frozen).collect();
@@ -171,6 +189,7 @@ fn every_emitted_key_is_documented() {
         .expect("docs/cant/graph-schema.md");
     let mut found = BTreeSet::new();
     keys(&graph_json(), &mut found);
+    keys(&json_for(EFFECTFUL), &mut found);
     let missing: Vec<_> = found.iter().filter(|k| !doc.contains(*k)).collect();
     assert!(
         missing.is_empty(),
@@ -195,10 +214,69 @@ fn the_document_says_it_is_experimental() {
 #[test]
 fn a_foreign_schema_version_is_refused() {
     let mut json = graph_json();
-    json["version"] = serde_json::json!("1");
+    json["version"] = serde_json::json!("99");
     let text = serde_json::to_string(&json).expect("json");
     let err = validate_deserialized(&text, FileId(0)).expect_err("version mismatch");
-    assert!(err.contains('1') && err.contains('0'), "{err}");
+    assert!(err.contains("99") && err.contains('1'), "{err}");
+}
+
+/// A version-0 graph has no `schema` key at all, so it must fail on the version
+/// rather than on a serde error about a missing field — the difference between
+/// "your graph is too old" and an unreadable parse message.
+#[test]
+fn a_version_zero_graph_is_refused_on_its_version() {
+    let mut json = graph_json();
+    json.as_object_mut().expect("object").remove("schema");
+    json.as_object_mut().expect("object").remove("producer");
+    json["version"] = serde_json::json!("0");
+    let text = serde_json::to_string(&json).expect("json");
+    let err = validate_deserialized(&text, FileId(0)).expect_err("version mismatch");
+    assert!(
+        err.contains("schema version") && err.contains('0'),
+        "expected a version complaint, got: {err}"
+    );
+}
+
+/// A document that is not a Cant graph is refused by name, before its version is
+/// read — otherwise the message argues about a number that was never ours.
+#[test]
+fn a_foreign_schema_name_is_refused() {
+    let mut json = graph_json();
+    json["schema"] = serde_json::json!("rite.sigil.graph");
+    let text = serde_json::to_string(&json).expect("json");
+    let err = validate_deserialized(&text, FileId(0)).expect_err("schema mismatch");
+    assert!(
+        err.contains("rite.sigil.graph") && err.contains("cant.graph"),
+        "{err}"
+    );
+}
+
+/// The seam Sigil actually consumes: which host family a node touches, answered
+/// from a field rather than by pattern-matching the leaf.
+#[test]
+fn capability_metadata_is_per_node_and_carries_a_family() {
+    let text = serde_json::to_string(&json_for(EFFECTFUL)).expect("json");
+    let analysis = validate_deserialized(&text, FileId(0)).expect("valid");
+    let graph = &analysis.graph;
+
+    let effectful: Vec<_> = graph
+        .nodes
+        .iter()
+        .filter(|n| !n.capabilities.is_empty())
+        .collect();
+    assert_eq!(effectful.len(), 1, "one node names a capability");
+    let node = effectful[0];
+    assert_eq!(node.capabilities[0].name, "@fs.read");
+    assert_eq!(node.capabilities[0].family, "fs");
+    assert!(
+        node.kind.leaf().is_some_and(|l| l.effectful),
+        "and it is marked as performing the effect"
+    );
+
+    // The program-wide summaries read the same fields, so they cannot disagree
+    // with a consumer that walks the nodes.
+    assert_eq!(graph.capabilities(), vec!["@fs.read"]);
+    assert_eq!(graph.capability_families(), vec!["fs"]);
 }
 
 /// The seam's actual claim: everything a renderer needs is in the JSON.

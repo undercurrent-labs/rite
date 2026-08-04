@@ -1,24 +1,51 @@
-# The Cant graph, version 0
+# The Cant graph, version 1
 
 The serialized form of a Cant program: what `cant graph --format json` emits, and
-what a renderer — Sigil, eventually — consumes.
+what a renderer — Sigil — consumes.
 
 **Stability: experimental.** This page is the contract, and a change to the shape
-bumps `version` and appears in the changelog — but version `0` means it can still
-change. Treat a stored graph as readable only by the tool version that wrote it.
+bumps `version` and appears in the changelog — but a single-digit version means it
+can still change. Treat a stored graph as readable only by the tool version that
+wrote it.
 
 `cant version` reports the schema a binary speaks:
 
 ```bash
 $ cant version
-cant_graph_schema_version: 0
+cant_graph_schema_version: 1
 ```
 
 Check it and refuse rather than guess. Cant's own reader does:
 
 ```text
-graph schema version `99`, expected `0`
+graph schema version `99`, expected `1`
 ```
+
+and, before it looks at the number at all:
+
+```text
+graph schema `rite.sigil.graph`, expected `cant.graph`
+```
+
+Name first, because a version is only meaningful once it is known whose it is.
+
+## What changed in version 1
+
+Three additions, all for the same reason: a renderer must not have to infer
+meaning from a label.
+
+- **`schema`** — the constant `"cant.graph"`. A consumer that reads more than one
+  graph format needs something to dispatch on before it trusts a version number.
+- **`producer`** — `{ "name", "version" }`, so a stored graph says what wrote it.
+  Diagnostic metadata; it is not part of the graph's meaning and must not be
+  hashed into anything a consumer caches on.
+- **`capabilities` on a node** — the host capabilities that node's leaf names,
+  each with the family it belongs to. Previously a consumer wanting to know
+  whether a node touched the filesystem or the network had to re-scan the leaf
+  text for `@fs.`; now it reads a field. See
+  `docs/adr/0006-sigil-consumes-a-normalized-graph.md`.
+
+Version 0 graphs are refused, not upgraded.
 
 ## The contract
 
@@ -43,8 +70,10 @@ picture comes from the JSON below.
 
 ```json
 {
-  "version": "0",
+  "schema": "cant.graph",
+  "version": "1",
   "language_version": "0",
+  "producer": { "name": "cant", "version": "0.1.0" },
   "entry": 0,
   "exit": 4,
   "nodes": [ … ],
@@ -57,6 +86,11 @@ picture comes from the JSON below.
 `entry` and `exit` are node identifiers: the first and last node of the top-level
 flow. `source.length` is in bytes, so a consumer can tell whether a span it holds
 is still in range for the text it has.
+
+`producer.version` is Cant's own number, not Rite's — the two version separately
+(ADR 0001, Amendment 2). It is there to make a bug report legible and for nothing
+else: a consumer that mixed it into a cache key or a fingerprint would invalidate
+every stored artifact on a release that changed no graph.
 
 ### Nodes
 
@@ -89,6 +123,39 @@ Whether the names in it resolve is Rite's question, not the graph's.
 `subgraph` is absent for a node in the top-level flow.
 
 `label` and `layout` are absent unless something put them there — see below.
+
+### Node capabilities
+
+```json
+{
+  "id": 2,
+  "kind": "stage",
+  "expr": { "text": "! @fs.read($)", "span": { "start": 22, "end": 35 },
+            "effectful": true, "placeholder": true },
+  "span": { "start": 22, "end": 35 },
+  "capabilities": [ { "name": "@fs.read", "family": "fs" } ]
+}
+```
+
+Every host capability the node's leaf names, deduplicated, in source order.
+**Absent when empty**, which is the common case.
+
+- `name` is the full spelling including the `@`.
+- `family` is the namespace before the first dot. This is the field a renderer
+  groups by — it decides which invocation mark a capability gets — so it is
+  stored rather than left for every reader to re-split, each of whom would have
+  to agree independently about what `@fs` with no dot means.
+
+The scan is textual, over leaf text the lexer already separated from strings and
+comments, so `@fs.read` inside a string literal is not reported. It runs once,
+during lowering. `CantProgram::capabilities()` and `capability_families()` read
+these fields rather than re-scanning, so a program-wide summary and a consumer
+walking the nodes cannot disagree.
+
+**`capabilities` is not `effectful`.** A node can name a capability without
+performing an effect, and only a `!` makes it an effect. Read `capabilities` for
+*which world it touches* and the leaf's `effectful` for *whether it touches it*.
+A renderer placing invocation marks on an outer boundary wants both.
 
 ### Edges
 

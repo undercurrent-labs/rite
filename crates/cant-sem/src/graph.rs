@@ -31,7 +31,16 @@ use rite_core::Span;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
-use crate::{NodeId, PortKind, PortRef, DEFAULT_ORBIT_MAX, GRAPH_SCHEMA_VERSION};
+use crate::{
+    NodeId, PortKind, PortRef, DEFAULT_ORBIT_MAX, GRAPH_SCHEMA_NAME, GRAPH_SCHEMA_VERSION,
+};
+
+/// Serde default for [`CantProgram::schema`], so a version-0 graph — which had
+/// no such field — still deserializes to something the version check can reject
+/// with a useful message instead of a serde error about a missing key.
+fn default_schema() -> String {
+    GRAPH_SCHEMA_NAME.to_string()
+}
 
 /// A fork branch or an orbit body.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -40,6 +49,62 @@ pub struct SubgraphId(pub u32);
 impl fmt::Display for SubgraphId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "s{}", self.0)
+    }
+}
+
+/// A host capability a node's leaf names, recorded rather than re-derived.
+///
+/// [`CantProgram::capabilities`] used to scan leaf text on every call, which is
+/// the right thing for a producer summarizing its own source and the wrong thing
+/// for a *consumer*. A renderer that has to decide "is this node a filesystem
+/// invocation or a network one?" by pattern-matching a label is inferring
+/// semantics from a label, which
+/// `docs/adr/0006-sigil-consumes-a-normalized-graph.md` forbids by name. So the
+/// scan happens once, during lowering, and the answer is in the JSON.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub struct CapabilityRef {
+    /// The full name as written, including the `@`: `@fs.read`.
+    pub name: String,
+    /// The namespace before the first dot: `fs`. A consumer groups by this —
+    /// it is what decides which invocation mark a capability gets — so it is
+    /// stored rather than left to be re-split by every reader, each of whom
+    /// would have to agree about `@fs` with no dot at all.
+    pub family: String,
+}
+
+impl CapabilityRef {
+    /// `@fs.read` → family `fs`; a bare `@fs` → family `fs`.
+    pub fn new(name: impl Into<String>) -> Self {
+        let name = name.into();
+        let family = name
+            .trim_start_matches('@')
+            .split('.')
+            .next()
+            .unwrap_or_default()
+            .to_string();
+        CapabilityRef { name, family }
+    }
+}
+
+/// What produced a graph, so a consumer reading a stored one knows whose bug it
+/// is looking at.
+///
+/// The version is `cant-sem`'s own — Cant's number, not Rite's (ADR 0001,
+/// Amendment 2). It is deliberately **not** part of anything a consumer hashes:
+/// a renderer keying its output on the producer version would invalidate every
+/// cached artifact on a release that changed nothing about the graph.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Producer {
+    pub name: String,
+    pub version: String,
+}
+
+impl Default for Producer {
+    fn default() -> Self {
+        Producer {
+            name: "cant".to_string(),
+            version: env!("CARGO_PKG_VERSION").to_string(),
+        }
     }
 }
 
@@ -158,6 +223,14 @@ pub struct Node {
     /// Which subgraph this node belongs to; `None` for the top-level flow.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub subgraph: Option<SubgraphId>,
+    /// Host capabilities this node's leaf names, in source order, deduplicated.
+    ///
+    /// Empty for a node with no leaf and for a leaf that names none, and omitted
+    /// from the JSON when empty — so the common case costs nothing. Pair it with
+    /// `leaf().effectful` to tell "names a capability" from "performs an effect":
+    /// a node can do the first without the second, and only the second is a `!`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub capabilities: Vec<CapabilityRef>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub label: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -220,9 +293,19 @@ pub struct SourceInfo {
 /// A whole Cant program as a graph.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CantProgram {
+    /// Which schema this is. Constant, and present because a consumer that
+    /// accepts more than one graph format needs to dispatch on something before
+    /// it trusts `version` — a bare integer says nothing about whose integer it
+    /// is. Sigil normalizes from several producers and records this as the
+    /// source schema of what it built.
+    #[serde(default = "default_schema")]
+    pub schema: String,
     /// Schema version, so a stored graph can be recognised or rejected.
     pub version: String,
     pub language_version: String,
+    /// What wrote this graph. Diagnostic metadata, not part of its meaning.
+    #[serde(default)]
+    pub producer: Producer,
     /// The first node of the top-level flow.
     pub entry: NodeId,
     /// The last node of the top-level flow — where program-boundary collection
@@ -259,18 +342,31 @@ impl CantProgram {
 
     /// Every capability the program names, deduplicated, in source order.
     ///
-    /// Read off the leaf text rather than from Rite: `cant explain` and
-    /// `cant graph` both want to say what a program will need before anything
-    /// has been expanded or run.
+    /// Read off the per-node [`Node::capabilities`] rather than by re-scanning
+    /// leaf text, so that this and a consumer walking the nodes cannot disagree.
+    /// Still answered before anything is expanded or run, which is what
+    /// `cant explain` and `cant graph` need it for.
     pub fn capabilities(&self) -> Vec<String> {
         let mut out: Vec<String> = Vec::new();
         for node in &self.nodes {
-            let Some(leaf) = node.kind.leaf() else {
-                continue;
-            };
-            for name in capabilities_in(&leaf.text) {
-                if !out.contains(&name) {
-                    out.push(name);
+            for capability in &node.capabilities {
+                if !out.contains(&capability.name) {
+                    out.push(capability.name.clone());
+                }
+            }
+        }
+        out
+    }
+
+    /// Every capability family the program touches, deduplicated, in source
+    /// order — `["fs", "http"]`. What a renderer groups outer-boundary
+    /// invocation marks by.
+    pub fn capability_families(&self) -> Vec<String> {
+        let mut out: Vec<String> = Vec::new();
+        for node in &self.nodes {
+            for capability in &node.capabilities {
+                if !out.contains(&capability.family) {
+                    out.push(capability.family.clone());
                 }
             }
         }
@@ -303,6 +399,8 @@ impl CantProgram {
 
     pub fn new_empty(source: SourceInfo) -> Self {
         Self {
+            schema: GRAPH_SCHEMA_NAME.to_string(),
+            producer: Producer::default(),
             version: GRAPH_SCHEMA_VERSION.to_string(),
             language_version: crate::CANT_LANGUAGE_VERSION.to_string(),
             entry: NodeId(0),
@@ -313,6 +411,22 @@ impl CantProgram {
             source,
         }
     }
+}
+
+/// The capabilities one leaf names, deduplicated, in source order.
+///
+/// Called once per node during lowering. Everything downstream reads the stored
+/// [`Node::capabilities`] instead of re-running this, which is the whole point:
+/// one scan, one answer, and no consumer deciding for itself what a leaf means.
+pub(crate) fn capability_refs(text: &str) -> Vec<CapabilityRef> {
+    let mut out: Vec<CapabilityRef> = Vec::new();
+    for name in capabilities_in(text) {
+        let capability = CapabilityRef::new(name);
+        if !out.contains(&capability) {
+            out.push(capability);
+        }
+    }
+    out
 }
 
 /// `@fs.read` out of `! @fs.read(path)`.

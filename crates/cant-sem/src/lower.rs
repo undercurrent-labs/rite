@@ -69,11 +69,18 @@ impl Builder {
     ) -> NodeId {
         let id = NodeId(self.next_node);
         self.next_node += 1;
+        // Scanned once, here, rather than by every consumer that wants to know
+        // which host family a node touches. See `CapabilityRef`.
+        let capabilities = kind
+            .leaf()
+            .map(|leaf| crate::graph::capability_refs(&leaf.text))
+            .unwrap_or_default();
         self.nodes.push(Node {
             id,
             kind,
             span,
             subgraph,
+            capabilities,
             label: None,
             layout: None,
         });
