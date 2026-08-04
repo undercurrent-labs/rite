@@ -652,7 +652,72 @@ assertions can be exact.
 - Selection parses edge endpoints out of the element id — see OD4.
 - No local persistence toggle.
 
+---
+
+## Phase 8 — Cloudflare, and Phase 9's fuzz layer
+
+Worker, headers, endpoints, a CI job, and property tests over generated graphs.
+Written but **not deployed**: the configuration is complete and dry-runs clean,
+and no zone has been attached.
+
+### Proving a negative about the Worker
+
+The most important property of the Worker is one it does not have: an endpoint
+that accepts a program. A behavioural test cannot show that — you cannot call a
+route that is not there and learn anything — so `tests/worker.test.ts` reads the
+Worker's own source and fails if it grows a request-body read, a `/api/render`
+route, or an import of the renderer.
+
+That is an unusual shape for a test and it is the right one here. ADR 0007's
+privacy claim is architectural rather than procedural — there is nothing to
+misconfigure because there is nothing there — and the way that stops being true
+is somebody adding a convenience endpoint, which is exactly what reading the file
+catches.
+
+### `wasm-unsafe-eval` is required; `unsafe-eval` is not
+
+Instantiating WebAssembly counts as evaluation to CSP, so a policy without
+`wasm-unsafe-eval` means the renderer never starts. `unsafe-eval` is a strictly
+larger grant and is not made. The test asserts both — including that
+`unsafe-eval` does not appear other than as part of `wasm-unsafe-eval`, which a
+naive substring check would have missed in the direction that matters.
+
+One concession: `style-src 'unsafe-inline'`, because Vite inlines a small amount
+of CSS and the asset pipeline does not hash it for us. Recorded in
+`docs/sigil/deployment.md` rather than left as an unexplained looseness.
+
+### OD4 closed
+
+`SceneElement::ends` carries an edge's endpoints as fields. The app was parsing
+them back out of the element *identifier* with a regular expression, which worked
+only because the Cant adapter happens to build ids that way — a string format as
+a structural dependency, and one that would have failed silently the moment edge
+naming changed.
+
+### The fuzz layer is `proptest`, not `cargo-fuzz`
+
+The input is structured, so a generator that builds graphs reaches the
+interesting shapes far more often than one mutating bytes, and it runs in the
+ordinary test suite without a second toolchain. Seven properties over generated
+graphs: no panic, finite coordinates, determinism, ornament invariance, no markup
+injection, veiled draws no text, and the caps hold.
+
+A coverage-guided target over the JSON *reader* is a different question and is
+still absent — that is the one place byte-level mutation would earn its keep, and
+Q5 stays partial because of it.
+
+### Known limitations
+
+- **Not deployed.** No zone attached, so CF2 and CF3 are configuration that has
+  never been exercised against Cloudflare.
+- No `cargo-fuzz` target over the graph JSON reader.
+- No cross-platform CLI test run (C4), no browser matrix, no accessibility audit.
+- `visual-language.md`, `cli.md`, `themes.md`, `accessibility.md` and
+  `internals.md` are unwritten.
+
 ### Next milestone
 
-Phase 8 — Cloudflare. Worker configuration, the three `/api` endpoints, security
-headers, and a CI job. It is what gets this to `sigil.rite.foo`.
+Deploy, which is the only way CF2 and CF3 stop being claims. Then the remaining
+documentation and the three open design items — edge-crossing minimization (OD2)
+and recursive fork-sector renormalization (OD3) are the two that still show in
+the picture.

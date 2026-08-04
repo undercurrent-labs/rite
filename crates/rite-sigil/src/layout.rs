@@ -719,6 +719,7 @@ fn emit_background(elements: &mut Vec<SceneElement>) {
         },
         title: Some("host boundary".to_string()),
         legend_key: None,
+        ends: None,
         bounds: Rect::new(CENTER - radius, CENTER - radius, radius * 2.0, radius * 2.0),
     });
 }
@@ -758,6 +759,7 @@ fn emit_regions(
             },
             title: Some("orbit ring".to_string()),
             legend_key: Some(format!("region/{}", region.id)),
+            ends: None,
             bounds: Rect::new(
                 owner.x - radius,
                 owner.y - radius,
@@ -801,6 +803,12 @@ fn emit_edges(
             geometry: Geometry::Path { commands },
             title: None,
             legend_key: None,
+            // The endpoints, as fields. A consumer highlighting a path reads
+            // these rather than parsing them back out of the identifier.
+            ends: Some(EdgeEnds {
+                from: edge.from.node.0.clone(),
+                to: edge.to.node.0.clone(),
+            }),
             // Generous: the control point pulls the curve off the chord, and a
             // bounding box that did not contain the curve would be useless for
             // hit testing. Half the chord length in every direction covers the
@@ -886,6 +894,7 @@ fn emit_nodes(
             // leak ADR 0007 separates disclosure from metadata to prevent.
             title: Some(title_for(node)),
             legend_key: Some(legend_key.clone()),
+            ends: None,
             bounds: Rect::new(position.x - size, position.y - size, size * 2.0, size * 2.0),
         });
 
@@ -950,6 +959,7 @@ fn emit_inscriptions(
             },
             title: None,
             legend_key: Some(format!("node/{}", node.id)),
+            ends: None,
             bounds: Rect::new(anchor.x - 90.0, anchor.y - 12.0, 180.0, 24.0),
         });
     }

@@ -137,6 +137,7 @@ fn element(id: String, layer: SceneLayerKind, geometry: Geometry, bounds: Rect) 
         // screen reader's traversal of a diagram.
         title: None,
         legend_key: None,
+        ends: None,
         bounds,
     }
 }

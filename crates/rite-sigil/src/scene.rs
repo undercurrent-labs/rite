@@ -158,6 +158,19 @@ impl SceneLayerKind {
     }
 }
 
+/// The two ends of an edge, carried on the element that draws it.
+///
+/// Without this, a consumer wanting to highlight a path had to parse the
+/// endpoints back out of the edge's *identifier* — `e0:n0.0->n1.0` — with a
+/// regular expression. That works only because the Cant adapter happens to build
+/// the id that way, and it makes a string format a structural dependency: change
+/// how edges are named and path highlighting silently stops.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EdgeEnds {
+    pub from: String,
+    pub to: String,
+}
+
 /// What a scene element is about.
 ///
 /// `None` for ornament, and that is enforced rather than conventional: ornament
@@ -304,6 +317,9 @@ pub struct SceneElement {
     /// The legend entry that decodes this element.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub legend_key: Option<String>,
+    /// For an edge, the nodes it joins. Absent on everything else.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ends: Option<EdgeEnds>,
     /// Axis-aligned bounds, for the bounds pass and for hit testing.
     pub bounds: Rect,
 }

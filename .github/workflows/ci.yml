@@ -241,6 +241,45 @@ jobs:
           name: cant-web-dist
           path: apps/cant-web/dist
 
+  sigil-site:
+    name: Sigil site
+    runs-on: ubuntu-latest
+    # No `needs:` — the Sigil site builds its own WASM and mirrors nothing the
+    # other jobs produce. Independent for the same reason the Cant site is: it
+    # must be removable without touching anything else.
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: jetli/wasm-pack-action@v0.4.0
+      - uses: Swatinem/rust-cache@v2
+      # Must match package.json "packageManager": "pnpm@9.0.0" exactly
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.0.0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 20
+          cache: pnpm
+      - name: install & build sigil site
+        run: |
+          set -euo pipefail
+          pnpm install
+          # Gate, not advisory — same reasoning as the other two typechecks.
+          pnpm --dir apps/sigil-web typecheck
+          pnpm --dir apps/sigil-web test
+          bash scripts/build-sigil-site.sh
+          # The app loads the engine by URL at runtime, so a build that dropped
+          # it is a blank canvas in production rather than a failure here.
+          test -f apps/sigil-web/dist/wasm/cant_sigil_wasm_bg.wasm
+          test -f apps/sigil-web/dist/index.html
+      - name: upload sigil dist
+        uses: actions/upload-artifact@v5
+        with:
+          name: sigil-web-dist
+          path: apps/sigil-web/dist
+
   vscode:
     name: VS Code extension
     runs-on: ubuntu-latest

@@ -1,0 +1,37 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "rite-sigil",
+  "main": "src/worker/index.ts",
+  // Pinned infrastructure. Update deliberately, with tests — not incidentally.
+  "compatibility_date": "2026-08-03",
+
+  // Sigil's own worker and its own domain, for the reason Cant has one: it is a
+  // separate product with a separate purpose, and folding it into the Rite site
+  // would imply a relationship the architecture does not have.
+  //
+  // The Worker is the *origin* — a Custom Domain, not a proxy route — so there
+  // is no second hop that could see a request, which matters for a product whose
+  // claim is that nothing is uploaded.
+  "workers_dev": false,
+  "routes": [
+    {
+      "pattern": "sigil.rite.foo",
+      "custom_domain": true
+    }
+  ],
+
+  "assets": {
+    "directory": "./dist",
+    // Every app route falls back to the SPA. There are no server-rendered
+    // routes, because there is no server-side rendering: ADR 0007 forbids an
+    // endpoint that accepts a program.
+    "not_found_handling": "single-page-application",
+    "html_handling": "auto-trailing-slash",
+    // The Worker runs first so it can serve `/api/*` and add security headers;
+    // everything else falls through to the static assets.
+    "binding": "ASSETS",
+    "run_worker_first": ["/api/*"]
+  },
+
+  "observability": { "enabled": true }
+}

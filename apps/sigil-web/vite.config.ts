@@ -21,6 +21,33 @@ function sigilVersion(): string {
   return `v${found}`;
 }
 
+/**
+ * What the `/api/*` endpoints report.
+ *
+ * Read from the crates rather than restated, so a version the Worker advertises
+ * cannot disagree with the renderer that is actually compiled into the page.
+ * The commit is whatever CI put in the environment; absent locally, and the
+ * endpoint says `unknown` rather than inventing one.
+ */
+function buildInfo() {
+  const cantSem = fs.readFileSync(path.join(repoRoot, "crates/cant-sem/src/lib.rs"), "utf8");
+  const cantGraph = cantSem.match(/GRAPH_SCHEMA_VERSION: &str = "([^"]+)"/)?.[1] ?? "unknown";
+  const sigil = fs.readFileSync(path.join(repoRoot, "crates/rite-sigil/src/graph.rs"), "utf8");
+  const sigilGraph = sigil.match(/GRAPH_SCHEMA_VERSION: u32 = (\d+)/)?.[1] ?? "unknown";
+  const scene = fs.readFileSync(path.join(repoRoot, "crates/rite-sigil/src/scene.rs"), "utf8");
+  const sceneSchema = scene.match(/SCENE_SCHEMA_VERSION: u32 = (\d+)/)?.[1] ?? "unknown";
+
+  return {
+    commit: process.env.GITHUB_SHA ?? process.env.COMMIT_SHA ?? "unknown",
+    renderer: sigilVersion(),
+    schemas: {
+      "cant.graph": [cantGraph],
+      "rite.sigil.graph": [Number(sigilGraph)],
+      "rite.sigil.scene": [Number(sceneSchema)],
+    },
+  };
+}
+
 /** A host from `site.toml`, so no domain is hardcoded in three places. */
 function host(key: string): string {
   const manifest = fs.readFileSync(path.join(repoRoot, "site.toml"), "utf8");
@@ -61,6 +88,7 @@ export default defineConfig({
     __RITE_HOST__: JSON.stringify(host("primary")),
     __CANT_HOST__: JSON.stringify(host("cant")),
     __SIGIL_EXAMPLES__: JSON.stringify(examples()),
+    __SIGIL_BUILD__: JSON.stringify(buildInfo()),
   },
   plugins: [vue()],
   resolve: {

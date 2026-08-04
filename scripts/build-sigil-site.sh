@@ -21,4 +21,11 @@ for asset in cant_sigil_wasm.js cant_sigil_wasm_bg.wasm; do
   fi
 done
 
+# The Worker must be deployable. A dry run catches a broken `wrangler.jsonc`
+# here rather than at the moment someone tries to publish.
+if command -v npx >/dev/null 2>&1; then
+  (cd "$ROOT/apps/sigil-web" && npx --no-install wrangler deploy --dry-run --outdir /tmp/sigil-dry) \
+    || echo "note: wrangler dry run skipped (wrangler not installed)" >&2
+fi
+
 echo "Sigil site built at apps/sigil-web/dist"

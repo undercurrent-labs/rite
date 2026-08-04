@@ -73,7 +73,7 @@ from, or discovered along the way.
 | [implementation-log.md](implementation-log.md) | Deviations, constraints found, test status |
 | [graph-contract.md](graph-contract.md) | The normalized `rite.sigil.graph` input model |
 | [scene.md](scene.md) | The `rite.sigil.scene` model and its layers |
+| [deployment.md](deployment.md) | The Worker, its headers, and what it deliberately cannot do |
 
-Pages arriving with their phases: `visual-language.md` (P3), `cli.md` (P3),
-`themes.md` (P4), `accessibility.md` (P6), `deployment.md` (P8),
-`internals.md` (P9).
+Pages still to write: `visual-language.md`, `cli.md`, `themes.md`,
+`accessibility.md`, `internals.md`.

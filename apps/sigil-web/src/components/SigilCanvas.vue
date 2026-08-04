@@ -58,7 +58,7 @@ const related = computed<{ nodes: Set<string>; edges: Set<string> }>(() => {
   // field names — only the *WASM boundary* types use camelCase — and reading the
   // wrong one fails silently: no edges parse, so a selection lights only itself
   // and looks like a highlighting bug rather than a naming one.
-  type Element = { id: string; graph_ref?: { kind: string; id: string } };
+  type Element = { id: string; graph_ref?: { kind: string }; ends?: { from: string; to: string } };
   let elements: Element[] = [];
   try {
     elements = JSON.parse(props.sceneJson).elements ?? [];
@@ -66,13 +66,13 @@ const related = computed<{ nodes: Set<string>; edges: Set<string> }>(() => {
     return { nodes: new Set([id]), edges: new Set() };
   }
 
-  // `e0:n0.0->n1.0` — the adapter's edge identity, which names both ends.
-  const edges: { element: string; from: string; to: string }[] = [];
-  for (const element of elements) {
-    if (element.graph_ref?.kind !== "edge") continue;
-    const match = /:(.+?)\.\d+->(.+?)\.\d+$/.exec(element.graph_ref.id);
-    if (match) edges.push({ element: element.id, from: match[1], to: match[2] });
-  }
+  // Endpoints come off the element's own `ends` field. They used to be parsed
+  // out of the *identifier* with a regular expression, which worked only because
+  // the Cant adapter happened to build ids that way — a string format as a
+  // structural dependency, and one that would have failed silently.
+  const edges = elements
+    .filter((e) => e.graph_ref?.kind === "edge" && e.ends)
+    .map((e) => ({ element: e.id, from: e.ends!.from, to: e.ends!.to }));
 
   const nodes = new Set<string>([id]);
   for (const forward of [true, false]) {

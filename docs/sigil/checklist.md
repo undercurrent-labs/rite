@@ -108,13 +108,13 @@ and Codex · **P7** export and gallery · **P8** Cloudflare · **P9** hardening.
 
 | # | Criterion | Phase | Artifact / proof | Done |
 |---|---|---|---|---|
-| CF1 | Separate Worker project exists | P8 | `apps/sigil-web/wrangler.jsonc`, worker `rite-sigil` | [ ] |
-| CF2 | Workers Static Assets/Vite deployment works | P8 | `pnpm sigil:build` + wrangler dry run in CI | [ ] |
-| CF3 | `sigil.rite.foo` is a Custom Domain | P8 | `custom_domain: true` route; `site.toml` gains the host and `site_domain_sync.rs` starts enforcing it | [ ] |
-| CF4 | SPA fallback works | P8 | `not_found_handling: single-page-application`; smoke test on a deep route | [ ] |
-| CF5 | Health/version/schema endpoints work | P8 | `/api/health`, `/api/version`, `/api/schema`; response shape test | [ ] |
-| CF6 | Security headers are present | P8 | CSP without broad `unsafe-eval`, `nosniff`, `Referrer-Policy`, `Permissions-Policy`; header assertion test | [ ] |
-| CF7 | Build/deploy scripts and CI checks exist | P8 | `pnpm sigil:{dev,build,preview,test,deploy}`; a `sigil-site` CI job independent of the other two, as `cant-site` is | [ ] |
+| CF1 | Separate Worker project exists | P8 | `apps/sigil-web/wrangler.jsonc`, worker `rite-sigil` | [x] |
+| CF2 | Workers Static Assets/Vite deployment works | P8 | `assets` binding with `run_worker_first` for `/api/*`; `pnpm sigil:build` runs a wrangler dry run. **Not yet deployed** | [~] |
+| CF3 | `sigil.rite.foo` is a Custom Domain | P8 | `custom_domain: true`; declared in `site.toml` and enforced by `site_domain_sync.rs`. Zone not attached | [~] |
+| CF4 | SPA fallback works | P8 | `not_found_handling: single-page-application`; `falls through to the SPA for an app route` | [x] |
+| CF5 | Health/version/schema endpoints work | P8 | all three, with versions read from the crates at build time; four Worker tests including the 405 on writes | [x] |
+| CF6 | Security headers are present | P8 | CSP granting `wasm-unsafe-eval` but not `unsafe-eval`, plus nosniff, Referrer-Policy, Permissions-Policy, frame-ancestors; three header tests | [x] |
+| CF7 | Build/deploy scripts and CI checks exist | P8 | `pnpm sigil:{dev,build,wasm,preview,test,deploy}` and a `sigil-site` CI job with no `needs:` | [x] |
 
 ## Quality
 
@@ -124,7 +124,7 @@ and Codex · **P7** export and gallery · **P8** Cloudflare · **P9** hardening.
 | Q2 | Native/WASM scene parity passes | P5 | see AR4 | [~] |
 | Q3 | Scene and SVG golden tests pass | P2/P3 | `fixtures/sigil/{scenes,svg}/`, structurally asserted rather than merely written | [x] |
 | Q4 | Visual regressions are reviewed | P4 | `tests/visual.rs` — an 8×8 perceptual hash over rasterised output: stable across runs, contrast present per theme, ground polarity, ornament changes without burying | [x] |
-| Q5 | Fuzz smoke tests pass | P9 | graph JSON parser, adapter, scene builder, mark generator, SVG serializer, metadata stripping | [ ] |
+| Q5 | Fuzz smoke tests pass | P9 | `tests/fuzz.rs` — 7 properties over generated graphs: no panic, finite coordinates, determinism, ornament invariance, no markup injection, veiled draws no text, caps hold. A `cargo-fuzz` target over the JSON reader is still absent | [~] |
 | Q6 | Malicious labels cannot inject markup | P1/P3 | `tests/svg_security.rs` — one escaper, one sanitizer, 12 hostile strings across 36 option sets, plus a hostile-identifier suite | [x] |
 | Q7 | Large graph limits work | P1 | `a_graph_over_the_node_cap_is_refused_with_a_way_out` asserts the refusal names an alternative; `a_large_but_legal_graph_warns_once` | [~] `--simplify` itself is P3 |
 | Q8 | Accessibility checklist passes | P6 | keyboard selection and focus rings, structured Codex, reduced motion, no colour-only differentiation, and the screen-reader summary in a live region. No audit yet | [~] |
@@ -138,7 +138,7 @@ worth showing. Carried here so they are not lost between phases.
 | # | What | Why it matters |
 |---|---|---|
 | ~~OD1~~ | ~~The composition does not fill the circle.~~ **Fixed.** Three causes: the spine divided by its length rather than length−1, so the gap grew as the program got *shorter*; its radius came from whole-graph depth, so deep branches bunched the backbone at the centre; and — the structural one — it allocated an angular slot to every spine node and then relocated some of them, reserving space for marks that would not be there. The sweep is now divided over the nodes that stay on the spiral, and a relocated node borrows a position without consuming a slot. | |
-| OD4 | Selection reads edge endpoints out of the *element id* (`e0:n0.0->n1.0`) with a regex. It works because the adapter builds that id, but it is a structural dependency on a string format. The scene should carry endpoints as fields. | A change to edge identity would silently stop path highlighting. |
+| ~~OD4~~ | ~~Selection reads edge endpoints out of the element id with a regex.~~ **Fixed.** `SceneElement::ends` carries them as fields. | |
 | OD2 | Edge routing minimizes nothing (§11.6). On a dense graph traces cross. | Crossings read as connections that are not there. |
 | OD3 | Nested fork-inside-fork sectors subdivide by weight but are not recursively renormalized. | Deep nesting gets cramped before it gets illegible. |
 
