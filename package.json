@@ -14,7 +14,7 @@
     "sigil:build": "bash scripts/build-sigil-site.sh",
     "sigil:preview": "pnpm --dir apps/sigil-web preview",
     "sigil:wasm": "bash scripts/build-sigil-wasm.sh",
-    "sigil:test": "cargo test -p rite-sigil -p cant-sigil-wasm --all-features && pnpm --dir apps/sigil-web typecheck",
+    "sigil:test": "cargo test -p rite-sigil -p cant-sigil-wasm --all-features && pnpm --dir apps/sigil-web typecheck && pnpm --dir apps/sigil-web test",
     "sigil:deploy": "bash scripts/build-sigil-site.sh && (cd apps/sigil-web && npx wrangler deploy)",
     "release:package": "bash scripts/package-release.sh",
     "studio:dev": "pnpm --dir apps/rite-studio dev",

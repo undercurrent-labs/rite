@@ -25,6 +25,7 @@ import {
 import SigilCanvas from "./components/SigilCanvas.vue";
 import CodexPanel from "./components/CodexPanel.vue";
 import ControlBar from "./components/ControlBar.vue";
+import GalleryPanel from "./components/GalleryPanel.vue";
 
 const examples = __SIGIL_EXAMPLES__;
 
@@ -43,6 +44,36 @@ const showSource = ref(true);
 const showCodex = ref(false);
 const deepVeil = ref(false);
 const selected = ref<string | null>(null);
+const showGallery = ref(false);
+
+/**
+ * What an export will actually contain (§20.7).
+ *
+ * Shown rather than assumed, because the two axes that decide it are
+ * independent: `--mode revealed --metadata none` draws the labels and embeds
+ * nothing, which is meaningful and is also what someone picks having confused
+ * "hide it" with "do not embed it".
+ */
+const exportNotice = computed(() => {
+  const mode = options.value.mode;
+  const metadata = options.value.metadata;
+  if (mode !== "veiled" && metadata === "none") {
+    return {
+      tone: "warn" as const,
+      text: `${mode} draws your labels into the artifact — metadata none only stops them being embedded`,
+    };
+  }
+  if (mode !== "veiled") {
+    return { tone: "warn" as const, text: `${mode} draws labels into the artifact` };
+  }
+  if (metadata === "none") {
+    return { tone: "safe" as const, text: "veiled, nothing embedded — no source in the file" };
+  }
+  if (metadata === "full") {
+    return { tone: "warn" as const, text: "veiled picture, but full metadata is embedded" };
+  }
+  return { tone: "safe" as const, text: "veiled, semantic metadata only — no source snippets" };
+});
 
 const diagnostics = computed<Diagnostic[]>(() => result.value?.diagnostics ?? []);
 const errors = computed(() => diagnostics.value.filter((d) => d.severity === "error"));
@@ -193,6 +224,13 @@ async function copyFingerprint() {
         <button class="instrument" :aria-pressed="showCodex" @click="showCodex = !showCodex">
           Codex
         </button>
+        <button
+          class="instrument"
+          :aria-pressed="showGallery"
+          @click="showGallery = !showGallery"
+        >
+          Gallery
+        </button>
         <span class="hidden text-[0.6rem] text-spectral/30 lg:inline">
           {{ versions?.renderer ? `renderer ${versions.renderer}` : "" }}
         </span>
@@ -205,7 +243,9 @@ async function copyFingerprint() {
       <!-- Source -->
       <section
         v-if="showSource"
-        class="panel flex min-h-0 shrink-0 flex-col border-b lg:w-[26rem] lg:border-b-0 lg:border-r"
+        class="panel fixed inset-x-0 bottom-0 z-20 flex max-h-[70vh] flex-col border-t
+               lg:static lg:z-auto lg:max-h-none lg:w-[26rem] lg:min-h-0 lg:shrink-0
+               lg:border-r lg:border-t-0"
         aria-label="Source"
       >
         <div class="flex shrink-0 gap-1 border-b border-ultraviolet/20 px-2 py-1.5">
@@ -299,6 +339,12 @@ async function copyFingerprint() {
 
     <p class="sr-only" role="status" aria-live="polite">{{ result?.summary }}</p>
 
+    <GalleryPanel
+      :open="showGallery"
+      @open="useExample($event); showGallery = false"
+      @close="showGallery = false"
+    />
+
     <footer
       class="panel flex shrink-0 flex-wrap items-center gap-2 border-t px-3 py-1.5 text-[0.65rem]"
     >
@@ -312,6 +358,13 @@ async function copyFingerprint() {
       <button class="instrument" :disabled="!result?.fingerprint" @click="copyFingerprint">
         Copy fingerprint
       </button>
+
+      <span
+        class="ml-3 border-l border-ultraviolet/20 pl-3"
+        :class="exportNotice.tone === 'warn' ? 'text-ember/80' : 'text-spectral/40'"
+      >
+        {{ exportNotice.text }}
+      </span>
 
       <label class="ml-auto flex items-center gap-1.5 text-spectral/40">
         <input v-model="liveRender" type="checkbox" class="accent-cyan" />

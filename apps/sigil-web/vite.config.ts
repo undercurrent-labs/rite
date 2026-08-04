@@ -49,6 +49,13 @@ function examples(): { name: string; source: string }[] {
 }
 
 export default defineConfig({
+  // `vitest` reads this config, so the `define` block above is available to the
+  // tests — which is what lets a component test use the same repository-read
+  // examples the app does, rather than a transcribed copy that can drift.
+  test: {
+    environment: "jsdom",
+    include: ["tests/**/*.test.ts"],
+  },
   define: {
     __SIGIL_VERSION__: JSON.stringify(sigilVersion()),
     __RITE_HOST__: JSON.stringify(host("primary")),

@@ -618,15 +618,41 @@ Both were found by measuring in a real browser rather than by reading the code.
 The lit-element counts are what showed it: 3 of 22 was too few, then 22 of 22 was
 too many, and only 7-to-10 varying by node is right.
 
-### Known limitations at the end of this pass
+### The rest of Phase 6, and Phase 7's gallery
 
-- No component tests and no E2E suite. W2–W7 are implemented, not proven.
-- Mobile stacks rather than using bottom sheets (§20.2).
-- No gallery, no local persistence.
+Mobile sheets, the gallery, an export preview, and eleven component tests under
+`vitest`.
+
+**The gallery renders live rather than baking thumbnails.** §20.8 asks for cards
+generated from repository fixtures so they cannot drift. The sources are read
+from `examples/sigil/` by Vite at build time; the pictures are produced in the
+browser by the same engine the canvas uses. That is stronger than baking, not
+weaker — a baked image can go stale against the renderer that made it, and one
+rendered on the spot cannot.
+
+**Seven inline SVGs on one page is seven copies of every element ID.** The
+gallery duplicated `id="sigil-glow"` and every `id="node-…"`, which is invalid
+HTML and means an `id` selector anywhere in the app could match a thumbnail
+instead of the canvas. Fixed by rendering cards with `metadata: "minimal"`, which
+emits no identifiers and no titles — a decorative card needs neither: it is
+`aria-hidden` and its accessible name is the caption beside it.
+
+The tests are about the chamber, not the engine: which control does what, which
+panel collapses, what an export preview claims, and that nothing calls `fetch`.
+The renderer is mocked, because what it does is tested in Rust where the
+assertions can be exact.
+
+### Known limitations
+
+- No E2E suite over a *built* site. The privacy assertion spies on `fetch` in a
+  component test, which is real but narrower than the criterion asks.
+- No mobile-viewport test; the sheets are asserted by class, not by rendering.
+- Examples are not generated as CI artifacts (Q9) — they are exercised by the
+  fixture tests and shown in the gallery, which is not the same thing.
 - Selection parses edge endpoints out of the element id — see OD4.
+- No local persistence toggle.
 
 ### Next milestone
 
-Phase 8 — Cloudflare — is small and mostly configuration, and is what gets this
-to `sigil.rite.foo`. Phase 7's gallery and the browser test suite are the other
-two open fronts.
+Phase 8 — Cloudflare. Worker configuration, the three `/api` endpoints, security
+headers, and a CI job. It is what gets this to `sigil.rite.foo`.

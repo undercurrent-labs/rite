@@ -62,9 +62,9 @@ and Codex · **P7** export and gallery · **P8** Cloudflare · **P9** hardening.
 | D1 | Veiled mode shows no visible source labels | P3 | `veiled_output_never_draws_a_label` over hostile input × every metadata mode; a Veiled render emits no `<text>` at all | [x] |
 | D2 | Inscribed mode shows minimal symbolic annotation | P4 | Inscriptions layer, abbreviated to 14 characters. Abbreviated *capability* marks remain unimplemented | [~] |
 | D3 | Revealed mode provides readable labels and a full Codex | P4 | labels drawn upright beside each mark; a Codex per node in the HTML export. The in-app Codex is P6 | [x] |
-| D4 | Codex can be hidden/collapsed | P6 | collapsed by default in both the app and the HTML export; no component test yet | [~] |
+| D4 | Codex can be hidden/collapsed | P6 | collapsed by default in the app and the HTML export; `collapses the source panel and the Codex` | [x] |
 | D5 | Hover/focus can reveal values in the web app | P6 | hover and keyboard focus both reveal, in the app and the HTML export; no E2E yet | [~] |
-| D6 | Deep Veil can suppress interactive revelation | P6 | suppresses tooltips *and* Codex labels in the app; no E2E yet | [~] |
+| D6 | Deep Veil can suppress interactive revelation | P6 | `hides labels and capabilities under Deep Veil but keeps the kinds` | [x] |
 | D7 | Metadata can be stripped completely | P3 | `metadata_none_contains_no_label_snippet_or_identifier` — no label, no title, no desc, no graph-derived id | [x] |
 
 ## Rendering
@@ -93,16 +93,16 @@ and Codex · **P7** export and gallery · **P8** Cloudflare · **P9** hardening.
 
 | # | Criterion | Phase | Artifact / proof | Done |
 |---|---|---|---|---|
-| W1 | Vue/TypeScript/Tailwind application exists | P5 | `apps/sigil-web`, running against the WASM engine; `typecheck` clean. Not yet a CI job | [~] |
-| W2 | Cant and graph JSON input modes work | P5 | both tabs render; no component test yet | [~] |
+| W1 | Vue/TypeScript/Tailwind application exists | P5 | `apps/sigil-web` on the WASM engine; typecheck and 11 component tests via `pnpm sigil:test`. Not yet a CI job | [~] |
+| W2 | Cant and graph JSON input modes work | P5 | both tabs render; `switches between the Cant and graph JSON inputs` | [x] |
 | W3 | Canvas dominates the interface | P5 | the canvas is the flex-1 column and both panels collapse; no layout test yet | [~] |
-| W4 | Panels can be hidden | P6 | E2E: all panels hidden leaves a fullscreen artifact | [ ] |
+| W4 | Panels can be hidden | P6 | `collapses the source panel and the Codex`; with both hidden the canvas is the only column | [x] |
 | W5 | Pan/zoom/fit/fullscreen work | P6 | implemented with keyboard-operable buttons; no E2E yet | [~] |
-| W6 | Codex selection synchronizes with the canvas | P6 | both directions — a mark selects its entry, an entry selects its mark; Escape clears. No component test yet | [~] |
-| W7 | Mobile alternatives to hover work | P6 | E2E at a mobile viewport, tap and focus only | [ ] |
+| W6 | Codex selection synchronizes with the canvas | P6 | both directions, plus Escape; `emits a selection and marks the current entry` | [x] |
+| W7 | Mobile alternatives to hover work | P6 | panels are bottom sheets under `lg`; selection is click/tap and Enter/Space, never hover. No mobile-viewport E2E yet | [~] |
 | W8 | Exports work | P7 | SVG, PNG (canvas), scene JSON, copy SVG, copy fingerprint in the app; HTML export is CLI-only | [~] |
-| W9 | Built-in gallery works | P7 | generated from `fixtures/sigil/` at build time, so it cannot drift | [ ] |
-| W10 | Source stays client-side | P5–P8 | ADR 0007; E2E asserts **no** network request carries source, graph JSON, or an exported artifact | [ ] |
+| W9 | Built-in gallery works | P7 | sources read from `examples/sigil/` at build time, thumbnails rendered live by the same engine — stronger than baking, since a baked image can go stale against the renderer | [x] |
+| W10 | Source stays client-side | P5–P8 | ADR 0007; `issues no network request while rendering, switching modes, or exporting` spies on `fetch`. No E2E over a built site yet | [~] |
 
 ## Cloudflare
 
@@ -128,7 +128,7 @@ and Codex · **P7** export and gallery · **P8** Cloudflare · **P9** hardening.
 | Q6 | Malicious labels cannot inject markup | P1/P3 | `tests/svg_security.rs` — one escaper, one sanitizer, 12 hostile strings across 36 option sets, plus a hostile-identifier suite | [x] |
 | Q7 | Large graph limits work | P1 | `a_graph_over_the_node_cap_is_refused_with_a_way_out` asserts the refusal names an alternative; `a_large_but_legal_graph_warns_once` | [~] `--simplify` itself is P3 |
 | Q8 | Accessibility checklist passes | P6 | keyboard selection and focus rings, structured Codex, reduced motion, no colour-only differentiation, and the screen-reader summary in a live region. No audit yet | [~] |
-| Q9 | Documentation examples are generated and tested | P7 | `examples/sigil/*.cant` → graph JSON, scene JSON, veiled + revealed SVG, PNG thumbnail, in CI | [ ] |
+| Q9 | Documentation examples are generated and tested | P7 | every example is parsed, adapted, laid out and rendered by `sigil_fixtures.rs`, and every one is a gallery card. Not generated *in CI* as artifacts | [~] |
 
 ## Open design work
 

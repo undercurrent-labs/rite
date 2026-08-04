@@ -43,7 +43,9 @@ const entries = computed<Entry[]>(() => {
 
 <template>
   <aside
-    class="panel flex min-h-0 shrink-0 flex-col border-t lg:w-80 lg:border-l lg:border-t-0"
+    class="panel fixed inset-x-0 bottom-0 z-20 flex max-h-[70vh] flex-col border-t
+           lg:static lg:z-auto lg:max-h-none lg:w-80 lg:min-h-0 lg:shrink-0 lg:border-l
+           lg:border-t-0"
     aria-label="Codex"
   >
     <div class="flex shrink-0 items-center border-b border-ultraviolet/20 px-3 py-2">
