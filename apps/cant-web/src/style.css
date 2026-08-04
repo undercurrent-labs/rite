@@ -60,6 +60,29 @@ body {
   color: var(--c-dollar);
 }
 
+/*
+ * Studio's toolbar controls.
+ *
+ * Shared classes rather than repeated utility strings: a select and a button
+ * sitting next to each other have to agree on height, radius and border, and
+ * three copies of that agreement is how a toolbar ends up half a pixel ragged.
+ */
+.studio-btn {
+  @apply rounded-md border border-cant-border bg-cant-panel px-3 py-1 text-sm text-slate-300;
+  @apply transition-colors hover:border-slate-600 hover:text-slate-100;
+  @apply disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-cant-border;
+}
+
+.studio-btn-primary {
+  @apply border-cant-accent/40 bg-cant-accent/10 font-medium text-cant-accent;
+  @apply hover:border-cant-accent/60 hover:bg-cant-accent/20 hover:text-cant-accent;
+}
+
+.studio-input {
+  @apply rounded-md border border-cant-border bg-cant-panel px-2 py-1 text-sm text-slate-300;
+  @apply outline-none focus:border-cant-accent/50;
+}
+
 .code-block {
   @apply overflow-x-auto rounded-lg border border-cant-border bg-cant-panel p-4 font-mono text-sm leading-relaxed;
 }

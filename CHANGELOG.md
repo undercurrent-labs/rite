@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Changed
+
+- The Rite site's footer no longer links Cant.
+
 ### Added
 
 - **Cant Studio** — `cant.rite.foo/studio`. The real engine, compiled to
@@ -19,6 +23,10 @@
   `graph`, `dot`, `explain`, `format`, `convert`, `run`, `version`. The `cant`
   crate gained a `native` feature (on by default) so the half that needs no host
   can be built without Rite's runtime, capabilities and compiler.
+
+- Studio is laid out like Rite's: viewport-height, toolbar across the top,
+  editor and panels side by side, each scrolling on its own. It was a centred
+  page with a short editor and a long stretch of nothing under it.
 
 - **[One-liners](docs/cant/one-liners.md)** — a field guide of recipes short
   enough to put in a shell, and the three things that surprise people: a list is

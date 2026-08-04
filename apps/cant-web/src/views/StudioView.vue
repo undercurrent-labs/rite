@@ -6,15 +6,26 @@ import {
   EXAMPLES,
   loadEngine,
   type CheckResult,
+  type Diagnostic,
   type ExpandResult,
   type ExplainResult,
   type GraphResult,
   type RunResult,
 } from "../lib/studio";
+import { renderDescription } from "../lib/operators";
 
 type Panel = "output" | "graph" | "rite" | "explain";
 
+const PANELS: { id: Panel; label: string }[] = [
+  { id: "output", label: "Output" },
+  { id: "graph", label: "Graph" },
+  { id: "rite", label: "Rite" },
+  { id: "explain", label: "Explain" },
+];
+
 const source = ref(EXAMPLES[0].source);
+const example = ref(0);
+const spelling = ref<"ascii" | "glyph">("ascii");
 const panel = ref<Panel>("output");
 const engineState = ref<"loading" | "ready" | "missing">("loading");
 const running = ref(false);
@@ -55,21 +66,31 @@ async function run() {
   }
 }
 
-async function convert(dialect: "ascii" | "glyph") {
+/** Lay the program out, in the current spelling. */
+async function format() {
+  const engine = await loadEngine();
+  if (!engine) return;
+  const result = engine.cant_format(source.value, spelling.value);
+  if (result.ok && result.text) source.value = result.text;
+}
+
+async function respell() {
   const engine = await loadEngine();
   if (!engine) return;
   // Format when the program parses — that lays it out as well as spelling it.
   // When it does not, fall back to the token-level conversion, which is safe on
-  // a half-written program: a spelling toggle has to keep working while typing.
-  const formatted = engine.cant_format(source.value, dialect);
+  // a half-written program: the spelling toggle has to keep working while typing.
+  const formatted = engine.cant_format(source.value, spelling.value);
   source.value =
     formatted.ok && formatted.text
       ? formatted.text
-      : engine.cant_convert(source.value, dialect);
+      : engine.cant_convert(source.value, spelling.value);
 }
 
-function load(index: number) {
+function loadExample(index: number) {
+  example.value = index;
   source.value = EXAMPLES[index].source;
+  spelling.value = "ascii";
   runResult.value = null;
   panel.value = "output";
 }
@@ -79,13 +100,25 @@ watch(source, () => {
   void analyze();
 });
 
+/**
+ * The highlighted layer sits under a transparent textarea, so the two have to
+ * scroll as one. Anything else and the colours slide off the characters the
+ * moment a program is taller or wider than the pane.
+ */
+const mirror = ref<HTMLElement | null>(null);
+function syncScroll(event: Event) {
+  const area = event.target as HTMLTextAreaElement;
+  if (!mirror.value) return;
+  mirror.value.scrollTop = area.scrollTop;
+  mirror.value.scrollLeft = area.scrollLeft;
+}
+
 const highlighted = computed(() => highlightCant(source.value));
-const expansionHtml = computed(() =>
-  runResult.value?.rite ? highlightRite(runResult.value.rite) : ""
-);
-/** The expansion is available without running: it is a property of the text. */
 const generatedHtml = computed(() =>
   expansion.value?.rite ? highlightRite(expansion.value.rite) : ""
+);
+const ranHtml = computed(() =>
+  runResult.value?.rite ? highlightRite(runResult.value.rite) : ""
 );
 
 const graphSvg = computed(() => {
@@ -101,7 +134,13 @@ const graphSvg = computed(() => {
 });
 
 const diagnostics = computed(() => check.value?.diagnostics ?? []);
-const errorCount = computed(
+
+/** The label that points at the thing itself, rather than at what followed it. */
+function primaryLabel(d: Diagnostic): string | undefined {
+  const label = d.labels?.find((l) => l.primary) ?? d.labels?.[0];
+  return label?.message;
+}
+const problemCount = computed(
   () => diagnostics.value.filter((d) => d.severity !== "warning").length
 );
 
@@ -124,237 +163,251 @@ function show(value: unknown): string {
   return JSON.stringify(value);
 }
 
-const valueText = computed(() =>
-  runResult.value ? show(runResult.value.value) : ""
-);
+const valueText = computed(() => (runResult.value ? show(runResult.value.value) : ""));
+
+/** Whether the editor still holds the example it was given. */
+const untouched = computed(() => source.value === EXAMPLES[example.value].source);
 </script>
 
 <template>
-  <div class="mx-auto max-w-7xl px-4 py-8">
-    <header class="mb-6 flex flex-wrap items-end justify-between gap-4">
-      <div>
-        <h1 class="text-2xl font-semibold tracking-tight text-white">Studio</h1>
-        <p class="mt-1 max-w-prose text-sm text-slate-400">
-          Cant in the page. The same crate the command line uses, compiled to
-          WebAssembly — it expands your program to Rite and runs the Rite, exactly
-          as <code class="font-mono text-slate-300">cant run</code> does. Nothing
-          you type leaves the browser.
-        </p>
-      </div>
-      <div class="flex flex-wrap gap-2">
-        <button
-          v-for="(example, i) in EXAMPLES"
-          :key="example.name"
-          type="button"
-          class="rounded border border-cant-border px-2.5 py-1 text-xs text-slate-400 hover:border-cant-accent/40 hover:text-slate-100"
-          :title="example.blurb"
-          @click="load(i)"
-        >
-          {{ example.name }}
-        </button>
-      </div>
+  <div class="flex h-full min-h-0 flex-col">
+    <!-- Toolbar -->
+    <header
+      class="flex shrink-0 flex-wrap items-center gap-2 border-b border-cant-border px-4 py-2"
+    >
+      <span class="mr-auto hidden text-sm text-slate-500 sm:inline">Playground</span>
+
+      <label class="sr-only" for="cant-example">Example</label>
+      <select
+        id="cant-example"
+        class="studio-input"
+        :value="example"
+        @change="loadExample(Number(($event.target as HTMLSelectElement).value))"
+      >
+        <option v-for="(ex, i) in EXAMPLES" :key="ex.name" :value="i">
+          {{ ex.name }}
+        </option>
+      </select>
+
+      <label class="sr-only" for="cant-spelling">Spelling</label>
+      <select id="cant-spelling" v-model="spelling" class="studio-input" @change="respell">
+        <option value="ascii">ascii</option>
+        <option value="glyph">glyph</option>
+      </select>
+
+      <button
+        type="button"
+        class="studio-btn"
+        :disabled="engineState !== 'ready'"
+        @click="format"
+      >
+        Format
+      </button>
+      <button
+        type="button"
+        class="studio-btn studio-btn-primary"
+        :disabled="running || engineState !== 'ready'"
+        @click="run"
+      >
+        {{ running ? "running…" : "Run" }}
+      </button>
+
+      <span
+        v-if="check"
+        class="ml-1 font-mono text-xs"
+        :class="check.ok ? 'text-cant-green' : 'text-rose-400'"
+      >
+        {{ check.ok ? "ok" : `${problemCount} problem${problemCount === 1 ? "" : "s"}` }}
+      </span>
     </header>
 
     <div
       v-if="engineState === 'missing'"
-      class="mb-6 rounded-lg border border-amber-500/40 bg-amber-500/10 p-4 text-sm text-amber-200"
+      class="shrink-0 border-b border-amber-500/40 bg-amber-500/10 px-4 py-2 text-sm text-amber-200"
     >
       The engine did not load. In a local checkout, build it first:
       <code class="font-mono">pnpm cant:wasm</code>.
     </div>
 
-    <div class="grid gap-5 lg:grid-cols-2">
-      <!-- Editor -->
-      <section>
-        <div class="mb-2 flex items-center justify-between">
+    <!-- Editor | panels -->
+    <main class="grid min-h-0 flex-1 overflow-hidden lg:grid-cols-2">
+      <section class="flex min-h-0 min-w-0 flex-col border-b border-cant-border lg:border-b-0">
+        <div
+          class="flex shrink-0 items-center justify-between gap-4 border-b border-cant-border/60 px-4 py-1.5"
+        >
           <span class="font-mono text-xs uppercase tracking-wider text-slate-500">
             program.cant
           </span>
-          <div class="flex gap-2">
-            <button
-              type="button"
-              class="rounded border border-cant-border px-2 py-0.5 text-xs text-slate-400 hover:text-slate-100"
-              @click="convert('ascii')"
-            >
-              ascii
-            </button>
-            <button
-              type="button"
-              class="rounded border border-cant-border px-2 py-0.5 text-xs text-slate-400 hover:text-slate-100"
-              @click="convert('glyph')"
-            >
-              glyph
-            </button>
-          </div>
+          <span v-if="untouched" class="truncate text-xs text-slate-600">
+            {{ EXAMPLES[example].blurb }}
+          </span>
         </div>
 
         <!--
-          A textarea over a highlighted <pre>, both in the same monospace metrics.
-          A real editor component would be a dependency and a lot of behaviour to
+          A textarea over a highlighted <pre>, in identical monospace metrics. A
+          real editor component would be a dependency and a lot of behaviour to
           own; this is a text box that looks like the rest of the site.
         -->
-        <div class="relative min-h-[9rem] rounded-lg border border-cant-border bg-cant-panel">
+        <div class="relative min-h-0 flex-1">
           <pre
-            class="pointer-events-none overflow-x-auto p-4 font-mono text-sm leading-relaxed"
+            ref="mirror"
+            class="pointer-events-none absolute inset-0 overflow-hidden whitespace-pre p-4 font-mono text-sm leading-relaxed"
             aria-hidden="true"
-          ><code v-html="highlighted"></code><br /></pre>
+          ><code v-html="highlighted"></code></pre>
           <textarea
             v-model="source"
             spellcheck="false"
             autocapitalize="off"
             autocomplete="off"
-            class="absolute inset-0 h-full w-full resize-none bg-transparent p-4 font-mono text-sm leading-relaxed text-transparent caret-cant-accent outline-none"
+            wrap="off"
+            class="absolute inset-0 h-full w-full resize-none overflow-auto whitespace-pre bg-transparent p-4 font-mono text-sm leading-relaxed text-transparent caret-cant-accent outline-none"
             aria-label="Cant program"
+            @scroll="syncScroll"
           ></textarea>
         </div>
 
-        <div class="mt-3 flex items-center gap-3">
-          <button
-            type="button"
-            class="rounded-md border border-cant-accent/40 bg-cant-accent/10 px-4 py-1.5 text-sm font-medium text-cant-accent hover:bg-cant-accent/20 disabled:opacity-50"
-            :disabled="running || engineState !== 'ready'"
-            @click="run"
-          >
-            {{ running ? "running…" : "Run" }}
-          </button>
-          <span v-if="check" class="text-xs" :class="check.ok ? 'text-cant-green' : 'text-rose-400'">
-            {{ check.ok ? "ok" : `${errorCount} problem${errorCount === 1 ? "" : "s"}` }}
-          </span>
-        </div>
-
-        <!-- Diagnostics -->
-        <div v-if="check && !check.ok" class="mt-4 space-y-2">
-          <div
-            v-for="(d, i) in diagnostics"
-            :key="i"
-            class="rounded-lg border border-rose-500/30 bg-rose-500/5 p-3 text-sm"
-          >
-            <div class="font-mono text-xs text-rose-300">{{ d.code }}</div>
-            <div class="mt-1 text-slate-200">{{ d.message }}</div>
-            <div v-if="d.help" class="mt-1.5 text-xs text-slate-400">help: {{ d.help }}</div>
-            <div v-if="d.rite?.code" class="mt-1.5 font-mono text-xs text-slate-500">
+        <!-- Problems, where an editor would put them. -->
+        <div
+          v-if="check && !check.ok"
+          class="max-h-44 shrink-0 space-y-1.5 overflow-auto border-t border-cant-border bg-cant-panel/40 p-3"
+        >
+          <div v-for="(d, i) in diagnostics" :key="i" class="text-sm leading-relaxed">
+            <span class="font-mono text-xs text-rose-300">{{ d.code }}</span>
+            <!--
+              Diagnostics quote code in backticks, the way a terminal does. The
+              site already knows how to turn those into code spans; rendering
+              them raw put literal backticks in front of every error.
+            -->
+            <span class="ml-2 text-slate-200" v-html="renderDescription(d.title ?? '')"></span>
+            <span
+              v-if="primaryLabel(d)"
+              class="ml-2 text-xs text-slate-400"
+              v-html="`— ${renderDescription(primaryLabel(d) ?? '')}`"
+            ></span>
+            <span
+              v-if="d.help"
+              class="ml-2 text-xs text-slate-500"
+              v-html="`help: ${renderDescription(d.help)}`"
+            ></span>
+            <span v-if="d.rite?.code" class="ml-2 font-mono text-xs text-slate-600">
               from Rite: {{ d.rite.code }}
-            </div>
+            </span>
           </div>
         </div>
       </section>
 
-      <!-- Panels -->
-      <section class="min-w-0">
-        <div class="mb-2 flex gap-1 border-b border-cant-border">
+      <section class="flex min-h-0 min-w-0 flex-col border-cant-border lg:border-l">
+        <div class="flex shrink-0 gap-1 border-b border-cant-border px-3 py-1.5" role="tablist">
           <button
-            v-for="tab in (['output', 'graph', 'rite', 'explain'] as Panel[])"
-            :key="tab"
+            v-for="tab in PANELS"
+            :key="tab.id"
             type="button"
-            class="-mb-px border-b-2 px-3 py-1.5 text-sm capitalize transition-colors"
+            role="tab"
+            :aria-selected="panel === tab.id"
+            class="rounded px-2.5 py-1 text-sm transition-colors"
             :class="
-              panel === tab
-                ? 'border-cant-accent text-cant-accent'
-                : 'border-transparent text-slate-500 hover:text-slate-300'
+              panel === tab.id
+                ? 'bg-slate-800/80 text-cant-accent'
+                : 'text-slate-500 hover:text-slate-300'
             "
-            @click="panel = tab"
+            @click="panel = tab.id"
           >
-            {{ tab === "rite" ? "Rite" : tab }}
+            {{ tab.label }}
           </button>
         </div>
 
-        <!-- Output -->
-        <div v-show="panel === 'output'" class="space-y-3">
-          <p v-if="!runResult" class="text-sm text-slate-500">
-            Press <span class="text-slate-300">Run</span>. The value, anything printed,
-            and the Rite that produced them appear here.
-          </p>
-          <template v-else>
-            <div
-              v-if="runResult.error"
-              class="rounded-lg border border-rose-500/30 bg-rose-500/5 p-3 text-sm text-rose-200"
-            >
-              {{ runResult.error }}
-            </div>
-            <div v-if="runResult.stdout">
-              <div class="mb-1 font-mono text-xs uppercase tracking-wider text-slate-500">
-                stdout
-              </div>
-              <pre
-                class="overflow-x-auto rounded-lg border border-cant-border bg-cant-panel p-3 font-mono text-sm text-slate-300"
-              >{{ runResult.stdout }}</pre>
-            </div>
-            <div v-if="runResult.ok">
-              <div class="mb-1 font-mono text-xs uppercase tracking-wider text-slate-500">
-                value
-              </div>
-              <pre
-                class="overflow-x-auto rounded-lg border border-cant-border bg-cant-panel p-3 font-mono text-sm text-cant-green"
-              >{{ valueText }}</pre>
-            </div>
-            <div v-if="runResult.rite">
-              <div class="mb-1 font-mono text-xs uppercase tracking-wider text-slate-500">
-                what ran
-              </div>
-              <pre
-                class="max-h-80 overflow-auto rounded-lg border border-cant-border bg-cant-panel p-3 font-mono text-xs leading-relaxed"
-              ><code v-html="expansionHtml"></code></pre>
-            </div>
-          </template>
-        </div>
-
-        <!-- Graph -->
-        <div v-show="panel === 'graph'">
-          <div
-            v-if="graphSvg"
-            class="overflow-auto rounded-lg border border-cant-border bg-cant-panel p-3"
-            v-html="graphSvg"
-          ></div>
-          <p v-else class="text-sm text-slate-500">Nothing to draw yet.</p>
-          <p class="mt-2 text-xs text-slate-500">
-            Clusters are subgraphs — a fork branch or an orbit body. Dashed edges enter
-            and rejoin them; the pink edge is an orbit's feedback, the only cycle a Cant
-            program can contain. The same shape
-            <code class="font-mono">cant graph</code> emits as JSON.
-          </p>
-        </div>
-
-        <!-- Generated Rite -->
-        <div v-show="panel === 'rite'">
-          <template v-if="expansion?.rite">
-            <pre
-              class="max-h-[32rem] overflow-auto rounded-lg border border-cant-border bg-cant-panel p-3 font-mono text-xs leading-relaxed"
-            ><code v-html="generatedHtml"></code></pre>
-            <p class="mt-2 text-xs text-slate-500">
-              Ordinary Rite, and exactly what runs — this is
-              <code class="font-mono">cant expand</code>. Every generated name carries
-              the prefix
-              <code class="font-mono text-slate-400">{{ expansion.prefix }}</code
-              >, so it cannot collide with anything you wrote.
+        <div class="min-h-0 flex-1 overflow-auto p-4">
+          <!-- Output -->
+          <div v-show="panel === 'output'" class="space-y-4">
+            <p v-if="!runResult" class="text-sm text-slate-500">
+              Press <span class="text-slate-300">Run</span>. The value, anything printed,
+              and the Rite that produced them appear here.
             </p>
-          </template>
-          <p v-else class="text-sm text-slate-500">
-            No expansion: Cant does not generate Rite for a program it has already
-            rejected, because printing a guess as though it were the program is how an
-            audit tool starts lying.
-          </p>
-        </div>
+            <template v-else>
+              <div
+                v-if="runResult.error"
+                class="rounded-lg border border-rose-500/30 bg-rose-500/5 p-3 text-sm text-rose-200"
+              >
+                {{ runResult.error }}
+              </div>
+              <div v-if="runResult.stdout">
+                <div class="mb-1 font-mono text-xs uppercase tracking-wider text-slate-500">
+                  stdout
+                </div>
+                <pre
+                  class="overflow-x-auto rounded-lg border border-cant-border bg-cant-panel p-3 font-mono text-sm text-slate-300"
+                >{{ runResult.stdout }}</pre>
+              </div>
+              <div v-if="runResult.ok">
+                <div class="mb-1 font-mono text-xs uppercase tracking-wider text-slate-500">
+                  value
+                </div>
+                <pre
+                  class="overflow-x-auto rounded-lg border border-cant-border bg-cant-panel p-3 font-mono text-sm text-cant-green"
+                >{{ valueText }}</pre>
+              </div>
+              <div v-if="runResult.rite">
+                <div class="mb-1 font-mono text-xs uppercase tracking-wider text-slate-500">
+                  what ran
+                </div>
+                <pre
+                  class="overflow-x-auto rounded-lg border border-cant-border bg-cant-panel p-3 font-mono text-xs leading-relaxed"
+                ><code v-html="ranHtml"></code></pre>
+              </div>
+            </template>
+          </div>
 
-        <!-- Explain -->
-        <div v-show="panel === 'explain'">
-          <pre
-            v-if="explainResult?.text"
-            class="overflow-auto rounded-lg border border-cant-border bg-cant-panel p-3 font-mono text-xs leading-relaxed text-slate-300"
-          >{{ explainResult.text }}</pre>
-          <div
-            v-if="explainResult?.capabilities?.length"
-            class="mt-3 text-sm text-slate-400"
-          >
-            Capabilities:
-            <code
-              v-for="cap in explainResult.capabilities"
-              :key="cap"
-              class="ml-1 font-mono text-cant-cyan"
-              >{{ cap }}</code
-            >
+          <!-- Graph -->
+          <div v-show="panel === 'graph'">
+            <div v-if="graphSvg" class="overflow-auto" v-html="graphSvg"></div>
+            <p v-else class="text-sm text-slate-500">Nothing to draw yet.</p>
+            <p class="mt-4 max-w-prose text-xs leading-relaxed text-slate-500">
+              Clusters are subgraphs — a fork branch or an orbit body. Dashed edges enter
+              and rejoin them; the pink edge is an orbit's feedback, the only cycle a Cant
+              program can contain. The same shape
+              <code class="font-mono">cant graph</code> emits as JSON.
+            </p>
+          </div>
+
+          <!-- Generated Rite -->
+          <div v-show="panel === 'rite'">
+            <template v-if="expansion?.rite">
+              <pre
+                class="overflow-x-auto rounded-lg border border-cant-border bg-cant-panel p-3 font-mono text-xs leading-relaxed"
+              ><code v-html="generatedHtml"></code></pre>
+              <p class="mt-3 max-w-prose text-xs leading-relaxed text-slate-500">
+                Ordinary Rite, and exactly what runs — this is
+                <code class="font-mono">cant expand</code>. Every generated name carries
+                the prefix
+                <code class="font-mono text-slate-400">{{ expansion.prefix }}</code
+                >, so it cannot collide with anything you wrote.
+              </p>
+            </template>
+            <p v-else class="text-sm text-slate-500">
+              No expansion: Cant does not generate Rite for a program it has already
+              rejected, because printing a guess as though it were the program is how an
+              audit tool starts lying.
+            </p>
+          </div>
+
+          <!-- Explain -->
+          <div v-show="panel === 'explain'">
+            <pre
+              v-if="explainResult?.text"
+              class="whitespace-pre-wrap font-mono text-xs leading-relaxed text-slate-300"
+            >{{ explainResult.text }}</pre>
+            <div v-if="explainResult?.capabilities?.length" class="mt-4 text-sm text-slate-400">
+              Capabilities:
+              <code
+                v-for="cap in explainResult.capabilities"
+                :key="cap"
+                class="ml-1 font-mono text-cant-cyan"
+                >{{ cap }}</code
+              >
+            </div>
           </div>
         </div>
       </section>
-    </div>
+    </main>
   </div>
 </template>

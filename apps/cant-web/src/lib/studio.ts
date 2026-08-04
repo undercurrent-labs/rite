@@ -9,14 +9,27 @@
  * There is no server. Nothing typed into Studio leaves the browser.
  */
 
+/**
+ * One diagnostic, as `CantDiagnostics::to_json` writes it.
+ *
+ * The headline is `title`, not `message` — `message` belongs to a *label*, and
+ * the two are different things: the title says what is wrong, a label says where.
+ * Studio rendered an empty line for every error until this matched the Rust.
+ */
 export type Diagnostic = {
   code?: string;
   severity?: string;
-  message?: string;
-  labels?: { span?: { start: number; end: number }; message?: string }[];
+  title?: string;
+  labels?: {
+    message?: string;
+    primary?: boolean;
+    /** A file id plus a byte range — the span is nested, not flat. */
+    span?: { file: number; span: { start: number; end: number } };
+  }[];
   notes?: string[];
   help?: string;
-  rite?: { code?: string; span?: { start: number; end: number } };
+  /** The Rite diagnostic this was remapped from, when there was one. */
+  rite?: { code?: string; span?: unknown };
 };
 
 export type CheckResult = {

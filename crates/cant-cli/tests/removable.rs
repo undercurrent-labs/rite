@@ -87,10 +87,6 @@ const SHARED_FILES: &[(&str, &str)] = &[
     ),
     ("site.toml", "the `cant` host"),
     (
-        "apps/rite-web/src/components/SiteFooter.vue",
-        "one footer link and its comment",
-    ),
-    (
         "xtask/Cargo.toml",
         "the rite-render dependency `cant-og` needs",
     ),

@@ -29,7 +29,9 @@ export const router = createRouter({
       path: "/studio",
       name: "studio",
       component: StudioView,
-      meta: { title: "Studio · Cant" },
+      // `chrome: "studio"` makes App.vue lock the shell to the viewport and drop
+      // the footer, so the panes scroll instead of the page.
+      meta: { title: "Studio · Cant", chrome: "studio" },
     },
     { path: "/:pathMatch(.*)*", name: "not-found", component: NotFoundView },
   ],
