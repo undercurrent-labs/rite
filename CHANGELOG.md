@@ -1,6 +1,19 @@
 # Changelog
 
-## [Unreleased]
+## [0.8.1] — 2026-08-04
+
+Cant becomes a shell citizen, and gets its missing library. `@stdin` puts the
+data on the pipe and the program on `-e`; `@regex` gives text pipelines real
+patterns, pure and linear-time; `use` imports Rite modules, so named functions
+exist without new syntax; `cant test`, `cant run --trace`, weighted and
+diffed sigils, and a REPL with a value workbench (`x <- …`, `~> …`, `it`)
+round out the tooling. The one-liners page doubled, every example is executed
+by the documentation gate, and the site's hero program can finally pass
+`cant check`.
+
+Numbered as a patch by choice; under the usual 0.x reading the new
+capabilities and the `use` syntax would be a minor. Nothing is breaking:
+every addition is additive, and no existing program changes meaning.
 
 ### Added
 

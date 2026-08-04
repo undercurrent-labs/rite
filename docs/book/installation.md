@@ -24,7 +24,7 @@ This will:
 ### Pin a version
 
 ```bash
-curl -fsSL https://rite.foo/install | RITE_VERSION=v0.8.0 bash
+curl -fsSL https://rite.foo/install | RITE_VERSION=v0.8.1 bash
 ```
 
 Use the latest tag from [Releases](https://github.com/undercurrent-labs/rite/releases) (omit `RITE_VERSION` to install whatever is current).
@@ -33,7 +33,7 @@ Use the latest tag from [Releases](https://github.com/undercurrent-labs/rite/rel
 
 | Variable | Default | Meaning |
 |----------|---------|---------|
-| `RITE_VERSION` | latest release | Tag such as `v0.8.0` |
+| `RITE_VERSION` | latest release | Tag such as `v0.8.1` |
 | `RITE_INSTALL_DIR` | `$HOME/.local/bin` | Where binaries go |
 | `INSTALL_LSP` | `1` | Set `0` to skip `rite-lsp` |
 | `RITE_REPO` | `undercurrent-labs/rite` | GitHub repo for assets |

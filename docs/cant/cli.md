@@ -42,7 +42,7 @@ $ cant version
 cant 0.1.0
 cant_language_version: 0
 cant_graph_schema_version: 1
-rite: 0.8.0
+rite: 0.8.1
 ```
 
 Four numbers because they move independently: the tool, the language it
