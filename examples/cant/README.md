@@ -9,15 +9,14 @@ canonical ASCII Rite and runs on Rite's runtime. See
 
 ## Running them
 
-Not yet. Phase 1 implements the parser; `cant run` arrives in Phase 5 (see
-[`docs/cant/checklist.md`](../../docs/cant/checklist.md)). Until then:
-
 ```bash
-cant check examples/cant/01-flow/main.cant
-cant parse --structure examples/cant/01-flow/main.cant
+cant run examples/cant/01-flow/main.cant
+cant run examples/cant/06-capabilities/main.cant --allow fs:read=examples/cant/06-capabilities
 ```
 
-Every example here parses cleanly, and a test asserts it.
+Every example runs — the documentation gate executes each `main.cant` and
+requires it to succeed, so an example that stops working stops the build.
+`cant check` and `cant parse --structure` work on all of them too.
 
 ## Quoting
 

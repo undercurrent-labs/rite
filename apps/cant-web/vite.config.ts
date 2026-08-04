@@ -36,6 +36,14 @@ function riteHost(): string {
   return found;
 }
 
+/** The Sigil site's host, from the same `site.toml` the sync test enforces. */
+function sigilHost(): string {
+  const text = fs.readFileSync(path.join(repoRoot, "site.toml"), "utf8");
+  const found = text.match(/^\s*sigil\s*=\s*"([^"]+)"/m)?.[1];
+  if (!found) throw new Error("could not read `sigil` from site.toml");
+  return found;
+}
+
 export type OperatorSpec = {
   concept: string;
   token: string;
@@ -118,6 +126,7 @@ export default defineConfig({
   define: {
     __CANT_VERSION__: JSON.stringify(cantVersion()),
     __RITE_HOST__: JSON.stringify(riteHost()),
+    __SIGIL_HOST__: JSON.stringify(sigilHost()),
     __CANT_OPERATORS__: JSON.stringify(cantOperators()),
   },
   plugins: [vue()],

@@ -92,6 +92,12 @@ is still in range for the text it has.
 else: a consumer that mixed it into a cache key or a fingerprint would invalidate
 every stored artifact on a release that changed no graph.
 
+`uses` is the program's leading `use` imports, as module names in source order.
+Additive and absent when empty, so graphs predating the field serialize
+byte-for-byte as they always did. The names are emitted verbatim into the
+expansion; Cant never resolves them, so the graph records what was *asked for*,
+not what exists.
+
 ### Nodes
 
 ```json

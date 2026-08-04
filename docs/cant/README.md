@@ -51,21 +51,21 @@ Two ASCII spellings do double duty, and position decides which you meant:
 
 ## Reading a program
 
-<!-- ignore: the dependency walk needs `imports` and `resolve` from a module
-     this page does not define. It is here to be read, not run. -->
+<!-- ignore: reads module files this page does not ship; every name in it is
+     real, and the same walk runs on the site's front page bar the files. -->
 ```cant ignore
-roots
+["main"]
   -> *
-  -> ~{ !@fs.read -> imports -> * -> resolve }
-     :by canonical_path
+  -> ~{ !@fs.read($ + ".cant")? -> @regex.find_all($, "use [a-z_]+")? -> * -> replace($, "use ", "") }
+     :by str
      :max 4096
   -> []
 ```
 
-Scatter `roots` into one path per emission. Walk them breadth-first, reading each
-unseen file and following its imports. Identify candidates by `canonical_path`,
-so a file reached twice is visited once. Stop when the worklist empties, or after
-4096 unique paths. Collect what was found.
+Start from `main` and walk breadth-first: read each unseen module, pull its
+`use` lines out with a regex, and follow them. `:by str` means a module
+reached twice is visited once; stop when the worklist empties, or after 4096
+unique modules. Collect every module found.
 
 There are three ways to look at that before running it: `cant graph` shows the
 topology, `cant expand` the ordinary Rite it becomes, and `cant explain` the same

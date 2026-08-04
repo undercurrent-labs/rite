@@ -151,13 +151,13 @@ Forks nest.
 A bounded breadth-first fixed point, and the only cyclic construct in the
 language.
 
-<!-- ignore: needs `imports` and `resolve` from a module this page does not
-     define. It is here to be read, not run. -->
+<!-- ignore: reads module files this page does not ship; every name in it is
+     real, and the same program runs on the site's front page bar the files. -->
 ```cant ignore
-roots
+["main"]
   -> *
-  -> ~{ !@fs.read -> imports -> * -> resolve }
-     :by canonical_path
+  -> ~{ !@fs.read($ + ".cant")? -> @regex.find_all($, "use [a-z_]+")? -> * -> replace($, "use ", "") }
+     :by str
      :max 4096
   -> []
 ```
@@ -210,6 +210,31 @@ Configure the structural form immediately to their left, with no arrow between:
 The colon must touch the name. That is what keeps `:` usable as Rite's atom
 prefix, so `?{ $.level = :error }` reads as the comparison it looks like.
 
+## Modules — `use`
+
+A Cant file is still an expression, not a module — but it can import Rite
+modules, which is where named functions come from when builtins and inline
+closures are not enough:
+
+<!-- ignore: imports a module this page does not ship; the executed form is
+     conformance/cant/execution/use-module. -->
+```cant ignore
+use mathy
+[1, 2, 3] -> * -> mathy.square($) -> []
+```
+
+`use name` lines come first, one per line, before the flow. Cant does not
+resolve them: the names are emitted verbatim at the top of the generated Rite,
+and Rite's module system does everything else — resolution relative to the
+program's directory, qualified access, collision reporting. An unknown module
+or a typo in a qualified call is Rite's own diagnostic, mapped back onto the
+Cant source.
+
+Effect discipline crosses the boundary intact: a call to an effectful module
+function takes the marker like any host call — `!logger.shout($)` — and an
+unmarked call to one is rejected by Rite's analysis exactly as it would be in
+Rite.
+
 ## Effects
 
 Cant keeps Rite's effect discipline exactly as it is.
@@ -232,6 +257,57 @@ the top level. Run `cant expand` to see it.
 
 Reads are effects, in Cant as in Rite: `@fs.read`, `@env.get` and `@db.query`
 need `!` for the same reason `@clock.now` does.
+
+### Standard input
+
+`@stdin` is what makes a Cant one-liner a shell citizen — the program on `-e`,
+the data on the pipe:
+
+```bash
+cat access.log | cant run -e '!@stdin.lines -> * -> ?{ contains($, "500") } -> []'
+```
+
+`!@stdin.lines` emits the input as a list of lines and `!@stdin.read` as one
+string. An empty pipe is an empty list, so the flow runs zero times rather
+than once over `""`. Reading stdin is an effect with its own permission,
+allowed by default and revocable with `--deny stdin`.
+
+## Failures
+
+A capability call answers a result — `ok(value)` or `err(record)` — and a flow
+has three postures toward the `err`, all of them Rite's own vocabulary rather
+than new syntax:
+
+**Propagate and stop.** Postfix `?` unwraps the `ok` and ends the run on an
+`err`, with the failure mapped back onto the Cant source. The right posture
+when a missing file means the program cannot mean anything:
+
+<!-- ignore: reads a file this document does not ship; the runnable form is
+     examples/cant/06-capabilities. -->
+```cant ignore
+"config.json" -> !@fs.read? -> @json.decode -> .name
+```
+
+**Drop the failures.** Without `?`, the `err` flows as an ordinary value —
+so a ward can filter on it, and `unwrap_or` opens the survivors:
+
+<!-- ignore: reads files this document does not ship; the executed form is
+     conformance/cant/execution/error-dropped. -->
+```cant ignore
+["a.txt", "b.txt"] -> * -> !@fs.read($) -> ?{ is_ok($) } -> unwrap_or($, "") -> []
+```
+
+**Replace with a fallback.** `unwrap_or` alone keeps every emission, failed
+reads becoming the default:
+
+<!-- ignore: reads files this document does not ship; the executed form is
+     conformance/cant/execution/error-replaced. -->
+```cant ignore
+["a.txt", "b.txt"] -> * -> !@fs.read($) -> unwrap_or($, "") -> []
+```
+
+Both idioms are pinned by `conformance/cant/execution/error-dropped` and
+`error-replaced`, interpreted and compiled alike.
 
 ## Determinism
 
@@ -263,8 +339,8 @@ collect, or the `}` closing a Rite closure for the end of a Cant block.
 Each of these is deferred, not overlooked:
 
 - **Function definitions.** A `.cant` file is an expression, not a module. Use
-  Rite's builtins, a closure inside a stage, or — when that is not enough — reach
-  for Rite itself.
+  Rite's builtins, a closure inside a stage, or `use` a Rite module and call its
+  functions by qualified name.
 - **Parallel fork**, **cancellation** and **error-routing edges**. See Fork.
 - **Named anchors and arbitrary feedback edges.** Orbit is the only cycle.
 - **Lazy or infinite streams.** Every emission set is finite.

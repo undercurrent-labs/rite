@@ -10,10 +10,17 @@ import {
   RITE_URL,
 } from "../lib/operators";
 
-const hero = `roots
+// Every name in this program is real — it runs as written in a directory of
+// modules, and \`cant check\` holds it to that. The old hero used four
+// undefined names and could never run; a homepage must not open with a
+// program the language rejects.
+const hero = `["main"]
   -> *
-  -> ~{ !@fs.read -> imports -> * -> resolve }
-     :by canonical_path
+  -> ~{ !@fs.read($ + ".cant")?
+        -> @regex.find_all($, "use [a-z_]+")?
+        -> *
+        -> replace($, "use ", "") }
+     :by str
      :max 4096
   -> []`;
 
@@ -58,14 +65,18 @@ const views = [
           <CodeBlock :code="hero" label="walking a dependency tree" />
           <div class="space-y-3 text-sm leading-relaxed text-slate-400">
             <p>
-              Scatter <code class="font-mono text-cant-accent">roots</code> into one
-              path per emission. Walk them breadth-first, reading each unseen file and
-              following its imports. Identify candidates by
-              <code class="font-mono text-slate-300">canonical_path</code>, so a file
-              reached twice is visited once. Stop when the worklist empties, or after
-              4096 unique paths. Collect what was found.
+              Start from <code class="font-mono text-cant-accent">main</code>. Walk
+              breadth-first: read each unseen module, pull its
+              <code class="font-mono text-slate-300">use</code> lines out with a
+              regex, and follow them. <code class="font-mono text-slate-300">:by
+              str</code> means a module reached twice is visited once;
+              <code class="font-mono text-slate-300">:max 4096</code> is a hard
+              bound on how long the walk can run. Collect every module found.
             </p>
-            <p>Six lines, and a hard bound on how long it can run.</p>
+            <p>
+              Every name in it is real — this runs, as written, in a directory of
+              modules.
+            </p>
           </div>
         </div>
       </div>

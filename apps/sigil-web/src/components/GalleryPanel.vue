@@ -20,8 +20,36 @@ const emit = defineEmits<{ open: [string]; close: [] }>();
 
 const examples = __SIGIL_EXAMPLES__;
 
-type Card = { name: string; source: string; svg?: string; summary?: string; tags: string[] };
-const cards = ref<Card[]>(examples.map((e) => ({ ...e, tags: [] })));
+type Card = {
+  name: string;
+  source: string;
+  svg?: string;
+  summary?: string;
+  tags: string[];
+  /** Which tracery the thumbnail currently wears; hover advances it. */
+  tracery: number;
+};
+const cards = ref<Card[]>(examples.map((e) => ({ ...e, tags: [], tracery: 0 })));
+
+const TRACERIES = ["flowing", "concentric", "circuit"];
+
+/**
+ * Hovering a card cycles its tracery — the axis advertises itself.
+ *
+ * Pointer hover only, deliberately: keyboard focus should not fire renders
+ * as someone tabs through, and the card's caption names what changed.
+ */
+async function cycleTracery(card: Card) {
+  card.tracery = (card.tracery + 1) % TRACERIES.length;
+  const result = await renderCant(`${card.name}.cant`, card.source, {
+    ...defaultOptions(),
+    ornament: "sparse",
+    canonical: true,
+    metadata: "minimal",
+    tracery: TRACERIES[card.tracery],
+  });
+  if (result.svg) card.svg = result.svg;
+}
 
 /**
  * The constructs a card advertises, read off the rendered summary.
@@ -85,6 +113,8 @@ onMounted(async () => {
         <button
           class="group w-full rounded-lg border border-sigil-border bg-sigil-card p-1.5 text-left
                  transition-colors hover:border-sigil-accent/60 focus-visible:border-sigil-accent"
+          :title="`open in the editor — hovering cycles the tracery (${TRACERIES[card.tracery]})`"
+          @mouseenter="cycleTracery(card)"
           @click="emit('open', card.name)"
         >
           <span
@@ -102,6 +132,7 @@ onMounted(async () => {
           </span>
           <span class="mt-0.5 block text-[0.55rem] leading-tight text-sigil-muted">
             {{ card.tags.join(" · ") || "…" }}
+            <template v-if="card.tracery !== 0"> · {{ TRACERIES[card.tracery] }}</template>
           </span>
         </button>
       </li>

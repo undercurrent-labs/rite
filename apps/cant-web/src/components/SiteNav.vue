@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useRoute } from "vue-router";
-import { RITE_URL } from "../lib/operators";
+import { RITE_URL, SIGIL_URL } from "../lib/operators";
 
 /*
  * `compact` is for Studio, which is full-bleed.
@@ -97,6 +97,14 @@ const github = "https://github.com/undercurrent-labs/rite/tree/main/docs/cant";
           class="hidden items-center rounded-md border border-cant-cyan/30 px-3 py-1.5 text-sm text-cant-cyan hover:bg-cant-cyan/10 sm:inline-flex"
         >
           Rite ↗
+        </a>
+        <!-- The renderer for this language, in its own accent — violet, the
+             third note beside Rite's cyan and Cant's pink. -->
+        <a
+          :href="SIGIL_URL"
+          class="hidden items-center rounded-md border border-[#c792ea]/30 px-3 py-1.5 text-sm text-[#c792ea] hover:bg-[#c792ea]/10 sm:inline-flex"
+        >
+          Sigil ↗
         </a>
         <a
           :href="github"

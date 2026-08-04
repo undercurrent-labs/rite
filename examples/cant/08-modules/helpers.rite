@@ -1,0 +1,8 @@
+pub def emphasize(s) [[
+  ^ join(["**", s, "**"], "")
+]]
+
+pub def! announce(s) [[
+  ! @console.println(join(["-> ", s], ""))
+  ^ s
+]]

@@ -18,10 +18,12 @@ export type OperatorSpec = {
 declare const __CANT_OPERATORS__: OperatorSpec[];
 declare const __CANT_VERSION__: string;
 declare const __RITE_HOST__: string;
+declare const __SIGIL_HOST__: string;
 
 export const OPERATORS: OperatorSpec[] = __CANT_OPERATORS__;
 export const CANT_VERSION: string = __CANT_VERSION__;
 export const RITE_URL = `https://${__RITE_HOST__}`;
+export const SIGIL_URL = `https://${__SIGIL_HOST__}`;
 
 /**
  * Human-readable names for the concepts, in the order the docs introduce them.

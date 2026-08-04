@@ -1,0 +1,2 @@
+use helpers
+["ward", "orbit"] -> * -> upper -> helpers.emphasize($) -> !helpers.announce($) -> []

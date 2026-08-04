@@ -122,6 +122,71 @@ grammar for both. There is no second thing to learn.
 
 Both need a grant: `--allow env` and `--allow net=example.com`.
 
+## Pipes
+
+The data on the pipe, the program on `-e` — the form `awk`, `sed` and `jq`
+built their careers on. `!@stdin.lines` is the input as a list of lines;
+`!@stdin.read` is the whole of it as one string.
+
+Count the lines that mention an error:
+
+```bash
+cat access.log | cant -e '!@stdin.lines -> * -> ?{ contains($, "500") } -> [] -> count'
+```
+
+Sum the first column:
+
+```bash
+cat sizes.txt | cant -e '!@stdin.lines -> * -> parse_int(first(words($)))? -> [] -> sum'
+```
+
+Pluck a field out of JSON, `jq`-style:
+
+```bash
+curl -s https://api.example.com/things | cant -e '!@stdin.read -> @json.decode? -> .items -> * -> .name -> []' --allow net=api.example.com
+```
+
+(The `curl` is doing the fetching there; drop it and let Cant fetch with
+`!@http.get` if you prefer one process.)
+
+The two most frequent words:
+
+```bash
+cat speech.txt | cant -e '!@stdin.read -> words -> frequencies -> take($, 2)'
+```
+
+```text
+[[the, 3], [and, 2]]
+```
+
+`frequencies` answers `[value, count]` pairs, most frequent first. The long
+spelling — `group`, a stage rewriting each bucket to `[count, word]`,
+structural `sort`, `reverse` — still works, and is worth knowing the day the
+key is not the value itself: `sort_by`, `min_by` and `max_by` take a key
+function or a field name for exactly that.
+
+Pull a number out of every line that has one, and sum them:
+
+```bash
+cat timings.log | cant -e '!@stdin.lines -> * -> nth(@regex.captures($, "took ([0-9]+)ms")? ?? [], 1) -> ?{ $ != none } -> parse_int($)? -> [] -> sum'
+```
+
+`@regex` is pure — no `!`, no permission — and a pattern that does not compile
+is an `err` value, so the usual postures apply. `captures` answers the whole
+match first and each group after it; `nth` reaches into the pair, `?? []`
+covers the lines that did not match, and the ward drops them.
+
+Columns from a CSV:
+
+```bash
+cat report.csv | cant -e '!@stdin.read -> @csv.decode? -> * -> .total -> []'
+```
+
+An empty pipe is an empty list: every recipe above answers its zero — `0`,
+`none`, `[]` — rather than hanging or throwing. And the value goes to stdout
+with nothing else mixed in, so a Cant one-liner composes with the next tool in
+the pipeline, including `cant` itself.
+
 ## Several answers at once
 
 A fork runs each branch from the same input and concatenates what they emit, in

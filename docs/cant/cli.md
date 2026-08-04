@@ -173,16 +173,16 @@ Reprints the program with canonical layout. Prints to stdout by default;
 `--write` rewrites the file.
 
 ```bash
-$ cant fmt --width 40 -e 'roots -> * -> ~{ !@fs.read -> imports -> * -> resolve } :by canonical_path :max 4096 -> []'
-roots
+$ cant fmt --width 40 -e '["main"] -> * -> ~{ !@fs.read($ + ".cant")? -> @regex.find_all($, "use [a-z_]+")? -> * -> replace($, "use ", "") } :by str :max 4096 -> []'
+["main"]
   -> *
   -> ~{
-       !@fs.read
-       -> imports
+       !@fs.read($ + ".cant")?
+       -> @regex.find_all($, "use [a-z_]+")?
        -> *
-       -> resolve
+       -> replace($, "use ", "")
      }
-     :by canonical_path
+     :by str
      :max 4096
   -> []
 ```
@@ -260,7 +260,7 @@ Prints the flow graph — the normalized semantic form of the program, and what
 lowering to Rite will read.
 
 ```bash
-$ cant graph --format dot -e 'roots -> ~{ !@fs.read -> imports -> * } :max 4096' | dot -Tsvg > graph.svg
+$ cant graph --format dot -e '["m"] -> * -> ~{ !@fs.read($)? -> lines -> * } :max 4096' | dot -Tsvg > graph.svg
 ```
 
 JSON is the machine format; DOT is for looking at, and clusters each fork branch
@@ -321,16 +321,101 @@ cant> :explain 5 -> |{ $ + 1 ; $ * 2 }
 …
 ```
 
-A Cant program is one flow: no declarations, no bindings, no statements. There is
-nothing for a line to leave behind.
+A Cant program is one flow: no declarations, no bindings, no statements. The
+*language* has nothing for a line to leave behind — but the **session** has a
+workbench:
 
-The session does carry the permissions and budget it started with:
+```text
+cant> evens <- [1, 2, 3, 4] -> * -> ?{ $ % 2 = 0 } -> []
+[2, 4]
+cant> evens -> * -> $ * 10 -> []
+[20, 40]
+cant> it -> count
+2
+cant> :bindings
+evens <- [ 2, 4 ]
+it <- 2
+```
+
+The binding arrow is Rite's own — what `:bindings` prints back is exactly what
+you type — and it is sugar for `:let evens = …`, which also works. `←` is its
+glyph twin. To *compare* against a negative number rather than bind, space the
+operator: `x < -3`.
+
+`:let` (and its arrow) is a meta-command, not syntax — a `.cant` file containing it does not
+parse. What persists is the **value**, not the program: re-using `evens`
+re-runs nothing and repeats no effects. Bindings reach the next line as a
+generated-Rite preamble (`:expand` says so when any are live), which is why a
+bound name works inside any stage. Only data values can be bound; a handle or
+a function has no literal to write, and the refusal says so. `it` is always
+the last successful answer.
+
+`~> <program>` (glyph `⟿`, longhand `:trace`) runs a line and prints per-node
+emission counts beside the value — the same counts `cant run --trace` reports:
+
+```text
+cant> ~> evens -> * -> []
+trace  n0:1  n1:2  n2:1
+[2, 4]
+```
+
+The session also carries the permissions and budget it started with:
 
 ```bash
 cant repl --allow fs:read=./data --timeout 5s
 ```
 
 Ctrl-D or `:quit` leaves; Ctrl-C abandons the line.
+
+### `cant test`
+
+Run a program and compare its final value against an expectation:
+
+```bash
+cant test -e '[1, 2] -> * -> $ * 2 -> []' --expect '[2, 4]'
+cant test pipeline.cant          # compares against pipeline.expect beside it
+```
+
+The comparison is over the printed value — exactly the text `cant run` shows —
+with trailing whitespace trimmed on both sides, so a sidecar file ending in a
+newline compares equal. A match prints `ok` and exits 0. A mismatch shows both
+values and exits **7**, the code the contract reserves for test failures. A
+program that fails before producing a value keeps its own exit code: a parse
+error is not a wrong answer.
+
+Permissions and budgets apply as they do to `cant run`, so a test that reads a
+file still says `--allow fs:read=.`.
+
+### Tracing a run
+
+`cant run --trace` counts how many emissions left every node and reports a
+`cant.trace` document on stderr — `--trace-out PATH` writes it to a file
+instead, and implies `--trace`:
+
+```bash
+cant run --trace-out p.trace.json p.cant
+cant sigil p.cant --weights p.trace.json
+```
+
+```json
+{
+  "schema": "cant.trace",
+  "version": "1",
+  "source": "p.cant",
+  "nodes": { "n0": 1, "n1": 3, "n2": 2 }
+}
+```
+
+Node ids are the graph's (`cant graph --format json` names the same ones), so
+the trace joins the sigil: `--weights` draws hot paths bright and thick and a
+branch that never ran faint. The program's *value* is untouched — it prints on
+stdout exactly as an untraced run would, so a traced run still pipes.
+
+Counts accumulate: an orbit body that ran five times over two candidates
+reports the sum. The instrumentation lives in the generated Rite (run
+`cant expand` on nothing — the traced variant differs only by `@store`
+counting), and a run that fails produces no trace: half a measurement of a
+crashed run would read as a measurement.
 
 ## Exit codes
 

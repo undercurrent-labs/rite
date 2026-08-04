@@ -2,6 +2,111 @@
 
 ## [Unreleased]
 
+### Added
+
+- **`@regex` — pure text transforms.** `is_match`, `find`, `find_all`,
+  `captures`, `replace` (with `$1` group references) and `split`. No `!`, no
+  permission: the engine is guaranteed linear-time, so a pattern cannot hang a
+  script, and a pattern that does not compile is an `err` value the usual
+  postures apply to. Compiled patterns are cached, so a pattern applied per
+  line costs one compile.
+
+- **List helpers.** `nth(xs, i)` (out of range is `none`, so `?? fallback`
+  composes), `sort_by` / `min_by` / `max_by` (a key function or a field name —
+  `sort` keeps its two-argument comparator), and `frequencies(xs)` —
+  `[value, count]` pairs, most frequent first. `enumerate` existed but was
+  unreachable: implemented, dispatched, and never named in the resolver's
+  builtin table; it is now callable, with `with_index` as its alias.
+
+- **The REPL grew a workbench.** `x <- <program>` — Rite's own binding arrow,
+  and exactly the shape `:bindings` prints back — runs a program and keeps its
+  *value*; `~> <program>` runs one and shows per-node emission counts beside
+  the answer; `it` is always the last answer. Both arrows take their glyph
+  twins (`←`, `⟿`), and `:let` / `:trace` remain as longhand; `:bindings` lists the workbench
+  and `:trace <program>` shows per-node emission counts beside the result.
+  Deliberately not language syntax: a `.cant` file containing `:let` does not
+  parse, bindings hold values rather than programs (nothing re-runs, no effect
+  repeats), and they reach the next line as a generated-Rite preamble — which
+  `:expand` discloses. Only data values can be bound; the refusal names what
+  cannot travel.
+
+- **The `[[` trap teaches itself.** A nested list written `[[1, 2], [3]]`
+  used to fail with Rite's raw "expected RBracket"; the diagnostic now carries
+  the fix — put a space between the brackets — detected from the error's own
+  shape, so it never fires on an unrelated parse failure.
+
+### Fixed
+
+- **The Cant site's hero program can now actually run.** It used four
+  undefined names (`roots`, `imports`, `resolve`, `canonical_path`) and failed
+  `cant check` with the very language it advertised. The new hero walks a
+  module tree's `use` lines breadth-first with `@fs.read` and `@regex` — every
+  name real, verified against a directory of modules — and the orbit example
+  in the language page follows suit. Every Studio example and both Rite site
+  samples were audited and run.
+
+- **`@stdin` — scripts that sit in a pipe.** `! @stdin.read` is the whole of
+  standard input as one string; `! @stdin.lines` is the input as a list of
+  lines, an empty pipe being an empty list. One read, cached, so `read` after
+  `lines` sees the same bytes. Reading stdin is an effect with its own
+  permission, allowed by default like `console` and revocable with
+  `--deny stdin`. This is what makes a Cant one-liner a shell citizen:
+  `cat access.log | cant -e '!@stdin.lines -> * -> ?{ contains($, "500") } -> []'`.
+
+- **Cant `use` of Rite modules.** Leading `use name` lines import a Rite
+  module — named functions, at last, without Cant learning to parse Rite:
+  the names are emitted verbatim into the generated Rite and Rite's module
+  system does everything else, including reporting a typo in a qualified call
+  against your Cant source. Both dialects, the formatter and the converter
+  carry the lines; the graph records them as `uses` (additive, absent when
+  empty); effect discipline crosses intact — `!logger.shout($)` marks the
+  call, and an unmarked effectful call is rejected as it would be in Rite.
+  Open question 1 closes.
+
+- **`cant test`.** Run a program and compare its printed value against
+  `--expect` or the `<source>.expect` sidecar. A mismatch shows both values
+  and exits 7 — the code the contract reserves for test failures; a program
+  that fails before answering keeps its own exit, because a parse error is
+  not a wrong answer.
+
+- **`cant run --trace` — the run, measured.** Counts how many emissions left
+  every node and reports a `cant.trace` document on stderr (`--trace-out
+  PATH` for a file). The instrumentation is generated Rite — `@store`
+  counting, visible with `cant expand` — and the program's value prints on
+  stdout exactly as an untraced run would, so a traced run still pipes.
+  Orbit iterations accumulate. A failed run produces no trace: half a
+  measurement of a crash would read as a measurement.
+
+- **Weighted sigils: `cant sigil --weights trace.json`.** The two halves
+  meet: feed a traced run to the renderer and every trace scales with how
+  many emissions left its source node — hot paths bright and thick, a branch
+  that never ran faint but present. Weights are presentation, not layout:
+  nothing moves (ADR 0004), the counts join the graph and therefore the
+  fingerprint, and an untraced render is byte-identical to before the field
+  existed.
+
+- **Sigil diff: `cant sigil new.cant --diff old.cant --canonical`.** The
+  review picture: the old program's semantic geometry ghosted beneath the
+  new render, anonymous and faint. Deterministic layout is what makes it
+  honest — the unchanged parts sit exactly under their ghosts — which is
+  why `--canonical` is required. SVG, fingerprinted `format=svg-diff`.
+
+- **An error story, documented and pinned.** A failed capability call was
+  already a value; now the three postures have names and fixtures:
+  propagate with `?`, drop with `?{ is_ok($) }`, replace with
+  `unwrap_or($, fallback)` — `docs/cant/language.md` § Failures,
+  `conformance/cant/execution/error-dropped` and `error-replaced`.
+
+- **Three new executed examples** — `examples/cant/07-stdin`, `08-modules`,
+  `09-failures` — and a Pipes section in the one-liners page: counting from a
+  log, summing a column, `jq`-style JSON plucking, word frequencies with
+  decorate-sort-undecorate, CSV columns. Every recipe was run before it was
+  written down, and the example files are executed by the documentation gate.
+
+- The Sigil site has a social card (`xtask sigil-og` — the ceremony render
+  is the artwork), gallery cards cycle traceries on hover, and the Cant
+  site's nav links Sigil in its own violet.
+
 ## [0.8.0] — 2026-08-04
 
 Cant programs become artifacts. Sigil renders a program's semantic topology as

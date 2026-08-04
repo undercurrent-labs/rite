@@ -71,6 +71,12 @@ fn main() {
                 ]));
             }
         }
+        "sigil-og" => {
+            if let Err(e) = sigil_og() {
+                eprintln!("sigil-og: {e:#}");
+                std::process::exit(1);
+            }
+        }
         "cant-og" => {
             if let Err(e) = cant_og() {
                 eprintln!("cant-og: {e:#}");
@@ -79,7 +85,7 @@ fn main() {
         }
         _ => {
             eprintln!(
-                "xtask commands: test | fmt | clippy | doc | examples | wasm-check | cant-og"
+                "xtask commands: test | fmt | clippy | doc | examples | wasm-check | cant-og | sigil-og"
             );
         }
     }
@@ -95,6 +101,85 @@ fn main() {
 /// Regenerate after changing the card or Rite's logo:
 ///
 ///     cargo run -p xtask -- cant-og
+/// The Sigil site's social card: family ground, violet accent, and the
+/// ceremony example's actual render — the golden from `fixtures/sigil/svg`,
+/// inlined as vector art so the card shows the product, not a screenshot.
+/// Removed with Cant, like `cant-og`: the fixture it reads goes with the
+/// language that produces it.
+fn sigil_og() -> anyhow::Result<()> {
+    const WIDTH: u32 = 1200;
+    const HEIGHT: u32 = 630;
+
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .ok_or_else(|| anyhow::anyhow!("no parent of xtask/"))?
+        .to_path_buf();
+
+    let ceremony = std::fs::read_to_string(root.join("fixtures/sigil/svg/ceremony.veiled.svg"))?;
+    // Re-window the golden into the card's right-hand panel. The golden's own
+    // opening tag carries the 1600-square viewBox; everything after it is the
+    // artwork, background included.
+    let body = ceremony
+        .split_once('>')
+        .map(|(_, rest)| rest)
+        .ok_or_else(|| anyhow::anyhow!("the ceremony golden has no opening tag"))?;
+    // Drop the golden's own background rect: the artwork floats on the card's
+    // ground instead of arriving in an opaque panel that crops the headline.
+    let body = match body.find("<rect") {
+        Some(start) => match body[start..].find("/>") {
+            Some(rel_end) => {
+                let end = start + rel_end + 2;
+                format!("{}{}", &body[..start], &body[end..])
+            }
+            None => body.to_string(),
+        },
+        None => body.to_string(),
+    };
+    let inset =
+        format!(r##"<svg x="560" y="10" width="630" height="630" viewBox="0 0 1600 1600">{body}"##);
+
+    let svg = format!(
+        r##"<svg xmlns="http://www.w3.org/2000/svg" width="{WIDTH}" height="{HEIGHT}" viewBox="0 0 {WIDTH} {HEIGHT}">
+  <rect width="{WIDTH}" height="{HEIGHT}" fill="#0b0f14"/>
+  <rect x="0" y="0" width="{WIDTH}" height="6" fill="#c792ea"/>
+
+  <rect x="88" y="88" width="92" height="92" rx="18" fill="#05030A" stroke="#c792ea" stroke-opacity="0.35" stroke-width="2"/>
+  <g fill="none" transform="translate(88 88) scale(0.71875)">
+    <circle cx="64" cy="64" r="44" stroke="#8E5CFF" stroke-width="3" opacity="0.7"/>
+    <path d="M64 30 L64 52 M31 83 L53 70.5 M97 83 L75 70.5" stroke="#FF3CCF" stroke-width="4" stroke-linecap="round"/>
+    <path d="M64 11 L73 20 L64 29 L55 20 Z" stroke="#38F2FF" stroke-width="4"/>
+    <circle cx="26" cy="86" r="7" stroke="#38F2FF" stroke-width="4"/>
+    <circle cx="102" cy="86" r="7" stroke="#38F2FF" stroke-width="4"/>
+    <circle cx="64" cy="64" r="12" stroke="#D8B35C" stroke-width="4"/>
+    <circle cx="64" cy="64" r="3.5" fill="#D8B35C" stroke="none"/>
+  </g>
+
+  <text x="208" y="152" font-family="DejaVu Sans Mono, monospace" font-size="52" font-weight="700" fill="#c792ea">Sigil</text>
+
+  <text x="88" y="290" font-family="DejaVu Sans, sans-serif" font-size="46" font-weight="700" fill="#e2e8f0">A program's topology</text>
+  <text x="88" y="352" font-family="DejaVu Sans, sans-serif" font-size="46" font-weight="700" fill="#e2e8f0">as a <tspan fill="#c792ea">ritual artifact</tspan>.</text>
+
+  <text x="88" y="440" font-family="DejaVu Sans, sans-serif" font-size="24" fill="#8b9bb4">Deterministic. Veiled by default.</text>
+  <text x="88" y="478" font-family="DejaVu Sans, sans-serif" font-size="24" fill="#8b9bb4">Rendered in your browser — never uploaded.</text>
+
+  <text x="88" y="562" font-family="DejaVu Sans Mono, monospace" font-size="25" fill="#c792ea">sigil.rite.foo</text>
+
+  {inset}
+</svg>"##
+    );
+
+    let png = rite_render::svg_to_png(&svg, 1.0)?;
+    let target = root.join("apps/sigil-web/public/og.png");
+    std::fs::create_dir_all(target.parent().expect("parent"))?;
+    std::fs::write(&target, &png)?;
+    println!(
+        "wrote {} ({} bytes, {WIDTH}x{HEIGHT})",
+        target.strip_prefix(&root).unwrap_or(&target).display(),
+        png.len()
+    );
+    Ok(())
+}
+
 fn cant_og() -> anyhow::Result<()> {
     const WIDTH: u32 = 1200;
     const HEIGHT: u32 = 630;

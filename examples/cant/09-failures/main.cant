@@ -1,0 +1,1 @@
+["missing.txt", "here.txt"] -> * -> !@fs.read($) -> ?{ is_ok($) } -> unwrap_or($, "") -> trim -> []
