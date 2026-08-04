@@ -27,26 +27,40 @@ pub mod expand;
 pub mod explain;
 pub mod graph;
 pub mod lower;
+pub mod sigil;
 pub mod validate;
 
 pub use dot::to_dot;
 pub use expand::{expand, remap_diagnostic, ExpandOptions, Expansion, Mapping, SourceMap};
 pub use explain::{explain, Explanation, Step};
 pub use graph::{
-    CantProgram, Edge, EdgeRole, LayoutHint, LeafExpr, Node, NodeKind, SourceInfo, Subgraph,
-    SubgraphId,
+    CantProgram, CapabilityRef, Edge, EdgeRole, LayoutHint, LeafExpr, Node, NodeKind, Producer,
+    SourceInfo, Subgraph, SubgraphId,
 };
 pub use lower::lower;
+pub use sigil::{to_sigil_graph, AdaptOptions};
 pub use validate::{analyze, validate, validate_deserialized, validate_modifiers, Analysis};
 
 use serde::{Deserialize, Serialize};
+
+/// The name of the serialized Cant graph schema.
+///
+/// Constant, and separate from the version because a consumer that reads more
+/// than one graph format has to know *which* format before a version number
+/// means anything. Sigil records it as the source schema of the normalized graph
+/// it builds.
+pub const GRAPH_SCHEMA_NAME: &str = "cant.graph";
 
 /// The version of the serialized Cant graph schema.
 ///
 /// Bumped when the JSON shape changes in a way a consumer would notice.
 /// Independent of both the crate version and the language version: a tooling
 /// release that does not touch the graph must not invalidate a stored one.
-pub const GRAPH_SCHEMA_VERSION: &str = "0";
+///
+/// **1** — added `schema`, `producer`, and per-node `capabilities`, so a
+/// renderer can tell which host family a node touches without pattern-matching
+/// its leaf text. See `docs/cant/graph-schema.md`.
+pub const GRAPH_SCHEMA_VERSION: &str = "1";
 
 /// Re-exported so a consumer needs one crate to know which language and which
 /// graph shape it is looking at.
@@ -109,7 +123,7 @@ mod tests {
 
     #[test]
     fn the_graph_schema_and_the_language_are_versioned_separately() {
-        assert_eq!(GRAPH_SCHEMA_VERSION, "0");
+        assert_eq!(GRAPH_SCHEMA_VERSION, "1");
         assert_eq!(CANT_LANGUAGE_VERSION, "0");
     }
 }

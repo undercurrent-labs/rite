@@ -34,7 +34,7 @@ fn version_reports_cant_the_language_and_the_rite_it_targets() {
     let text = stdout(&out);
     assert!(text.starts_with("cant "), "{text}");
     assert!(text.contains("cant_language_version: 0"), "{text}");
-    assert!(text.contains("cant_graph_schema_version: 0"), "{text}");
+    assert!(text.contains("cant_graph_schema_version: 1"), "{text}");
     // `rite-core`'s version, not this crate's: Cant versions independently, so
     // `CARGO_PKG_VERSION` here is Cant's number and would never match.
     assert!(
@@ -503,7 +503,8 @@ fn graph_emits_json_by_default() {
     let out = cant(&["graph", "-e", "[1, 2] -> * -> ~{ deps } :max 8 -> []"]);
     assert_eq!(code(&out), 0, "{}", stderr(&out));
     let json: serde_json::Value = serde_json::from_str(&stdout(&out)).expect("valid JSON");
-    assert_eq!(json["version"], serde_json::json!("0"));
+    assert_eq!(json["schema"], serde_json::json!("cant.graph"));
+    assert_eq!(json["version"], serde_json::json!("1"));
     // Five: roots, scatter, orbit, the `deps` inside its body, collect. Nodes
     // nested in a subgraph are members of the one flat list, with a `subgraph`
     // field saying where they live — a renderer walking `nodes` sees all of them.

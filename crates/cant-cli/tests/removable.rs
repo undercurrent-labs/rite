@@ -37,6 +37,9 @@ const CANT_PATHS: &[&str] = &[
     "crates/cant-sem",
     "crates/cant",
     "crates/cant-wasm",
+    // Sigil's browser binding parses Cant source, so it cannot outlive Cant. The
+    // *renderer* (`crates/rite-sigil`) can, and does.
+    "crates/cant-sigil-wasm",
     "crates/cant-cli",
     "grammar/cant",
     "docs/cant",
@@ -44,7 +47,19 @@ const CANT_PATHS: &[&str] = &[
     "docs/adr/0002-cant-lowers-through-rite.md",
     "conformance/cant",
     "examples/cant",
+    // Sigil's examples are Cant programs and its scene fixtures are generated
+    // from them. The *renderer* survives Cant's removal; these do not.
+    "examples/sigil",
+    "fixtures/sigil",
     "apps/cant-web",
+    // Sigil's site renders Cant programs and has no other producer, so it goes
+    // with Cant — as does the WASM binding it loads and the scripts that build
+    // them. The *renderer* (`crates/rite-sigil`) survives, which is the boundary
+    // that carries the architecture.
+    "apps/sigil-web",
+    "scripts/build-sigil-wasm.sh",
+    "scripts/build-sigil-site.sh",
+    "scripts/check-sigil-wasm-parity.mjs",
     "scripts/build-cant-site.sh",
     "scripts/build-cant-graphs.sh",
     "scripts/build-cant-wasm.sh",
@@ -75,6 +90,163 @@ const SHARED_FILES: &[(&str, &str)] = &[
         "`-p cant-cli`, the packaging lines, and the two Cant steps at the end of \
          the `sites` job — the Rite deploy runs before them, so removing Cant \
          cannot disturb it",
+    ),
+    // Sigil renders Cant graphs but does not depend on Cant (ADR 0006), so
+    // removing Cant leaves the renderer building and its tests passing. What it
+    // leaves behind is prose: doc comments and pages that explain the adapter
+    // boundary by naming the thing on the other side of it.
+    (
+        "crates/rite-sigil/Cargo.toml",
+        "a comment naming the crates it deliberately does not depend on",
+    ),
+    (
+        "crates/rite-sigil/src/lib.rs",
+        "doc-comment prose and one field value in the doctest's JSON",
+    ),
+    (
+        "crates/rite-sigil/src/graph.rs",
+        "`SourceLanguage::Cant` and the doc comments explaining why the model is \
+         not Cant's",
+    ),
+    (
+        "crates/rite-sigil/src/diagnostic.rs",
+        "one doc comment comparing the code namespace to Cant's",
+    ),
+    (
+        "crates/rite-sigil/src/canonical.rs",
+        "`SourceLanguage::Cant` in test fixtures",
+    ),
+    (
+        "crates/rite-sigil/src/limits.rs",
+        "one doc comment recommending `cant graph` for a graph too large to draw",
+    ),
+    (
+        "crates/rite-sigil/src/svg.rs",
+        "one doc comment citing the Cant social card as `svg_to_png`'s first \
+         caller; the PNG path itself is Rite's and stays",
+    ),
+    (
+        "crates/rite-sigil/src/validate.rs",
+        "one doc comment citing `validate_deserialized`",
+    ),
+    (
+        "crates/rite-sigil/src/analysis.rs",
+        "`SourceLanguage::Cant` in test fixtures",
+    ),
+    (
+        "crates/rite-sigil/src/layout.rs",
+        "`SourceLanguage::Cant` in test fixtures",
+    ),
+    (
+        "crates/rite-sigil/src/scene.rs",
+        "nothing — it names no Cant type",
+    ),
+    (
+        "crates/rite-sigil/tests/boundaries.rs",
+        "the Cant half of the forbidden-dependency list, which becomes vacuous",
+    ),
+    (
+        "crates/rite-sigil/tests/performance.rs",
+        "`SourceLanguage::Cant` in the generated fixture",
+    ),
+    (
+        "crates/rite-sigil/tests/svg_security.rs",
+        "`SourceLanguage::Cant` in the hostile-input fixtures",
+    ),
+    (
+        "crates/rite-sigil/tests/visual.rs",
+        "`SourceLanguage::Cant` in the rasterised sample graph",
+    ),
+    (
+        "crates/rite-sigil/tests/fuzz.rs",
+        "`SourceLanguage::Cant` in the generated graphs",
+    ),
+    (
+        "docs/sigil/deployment.md",
+        "two sentences comparing the Sigil worker to Cant's",
+    ),
+    (
+        "crates/rite-sigil/tests/html_export.rs",
+        "`SourceLanguage::Cant` in the hostile-input fixtures",
+    ),
+    (
+        "crates/rite-sigil/src/html.rs",
+        "nothing — it names no Cant type",
+    ),
+    (
+        "crates/rite-sigil/src/ornament.rs",
+        "nothing — it names no Cant type",
+    ),
+    (
+        "crates/rite-sigil/src/marks.rs",
+        "nothing — it names no Cant type",
+    ),
+    (
+        "crates/rite-sigil/src/theme.rs",
+        "nothing — it names no Cant type",
+    ),
+    (
+        "docs/sigil/README.md",
+        "the pipeline diagram and the Cant references in it",
+    ),
+    (
+        "docs/sigil/graph-contract.md",
+        "the `cant.graph` adaptation section",
+    ),
+    ("docs/sigil/scene.md", "the fixture provenance note"),
+    (
+        "docs/sigil/checklist.md",
+        "the criteria naming `cant sigil`; Sigil's own criteria stand",
+    ),
+    (
+        "docs/sigil/implementation-log.md",
+        "nothing — a log records what happened",
+    ),
+    (
+        "docs/sigil/visual-language.md",
+        "one sentence naming the Cant pipeline; the visual grammar is the renderer's",
+    ),
+    (
+        "docs/sigil/cli.md",
+        "the whole page — it documents `cant sigil`, which is removed with Cant",
+    ),
+    (
+        "docs/sigil/themes.md",
+        "nothing — themes belong to the renderer",
+    ),
+    (
+        "docs/sigil/accessibility.md",
+        "nothing — the summary and titles belong to the renderer",
+    ),
+    (
+        "docs/sigil/internals.md",
+        "the pipeline diagram's Cant stages and the parity-gate paragraph",
+    ),
+    (
+        "docs/adr/0003-sigil-is-a-renderer-not-a-runtime.md",
+        "nothing — an accepted ADR records a decision, not a live dependency",
+    ),
+    (
+        "docs/adr/0004-sigil-layout-is-non-semantic.md",
+        "nothing, as above",
+    ),
+    ("docs/adr/0005-one-renderer-in-rust.md", "nothing, as above"),
+    (
+        "docs/adr/0006-sigil-consumes-a-normalized-graph.md",
+        "nothing, as above — though it becomes an ADR about an adapter with one \
+         producer left",
+    ),
+    (
+        "docs/adr/0007-veil-and-source-privacy.md",
+        "nothing, as above",
+    ),
+    (
+        "docs/adr/0008-graphviz-stays-the-technical-view.md",
+        "nothing, as above",
+    ),
+    (
+        "docs/adr/0009-glyph-names-a-token-sigil-names-an-artifact.md",
+        "nothing, as above",
     ),
     ("scripts/install.sh", "the INSTALL_CANT block"),
     (
@@ -227,7 +399,12 @@ fn every_shared_file_still_exists_and_is_documented() {
 }
 
 /// The workspace member list is the one place removal *must* touch, so it is
-/// worth checking it is exactly four lines and they are together.
+/// worth checking the Cant entries are all there and together.
+///
+/// Six now, not four: `cant-wasm` and `cant-sigil-wasm` joined the original
+/// four. The second is Sigil's browser binding, which parses Cant source and
+/// therefore cannot outlive Cant — see its manifest for why it is named
+/// `cant-` rather than `rite-`.
 #[test]
 fn the_workspace_entries_are_contiguous() {
     let manifest = std::fs::read_to_string(repo_root().join("Cargo.toml")).expect("Cargo.toml");
@@ -238,7 +415,7 @@ fn the_workspace_entries_are_contiguous() {
         .filter(|(_, l)| l.trim_start().starts_with("\"crates/cant"))
         .map(|(i, _)| i)
         .collect();
-    assert_eq!(cant_members.len(), 5, "expected five Cant members");
+    assert_eq!(cant_members.len(), 6, "expected six Cant members");
     let first = cant_members[0];
     assert!(
         cant_members
@@ -267,15 +444,34 @@ fn no_rite_crate_invokes_the_cant_binary() {
         let Ok(text) = std::fs::read_to_string(root.join(&relative)) else {
             continue;
         };
-        // `site_domain_sync.rs` reads the `cant` *host* out of `site.toml`. It is
-        // a string key, not a binary, and it is already in the removal notes.
-        let bare_string_is_a_host = relative.ends_with("tests/site_domain_sync.rs");
-        for marker in ["CARGO_BIN_EXE_cant", "Command::new(\"cant", "\"cant\""] {
-            if marker == "\"cant\"" && bare_string_is_a_host {
-                continue;
-            }
+        for marker in ["CARGO_BIN_EXE_cant", "Command::new(\"cant"] {
             if text.contains(marker) {
                 offenders.push(format!("{relative}: {marker}"));
+            }
+        }
+
+        // A bare `"cant"` is the backstop for `.arg("cant")` and the like, and
+        // on its own it is far too loose. `site_domain_sync.rs` reads the `cant`
+        // *host* out of `site.toml`; `rite-sigil` names `cant` as a
+        // `SourceLanguage`. Neither is an invocation, and neither would be
+        // distinguishable from one by a whole-file search — `site_domain_sync.rs`
+        // spawns `git`, so even "does this file spawn anything?" says yes.
+        //
+        // So the backstop is line-level: a bare `"cant"` counts only where the
+        // same line is also building a command. That is a rule rather than a
+        // list of exempted file names, which is what this was becoming — and a
+        // file-name exception is indistinguishable from an oversight six months
+        // later.
+        for (n, line) in text.lines().enumerate() {
+            if !line.contains("\"cant\"") {
+                continue;
+            }
+            let building_a_command = line.contains("Command")
+                || line.contains(".arg(")
+                || line.contains(".args(")
+                || line.contains("exe");
+            if building_a_command {
+                offenders.push(format!("{relative}:{}: {}", n + 1, line.trim()));
             }
         }
     }

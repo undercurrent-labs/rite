@@ -27,6 +27,14 @@ primary = "rite.foo"
 # (docs/adr/0001-cant-sibling-frontend.md).
 cant = "cant.rite.foo"
 
+# Sigil's site: the semantic renderer, on its own worker and its own domain, for
+# the same reason Cant has one. It is a separate product with a separate purpose
+# — a program's topology as an artifact, not a language to read about — and the
+# Worker that serves it is deliberately minimal because the rendering happens in
+# the browser and the source never leaves it
+# (docs/adr/0007-veil-and-source-privacy.md).
+sigil = "sigil.rite.foo"
+
 # Hosts that used to be canonical. Kept so the sync test can tell "a stale
 # reference someone forgot to update" from "a typo", and so a redirect can be
 # retired deliberately rather than by discovering the traffic stopped.

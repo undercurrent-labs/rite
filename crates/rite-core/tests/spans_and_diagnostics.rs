@@ -217,7 +217,7 @@ fn the_caret_lines_up_under_the_span_on_a_glyph_line() {
     );
 
     // The source line and the caret line must agree once the gutter is removed.
-    // Select by position, not by content: Rite's return sigil is `^`, so searching for a
+    // Select by position, not by content: Rite's return glyph is `^`, so searching for a
     // line containing '^' finds the *source* line and compares it against itself.
     let lines: Vec<&str> = out.lines().collect();
     let src_idx = lines

@@ -15,7 +15,7 @@ pub struct Style {
     pub italic: bool,
     #[serde(default)]
     pub weight: Option<u16>,
-    /// The sigil glow. Carried so a renderer *could* draw it; the SVG output
+    /// The glyph glow. Carried so a renderer *could* draw it; the SVG output
     /// deliberately does not, because a blur filter costs more than it adds at
     /// the sizes an image of code is read at, and rasterises differently in
     /// every viewer.
@@ -64,7 +64,7 @@ pub enum Kind {
     Operator,
     Http,
     Punctuation,
-    Sigil,
+    Glyph,
     Plain,
 }
 
@@ -81,7 +81,7 @@ impl Kind {
             Kind::Operator => "operator",
             Kind::Http => "http",
             Kind::Punctuation => "punctuation",
-            Kind::Sigil => "sigil",
+            Kind::Glyph => "glyph",
             Kind::Plain => "plain",
         }
     }
@@ -98,7 +98,7 @@ impl Kind {
         Kind::Operator,
         Kind::Http,
         Kind::Punctuation,
-        Kind::Sigil,
+        Kind::Glyph,
         Kind::Plain,
     ];
 }

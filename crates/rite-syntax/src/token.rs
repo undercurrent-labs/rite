@@ -5,7 +5,7 @@ use std::fmt;
 /// Canonical token kinds after glyph/ASCII normalization.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum TokenKind {
-    // Sigils (normalized)
+    // Glyphs (normalized)
     Def,
     Bind,
     BindMut,
@@ -34,7 +34,7 @@ pub enum TokenKind {
     StarAssign,
     SlashAssign,
     PercentAssign,
-    // Sugar keywords / sigils
+    // Sugar keywords / glyphs
     Else,
     For,
     Unless,

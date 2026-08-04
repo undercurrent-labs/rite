@@ -1134,7 +1134,7 @@ impl Parser {
         while !self.is_eof() && !self.check(TokenKind::RecordClose) {
             // `⟨..base, k: v⟩` — spread `base` in, then let later entries win.
             // Sugar for record merge: see the fold in rite-sem's `Expr::Record`.
-            // `..` is canonical (grammar/sigils.toml) and dialect-neutral; `...` is
+            // `..` is canonical (grammar/glyphs.toml) and dialect-neutral; `...` is
             // accepted as a synonym and normalised to `..` by the formatter.
             if self.check(TokenKind::Rest) || self.check(TokenKind::Spread) {
                 let open = self.advance().span;

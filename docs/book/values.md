@@ -56,7 +56,7 @@ the language, not two:
 ⟨..base, ..over⟩ = base + over    // true, always
 ```
 
-`..` is the canonical sigil in both dialects; `...` is accepted and `rite fmt`
+`..` is the canonical glyph in both dialects; `...` is accepted and `rite fmt`
 normalises it to `..`.
 
 ## Atoms

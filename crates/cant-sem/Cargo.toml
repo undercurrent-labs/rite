@@ -10,6 +10,10 @@ description = "Cant graph IR, validation, lowering to Rite, and source maps"
 [dependencies]
 cant-syntax = { workspace = true }
 rite-core = { workspace = true }
+# The Sigil adapter. This edge is `cant-* -> rite-*`, which ADR 0001 allows and
+# ADR 0006 requires: `rite-sigil` may not know what Cant is, so the crate that
+# knows both shapes has to be this one.
+rite-sigil = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 

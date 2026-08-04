@@ -25,9 +25,23 @@ fn repo_root() -> PathBuf {
 
 struct Manifest {
     primary: String,
-    cant: String,
+    /// Every product host besides the primary one, as `(key, host)`.
+    ///
+    /// A list rather than a field per product. It was one field when there was
+    /// one sibling; Sigil made it two, and a fourth product would have meant
+    /// editing this struct, the parser, the allow-list and the coherence check
+    /// in four places — three of which fail silently by simply not checking the
+    /// new host.
+    products: Vec<(String, String)>,
     legacy: Vec<String>,
 }
+
+/// The keys in `site.toml` that name a product site.
+///
+/// Named explicitly rather than "every key that is not `primary` or `legacy`",
+/// so a typo in `site.toml` is a missing host the tests complain about rather
+/// than a new product they silently accept.
+const PRODUCT_KEYS: &[&str] = &["cant", "sigil"];
 
 /// Read the three host keys out of `site.toml`.
 ///
@@ -62,7 +76,13 @@ fn manifest() -> Manifest {
 
     Manifest {
         primary: value("primary").expect("site.toml has a `primary` host"),
-        cant: value("cant").expect("site.toml has a `cant` host"),
+        products: PRODUCT_KEYS
+            .iter()
+            .map(|key| {
+                let host = value(key).unwrap_or_else(|| panic!("site.toml has no `{key}` host"));
+                ((*key).to_string(), host)
+            })
+            .collect(),
         legacy,
     }
 }
@@ -150,7 +170,9 @@ fn is_host_char(b: u8) -> bool {
 #[test]
 fn every_rite_host_in_the_tree_is_one_site_toml_declares() {
     let manifest = manifest();
-    let allowed = [manifest.primary.clone(), manifest.cant.clone()];
+    let allowed: Vec<String> = std::iter::once(manifest.primary.clone())
+        .chain(manifest.products.iter().map(|(_, host)| host.clone()))
+        .collect();
     let mut offenders: Vec<String> = Vec::new();
 
     for path in tracked_files() {
@@ -193,26 +215,26 @@ fn every_rite_host_in_the_tree_is_one_site_toml_declares() {
 
     assert!(
         offenders.is_empty(),
-        "{} reference(s) to a host site.toml does not declare \
-         (primary `{}`, cant `{}`):\n  {}",
+        "{} reference(s) to a host site.toml does not declare (declared: {}):\n  {}",
         offenders.len(),
-        manifest.primary,
-        manifest.cant,
+        allowed.join(", "),
         offenders.join("\n  ")
     );
 }
 
 /// The manifest itself has to be coherent.
 #[test]
-fn the_cant_host_is_a_subdomain_of_the_primary_one() {
+fn every_product_host_is_a_subdomain_of_the_primary_one() {
     let manifest = manifest();
-    assert!(
-        manifest.cant.ends_with(&format!(".{}", manifest.primary)),
-        "cant host `{}` is not under `{}` — if that is deliberate, this test is \
-         what should change, along with the reasoning in site.toml",
-        manifest.cant,
-        manifest.primary
-    );
+    for (key, host) in &manifest.products {
+        assert!(
+            host.ends_with(&format!(".{}", manifest.primary)),
+            "`{key}` host `{host}` is not under `{}` — if that is deliberate, \
+             this test is what should change, along with the reasoning in \
+             site.toml",
+            manifest.primary
+        );
+    }
     assert!(
         !manifest.legacy.contains(&manifest.primary),
         "`{}` is listed as both primary and legacy",

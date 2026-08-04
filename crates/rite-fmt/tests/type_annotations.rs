@@ -71,7 +71,7 @@ fn mcp_declaration_survives_dialect_conversion() {
     let ascii = convert_source(glyph, Dialect::Ascii).unwrap().text;
     assert!(
         ascii.contains("host.mcp.serve"),
-        "capability sigil not converted:\n{ascii}"
+        "capability glyph not converted:\n{ascii}"
     );
     assert!(
         ascii.contains("a: int"),

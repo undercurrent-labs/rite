@@ -1,6 +1,18 @@
 # Changelog
 
-## [Unreleased]
+## [0.8.0] — 2026-08-04
+
+Cant programs become artifacts. Sigil renders a program's semantic topology as
+a deterministic radial diagram — circular, symbolic, readable with every label
+removed — from the CLI (`cant sigil`), and in the browser at `sigil.rite.foo`,
+where the source never leaves the tab. Three themes, three traceries, four
+ornament levels, three disclosure modes; SVG, PNG, interactive HTML and scene
+JSON. Beside it: Cant Studio, the `cant.graph` schema at version 1, and Cant
+versioning on its own number.
+
+The minor bump is the new renderer and its site. One in-repo API is renamed —
+`rite_render::Kind::Sigil` is `Kind::Glyph` — and nothing anyone types has
+changed.
 
 ### Fixed
 
@@ -14,9 +26,163 @@
 
 ### Changed
 
+- **A Rite token symbol is a *glyph*, not a *sigil*.** The word was in service
+  for two things at once — `◆` and, shortly, the visual artifact a whole program
+  renders to — and the collision is worst in exactly the documents that have to
+  explain both. `grammar/sigils.toml` is now `grammar/glyphs.toml`, the
+  `"sigil"` palette kind is `"glyph"`, `rite_render::Kind::Sigil` is
+  `Kind::Glyph`, and the Studio stylesheet's `.tok-sigil` is `.tok-glyph`.
+  No syntax, no semantics, and no spelling anyone types has changed. The
+  breaking parts are the enum variant, the palette key and the CSS class; all
+  three are in-repo. See ADR 0009.
+
+- **The Cant graph schema is version `1`.** Three additions, all so a consumer
+  never has to recover meaning from a label: a `schema` field naming the format
+  (`"cant.graph"`), a `producer` block saying what wrote the graph, and
+  per-node `capabilities` — each `{ name, family }`, so "does this node touch
+  the filesystem or the network?" is a field rather than a re-scan of leaf text.
+  `CantProgram::capabilities()` now reads those fields instead of re-scanning,
+  and `capability_families()` joins it. Version `0` graphs are refused rather
+  than upgraded, and a document whose `schema` is not `cant.graph` is refused
+  before its version is read. `docs/cant/graph-schema.md` has the shape.
+
 - The Rite site's footer no longer links Cant.
 
 ### Added
+
+- **`rite-sigil` — the semantic renderer's graph and scene layers.** A Cant
+  program's topology, normalized into a renderer-owned model (`rite.sigil.graph`
+  v1) and projected into a deterministic radial scene (`rite.sigil.scene` v1):
+  entry at the centre, flow spiralling outward, fork branches in ordered
+  clockwise sectors, orbits as closed rings their bodies sit on, and capability
+  invocations pulled to an outer host boundary. Same graph and options produce a
+  byte-identical scene. The crate parses nothing, executes nothing, and opens
+  nothing — `crates/rite-sigil/tests/boundaries.rs` reads the manifest and the
+  sources to keep it that way. Six golden scene fixtures under `fixtures/sigil/`,
+  generated from `examples/sigil/`, asserted structurally rather than merely
+  written. See `docs/sigil/`.
+
+- **Sigil renders.** `cant sigil <file|-|-e|--graph>` produces SVG, PNG,
+  self-contained interactive HTML, or scene JSON, in three themes, four ornament
+  levels, three disclosure modes and four metadata modes.
+
+  Marks come from a constrained grammar rather than noise: a fixed skeleton per
+  node kind plus deterministic variation that only ever adds strokes outside the
+  skeleton it varies. Every kind differs from every other in *topology* — a
+  stroke count, a closed versus open form — because colour is not permitted to
+  carry the distinction, and `void` is the theme where a mark that only works in
+  colour fails.
+
+  Ornament is generated from the level and the seed and nothing from the placed
+  scene, which is what makes "removable without relayout" true rather than
+  careful: it cannot avoid a node because it cannot see one.
+
+  Veiled is the default and means the artifact draws no source text at all —
+  enforced by never generating a text element, not by hiding one. `--metadata`
+  is a separate axis governing what is *embedded*; `none` strips titles,
+  descriptions, identifiers and snippets. The contradictory pairing warns rather
+  than silently resolving.
+
+  Standard SVG contains no script, no event handler, no external reference and
+  no unescaped user text — asserted over twelve hostile strings across
+  thirty-six option combinations.
+
+  **Three traceries.** How traces are drawn is its own axis, beside theme and
+  ornament: `--tracery flowing` (the default — cubics bowed with the
+  composition), `concentric` (radial runs joined by arcs of circles centred on
+  the composition, sharp at the joints, the way an astrolabe is), and `circuit`
+  (orthogonal runs at right angles with a via dot at every bend, and one on a
+  straight run). A tracery changes every edge's shape and no mark's position —
+  asserted, not assumed — and the choice is recorded in the scene's metadata
+  and the render fingerprint. The web app offers all three from the control
+  bar; the hostile-string suite runs against every tracery because their paths
+  carry commands the default never emits.
+
+  Traces route *around* marks. An edge's arc bows toward the centre, which is
+  exactly where the source mark sits, so on real programs traces sagged through
+  marks they did not connect — a relationship the graph never asserted. Each
+  edge now tries its house curve first and, only when that would clip a mark,
+  deepens or slides the bow through a fixed candidate order until it clears —
+  never flipping the bow's side, because a feedback arc that crossed to the
+  inside would stop reading as feedback. Deterministic, bounded, and inert for
+  any edge that was already clean.
+  `examples/sigil/ceremony.cant` joins the set as the densest example — two
+  readings, a decode, a warded fork carrying an effect and an orbit — and the
+  seventh pair of goldens.
+
+  Traces also avoid *each other* where they can (OD2): edges route in graph
+  order, earlier traces are soft obstacles, and among mark-clearing candidates
+  the fewest crossings wins — deterministically, without moving a node. Traces
+  sharing an endpoint are exempt; they meet at a mark, which is a junction.
+  And fork sectors renormalize recursively (OD3): a fork inside a branch now
+  subdivides the sector its parent was allocated rather than opening a
+  top-level fan across its siblings — before this, a nested fork's branches
+  were not sector-placed at all and fell to the leftover pass near the seal
+  band.
+
+  **The parity gate now executes the wasm.** `parity.rs` proved the CLI and
+  browser binding are one code path by calling both natively; it could not
+  prove the wasm32 *build* draws the same bytes. Now
+  `tests/browser_fixture.rs` pins a native render as a fixture and
+  `scripts/check-sigil-wasm-parity.mjs` runs the built bundle in Node against
+  it byte-for-byte, inside `build-sigil-site.sh` — so CI and every release
+  exercise the artifact that actually ships. AR4/Q2 close.
+
+  **The Sigil site deploys from the tag.** `release.yml`'s `sites` job builds
+  and deploys `apps/sigil-web` beside the Rite and Cant sites, inside the
+  Cant-removable section; attaching the `sigil.rite.foo` zone in Cloudflare is
+  the one manual step left. The app also gained the HTML export (W8):
+  `renderCantHtml`/`renderGraphHtml` build the same self-contained interactive
+  page the CLI writes, in the tab, uploaded nowhere.
+
+  **The five unwritten docs pages exist.** `visual-language.md` — the page
+  that teaches reading a sigil, promoted out of `marks.rs` doc comments —
+  plus `cli.md`, `themes.md`, `accessibility.md` and `internals.md`, each
+  registered with the removability gate.
+
+- **`sigil.rite.foo` — the Sigil web application.** `apps/sigil-web`: Vue 3,
+  TypeScript, Tailwind, Cloudflare Workers Static Assets, and the same renderer
+  compiled to WebAssembly through `cant-sigil-wasm`. Paste or open a Cant
+  program, or a `cant graph` document, and it renders in the tab.
+
+  **Nothing is uploaded.** There is no render endpoint, no source in a URL, and
+  nothing persisted. The Worker answers `/api/health`, `/api/version` and
+  `/api/schema` and serves static assets; a test reads its source and fails if it
+  grows a request-body read or a render route, because a behavioural test cannot
+  prove absence.
+
+  Pan, zoom, fit, fullscreen; hover and keyboard-focus revelation; selection with
+  upstream-and-downstream path highlighting; a collapsible Codex that decodes a
+  Veiled render, and Deep Veil to suppress that; a gallery rendered live from the
+  repository's own examples; and SVG, PNG, scene JSON and copy exports.
+
+  The chrome follows the family rule the Cant site established: ground, panels,
+  borders and type byte-identical to the Rite and Cant sites, with the accent
+  moved — `keyword` violet from `grammar/palette.json`, alongside Rite's
+  capability cyan and Cant's glyph pink. The two typefaces are self-hosted
+  rather than loaded from Google Fonts, because this app's CSP is
+  `default-src 'self'` and the privacy claim covers fonts too. The canvas keeps
+  the renderer's own neon-ritual ground: the artifact sits on its stage, framed
+  by chrome that belongs to the family, and the header links each sibling in
+  that sibling's accent.
+
+  The source panel highlights Cant: the Cant site's scanner, ported whole and
+  driven by the same `grammar/cant/operators.toml` through a build-time define,
+  layered under a transparent textarea that keeps the caret and every native
+  editing behaviour. No editor dependency — the app still ships no third-party
+  code. A fresh render materialises with a brief brightening that settles,
+  starting from partial opacity so live re-renders read as re-inscription
+  rather than flicker, and `prefers-reduced-motion` truncates it to nothing.
+
+- **ADRs 0003–0009, for Sigil.** The semantic renderer that turns a Cant graph
+  into a ritual artifact is being built, and the decisions that constrain it are
+  recorded before the code: Sigil is a renderer and never executes a program
+  (0003); its layout carries no execution meaning (0004); one renderer in Rust
+  serves both the CLI and the browser (0005); it consumes a normalized adapter
+  graph rather than Cant's own types (0006); Veiled rendering and source privacy
+  are first-class and separately enforced (0007); Graphviz stays the technical
+  topology view and does not supply Sigil's geometry (0008); and *glyph* names a
+  token while *Sigil* names an artifact (0009).
 
 - **Cant versions on its own number, starting at `0.1.0`.** It shipped in Rite's
   `0.7.0` archive wearing Rite's version, which claimed seven minor cycles of

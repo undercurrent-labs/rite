@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128" role="img" aria-label="Sigil">
+  <title>Sigil</title>
+  <!--
+    Sigil's mark is a miniature sigil: a source, two seals, a ring, drawn by
+    hand in the renderer's own neon-ritual palette (crates/rite-sigil/src/theme.rs)
+    so the mark and the artifacts it stands for cannot disagree about colour.
+  -->
+  <rect width="128" height="128" fill="#05030A"/>
+  <g fill="none">
+    <!-- ornament ring, at ornament opacity -->
+    <circle cx="64" cy="64" r="54" stroke="#8E5CFF" stroke-width="1.5" stroke-dasharray="2 6" opacity="0.35"/>
+    <!-- orbit ring -->
+    <circle cx="64" cy="64" r="44" stroke="#8E5CFF" stroke-width="2" opacity="0.7"/>
+    <!-- edges: source and seals to the centre -->
+    <path d="M64 30 L64 52 M31 83 L53 70.5 M97 83 L75 70.5" stroke="#FF3CCF" stroke-width="2.5" stroke-linecap="round"/>
+    <!-- the source, a diamond at the top of the ring -->
+    <path d="M64 11 L73 20 L64 29 L55 20 Z" stroke="#38F2FF" stroke-width="2.5"/>
+    <!-- two seals on the lower ring -->
+    <circle cx="26" cy="86" r="7" stroke="#38F2FF" stroke-width="2.5"/>
+    <circle cx="102" cy="86" r="7" stroke="#38F2FF" stroke-width="2.5"/>
+    <!-- the closing seal -->
+    <circle cx="64" cy="64" r="12" stroke="#D8B35C" stroke-width="2.5"/>
+    <circle cx="64" cy="64" r="3.5" fill="#D8B35C" stroke="none"/>
+  </g>
+</svg>

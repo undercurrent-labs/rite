@@ -21,6 +21,7 @@
 
 use cant_syntax::{CantDiagnostics, Dialect, FormatOptions, ParseResult};
 mod repl;
+mod sigil;
 
 use clap::{Parser, Subcommand};
 use rite_core::SourceMap;
@@ -105,6 +106,14 @@ fn runtime_options(cli: &Cli) -> rite::RuntimeOptions {
     }
 }
 
+/// The subcommands.
+///
+/// `Box`ed variants would shrink the enum — `Sigil` carries fifteen fields and
+/// clippy notices — but this value is constructed once per process, moved once,
+/// and matched once. Boxing it would trade a readable declaration for an
+/// allocation nobody can measure, so the lint is turned off here rather than
+/// obeyed.
+#[allow(clippy::large_enum_variant)]
 #[derive(Subcommand, Debug)]
 enum Commands {
     /// Print the Cant, language, graph schema, and Rite versions
@@ -295,8 +304,9 @@ enum Commands {
     Update,
     /// Print the flow graph
     ///
-    /// JSON is the machine format; DOT is for looking at the topology before
-    /// Sigil exists — pipe it to `dot -Tsvg`.
+    /// JSON is the machine format; DOT is the technical topology view — pipe it
+    /// to `dot -Tsvg`. `cant sigil` is the stylized one, and neither replaces
+    /// the other (ADR 0008).
     Graph {
         /// Source file, or `-` for standard input
         source: Option<PathBuf>,
@@ -311,6 +321,95 @@ enum Commands {
         /// Output format
         #[arg(long, default_value = "json", value_name = "json|dot")]
         format: String,
+    },
+    /// Render the program's topology as a sigil
+    ///
+    /// A deterministic ritual artifact: entry at the centre, flow spiralling
+    /// outward, forks in ordered sectors, orbits as closed rings, and host
+    /// invocations on the outer boundary. `cant graph` remains the technical
+    /// view; neither replaces the other (ADR 0008).
+    Sigil {
+        /// Source file, or `-` for standard input
+        source: Option<PathBuf>,
+        /// Render this expression instead of a file — quote it
+        #[arg(
+            long,
+            short = 'e',
+            value_name = "EXPRESSION",
+            allow_hyphen_values = true
+        )]
+        expr: Option<String>,
+        /// Render a `cant.graph` JSON document instead of source; `-` for stdin
+        #[arg(long, value_name = "PATH")]
+        graph: Option<PathBuf>,
+        /// Where to write; `-` for standard output
+        #[arg(long, short)]
+        output: Option<PathBuf>,
+        /// Output format
+        #[arg(long, default_value = "svg", value_name = "svg|png|html|scene-json")]
+        format: String,
+        /// Visual theme
+        #[arg(
+            long,
+            default_value = "neon-ritual",
+            value_name = "neon-ritual|void|parchment"
+        )]
+        theme: String,
+        /// How much is visible in the artifact
+        #[arg(
+            long,
+            default_value = "veiled",
+            value_name = "veiled|inscribed|revealed"
+        )]
+        mode: String,
+        /// How much is embedded, visible or not
+        #[arg(long, default_value = "safe", value_name = "full|safe|minimal|none")]
+        metadata: String,
+        /// Seed for deterministic variation
+        #[arg(
+            long,
+            default_value = "graph",
+            value_name = "graph|canonical|random|INTEGER"
+        )]
+        seed: String,
+        /// The documented fixed orientation and seed, for reproducible output
+        #[arg(long)]
+        canonical: bool,
+        /// Background: `theme`, `transparent`, or a `#rrggbb` colour
+        #[arg(long, default_value = "theme", value_name = "theme|transparent|HEX")]
+        background: String,
+        /// How much non-semantic decoration to draw
+        #[arg(
+            long,
+            default_value = "ritual",
+            value_name = "none|sparse|ritual|maximal"
+        )]
+        ornament: String,
+        /// How traces are drawn
+        #[arg(
+            long,
+            default_value = "flowing",
+            value_name = "flowing|concentric|circuit"
+        )]
+        tracery: String,
+        /// Pixel width (the canvas is square, so this sets both dimensions)
+        #[arg(long)]
+        width: Option<f64>,
+        /// PNG rasterisation scale, when `--width` is not given
+        #[arg(long, default_value_t = 1.0)]
+        scale: f64,
+        /// Embed the scene JSON in an HTML export (needs `--metadata full`)
+        #[arg(long = "embed-scene")]
+        embed_scene: bool,
+        /// Draw skeleton marks only — for a graph too dense for full variation
+        #[arg(long)]
+        simplify: bool,
+        /// Refuse a graph larger than this
+        #[arg(long, value_name = "N")]
+        max_nodes: Option<usize>,
+        /// Render and report the fingerprint without writing anything
+        #[arg(long)]
+        check: bool,
     },
     /// Print the parsed syntax tree
     Parse {
@@ -460,6 +559,47 @@ async fn main() -> ExitCode {
             Ok(input) => print_graph(input, &format),
             Err(usage) => usage_error(&usage),
         },
+        Commands::Sigil {
+            source,
+            expr,
+            graph,
+            output,
+            format,
+            theme,
+            mode,
+            metadata,
+            seed,
+            canonical,
+            background,
+            ornament,
+            tracery,
+            width,
+            scale,
+            embed_scene,
+            simplify,
+            max_nodes,
+            check,
+        } => sigil::run(sigil::SigilArgs {
+            source,
+            expr,
+            graph,
+            output,
+            format,
+            theme,
+            mode,
+            metadata,
+            seed,
+            canonical,
+            background,
+            ornament,
+            tracery,
+            width,
+            scale,
+            embed_scene,
+            simplify,
+            max_nodes,
+            check,
+        }),
         Commands::Fmt {
             source,
             expr,

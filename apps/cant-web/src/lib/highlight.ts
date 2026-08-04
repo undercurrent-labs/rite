@@ -28,7 +28,7 @@ const SPELLINGS: string[] = (() => {
     if (op.glyph && op.glyph !== op.ascii) out.push(op.glyph);
   }
   // `}` and `⟧` close blocks and are in the manifest; `{` only ever arrives
-  // attached to a sigil, so it is not listed and needs no case here.
+  // attached to a glyph, so it is not listed and needs no case here.
   return [...new Set(out)].sort((a, b) => b.length - a.length);
 })();
 

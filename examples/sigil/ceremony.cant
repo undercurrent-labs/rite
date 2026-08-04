@@ -1,0 +1,14 @@
+// Two readings, a decoding, a warded fork with an inner
+// orbit, and one seal — the fullest ceremony in the set.
+["rites.json", "omens.json"]
+  -> *
+  -> ! @fs.read($)
+  -> @json.decode
+  -> ?{ $ != none }
+  -> |{
+       ?{ $ > 3 } -> $ * 3 -> ! @clock.now ;
+       ~{ ?{ $ < 12 } -> $ + 4 } :by str :max 6 ;
+       $ - 1
+     }
+  -> ?{ $ >= 0 }
+  -> []

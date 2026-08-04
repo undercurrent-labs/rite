@@ -590,6 +590,16 @@ pub fn analyze(
 /// consumer that assumes edges join real nodes.
 pub fn validate_deserialized(json: &str, file: rite_core::FileId) -> Result<Analysis, String> {
     let graph: CantProgram = serde_json::from_str(json).map_err(|e| e.to_string())?;
+    // Name before version: a version number is only meaningful once it is known
+    // whose it is, and "expected 1, got 3" is a confusing thing to say about a
+    // document that was never a Cant graph.
+    if graph.schema != crate::GRAPH_SCHEMA_NAME {
+        return Err(format!(
+            "graph schema `{}`, expected `{}`",
+            graph.schema,
+            crate::GRAPH_SCHEMA_NAME
+        ));
+    }
     if graph.version != crate::GRAPH_SCHEMA_VERSION {
         return Err(format!(
             "graph schema version `{}`, expected `{}`",

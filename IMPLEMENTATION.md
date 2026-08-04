@@ -181,6 +181,7 @@ DAP, package registry, JetBrains, collaborative Studio, cloud compile, bytecode 
 | Product site | `apps/rite-web` (home, docs book, studio shell) → Cloudflare |
 | Agent | `skills/rite` |
 | Cant (sibling language) | `cant-syntax`, `cant-sem`, `cant`, `cant-cli` |
+| Sigil (semantic renderer) | *planned:* `rite-sigil`, `rite-sigil-wasm`, `apps/sigil-web` |
 
 ### Cant
 
@@ -203,8 +204,8 @@ version` / `check` / `parse` / `fmt` / `convert` / `graph` / `expand` / `explain
 runtime and compile through Rite's compiler; `crates/cant-cli/tests/differential.rs`
 checks that `cant run`, `rite run <cant expand>` and the compiled binary agree.
 `cant` ships in the release archives beside `rite` and `rite-lsp`, and
-`docs/cant/graph-schema.md` freezes the graph JSON at version 0 as the contract
-for a future Sigil renderer.
+`docs/cant/graph-schema.md` freezes the graph JSON at **version 1** as the
+contract Sigil consumes.
 
 **Cant is removable.** No Rite source file mentions it at all; Rite's grammar,
 conformance fixtures, examples, book and skill bundle never have. Thirteen shared
@@ -224,6 +225,49 @@ behaviour-preserving:
 - `rite_render::svg_to_png` — arbitrary SVG to PNG, the part of `render_png` that
   was never about Rite. It builds Cant's social card without anyone installing an
   image toolchain.
+
+### Sigil
+
+The **semantic visual renderer**: a Cant graph projected into a deterministic
+radial artifact — SVG, PNG, interactive HTML, or scene JSON — that stays legible
+with every label removed. Not a runtime, not a visual programming language, and
+not a Graphviz skin; `cant graph --format dot` remains the technical topology
+view and does not supply Sigil's geometry.
+
+- [`docs/adr/0003-sigil-is-a-renderer-not-a-runtime.md`](docs/adr/0003-sigil-is-a-renderer-not-a-runtime.md)
+- [`docs/adr/0004-sigil-layout-is-non-semantic.md`](docs/adr/0004-sigil-layout-is-non-semantic.md)
+- [`docs/adr/0005-one-renderer-in-rust.md`](docs/adr/0005-one-renderer-in-rust.md)
+- [`docs/adr/0006-sigil-consumes-a-normalized-graph.md`](docs/adr/0006-sigil-consumes-a-normalized-graph.md)
+- [`docs/adr/0007-veil-and-source-privacy.md`](docs/adr/0007-veil-and-source-privacy.md)
+- [`docs/adr/0008-graphviz-stays-the-technical-view.md`](docs/adr/0008-graphviz-stays-the-technical-view.md)
+- [`docs/adr/0009-glyph-names-a-token-sigil-names-an-artifact.md`](docs/adr/0009-glyph-names-a-token-sigil-names-an-artifact.md)
+- [`docs/sigil/checklist.md`](docs/sigil/checklist.md) — per-criterion status
+- [`docs/sigil/implementation-log.md`](docs/sigil/implementation-log.md) —
+  deviations, discovered constraints, per-phase test results
+
+Status: **Phases 0–8 complete, Phase 9 partial. Deploys from the tag; first
+live deploy lands with the next release.**
+
+`cant sigil` renders SVG, PNG, interactive HTML and scene JSON in three themes,
+three traceries, four ornament levels and three disclosure modes.
+`apps/sigil-web` runs the same renderer as WebAssembly in the browser — the
+executed wasm32 build is compared byte-for-byte against a native fixture on
+every site build — with selection, a Codex, a gallery, and every export the
+CLI has including the interactive HTML page. No server round trip: there is no
+render endpoint, and a test reads the Worker's source to keep it that way.
+
+Of the checklist's criteria: **51 met with a test behind them, 14 partial with
+the gap named, 1 not started.** All ten documentation pages exist —
+`visual-language.md` is the one that teaches reading a sigil. What remains:
+attaching the `sigil.rite.foo` zone in Cloudflare (the deploy itself is in
+`release.yml`), and the partials named in `docs/sigil/checklist.md`;
+`docs/sigil/implementation-log.md` records what each phase cost.
+
+Two conflicts with the specification were resolved in the repository's favour and
+recorded: the browser binding is `cant-sigil-wasm` rather than `rite-sigil-wasm`,
+because it parses Cant source and ADR 0001 fixes the dependency edge by directory
+name; and the gallery renders thumbnails live rather than baking them at build
+time, which is stronger against drift.
 
 ### Key decisions
 

@@ -1,120 +1,120 @@
-# Canonical sigils and ASCII aliases for Rite v1
+# Canonical glyphs and ASCII aliases for Rite v1
 
-[[sigil]]
+[[glyph]]
 canonical = "◆"
 ascii = ["def"]
 token = "Def"
 meaning = "Declaration"
 
-[[sigil]]
+[[glyph]]
 canonical = "←"
 ascii = ["<-"]
 token = "Bind"
 meaning = "Immutable binding"
 
-[[sigil]]
+[[glyph]]
 canonical = "↢"
 ascii = ["<~"]
 token = "BindMut"
 meaning = "Mutable binding"
 
-[[sigil]]
+[[glyph]]
 canonical = "→"
 ascii = ["->"]
 token = "Arrow"
 meaning = "Pipeline or match branch"
 
-[[sigil]]
+[[glyph]]
 canonical = "^"
 ascii = ["return"]
 token = "Return"
 meaning = "Explicit return or yield"
 
-[[sigil]]
+[[glyph]]
 canonical = "?"
 ascii = ["if"]
 token = "If"
 meaning = "Conditional (prefix) / try unwrap (postfix)"
 
-[[sigil]]
+[[glyph]]
 canonical = "~"
 ascii = ["match"]
 token = "Match"
 meaning = "Pattern match"
 
-[[sigil]]
+[[glyph]]
 canonical = "!"
 ascii = ["do"]
 token = "Effect"
 meaning = "Perform effect"
 
-[[sigil]]
+[[glyph]]
 canonical = "@"
 ascii = ["host."]
 token = "Host"
 meaning = "Host capability namespace"
 
-[[sigil]]
+[[glyph]]
 canonical = "#"
 ascii = [":"]
 token = "Atom"
 meaning = "Atom prefix"
 
-[[sigil]]
+[[glyph]]
 canonical = "⟦"
 ascii = ["[["]
 token = "BlockOpen"
 meaning = "Executable block open"
 
-[[sigil]]
+[[glyph]]
 canonical = "⟧"
 ascii = ["]]"]
 token = "BlockClose"
 meaning = "Executable block close"
 
-[[sigil]]
+[[glyph]]
 canonical = "⟨"
 ascii = ["<<"]
 token = "RecordOpen"
 meaning = "Record literal open"
 
-[[sigil]]
+[[glyph]]
 canonical = "⟩"
 ascii = [">>"]
 token = "RecordClose"
 meaning = "Record literal close"
 
-[[sigil]]
+[[glyph]]
 canonical = "∈"
 ascii = ["in"]
 token = "In"
 meaning = "Membership"
 
-[[sigil]]
+[[glyph]]
 canonical = "∉"
 ascii = ["not in"]
 token = "NotIn"
 meaning = "Non-membership"
 
-[[sigil]]
+[[glyph]]
 canonical = "??"
 ascii = ["??"]
 token = "Coalesce"
 meaning = "Null/default coalescing"
 
-[[sigil]]
+[[glyph]]
 canonical = ":="
 ascii = [":="]
 token = "Assign"
 meaning = "Mutable assignment"
 
-[[sigil]]
+[[glyph]]
 canonical = ".."
 ascii = [".."]
 token = "Rest"
 meaning = "Rest in patterns; spread in record literals (`⟨..base, k: v⟩`, sugar for `+`)"
 
-[[sigil]]
+[[glyph]]
 canonical = ":"
 ascii = ["else"]
 token = "Colon"

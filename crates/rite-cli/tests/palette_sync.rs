@@ -9,7 +9,7 @@
 //!
 //! The stylesheet stays hand-written rather than generated: it carries things a
 //! colour table has no business knowing about, like the reduced-motion rule that
-//! turns the sigil glow off. What is checked is that the parts which *are* the
+//! turns the glyph glow off. What is checked is that the parts which *are* the
 //! palette agree.
 
 use std::collections::BTreeSet;

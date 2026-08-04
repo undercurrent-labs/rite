@@ -1,7 +1,7 @@
 //! Classify Rite source for colouring, through the language's own lexer.
 //!
 //! The site has a hand-written tokeniser in TypeScript. This is not a second one:
-//! it runs `rite_syntax::lex`, so what counts as a keyword, an atom or a sigil is
+//! it runs `rite_syntax::lex`, so what counts as a keyword, an atom or a glyph is
 //! whatever the language says it is, and adding a keyword cannot leave the
 //! renderer behind.
 //!
@@ -102,7 +102,7 @@ fn kind_of(token: TokenKind) -> Kind {
         | T::ForAll
         | T::OkMark
         | T::ErrMark
-        | T::Paragraph => Kind::Sigil,
+        | T::Paragraph => Kind::Glyph,
 
         T::Plus
         | T::Minus
@@ -186,7 +186,7 @@ pub fn runs(source: &str) -> Vec<Run> {
 
         // `@fs.read` arrives as four tokens: Host, Ident, Dot, Ident. Colouring
         // them separately would lose what makes a capability call recognisable at
-        // a glance, so a known capability name takes the sigil with it and a known
+        // a glance, so a known capability name takes the glyph with it and a known
         // function name after the dot is coloured as one.
         if token.kind == TokenKind::Host {
             let name = tokens.get(i + 1).filter(|t| t.kind == TokenKind::Ident);

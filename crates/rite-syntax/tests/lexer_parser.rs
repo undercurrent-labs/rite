@@ -12,7 +12,7 @@ fn glyph_ascii_equivalent_function() {
 }
 
 #[test]
-fn all_sigils_lex() {
+fn all_glyphs_lex() {
     let src = "◆ ← ↢ → ^ ? ~ ! @ # ⟦ ⟧ ⟨ ⟩ ∈ ∉ ??";
     let f = SourceFile::new(FileId(0), "t.rite", src);
     let (toks, d) = lex(&f);

@@ -1,0 +1,5173 @@
+{
+  "schema": "rite.sigil.scene",
+  "version": 1,
+  "view_box": {
+    "x": 0.0,
+    "y": 0.0,
+    "width": 1600.0,
+    "height": 1600.0
+  },
+  "center": {
+    "x": 800.0,
+    "y": 800.0
+  },
+  "elements": [
+    {
+      "id": "boundary/host",
+      "layer": "semantic-regions",
+      "semantic": "invocation-boundary",
+      "geometry": "circle",
+      "center": {
+        "x": 800.0,
+        "y": 800.0
+      },
+      "radius": 595.0,
+      "title": "host boundary",
+      "bounds": {
+        "x": 205.0,
+        "y": 205.0,
+        "width": 1190.0,
+        "height": 1190.0
+      }
+    },
+    {
+      "id": "region/s3/ring",
+      "layer": "semantic-regions",
+      "semantic": {
+        "region": "orbit"
+      },
+      "graph_ref": {
+        "kind": "region",
+        "id": "s3"
+      },
+      "geometry": "circle",
+      "center": {
+        "x": 364.1526674345267,
+        "y": 861.6957895406247
+      },
+      "radius": 52.0,
+      "title": "orbit ring",
+      "legend_key": "region/s3",
+      "bounds": {
+        "x": 312.1526674345267,
+        "y": 809.6957895406247,
+        "width": 104.0,
+        "height": 104.0
+      }
+    },
+    {
+      "id": "edge/e0_n0.0-_n1.0",
+      "layer": "semantic-edges",
+      "semantic": {
+        "edge": "flow"
+      },
+      "graph_ref": {
+        "kind": "edge",
+        "id": "e0:n0.0->n1.0"
+      },
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 800.0,
+          "y": 800.0
+        },
+        {
+          "op": "cubic_to",
+          "c1": {
+            "x": 827.7324120613027,
+            "y": 783.3630254775061
+          },
+          "c2": {
+            "x": 878.755248104825,
+            "y": 752.7538732175065
+          },
+          "to": {
+            "x": 950.0671648338891,
+            "y": 709.9730815882364
+          }
+        }
+      ],
+      "ends": {
+        "from": "n0",
+        "to": "n1"
+      },
+      "bounds": {
+        "x": 789.5,
+        "y": 699.4730815882364,
+        "width": 171.06716483388914,
+        "height": 111.02691841176363
+      }
+    },
+    {
+      "id": "edge/e1_n1.0-_n2.0",
+      "layer": "semantic-edges",
+      "semantic": {
+        "edge": "flow"
+      },
+      "graph_ref": {
+        "kind": "edge",
+        "id": "e1:n1.0->n2.0"
+      },
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 950.0671648338891,
+          "y": 709.9730815882364
+        },
+        {
+          "op": "cubic_to",
+          "c1": {
+            "x": 1039.8429902882476,
+            "y": 743.946228933838
+          },
+          "c2": {
+            "x": 1205.3317559597024,
+            "y": 769.1127051227196
+          },
+          "to": {
+            "x": 1436.798828573462,
+            "y": 783.992129202594
+          }
+        }
+      ],
+      "ends": {
+        "from": "n1",
+        "to": "n2"
+      },
+      "bounds": {
+        "x": 939.5671648338891,
+        "y": 699.4730815882364,
+        "width": 507.7316637395729,
+        "height": 95.01904761435765
+      }
+    },
+    {
+      "id": "edge/e2_n2.0-_n3.0",
+      "layer": "semantic-edges",
+      "semantic": {
+        "edge": "flow"
+      },
+      "graph_ref": {
+        "kind": "edge",
+        "id": "e2:n2.0->n3.0"
+      },
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 1436.798828573462,
+          "y": 783.992129202594
+        },
+        {
+          "op": "cubic_to",
+          "c1": {
+            "x": 1234.4336095894816,
+            "y": 819.9311174054451
+          },
+          "c2": {
+            "x": 1091.4168670365361,
+            "y": 864.5834310259353
+          },
+          "to": {
+            "x": 1016.1613504765636,
+            "y": 915.3224633805064
+          }
+        }
+      ],
+      "ends": {
+        "from": "n2",
+        "to": "n3"
+      },
+      "bounds": {
+        "x": 1005.6613504765636,
+        "y": 773.492129202594,
+        "width": 441.63747809689846,
+        "height": 152.3303341779124
+      }
+    },
+    {
+      "id": "edge/e3_n3.0-_n4.0",
+      "layer": "semantic-edges",
+      "semantic": {
+        "edge": "flow"
+      },
+      "graph_ref": {
+        "kind": "edge",
+        "id": "e3:n3.0->n4.0"
+      },
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 1016.1613504765636,
+          "y": 915.3224633805064
+        },
+        {
+          "op": "cubic_to",
+          "c1": {
+            "x": 930.5671023017219,
+            "y": 944.976869947633
+          },
+          "c2": {
+            "x": 862.4534096167436,
+            "y": 1012.7319604507652
+          },
+          "to": {
+            "x": 815.8269602266274,
+            "y": 1114.6021413308954
+          }
+        }
+      ],
+      "ends": {
+        "from": "n3",
+        "to": "n4"
+      },
+      "bounds": {
+        "x": 805.3269602266274,
+        "y": 904.8224633805064,
+        "width": 221.33439024993618,
+        "height": 220.279677950389
+      }
+    },
+    {
+      "id": "edge/e4_n6.0-_n7.0",
+      "layer": "semantic-edges",
+      "semantic": {
+        "edge": "flow"
+      },
+      "graph_ref": {
+        "kind": "edge",
+        "id": "e4:n6.0->n7.0"
+      },
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 830.7106201013378,
+          "y": 1239.119716665593
+        },
+        {
+          "op": "cubic_to",
+          "c1": {
+            "x": 809.218841056261,
+            "y": 1226.516000667959
+          },
+          "c2": {
+            "x": 787.0323112227802,
+            "y": 1223.3888243553067
+          },
+          "to": {
+            "x": 765.4561205911001,
+            "y": 1229.9221392754393
+          }
+        }
+      ],
+      "ends": {
+        "from": "n6",
+        "to": "n7"
+      },
+      "bounds": {
+        "x": 754.9561205911001,
+        "y": 1216.1217648229385,
+        "width": 86.25449951023768,
+        "height": 33.4979518426544
+      }
+    },
+    {
+      "id": "edge/e5_n7.0-_n8.0",
+      "layer": "semantic-edges",
+      "semantic": {
+        "edge": "flow"
+      },
+      "graph_ref": {
+        "kind": "edge",
+        "id": "e5:n7.0->n8.0"
+      },
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 765.4561205911001,
+          "y": 1229.9221392754393
+        },
+        {
+          "op": "cubic_to",
+          "c1": {
+            "x": 734.293801713398,
+            "y": 1261.2024858109853
+          },
+          "c2": {
+            "x": 696.626043685318,
+            "y": 1325.8968880934353
+          },
+          "to": {
+            "x": 654.6685969790999,
+            "y": 1420.1997930473508
+          }
+        }
+      ],
+      "ends": {
+        "from": "n7",
+        "to": "n8"
+      },
+      "bounds": {
+        "x": 644.1685969790999,
+        "y": 1219.4221392754393,
+        "width": 131.7875236120002,
+        "height": 211.27765377191145
+      }
+    },
+    {
+      "id": "edge/e6_n5.1-_n6.0",
+      "layer": "semantic-edges",
+      "semantic": {
+        "edge": "enter"
+      },
+      "graph_ref": {
+        "kind": "edge",
+        "id": "e6:n5.1->n6.0"
+      },
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 480.2205788096122,
+          "y": 1014.3971123479525
+        },
+        {
+          "op": "cubic_to",
+          "c1": {
+            "x": 613.6675186359361,
+            "y": 1048.3473425008517
+          },
+          "c2": {
+            "x": 732.8341326751228,
+            "y": 1124.7530279688494
+          },
+          "to": {
+            "x": 830.7106201013378,
+            "y": 1239.119716665593
+          }
+        }
+      ],
+      "ends": {
+        "from": "n5",
+        "to": "n6"
+      },
+      "bounds": {
+        "x": 469.7205788096122,
+        "y": 1003.8971123479525,
+        "width": 371.49004129172556,
+        "height": 245.7226043176404
+      }
+    },
+    {
+      "id": "edge/e7_n8.0-_n5.1",
+      "layer": "semantic-edges",
+      "semantic": {
+        "edge": "join"
+      },
+      "graph_ref": {
+        "kind": "edge",
+        "id": "e7:n8.0->n5.1"
+      },
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 654.6685969790999,
+          "y": 1420.1997930473508
+        },
+        {
+          "op": "cubic_to",
+          "c1": {
+            "x": 619.8072907915796,
+            "y": 1245.5401936736262
+          },
+          "c2": {
+            "x": 560.4949646139538,
+            "y": 1107.5672822358308
+          },
+          "to": {
+            "x": 480.2205788096122,
+            "y": 1014.3971123479525
+          }
+        }
+      ],
+      "ends": {
+        "from": "n8",
+        "to": "n5"
+      },
+      "bounds": {
+        "x": 469.7205788096122,
+        "y": 1003.8971123479525,
+        "width": 195.44801816948768,
+        "height": 426.80268069939825
+      }
+    },
+    {
+      "id": "edge/e8_n10.0-_n11.0",
+      "layer": "semantic-edges",
+      "semantic": {
+        "edge": "flow"
+      },
+      "graph_ref": {
+        "kind": "edge",
+        "id": "e8:n10.0->n11.0"
+      },
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 415.6393947065686,
+          "y": 854.4076543323307
+        },
+        {
+          "op": "cubic_to",
+          "c1": {
+            "x": 436.7757259862873,
+            "y": 851.4157290666218
+          },
+          "c2": {
+            "x": 401.7647514412988,
+            "y": 856.3716610082618
+          },
+          "to": {
+            "x": 312.66594016248473,
+            "y": 868.9839247489186
+          }
+        }
+      ],
+      "ends": {
+        "from": "n10",
+        "to": "n11"
+      },
+      "bounds": {
+        "x": 302.16594016248473,
+        "y": 843.0610252589314,
+        "width": 129.95443032964351,
+        "height": 36.42289948998723
+      }
+    },
+    {
+      "id": "edge/e9_n9.1-_n10.0",
+      "layer": "semantic-edges",
+      "semantic": {
+        "edge": "enter"
+      },
+      "graph_ref": {
+        "kind": "edge",
+        "id": "e9:n9.1->n10.0"
+      },
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 364.1526674345267,
+          "y": 861.6957895406247
+        },
+        {
+          "op": "cubic_to",
+          "c1": {
+            "x": 386.58028583422816,
+            "y": 858.5210778438918
+          },
+          "c2": {
+            "x": 404.0857731067224,
+            "y": 856.0431118730719
+          },
+          "to": {
+            "x": 415.6393947065686,
+            "y": 854.4076543323307
+          }
+        }
+      ],
+      "ends": {
+        "from": "n9",
+        "to": "n10"
+      },
+      "bounds": {
+        "x": 353.6526674345267,
+        "y": 843.9076543323307,
+        "width": 72.48672727204195,
+        "height": 28.288135208293966
+      }
+    },
+    {
+      "id": "edge/e10_n11.0-_n9.1",
+      "layer": "semantic-edges",
+      "semantic": {
+        "edge": "feedback"
+      },
+      "graph_ref": {
+        "kind": "edge",
+        "id": "e10:n11.0->n9.1"
+      },
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 312.66594016248473,
+          "y": 868.9839247489186
+        },
+        {
+          "op": "cubic_to",
+          "c1": {
+            "x": 318.10293856241236,
+            "y": 868.2142976709229
+          },
+          "c2": {
+            "x": 335.6084258349066,
+            "y": 865.7363317001028
+          },
+          "to": {
+            "x": 364.1526674345267,
+            "y": 861.6957895406247
+          }
+        }
+      ],
+      "ends": {
+        "from": "n11",
+        "to": "n9"
+      },
+      "bounds": {
+        "x": 302.16594016248473,
+        "y": 851.1957895406247,
+        "width": 72.48672727204195,
+        "height": 28.288135208293966
+      }
+    },
+    {
+      "id": "edge/e11_n5.2-_n9.0",
+      "layer": "semantic-edges",
+      "semantic": {
+        "edge": "enter"
+      },
+      "graph_ref": {
+        "kind": "edge",
+        "id": "e11:n5.2->n9.0"
+      },
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 480.2205788096122,
+          "y": 1014.3971123479525
+        },
+        {
+          "op": "cubic_to",
+          "c1": {
+            "x": 460.9426995161792,
+            "y": 957.0544421974608
+          },
+          "c2": {
+            "x": 421.47960964865007,
+            "y": 905.1359924429694
+          },
+          "to": {
+            "x": 364.1526674345267,
+            "y": 861.6957895406247
+          }
+        }
+      ],
+      "ends": {
+        "from": "n5",
+        "to": "n9"
+      },
+      "bounds": {
+        "x": 353.6526674345267,
+        "y": 851.1957895406247,
+        "width": 137.06791137508554,
+        "height": 173.70132280732787
+      }
+    },
+    {
+      "id": "edge/e12_n9.0-_n5.1",
+      "layer": "semantic-edges",
+      "semantic": {
+        "edge": "join"
+      },
+      "graph_ref": {
+        "kind": "edge",
+        "id": "e12:n9.0->n5.1"
+      },
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 364.1526674345267,
+          "y": 861.6957895406247
+        },
+        {
+          "op": "cubic_to",
+          "c1": {
+            "x": 421.47960964865007,
+            "y": 905.1359924429694
+          },
+          "c2": {
+            "x": 460.9426995161792,
+            "y": 957.0544421974608
+          },
+          "to": {
+            "x": 480.2205788096122,
+            "y": 1014.3971123479525
+          }
+        }
+      ],
+      "ends": {
+        "from": "n9",
+        "to": "n5"
+      },
+      "bounds": {
+        "x": 353.6526674345267,
+        "y": 851.1957895406247,
+        "width": 137.06791137508554,
+        "height": 173.70132280732787
+      }
+    },
+    {
+      "id": "edge/e13_n5.3-_n12.0",
+      "layer": "semantic-edges",
+      "semantic": {
+        "edge": "enter"
+      },
+      "graph_ref": {
+        "kind": "edge",
+        "id": "e13:n5.3->n12.0"
+      },
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 480.2205788096122,
+          "y": 1014.3971123479525
+        },
+        {
+          "op": "cubic_to",
+          "c1": {
+            "x": 533.4880738904787,
+            "y": 850.1488225132656
+          },
+          "c2": {
+            "x": 532.2058034260015,
+            "y": 672.8268500042412
+          },
+          "to": {
+            "x": 476.4491950905615,
+            "y": 492.86189908611624
+          }
+        }
+      ],
+      "ends": {
+        "from": "n5",
+        "to": "n12"
+      },
+      "bounds": {
+        "x": 465.9491950905615,
+        "y": 482.36189908611624,
+        "width": 63.76973064064032,
+        "height": 542.5352132618364
+      }
+    },
+    {
+      "id": "edge/e14_n12.0-_n5.1",
+      "layer": "semantic-edges",
+      "semantic": {
+        "edge": "join"
+      },
+      "graph_ref": {
+        "kind": "edge",
+        "id": "e14:n12.0->n5.1"
+      },
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 476.4491950905615,
+          "y": 492.86189908611624
+        },
+        {
+          "op": "cubic_to",
+          "c1": {
+            "x": 532.2058034260015,
+            "y": 672.8268500042412
+          },
+          "c2": {
+            "x": 533.4880738904787,
+            "y": 850.1488225132656
+          },
+          "to": {
+            "x": 480.2205788096122,
+            "y": 1014.3971123479525
+          }
+        }
+      ],
+      "ends": {
+        "from": "n12",
+        "to": "n5"
+      },
+      "bounds": {
+        "x": 465.9491950905615,
+        "y": 482.36189908611624,
+        "width": 63.76973064064032,
+        "height": 542.5352132618364
+      }
+    },
+    {
+      "id": "edge/e15_n4.0-_n5.0",
+      "layer": "semantic-edges",
+      "semantic": {
+        "edge": "flow"
+      },
+      "graph_ref": {
+        "kind": "edge",
+        "id": "e15:n4.0->n5.0"
+      },
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 815.8269602266274,
+          "y": 1114.6021413308954
+        },
+        {
+          "op": "cubic_to",
+          "c1": {
+            "x": 730.4130912151362,
+            "y": 1037.4392625818439
+          },
+          "c2": {
+            "x": 616.306921533351,
+            "y": 1003.3695527276434
+          },
+          "to": {
+            "x": 480.2205788096122,
+            "y": 1014.3971123479525
+          }
+        }
+      ],
+      "ends": {
+        "from": "n4",
+        "to": "n5"
+      },
+      "bounds": {
+        "x": 469.7205788096122,
+        "y": 1001.8717977380095,
+        "width": 356.6063814170152,
+        "height": 123.2303435928859
+      }
+    },
+    {
+      "id": "edge/e16_n5.0-_n13.0",
+      "layer": "semantic-edges",
+      "semantic": {
+        "edge": "flow"
+      },
+      "graph_ref": {
+        "kind": "edge",
+        "id": "e16:n5.0->n13.0"
+      },
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 480.2205788096122,
+          "y": 1014.3971123479525
+        },
+        {
+          "op": "cubic_to",
+          "c1": {
+            "x": 510.60808724720084,
+            "y": 877.999684650259
+          },
+          "c2": {
+            "x": 479.3563454354394,
+            "y": 739.2366100468386
+          },
+          "to": {
+            "x": 388.3036911279609,
+            "y": 606.2704223378923
+          }
+        }
+      ],
+      "ends": {
+        "from": "n5",
+        "to": "n13"
+      },
+      "bounds": {
+        "x": 377.8036911279609,
+        "y": 595.7704223378923,
+        "width": 124.17888361549012,
+        "height": 429.1266900100602
+      }
+    },
+    {
+      "id": "edge/e17_n13.0-_n14.0",
+      "layer": "semantic-edges",
+      "semantic": {
+        "edge": "flow"
+      },
+      "graph_ref": {
+        "kind": "edge",
+        "id": "e17:n13.0->n14.0"
+      },
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 388.3036911279609,
+          "y": 606.2704223378923
+        },
+        {
+          "op": "cubic_to",
+          "c1": {
+            "x": 656.4423326990752,
+            "y": 742.1505626366957
+          },
+          "c2": {
+            "x": 796.4190777155685,
+            "y": 986.5186190418124
+          },
+          "to": {
+            "x": 800.0,
+            "y": 1325.0
+          }
+        }
+      ],
+      "ends": {
+        "from": "n13",
+        "to": "n14"
+      },
+      "bounds": {
+        "x": 377.8036911279609,
+        "y": 595.7704223378923,
+        "width": 432.6963088720391,
+        "height": 739.7295776621077
+      }
+    },
+    {
+      "id": "node/n0",
+      "layer": "semantic-nodes",
+      "semantic": {
+        "node": {
+          "kind": "source"
+        }
+      },
+      "graph_ref": {
+        "kind": "node",
+        "id": "n0"
+      },
+      "geometry": "mark",
+      "center": {
+        "x": 800.0,
+        "y": 800.0
+      },
+      "size": 54.0,
+      "rotation": 0.008098114249107927,
+      "title": "source",
+      "legend_key": "node/n0",
+      "bounds": {
+        "x": 746.0,
+        "y": 746.0,
+        "width": 108.0,
+        "height": 108.0
+      }
+    },
+    {
+      "id": "node/n1",
+      "layer": "semantic-nodes",
+      "semantic": {
+        "node": {
+          "kind": "scatter"
+        }
+      },
+      "graph_ref": {
+        "kind": "node",
+        "id": "n1"
+      },
+      "geometry": "mark",
+      "center": {
+        "x": 950.0671648338891,
+        "y": 709.9730815882364
+      },
+      "size": 24.0,
+      "rotation": -0.5425825807828307,
+      "title": "scatter",
+      "legend_key": "node/n1",
+      "bounds": {
+        "x": 926.0671648338891,
+        "y": 685.9730815882364,
+        "width": 48.0,
+        "height": 48.0
+      }
+    },
+    {
+      "id": "node/n2",
+      "layer": "semantic-nodes",
+      "semantic": {
+        "node": {
+          "kind": "effect"
+        }
+      },
+      "graph_ref": {
+        "kind": "node",
+        "id": "n2"
+      },
+      "geometry": "mark",
+      "center": {
+        "x": 1436.798828573462,
+        "y": 783.992129202594
+      },
+      "size": 30.0,
+      "rotation": 0.009271838330161014,
+      "title": "fs invocation",
+      "legend_key": "node/n2",
+      "bounds": {
+        "x": 1406.798828573462,
+        "y": 753.992129202594,
+        "width": 60.0,
+        "height": 60.0
+      }
+    },
+    {
+      "id": "node/n3",
+      "layer": "semantic-nodes",
+      "semantic": {
+        "node": {
+          "kind": "stage"
+        }
+      },
+      "graph_ref": {
+        "kind": "node",
+        "id": "n3"
+      },
+      "geometry": "mark",
+      "center": {
+        "x": 1016.1613504765636,
+        "y": 915.3224633805064
+      },
+      "size": 24.0,
+      "rotation": 0.5070415211671654,
+      "title": "stage",
+      "legend_key": "node/n3",
+      "bounds": {
+        "x": 992.1613504765636,
+        "y": 891.3224633805064,
+        "width": 48.0,
+        "height": 48.0
+      }
+    },
+    {
+      "id": "node/n4",
+      "layer": "semantic-nodes",
+      "semantic": {
+        "node": {
+          "kind": "ward"
+        }
+      },
+      "graph_ref": {
+        "kind": "node",
+        "id": "n4"
+      },
+      "geometry": "mark",
+      "center": {
+        "x": 815.8269602266274,
+        "y": 1114.6021413308954
+      },
+      "size": 24.0,
+      "rotation": 1.4965956543655845,
+      "title": "ward",
+      "legend_key": "node/n4",
+      "bounds": {
+        "x": 791.8269602266274,
+        "y": 1090.6021413308954,
+        "width": 48.0,
+        "height": 48.0
+      }
+    },
+    {
+      "id": "node/n5",
+      "layer": "semantic-nodes",
+      "semantic": {
+        "node": {
+          "kind": "fork"
+        }
+      },
+      "graph_ref": {
+        "kind": "node",
+        "id": "n5"
+      },
+      "geometry": "mark",
+      "center": {
+        "x": 480.2205788096122,
+        "y": 1014.3971123479525
+      },
+      "size": 32.0,
+      "rotation": 2.5379065007698456,
+      "title": "fork",
+      "legend_key": "node/n5",
+      "bounds": {
+        "x": 448.2205788096122,
+        "y": 982.3971123479525,
+        "width": 64.0,
+        "height": 64.0
+      }
+    },
+    {
+      "id": "node/n6",
+      "layer": "semantic-nodes",
+      "semantic": {
+        "node": {
+          "kind": "ward"
+        }
+      },
+      "graph_ref": {
+        "kind": "node",
+        "id": "n6"
+      },
+      "geometry": "mark",
+      "center": {
+        "x": 830.7106201013378,
+        "y": 1239.119716665593
+      },
+      "size": 24.0,
+      "rotation": 1.4658319399707866,
+      "title": "ward",
+      "legend_key": "node/n6",
+      "bounds": {
+        "x": 806.7106201013378,
+        "y": 1215.119716665593,
+        "width": 48.0,
+        "height": 48.0
+      }
+    },
+    {
+      "id": "node/n7",
+      "layer": "semantic-nodes",
+      "semantic": {
+        "node": {
+          "kind": "stage"
+        }
+      },
+      "graph_ref": {
+        "kind": "node",
+        "id": "n7"
+      },
+      "geometry": "mark",
+      "center": {
+        "x": 765.4561205911001,
+        "y": 1229.9221392754393
+      },
+      "size": 24.0,
+      "rotation": 1.6590592359036265,
+      "title": "stage",
+      "legend_key": "node/n7",
+      "bounds": {
+        "x": 741.4561205911001,
+        "y": 1205.9221392754393,
+        "width": 48.0,
+        "height": 48.0
+      }
+    },
+    {
+      "id": "node/n8",
+      "layer": "semantic-nodes",
+      "semantic": {
+        "node": {
+          "kind": "effect"
+        }
+      },
+      "graph_ref": {
+        "kind": "node",
+        "id": "n8"
+      },
+      "geometry": "mark",
+      "center": {
+        "x": 654.6685969790999,
+        "y": 1420.1997930473508
+      },
+      "size": 30.0,
+      "rotation": 1.8124098557418895,
+      "title": "clock invocation",
+      "legend_key": "node/n8",
+      "bounds": {
+        "x": 624.6685969790999,
+        "y": 1390.1997930473508,
+        "width": 60.0,
+        "height": 60.0
+      }
+    },
+    {
+      "id": "node/n9",
+      "layer": "semantic-nodes",
+      "semantic": {
+        "node": {
+          "kind": "orbit"
+        }
+      },
+      "graph_ref": {
+        "kind": "node",
+        "id": "n9"
+      },
+      "geometry": "mark",
+      "center": {
+        "x": 364.1526674345267,
+        "y": 861.6957895406247
+      },
+      "size": 34.0,
+      "rotation": 2.962090238130362,
+      "title": "orbit",
+      "legend_key": "node/n9",
+      "bounds": {
+        "x": 330.1526674345267,
+        "y": 827.6957895406247,
+        "width": 68.0,
+        "height": 68.0
+      }
+    },
+    {
+      "id": "node/n10",
+      "layer": "semantic-nodes",
+      "semantic": {
+        "node": {
+          "kind": "ward"
+        }
+      },
+      "graph_ref": {
+        "kind": "node",
+        "id": "n10"
+      },
+      "geometry": "mark",
+      "center": {
+        "x": 415.6393947065686,
+        "y": 854.4076543323307
+      },
+      "size": 24.0,
+      "rotation": 2.991908299451592,
+      "title": "ward",
+      "legend_key": "node/n10",
+      "bounds": {
+        "x": 391.6393947065686,
+        "y": 830.4076543323307,
+        "width": 48.0,
+        "height": 48.0
+      }
+    },
+    {
+      "id": "node/n11",
+      "layer": "semantic-nodes",
+      "semantic": {
+        "node": {
+          "kind": "stage"
+        }
+      },
+      "graph_ref": {
+        "kind": "node",
+        "id": "n11"
+      },
+      "geometry": "mark",
+      "center": {
+        "x": 312.66594016248473,
+        "y": 868.9839247489186
+      },
+      "size": 24.0,
+      "rotation": 3.0360085862180926,
+      "title": "stage",
+      "legend_key": "node/n11",
+      "bounds": {
+        "x": 288.66594016248473,
+        "y": 844.9839247489186,
+        "width": 48.0,
+        "height": 48.0
+      }
+    },
+    {
+      "id": "node/n12",
+      "layer": "semantic-nodes",
+      "semantic": {
+        "node": {
+          "kind": "stage"
+        }
+      },
+      "graph_ref": {
+        "kind": "node",
+        "id": "n12"
+      },
+      "geometry": "mark",
+      "center": {
+        "x": 476.4491950905615,
+        "y": 492.86189908611624
+      },
+      "size": 24.0,
+      "rotation": -2.349149040189349,
+      "title": "stage",
+      "legend_key": "node/n12",
+      "bounds": {
+        "x": 452.4491950905615,
+        "y": 468.86189908611624,
+        "width": 48.0,
+        "height": 48.0
+      }
+    },
+    {
+      "id": "node/n13",
+      "layer": "semantic-nodes",
+      "semantic": {
+        "node": {
+          "kind": "ward"
+        }
+      },
+      "graph_ref": {
+        "kind": "node",
+        "id": "n13"
+      },
+      "geometry": "mark",
+      "center": {
+        "x": 388.3036911279609,
+        "y": 606.2704223378923
+      },
+      "size": 24.0,
+      "rotation": -2.728042823078725,
+      "title": "ward",
+      "legend_key": "node/n13",
+      "bounds": {
+        "x": 364.3036911279609,
+        "y": 582.2704223378923,
+        "width": 48.0,
+        "height": 48.0
+      }
+    },
+    {
+      "id": "node/n14",
+      "layer": "semantic-nodes",
+      "semantic": {
+        "node": {
+          "kind": "collect"
+        }
+      },
+      "graph_ref": {
+        "kind": "node",
+        "id": "n14"
+      },
+      "geometry": "mark",
+      "center": {
+        "x": 800.0,
+        "y": 1325.0
+      },
+      "size": 40.0,
+      "rotation": 1.5310090768427067,
+      "title": "collect",
+      "legend_key": "node/n14",
+      "bounds": {
+        "x": 760.0,
+        "y": 1285.0,
+        "width": 80.0,
+        "height": 80.0
+      }
+    },
+    {
+      "id": "ornament/guide-0",
+      "layer": "guide-geometry",
+      "semantic": "ornament",
+      "geometry": "circle",
+      "center": {
+        "x": 800.0,
+        "y": 800.0
+      },
+      "radius": 105.0,
+      "bounds": {
+        "x": 695.0,
+        "y": 695.0,
+        "width": 210.0,
+        "height": 210.0
+      }
+    },
+    {
+      "id": "ornament/guide-1",
+      "layer": "guide-geometry",
+      "semantic": "ornament",
+      "geometry": "circle",
+      "center": {
+        "x": 800.0,
+        "y": 800.0
+      },
+      "radius": 455.0,
+      "bounds": {
+        "x": 345.0,
+        "y": 345.0,
+        "width": 910.0,
+        "height": 910.0
+      }
+    },
+    {
+      "id": "ornament/guide-2",
+      "layer": "guide-geometry",
+      "semantic": "ornament",
+      "geometry": "circle",
+      "center": {
+        "x": 800.0,
+        "y": 800.0
+      },
+      "radius": 595.0,
+      "bounds": {
+        "x": 205.0,
+        "y": 205.0,
+        "width": 1190.0,
+        "height": 1190.0
+      }
+    },
+    {
+      "id": "ornament/cardinal-0",
+      "layer": "guide-geometry",
+      "semantic": "ornament",
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 800.0,
+          "y": 94.0
+        },
+        {
+          "op": "line_to",
+          "x": 800.0,
+          "y": 59.48149016154423
+        }
+      ],
+      "bounds": {
+        "x": 800.0,
+        "y": 59.48149016154423,
+        "width": 0.0,
+        "height": 34.51850983845577
+      }
+    },
+    {
+      "id": "ornament/cardinal-1",
+      "layer": "guide-geometry",
+      "semantic": "ornament",
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 1299.2173875177027,
+          "y": 300.7826124822975
+        },
+        {
+          "op": "line_to",
+          "x": 1312.0260293996253,
+          "y": 287.97397060037497
+        }
+      ],
+      "bounds": {
+        "x": 1299.2173875177027,
+        "y": 287.97397060037497,
+        "width": 12.80864188192254,
+        "height": 12.80864188192254
+      }
+    },
+    {
+      "id": "ornament/cardinal-2",
+      "layer": "guide-geometry",
+      "semantic": "ornament",
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 1506.0,
+          "y": 800.0
+        },
+        {
+          "op": "line_to",
+          "x": 1542.9064363604323,
+          "y": 800.0
+        }
+      ],
+      "bounds": {
+        "x": 1506.0,
+        "y": 800.0,
+        "width": 36.90643636043228,
+        "height": 0.0
+      }
+    },
+    {
+      "id": "ornament/cardinal-3",
+      "layer": "guide-geometry",
+      "semantic": "ornament",
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 1299.2173875177027,
+          "y": 1299.2173875177025
+        },
+        {
+          "op": "line_to",
+          "x": 1314.492009819579,
+          "y": 1314.492009819579
+        }
+      ],
+      "bounds": {
+        "x": 1299.2173875177027,
+        "y": 1299.2173875177025,
+        "width": 15.274622301876207,
+        "height": 15.274622301876434
+      }
+    },
+    {
+      "id": "ornament/cardinal-4",
+      "layer": "guide-geometry",
+      "semantic": "ornament",
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 800.0,
+          "y": 1506.0
+        },
+        {
+          "op": "line_to",
+          "x": 800.0,
+          "y": 1542.6574157949667
+        }
+      ],
+      "bounds": {
+        "x": 800.0,
+        "y": 1506.0,
+        "width": 0.0,
+        "height": 36.65741579496671
+      }
+    },
+    {
+      "id": "ornament/cardinal-5",
+      "layer": "guide-geometry",
+      "semantic": "ornament",
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 300.7826124822975,
+          "y": 1299.2173875177027
+        },
+        {
+          "op": "line_to",
+          "x": 286.28665889240256,
+          "y": 1313.7133411075974
+        }
+      ],
+      "bounds": {
+        "x": 286.28665889240256,
+        "y": 1299.2173875177027,
+        "width": 14.495953589894953,
+        "height": 14.495953589894725
+      }
+    },
+    {
+      "id": "ornament/cardinal-6",
+      "layer": "guide-geometry",
+      "semantic": "ornament",
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 94.0,
+          "y": 800.0000000000001
+        },
+        {
+          "op": "line_to",
+          "x": 59.50947257545886,
+          "y": 800.0000000000001
+        }
+      ],
+      "bounds": {
+        "x": 59.50947257545886,
+        "y": 800.0000000000001,
+        "width": 34.49052742454114,
+        "height": 0.0
+      }
+    },
+    {
+      "id": "ornament/cardinal-7",
+      "layer": "guide-geometry",
+      "semantic": "ornament",
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 300.78261248229734,
+          "y": 300.7826124822975
+        },
+        {
+          "op": "line_to",
+          "x": 285.7928678478571,
+          "y": 285.79286784785734
+        }
+      ],
+      "bounds": {
+        "x": 285.7928678478571,
+        "y": 285.79286784785734,
+        "width": 14.989744634440228,
+        "height": 14.989744634440171
+      }
+    },
+    {
+      "id": "ornament/filament-0",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 1401.9854729381086,
+          "y": 804.1821491462803
+        },
+        {
+          "op": "line_to",
+          "x": 1473.2388898519755,
+          "y": 804.677165106153
+        }
+      ],
+      "bounds": {
+        "x": 1401.9854729381086,
+        "y": 804.1821491462803,
+        "width": 71.25341691386689,
+        "height": 0.49501595987271685
+      }
+    },
+    {
+      "id": "ornament/filament-1",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 1396.5096169824064,
+          "y": 881.1189056108549
+        },
+        {
+          "op": "line_to",
+          "x": 1474.3312130160798,
+          "y": 891.7018074173278
+        }
+      ],
+      "bounds": {
+        "x": 1396.5096169824064,
+        "y": 881.1189056108549,
+        "width": 77.82159603367336,
+        "height": 10.582901806472933
+      }
+    },
+    {
+      "id": "ornament/filament-2",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 1380.2128134118682,
+          "y": 960.4901590524623
+        },
+        {
+          "op": "line_to",
+          "x": 1444.225830734074,
+          "y": 978.1965231554146
+        }
+      ],
+      "bounds": {
+        "x": 1380.2128134118682,
+        "y": 960.4901590524623,
+        "width": 64.01301732220577,
+        "height": 17.706364102952307
+      }
+    },
+    {
+      "id": "ornament/filament-3",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 1355.4258519867703,
+          "y": 1032.176921645478
+        },
+        {
+          "op": "line_to",
+          "x": 1432.2200776900554,
+          "y": 1064.278140665369
+        }
+      ],
+      "bounds": {
+        "x": 1355.4258519867703,
+        "y": 1032.176921645478,
+        "width": 76.79422570328506,
+        "height": 32.101219019891005
+      }
+    },
+    {
+      "id": "ornament/filament-4",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 1320.4088887227604,
+          "y": 1102.6195442107824
+        },
+        {
+          "op": "line_to",
+          "x": 1382.4670941166228,
+          "y": 1138.7066023640773
+        }
+      ],
+      "bounds": {
+        "x": 1320.4088887227604,
+        "y": 1102.6195442107824,
+        "width": 62.05820539386241,
+        "height": 36.08705815329495
+      }
+    },
+    {
+      "id": "ornament/filament-5",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 1275.9703983426298,
+          "y": 1168.5867332142575
+        },
+        {
+          "op": "line_to",
+          "x": 1328.8440995939259,
+          "y": 1209.5316005526943
+        }
+      ],
+      "bounds": {
+        "x": 1275.9703983426298,
+        "y": 1168.5867332142575,
+        "width": 52.8737012512961,
+        "height": 40.94486733843678
+      }
+    },
+    {
+      "id": "ornament/filament-6",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 1223.4922026778358,
+          "y": 1227.8531924282847
+        },
+        {
+          "op": "line_to",
+          "x": 1272.3410350317479,
+          "y": 1277.2050547219924
+        }
+      ],
+      "bounds": {
+        "x": 1223.4922026778358,
+        "y": 1227.8531924282847,
+        "width": 48.84883235391203,
+        "height": 49.351862293707654
+      }
+    },
+    {
+      "id": "ornament/filament-7",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 1163.098612374153,
+          "y": 1280.1701757626815
+        },
+        {
+          "op": "line_to",
+          "x": 1197.8967423747447,
+          "y": 1326.188044267723
+        }
+      ],
+      "bounds": {
+        "x": 1163.098612374153,
+        "y": 1280.1701757626815,
+        "width": 34.798130000591755,
+        "height": 46.017868505041406
+      }
+    },
+    {
+      "id": "ornament/filament-8",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 1095.4117853569603,
+          "y": 1324.5339617910486
+        },
+        {
+          "op": "line_to",
+          "x": 1130.8804173473256,
+          "y": 1387.5121602902532
+        }
+      ],
+      "bounds": {
+        "x": 1095.4117853569603,
+        "y": 1324.5339617910486,
+        "width": 35.46863199036534,
+        "height": 62.97819849920461
+      }
+    },
+    {
+      "id": "ornament/filament-9",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 1024.2097147849195,
+          "y": 1358.6895415130527
+        },
+        {
+          "op": "line_to",
+          "x": 1055.5452264244211,
+          "y": 1436.7718968995896
+        }
+      ],
+      "bounds": {
+        "x": 1024.2097147849195,
+        "y": 1358.6895415130527,
+        "width": 31.335511639501647,
+        "height": 78.08235538653685
+      }
+    },
+    {
+      "id": "ornament/filament-10",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 949.3199505621942,
+          "y": 1383.1874075836204
+        },
+        {
+          "op": "line_to",
+          "x": 966.8706720521659,
+          "y": 1451.7339060817935
+        }
+      ],
+      "bounds": {
+        "x": 949.3199505621942,
+        "y": 1383.1874075836204,
+        "width": 17.550721489971693,
+        "height": 68.54649849817315
+      }
+    },
+    {
+      "id": "ornament/filament-11",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 871.6321319155165,
+          "y": 1397.7230442916168
+        },
+        {
+          "op": "line_to",
+          "x": 881.9933908906661,
+          "y": 1484.180938140491
+        }
+      ],
+      "bounds": {
+        "x": 871.6321319155165,
+        "y": 1397.7230442916168,
+        "width": 10.361258975149553,
+        "height": 86.45789384887416
+      }
+    },
+    {
+      "id": "ornament/filament-12",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 796.7567482350489,
+          "y": 1401.9912634897528
+        },
+        {
+          "op": "line_to",
+          "x": 796.3017860176226,
+          "y": 1486.438386302829
+        }
+      ],
+      "bounds": {
+        "x": 796.3017860176226,
+        "y": 1401.9912634897528,
+        "width": 0.4549622174263277,
+        "height": 84.44712281307625
+      }
+    },
+    {
+      "id": "ornament/filament-13",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 720.875181304104,
+          "y": 1396.7773982536046
+        },
+        {
+          "op": "line_to",
+          "x": 710.9226706806322,
+          "y": 1471.8414994276518
+        }
+      ],
+      "bounds": {
+        "x": 710.9226706806322,
+        "y": 1396.7773982536046,
+        "width": 9.952510623471767,
+        "height": 75.06410117404721
+      }
+    },
+    {
+      "id": "ornament/filament-14",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 639.1433724492933,
+          "y": 1380.111321534939
+        },
+        {
+          "op": "line_to",
+          "x": 617.366301796425,
+          "y": 1458.6478756574165
+        }
+      ],
+      "bounds": {
+        "x": 617.366301796425,
+        "y": 1380.111321534939,
+        "width": 21.77707065286836,
+        "height": 78.53655412247758
+      }
+    },
+    {
+      "id": "ornament/filament-15",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 568.208928656098,
+          "y": 1355.5869862094019
+        },
+        {
+          "op": "line_to",
+          "x": 541.7027148846391,
+          "y": 1419.1205267367575
+        }
+      ],
+      "bounds": {
+        "x": 541.7027148846391,
+        "y": 1355.5869862094019,
+        "width": 26.506213771458874,
+        "height": 63.533540527355626
+      }
+    },
+    {
+      "id": "ornament/filament-16",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 495.6861762231182,
+          "y": 1319.4199617441486
+        },
+        {
+          "op": "line_to",
+          "x": 460.8843206814762,
+          "y": 1378.8217274927815
+        }
+      ],
+      "bounds": {
+        "x": 460.8843206814762,
+        "y": 1319.4199617441486,
+        "width": 34.801855541642,
+        "height": 59.4017657486329
+      }
+    },
+    {
+      "id": "ornament/filament-17",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 431.092722938785,
+          "y": 1275.7219996292793
+        },
+        {
+          "op": "line_to",
+          "x": 387.45102302273455,
+          "y": 1331.9998722607793
+        }
+      ],
+      "bounds": {
+        "x": 387.45102302273455,
+        "y": 1275.7219996292793,
+        "width": 43.64169991605047,
+        "height": 56.27787263150003
+      }
+    },
+    {
+      "id": "ornament/filament-18",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 369.8218896904826,
+          "y": 1221.130375787039
+        },
+        {
+          "op": "line_to",
+          "x": 314.52249736740623,
+          "y": 1275.2666819162744
+        }
+      ],
+      "bounds": {
+        "x": 314.52249736740623,
+        "y": 1221.130375787039,
+        "width": 55.29939232307635,
+        "height": 54.136306129235436
+      }
+    },
+    {
+      "id": "ornament/filament-19",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 319.52909122560897,
+          "y": 1162.7005732301932
+        },
+        {
+          "op": "line_to",
+          "x": 263.4797771917688,
+          "y": 1205.0113936315563
+        }
+      ],
+      "bounds": {
+        "x": 263.4797771917688,
+        "y": 1162.7005732301932,
+        "width": 56.049314033840176,
+        "height": 42.31082040136312
+      }
+    },
+    {
+      "id": "ornament/filament-20",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 275.4315900846533,
+          "y": 1095.3506108320835
+        },
+        {
+          "op": "line_to",
+          "x": 209.89630003639468,
+          "y": 1132.2493023677298
+        }
+      ],
+      "bounds": {
+        "x": 209.89630003639468,
+        "y": 1095.3506108320835,
+        "width": 65.53529004825862,
+        "height": 36.89869153564632
+      }
+    },
+    {
+      "id": "ornament/filament-21",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 242.98816746411,
+          "y": 1028.3458307370854
+        },
+        {
+          "op": "line_to",
+          "x": 170.36915660439854,
+          "y": 1058.1158417017946
+        }
+      ],
+      "bounds": {
+        "x": 170.36915660439854,
+        "y": 1028.3458307370854,
+        "width": 72.61901085971147,
+        "height": 29.770010964709172
+      }
+    },
+    {
+      "id": "ornament/filament-22",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 218.0639216696278,
+          "y": 954.1246272906019
+        },
+        {
+          "op": "line_to",
+          "x": 163.35567156877323,
+          "y": 968.6139998703311
+        }
+      ],
+      "bounds": {
+        "x": 163.35567156877323,
+        "y": 954.1246272906019,
+        "width": 54.70825010085457,
+        "height": 14.489372579729206
+      }
+    },
+    {
+      "id": "ornament/filament-23",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 202.51839489449048,
+          "y": 873.6188261285387
+        },
+        {
+          "op": "line_to",
+          "x": 141.2787662987265,
+          "y": 881.1644803064137
+        }
+      ],
+      "bounds": {
+        "x": 141.2787662987265,
+        "y": 873.6188261285387,
+        "width": 61.239628595763975,
+        "height": 7.545654177875008
+      }
+    },
+    {
+      "id": "ornament/filament-24",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 198.00115702540631,
+          "y": 798.8197215369075
+        },
+        {
+          "op": "line_to",
+          "x": 118.51363578686585,
+          "y": 798.6638783646202
+        }
+      ],
+      "bounds": {
+        "x": 118.51363578686585,
+        "y": 798.6638783646202,
+        "width": 79.48752123854047,
+        "height": 0.15584317228729105
+      }
+    },
+    {
+      "id": "ornament/filament-25",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 204.0211398594554,
+          "y": 715.069450339839
+        },
+        {
+          "op": "line_to",
+          "x": 141.5616220469393,
+          "y": 706.1685957389316
+        }
+      ],
+      "bounds": {
+        "x": 141.5616220469393,
+        "y": 706.1685957389316,
+        "width": 62.45951781251608,
+        "height": 8.90085460090745
+      }
+    },
+    {
+      "id": "ornament/filament-26",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 219.67832482338156,
+          "y": 639.9039247195504
+        },
+        {
+          "op": "line_to",
+          "x": 150.63139150757672,
+          "y": 620.8556218439995
+        }
+      ],
+      "bounds": {
+        "x": 150.63139150757672,
+        "y": 620.8556218439995,
+        "width": 69.04693331580484,
+        "height": 19.048302875550917
+      }
+    },
+    {
+      "id": "ornament/filament-27",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 246.5168928311134,
+          "y": 563.2291190228943
+        },
+        {
+          "op": "line_to",
+          "x": 189.68019710466854,
+          "y": 538.9153245372538
+        }
+      ],
+      "bounds": {
+        "x": 189.68019710466854,
+        "y": 538.9153245372538,
+        "width": 56.83669572644487,
+        "height": 24.31379448564053
+      }
+    },
+    {
+      "id": "ornament/filament-28",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 280.6282140536689,
+          "y": 495.6039619789403
+        },
+        {
+          "op": "line_to",
+          "x": 210.64451839637297,
+          "y": 454.5875643605417
+        }
+      ],
+      "bounds": {
+        "x": 210.64451839637297,
+        "y": 454.5875643605417,
+        "width": 69.98369565729593,
+        "height": 41.01639761839857
+      }
+    },
+    {
+      "id": "ornament/filament-29",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 325.7168538219754,
+          "y": 429.2446935626214
+        },
+        {
+          "op": "line_to",
+          "x": 255.93232666708946,
+          "y": 374.6929264201606
+        }
+      ],
+      "bounds": {
+        "x": 255.93232666708946,
+        "y": 374.6929264201606,
+        "width": 69.78452715488595,
+        "height": 54.55176714246085
+      }
+    },
+    {
+      "id": "ornament/filament-30",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 378.9015076837638,
+          "y": 369.79067912353094
+        },
+        {
+          "op": "line_to",
+          "x": 327.4293179496881,
+          "y": 317.20484423317015
+        }
+      ],
+      "bounds": {
+        "x": 327.4293179496881,
+        "y": 317.20484423317015,
+        "width": 51.4721897340757,
+        "height": 52.585834890360786
+      }
+    },
+    {
+      "id": "ornament/filament-31",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 436.3304372524943,
+          "y": 320.26210371595823
+        },
+        {
+          "op": "line_to",
+          "x": 393.9143523498455,
+          "y": 264.30855295391666
+        }
+      ],
+      "bounds": {
+        "x": 393.9143523498455,
+        "y": 264.30855295391666,
+        "width": 42.41608490264878,
+        "height": 55.95355076204157
+      }
+    },
+    {
+      "id": "ornament/filament-32",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 499.77511059991343,
+          "y": 278.20596421125526
+        },
+        {
+          "op": "line_to",
+          "x": 465.5989219809154,
+          "y": 218.80738662157455
+        }
+      ],
+      "bounds": {
+        "x": 465.5989219809154,
+        "y": 218.80738662157455,
+        "width": 34.176188618998026,
+        "height": 59.39857758968071
+      }
+    },
+    {
+      "id": "ornament/filament-33",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 569.9156410959548,
+          "y": 243.7040465833726
+        },
+        {
+          "op": "line_to",
+          "x": 538.7940817836309,
+          "y": 168.45861229167667
+        }
+      ],
+      "bounds": {
+        "x": 538.7940817836309,
+        "y": 168.45861229167667,
+        "width": 31.12155931232394,
+        "height": 75.24543429169591
+      }
+    },
+    {
+      "id": "ornament/filament-34",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 650.6569024507259,
+          "y": 216.81851948609687
+        },
+        {
+          "op": "line_to",
+          "x": 628.7406871605781,
+          "y": 131.23618531793898
+        }
+      ],
+      "bounds": {
+        "x": 628.7406871605781,
+        "y": 131.23618531793898,
+        "width": 21.91621529014776,
+        "height": 85.5823341681579
+      }
+    },
+    {
+      "id": "ornament/filament-35",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 726.3065661962675,
+          "y": 202.527592424374
+        },
+        {
+          "op": "line_to",
+          "x": 715.4607712024231,
+          "y": 114.59488373417764
+        }
+      ],
+      "bounds": {
+        "x": 715.4607712024231,
+        "y": 114.59488373417764,
+        "width": 10.845794993844379,
+        "height": 87.93270869019636
+      }
+    },
+    {
+      "id": "ornament/filament-36",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 802.9491621171775,
+          "y": 198.00722392805528
+        },
+        {
+          "op": "line_to",
+          "x": 803.3588472331231,
+          "y": 114.3809360319226
+        }
+      ],
+      "bounds": {
+        "x": 802.9491621171775,
+        "y": 114.3809360319226,
+        "width": 0.40968511594564916,
+        "height": 83.62628789613268
+      }
+    },
+    {
+      "id": "ornament/filament-37",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 878.9177807955884,
+          "y": 203.1951877922737
+        },
+        {
+          "op": "line_to",
+          "x": 889.6321027476206,
+          "y": 122.16960856218554
+        }
+      ],
+      "bounds": {
+        "x": 878.9177807955884,
+        "y": 122.16960856218554,
+        "width": 10.71432195203215,
+        "height": 81.02557923008817
+      }
+    },
+    {
+      "id": "ornament/filament-38",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 957.6758208973997,
+          "y": 219.01606261073687
+        },
+        {
+          "op": "line_to",
+          "x": 975.7091933370739,
+          "y": 152.56897094646445
+        }
+      ],
+      "bounds": {
+        "x": 957.6758208973997,
+        "y": 152.56897094646445,
+        "width": 18.033372439674167,
+        "height": 66.44709166427242
+      }
+    },
+    {
+      "id": "ornament/filament-39",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 1032.1406084594014,
+          "y": 244.5589699130078
+        },
+        {
+          "op": "line_to",
+          "x": 1062.5472052403113,
+          "y": 171.80534205999004
+        }
+      ],
+      "bounds": {
+        "x": 1032.1406084594014,
+        "y": 171.80534205999004,
+        "width": 30.406596780909922,
+        "height": 72.75362785301775
+      }
+    },
+    {
+      "id": "ornament/filament-40",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 1105.3466753001526,
+          "y": 281.1865384522649
+        },
+        {
+          "op": "line_to",
+          "x": 1139.0817442158193,
+          "y": 223.8674015647125
+        }
+      ],
+      "bounds": {
+        "x": 1105.3466753001526,
+        "y": 223.8674015647125,
+        "width": 33.735068915666716,
+        "height": 57.31913688755242
+      }
+    },
+    {
+      "id": "ornament/filament-41",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 1167.0400579706004,
+          "y": 322.83588164559325
+        },
+        {
+          "op": "line_to",
+          "x": 1216.6576777179778,
+          "y": 258.33134796470017
+        }
+      ],
+      "bounds": {
+        "x": 1167.0400579706004,
+        "y": 258.33134796470017,
+        "width": 49.617619747377375,
+        "height": 64.50453368089308
+      }
+    },
+    {
+      "id": "ornament/filament-42",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 1226.6170997054967,
+          "y": 375.2626102650364
+        },
+        {
+          "op": "line_to",
+          "x": 1281.8045733686122,
+          "y": 320.31829714228536
+        }
+      ],
+      "bounds": {
+        "x": 1226.6170997054967,
+        "y": 320.31829714228536,
+        "width": 55.1874736631155,
+        "height": 54.944313122751055
+      }
+    },
+    {
+      "id": "ornament/filament-43",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 1280.1021992371836,
+          "y": 436.81151135034634
+        },
+        {
+          "op": "line_to",
+          "x": 1331.7922268641382,
+          "y": 397.70895559884053
+        }
+      ],
+      "bounds": {
+        "x": 1280.1021992371836,
+        "y": 397.70895559884053,
+        "width": 51.69002762695459,
+        "height": 39.102555751505804
+      }
+    },
+    {
+      "id": "ornament/filament-44",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 1321.5070495500363,
+          "y": 499.2768760643505
+        },
+        {
+          "op": "line_to",
+          "x": 1382.495737842184,
+          "y": 464.1082069470742
+        }
+      ],
+      "bounds": {
+        "x": 1321.5070495500363,
+        "y": 464.1082069470742,
+        "width": 60.9886882921478,
+        "height": 35.168669117276295
+      }
+    },
+    {
+      "id": "ornament/filament-45",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 1357.0169181973065,
+          "y": 571.6665752852307
+        },
+        {
+          "op": "line_to",
+          "x": 1428.5837709480254,
+          "y": 542.3297561496207
+        }
+      ],
+      "bounds": {
+        "x": 1357.0169181973065,
+        "y": 542.3297561496207,
+        "width": 71.56685275071891,
+        "height": 29.33681913560997
+      }
+    },
+    {
+      "id": "ornament/filament-46",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 1381.7425671480498,
+          "y": 645.1465674645966
+        },
+        {
+          "op": "line_to",
+          "x": 1451.1214540462993,
+          "y": 626.6786756712404
+        }
+      ],
+      "bounds": {
+        "x": 1381.7425671480498,
+        "y": 626.6786756712404,
+        "width": 69.37888689824945,
+        "height": 18.467891793356216
+      }
+    },
+    {
+      "id": "ornament/filament-47",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 1397.2237887062456,
+          "y": 724.318125001043
+        },
+        {
+          "op": "line_to",
+          "x": 1477.936801986502,
+          "y": 714.0899453849927
+        }
+      ],
+      "bounds": {
+        "x": 1397.2237887062456,
+        "y": 714.0899453849927,
+        "width": 80.71301328025629,
+        "height": 10.228179616050284
+      }
+    },
+    {
+      "id": "ornament/rune-0",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 1352.716888160114,
+          "y": 817.692980037293
+        },
+        {
+          "op": "line_to",
+          "x": 1367.662442878048,
+          "y": 818.1714011004722
+        },
+        {
+          "op": "move_to",
+          "x": 1352.557658983521,
+          "y": 822.1141018052087
+        },
+        {
+          "op": "line_to",
+          "x": 1370.3240174057,
+          "y": 822.8251354004694
+        }
+      ],
+      "bounds": {
+        "x": 1344.5480602634525,
+        "y": 802.5939738154483,
+        "width": 40.0,
+        "height": 40.0
+      }
+    },
+    {
+      "id": "ornament/rune-1",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 1334.9220633592056,
+          "y": 940.2404582548489
+        },
+        {
+          "op": "line_to",
+          "x": 1352.4310796117477,
+          "y": 944.8307951114524
+        },
+        {
+          "op": "move_to",
+          "x": 1333.78303424558,
+          "y": 944.5153014444561
+        },
+        {
+          "op": "line_to",
+          "x": 1344.1582737504768,
+          "y": 947.3242720718717
+        }
+      ],
+      "bounds": {
+        "x": 1325.366029563748,
+        "y": 927.6512573528349,
+        "width": 40.0,
+        "height": 40.0
+      }
+    },
+    {
+      "id": "ornament/rune-2",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 1291.3231102837324,
+          "y": 1053.7924374387844
+        },
+        {
+          "op": "line_to",
+          "x": 1302.9767263189428,
+          "y": 1059.8121005823396
+        },
+        {
+          "op": "move_to",
+          "x": 1289.2770701854308,
+          "y": 1057.7148590802656
+        },
+        {
+          "op": "line_to",
+          "x": 1300.0479836247678,
+          "y": 1063.388177141405
+        },
+        {
+          "op": "move_to",
+          "x": 1287.1997165216435,
+          "y": 1061.6207870587318
+        },
+        {
+          "op": "line_to",
+          "x": 1302.625397947016,
+          "y": 1069.904205087453
+        },
+        {
+          "op": "move_to",
+          "x": 1296.6539216068832,
+          "y": 1056.5460624381203
+        },
+        {
+          "op": "line_to",
+          "x": 1290.3543777096625,
+          "y": 1068.3907305794478
+        }
+      ],
+      "bounds": {
+        "x": 1278.8370688914986,
+        "y": 1045.3046903085926,
+        "width": 40.0,
+        "height": 40.0
+      }
+    },
+    {
+      "id": "ornament/rune-3",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 1223.9541358950182,
+          "y": 1155.0660370374903
+        },
+        {
+          "op": "line_to",
+          "x": 1238.6263870325902,
+          "y": 1167.3542013098788
+        },
+        {
+          "op": "move_to",
+          "x": 1221.100071437596,
+          "y": 1158.4462718947593
+        },
+        {
+          "op": "line_to",
+          "x": 1237.5705715396784,
+          "y": 1172.466191999923
+        },
+        {
+          "op": "move_to",
+          "x": 1218.2190567193365,
+          "y": 1161.8035663129763
+        },
+        {
+          "op": "line_to",
+          "x": 1225.8899476033457,
+          "y": 1168.439695475533
+        },
+        {
+          "op": "move_to",
+          "x": 1215.3112761241994,
+          "y": 1165.1377054264447
+        },
+        {
+          "op": "line_to",
+          "x": 1228.8589677962798,
+          "y": 1177.0487064884267
+        },
+        {
+          "op": "move_to",
+          "x": 1227.1149014525683,
+          "y": 1160.6298115202942
+        },
+        {
+          "op": "line_to",
+          "x": 1218.3376136559423,
+          "y": 1170.7757287102968
+        }
+      ],
+      "bounds": {
+        "x": 1207.2943346228303,
+        "y": 1149.6546382763681,
+        "width": 40.0,
+        "height": 40.0
+      }
+    },
+    {
+      "id": "ornament/rune-4",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 1132.5504147309312,
+          "y": 1241.8361932461912
+        },
+        {
+          "op": "line_to",
+          "x": 1140.0201049744746,
+          "y": 1251.760641858309
+        },
+        {
+          "op": "move_to",
+          "x": 1129.0051213316797,
+          "y": 1244.482429503717
+        },
+        {
+          "op": "line_to",
+          "x": 1140.692940205022,
+          "y": 1260.272548841055
+        },
+        {
+          "op": "move_to",
+          "x": 1125.4387717169634,
+          "y": 1247.1002190374707
+        },
+        {
+          "op": "line_to",
+          "x": 1137.5268115793576,
+          "y": 1263.7072300635277
+        }
+      ],
+      "bounds": {
+        "x": 1114.3252781904166,
+        "y": 1235.468559137621,
+        "width": 40.0,
+        "height": 40.0
+      }
+    },
+    {
+      "id": "ornament/rune-5",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 1027.9120980764033,
+          "y": 1303.8502511167499
+        },
+        {
+          "op": "line_to",
+          "x": 1034.9052376463135,
+          "y": 1319.3101374419268
+        },
+        {
+          "op": "move_to",
+          "x": 1023.8740459143115,
+          "y": 1305.6574053308789
+        },
+        {
+          "op": "line_to",
+          "x": 1029.004318288876,
+          "y": 1317.2449933738262
+        },
+        {
+          "op": "move_to",
+          "x": 1019.8216658896969,
+          "y": 1307.432197643664
+        },
+        {
+          "op": "line_to",
+          "x": 1025.0888111010784,
+          "y": 1319.590776549443
+        },
+        {
+          "op": "move_to",
+          "x": 1015.7552173534975,
+          "y": 1309.174514469003
+        },
+        {
+          "op": "line_to",
+          "x": 1022.42596879285,
+          "y": 1324.9172467511646
+        }
+      ],
+      "bounds": {
+        "x": 1004.59175628875,
+        "y": 1298.4433845726403,
+        "width": 40.0,
+        "height": 40.0
+      }
+    },
+    {
+      "id": "ornament/rune-6",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 905.7416980787837,
+          "y": 1342.7961802439431
+        },
+        {
+          "op": "line_to",
+          "x": 909.9134845787074,
+          "y": 1364.2109089469445
+        },
+        {
+          "op": "move_to",
+          "x": 901.3959912389994,
+          "y": 1343.62473542018
+        },
+        {
+          "op": "line_to",
+          "x": 905.3275114567002,
+          "y": 1364.7031983064394
+        },
+        {
+          "op": "move_to",
+          "x": 909.0828668577074,
+          "y": 1348.253525440652
+        },
+        {
+          "op": "line_to",
+          "x": 895.8946310291528,
+          "y": 1350.7133734891343
+        }
+      ],
+      "bounds": {
+        "x": 883.5962659132633,
+        "y": 1335.4212938741443,
+        "width": 40.0,
+        "height": 40.0
+      }
+    },
+    {
+      "id": "ornament/rune-7",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 784.518023163357,
+          "y": 1352.7832381623284
+        },
+        {
+          "op": "line_to",
+          "x": 784.1723057388524,
+          "y": 1365.1270621728731
+        },
+        {
+          "op": "move_to",
+          "x": 780.0962998493603,
+          "y": 1352.64169469948
+        },
+        {
+          "op": "line_to",
+          "x": 779.6800765815505,
+          "y": 1364.1984570278362
+        },
+        {
+          "op": "move_to",
+          "x": 775.6758503653795,
+          "y": 1352.4647823568057
+        },
+        {
+          "op": "line_to",
+          "x": 774.891987973028,
+          "y": 1370.2683385959017
+        }
+      ],
+      "bounds": {
+        "x": 757.4060261845517,
+        "y": 1344.5480602634525,
+        "width": 40.0,
+        "height": 40.0
+      }
+    },
+    {
+      "id": "ornament/rune-8",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 659.7595417451511,
+          "y": 1334.9220633592056
+        },
+        {
+          "op": "line_to",
+          "x": 655.8146373365271,
+          "y": 1349.9691933548966
+        },
+        {
+          "op": "move_to",
+          "x": 655.4846985555439,
+          "y": 1333.78303424558
+        },
+        {
+          "op": "line_to",
+          "x": 651.0772105318764,
+          "y": 1350.0625721710398
+        },
+        {
+          "op": "move_to",
+          "x": 660.4019774577655,
+          "y": 1341.2886402856593
+        },
+        {
+          "op": "line_to",
+          "x": 647.4524994847462,
+          "y": 1337.7827257234549
+        }
+      ],
+      "bounds": {
+        "x": 632.3487426471651,
+        "y": 1325.366029563748,
+        "width": 40.0,
+        "height": 40.0
+      }
+    },
+    {
+      "id": "ornament/rune-9",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 546.2075625612156,
+          "y": 1291.3231102837324
+        },
+        {
+          "op": "line_to",
+          "x": 537.7905558252994,
+          "y": 1307.6178035791816
+        },
+        {
+          "op": "move_to",
+          "x": 542.2851409197345,
+          "y": 1289.2770701854308
+        },
+        {
+          "op": "line_to",
+          "x": 533.0028885280233,
+          "y": 1306.8996212139054
+        },
+        {
+          "op": "move_to",
+          "x": 538.3792129412682,
+          "y": 1287.1997165216435
+        },
+        {
+          "op": "line_to",
+          "x": 532.8114084170054,
+          "y": 1297.5682840057698
+        }
+      ],
+      "bounds": {
+        "x": 514.6953096914074,
+        "y": 1278.8370688914986,
+        "width": 40.0,
+        "height": 40.0
+      }
+    },
+    {
+      "id": "ornament/rune-10",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 441.5537281052408,
+          "y": 1221.100071437596
+        },
+        {
+          "op": "line_to",
+          "x": 432.9825707992828,
+          "y": 1231.169404659456
+        },
+        {
+          "op": "move_to",
+          "x": 438.1964336870238,
+          "y": 1218.2190567193368
+        },
+        {
+          "op": "line_to",
+          "x": 430.8184717061793,
+          "y": 1226.7474533064249
+        }
+      ],
+      "bounds": {
+        "x": 410.34536172363187,
+        "y": 1207.2943346228305,
+        "width": 40.0,
+        "height": 40.0
+      }
+    },
+    {
+      "id": "ornament/rune-11",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 356.8371433269198,
+          "y": 1130.7804142710916
+        },
+        {
+          "op": "line_to",
+          "x": 340.3848622776373,
+          "y": 1143.0605326502377
+        },
+        {
+          "op": "move_to",
+          "x": 354.2051093750366,
+          "y": 1127.224564317346
+        },
+        {
+          "op": "line_to",
+          "x": 342.27362166257063,
+          "y": 1135.9825737752292
+        },
+        {
+          "op": "move_to",
+          "x": 353.3699240061105,
+          "y": 1136.1585566629124
+        },
+        {
+          "op": "line_to",
+          "x": 345.43151642100025,
+          "y": 1125.3436548277662
+        }
+      ],
+      "bounds": {
+        "x": 324.5314408623792,
+        "y": 1114.3252781904168,
+        "width": 40.0,
+        "height": 40.0
+      }
+    },
+    {
+      "id": "ornament/rune-12",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 294.3425946691211,
+          "y": 1023.8740459143116
+        },
+        {
+          "op": "line_to",
+          "x": 284.5199301068917,
+          "y": 1028.2229185581652
+        },
+        {
+          "op": "move_to",
+          "x": 292.567802356336,
+          "y": 1019.8216658896969
+        },
+        {
+          "op": "line_to",
+          "x": 273.1318838621129,
+          "y": 1028.2413838369146
+        },
+        {
+          "op": "move_to",
+          "x": 289.76555650763015,
+          "y": 1028.3458181662884
+        },
+        {
+          "op": "line_to",
+          "x": 284.4327234316328,
+          "y": 1016.0356066297331
+        }
+      ],
+      "bounds": {
+        "x": 261.5566154273596,
+        "y": 1004.59175628875,
+        "width": 40.0,
+        "height": 40.0
+      }
+    },
+    {
+      "id": "ornament/rune-13",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 258.06711370255505,
+          "y": 910.0806374859839
+        },
+        {
+          "op": "line_to",
+          "x": 239.1789238978381,
+          "y": 913.9173191623166
+        },
+        {
+          "op": "move_to",
+          "x": 257.20381975605676,
+          "y": 905.7416980787834
+        },
+        {
+          "op": "line_to",
+          "x": 244.2305966404631,
+          "y": 908.2690014971334
+        },
+        {
+          "op": "move_to",
+          "x": 256.3752645798198,
+          "y": 901.3959912389992
+        },
+        {
+          "op": "line_to",
+          "x": 236.72686194540051,
+          "y": 905.0607789713675
+        },
+        {
+          "op": "move_to",
+          "x": 255.58150120109315,
+          "y": 897.0437950903852
+        },
+        {
+          "op": "line_to",
+          "x": 239.33328049005956,
+          "y": 899.9400761769824
+        }
+      ],
+      "bounds": {
+        "x": 224.57870612585577,
+        "y": 883.5962659132631,
+        "width": 40.0,
+        "height": 40.0
+      }
+    },
+    {
+      "id": "ornament/rune-14",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 247.28311183988603,
+          "y": 782.3070199627072
+        },
+        {
+          "op": "line_to",
+          "x": 233.14715944756358,
+          "y": 781.8545150205874
+        },
+        {
+          "op": "move_to",
+          "x": 247.4423410164792,
+          "y": 777.8858981947914
+        },
+        {
+          "op": "line_to",
+          "x": 232.1631868238626,
+          "y": 777.2744058630507
+        },
+        {
+          "op": "move_to",
+          "x": 241.2191136840114,
+          "y": 784.3500451144965
+        },
+        {
+          "op": "line_to",
+          "x": 241.7555977156262,
+          "y": 770.9450982076636
+        }
+      ],
+      "bounds": {
+        "x": 215.4519397365475,
+        "y": 757.4060261845517,
+        "width": 40.0,
+        "height": 40.0
+      }
+    },
+    {
+      "id": "ornament/rune-15",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 263.97314235663737,
+          "y": 664.0433602762181
+        },
+        {
+          "op": "line_to",
+          "x": 253.76074438013939,
+          "y": 661.4531107530676
+        },
+        {
+          "op": "move_to",
+          "x": 265.0779366407943,
+          "y": 659.7595417451513
+        },
+        {
+          "op": "line_to",
+          "x": 247.47132491314528,
+          "y": 655.1436182936211
+        },
+        {
+          "op": "move_to",
+          "x": 266.2169657544199,
+          "y": 655.4846985555441
+        },
+        {
+          "op": "line_to",
+          "x": 256.2277690751839,
+          "y": 652.7802443547318
+        },
+        {
+          "op": "move_to",
+          "x": 267.3901568000398,
+          "y": 651.2191042959016
+        },
+        {
+          "op": "line_to",
+          "x": 254.10748357164346,
+          "y": 647.5086809053154
+        },
+        {
+          "op": "move_to",
+          "x": 258.7113597143407,
+          "y": 660.4019774577657
+        },
+        {
+          "op": "line_to",
+          "x": 262.21727427654514,
+          "y": 647.4524994847465
+        }
+      ],
+      "bounds": {
+        "x": 234.63397043625184,
+        "y": 632.3487426471654,
+        "width": 40.0,
+        "height": 40.0
+      }
+    },
+    {
+      "id": "ornament/rune-16",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 308.67688971626757,
+          "y": 546.2075625612156
+        },
+        {
+          "op": "line_to",
+          "x": 290.56617933635994,
+          "y": 536.8524941045124
+        },
+        {
+          "op": "move_to",
+          "x": 310.7229298145692,
+          "y": 542.2851409197345
+        },
+        {
+          "op": "line_to",
+          "x": 291.3407135914043,
+          "y": 532.0760274603135
+        },
+        {
+          "op": "move_to",
+          "x": 312.8002834783566,
+          "y": 538.3792129412682
+        },
+        {
+          "op": "line_to",
+          "x": 303.90697826351203,
+          "y": 533.6036077203283
+        },
+        {
+          "op": "move_to",
+          "x": 303.3460783931167,
+          "y": 543.4539375618798
+        },
+        {
+          "op": "line_to",
+          "x": 309.64562229033754,
+          "y": 531.6092694205523
+        }
+      ],
+      "bounds": {
+        "x": 281.16293110850137,
+        "y": 514.6953096914074,
+        "width": 40.0,
+        "height": 40.0
+      }
+    },
+    {
+      "id": "ornament/rune-17",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 376.0458641049819,
+          "y": 444.9339629625096
+        },
+        {
+          "op": "line_to",
+          "x": 363.4102152715367,
+          "y": 434.35147448833237
+        },
+        {
+          "op": "move_to",
+          "x": 378.8999285624043,
+          "y": 441.5537281052407
+        },
+        {
+          "op": "line_to",
+          "x": 369.23542130476926,
+          "y": 433.32716432344733
+        },
+        {
+          "op": "move_to",
+          "x": 381.78094328066345,
+          "y": 438.19643368702356
+        },
+        {
+          "op": "line_to",
+          "x": 365.7884288568172,
+          "y": 424.3612230243437
+        },
+        {
+          "op": "move_to",
+          "x": 384.68872387580086,
+          "y": 434.8622945735552
+        },
+        {
+          "op": "line_to",
+          "x": 368.45738020661287,
+          "y": 420.59185231957946
+        },
+        {
+          "op": "move_to",
+          "x": 372.8850985474318,
+          "y": 439.3701884797057
+        },
+        {
+          "op": "line_to",
+          "x": 381.6623863440578,
+          "y": 429.22427128970315
+        }
+      ],
+      "bounds": {
+        "x": 352.7056653771697,
+        "y": 410.3453617236317,
+        "width": 40.0,
+        "height": 40.0
+      }
+    },
+    {
+      "id": "ornament/rune-18",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 467.4495852690691,
+          "y": 358.16380675380856
+        },
+        {
+          "op": "line_to",
+          "x": 457.21574913855295,
+          "y": 344.566833188549
+        },
+        {
+          "op": "move_to",
+          "x": 470.9948786683203,
+          "y": 355.517570496283
+        },
+        {
+          "op": "line_to",
+          "x": 460.10747252108905,
+          "y": 340.8088002627751
+        },
+        {
+          "op": "move_to",
+          "x": 474.56122828303626,
+          "y": 352.8997809625297
+        },
+        {
+          "op": "line_to",
+          "x": 466.81818433471693,
+          "y": 342.2620913380089
+        }
+      ],
+      "bounds": {
+        "x": 445.6747218095834,
+        "y": 324.53144086237904,
+        "width": 40.0,
+        "height": 40.0
+      }
+    },
+    {
+      "id": "ornament/rune-19",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 574.105120848019,
+          "y": 295.24213371863937
+        },
+        {
+          "op": "line_to",
+          "x": 565.6172358022371,
+          "y": 276.27611394415885
+        },
+        {
+          "op": "move_to",
+          "x": 578.1503693033168,
+          "y": 293.4511461273007
+        },
+        {
+          "op": "line_to",
+          "x": 573.1230575245614,
+          "y": 281.9722943861816
+        },
+        {
+          "op": "move_to",
+          "x": 582.2098160592541,
+          "y": 291.6925774897084
+        },
+        {
+          "op": "line_to",
+          "x": 574.311917194241,
+          "y": 273.25942066564346
+        }
+      ],
+      "bounds": {
+        "x": 555.40824371125,
+        "y": 261.5566154273596,
+        "width": 40.0,
+        "height": 40.0
+      }
+    },
+    {
+      "id": "ornament/rune-20",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 692.0879689225187,
+          "y": 257.63112778411346
+        },
+        {
+          "op": "line_to",
+          "x": 689.2589797087065,
+          "y": 243.41254924300006
+        },
+        {
+          "op": "move_to",
+          "x": 696.4303267848277,
+          "y": 256.78519645530423
+        },
+        {
+          "op": "line_to",
+          "x": 692.7342431269741,
+          "y": 237.39952789270808
+        },
+        {
+          "op": "move_to",
+          "x": 700.7793130708702,
+          "y": 255.97403068850508
+        },
+        {
+          "op": "line_to",
+          "x": 698.4290361172615,
+          "y": 243.08748719228117
+        }
+      ],
+      "bounds": {
+        "x": 676.4037340867366,
+        "y": 224.57870612585577,
+        "width": 40.0,
+        "height": 40.0
+      }
+    },
+    {
+      "id": "ornament/rune-21",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 813.2707259246938,
+          "y": 247.15925635547478
+        },
+        {
+          "op": "line_to",
+          "x": 813.7362252593338,
+          "y": 227.7671748831641
+        },
+        {
+          "op": "move_to",
+          "x": 817.6929800372928,
+          "y": 247.28311183988603
+        },
+        {
+          "op": "line_to",
+          "x": 818.2236871534889,
+          "y": 230.7041757211539
+        },
+        {
+          "op": "move_to",
+          "x": 822.1141018052086,
+          "y": 247.4423410164792
+        },
+        {
+          "op": "line_to",
+          "x": 822.7332451954096,
+          "y": 231.97201238734942
+        },
+        {
+          "op": "move_to",
+          "x": 826.5338082781572,
+          "y": 247.63693369464136
+        },
+        {
+          "op": "line_to",
+          "x": 827.1688129651126,
+          "y": 234.4178310189901
+        }
+      ],
+      "bounds": {
+        "x": 802.5939738154482,
+        "y": 215.4519397365475,
+        "width": 40.0,
+        "height": 40.0
+      }
+    },
+    {
+      "id": "ornament/rune-22",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 940.2404582548485,
+          "y": 265.0779366407943
+        },
+        {
+          "op": "line_to",
+          "x": 944.0691475671798,
+          "y": 250.47408827635263
+        },
+        {
+          "op": "move_to",
+          "x": 944.5153014444556,
+          "y": 266.2169657544199
+        },
+        {
+          "op": "line_to",
+          "x": 948.1159909803475,
+          "y": 252.91742607499395
+        }
+      ],
+      "bounds": {
+        "x": 927.6512573528344,
+        "y": 234.63397043625173,
+        "width": 40.0,
+        "height": 40.0
+      }
+    },
+    {
+      "id": "ornament/rune-23",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 1051.8251199016327,
+          "y": 307.66565325327105
+        },
+        {
+          "op": "line_to",
+          "x": 1059.4521213188764,
+          "y": 292.75437370394786
+        },
+        {
+          "op": "move_to",
+          "x": 1055.7556943023512,
+          "y": 309.695987338547
+        },
+        {
+          "op": "line_to",
+          "x": 1063.5231389638302,
+          "y": 294.80517798222945
+        },
+        {
+          "op": "move_to",
+          "x": 1059.6699004259322,
+          "y": 311.75770071327656
+        },
+        {
+          "op": "line_to",
+          "x": 1067.9592278392474,
+          "y": 296.1717576787587
+        },
+        {
+          "op": "move_to",
+          "x": 1063.5674877645197,
+          "y": 313.8506614285074
+        },
+        {
+          "op": "line_to",
+          "x": 1069.0809891782915,
+          "y": 303.6810267430911
+        }
+      ],
+      "bounds": {
+        "x": 1045.3046903085926,
+        "y": 281.16293110850137,
+        "width": 40.0,
+        "height": 40.0
+      }
+    },
+    {
+      "id": "ornament/rune-24",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 1158.446271894759,
+          "y": 378.8999285624041
+        },
+        {
+          "op": "line_to",
+          "x": 1166.9003581553789,
+          "y": 368.96812955256036
+        },
+        {
+          "op": "move_to",
+          "x": 1161.8035663129763,
+          "y": 381.7809432806633
+        },
+        {
+          "op": "line_to",
+          "x": 1174.73719153963,
+          "y": 366.83059716502146
+        }
+      ],
+      "bounds": {
+        "x": 1149.6546382763681,
+        "y": 352.7056653771695,
+        "width": 40.0,
+        "height": 40.0
+      }
+    },
+    {
+      "id": "ornament/rune-25",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 1241.8361932461914,
+          "y": 467.4495852690691
+        },
+        {
+          "op": "line_to",
+          "x": 1254.188181833819,
+          "y": 458.15279385551804
+        },
+        {
+          "op": "move_to",
+          "x": 1244.482429503717,
+          "y": 470.99487866832027
+        },
+        {
+          "op": "line_to",
+          "x": 1259.8187884766503,
+          "y": 459.64293242758833
+        },
+        {
+          "op": "move_to",
+          "x": 1247.1002190374702,
+          "y": 474.56122828303626
+        },
+        {
+          "op": "line_to",
+          "x": 1262.814228863118,
+          "y": 463.123193053672
+        },
+        {
+          "op": "move_to",
+          "x": 1246.6300759938897,
+          "y": 463.84144333708787
+        },
+        {
+          "op": "line_to",
+          "x": 1254.5684835789998,
+          "y": 474.6563451722338
+        }
+      ],
+      "bounds": {
+        "x": 1235.468559137621,
+        "y": 445.67472180958333,
+        "width": 40.0,
+        "height": 40.0
+      }
+    },
+    {
+      "id": "ornament/rune-26",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 1305.657405330879,
+          "y": 576.1259540856888
+        },
+        {
+          "op": "line_to",
+          "x": 1315.3661303046988,
+          "y": 571.8275268943851
+        },
+        {
+          "op": "move_to",
+          "x": 1307.432197643664,
+          "y": 580.1783341103035
+        },
+        {
+          "op": "line_to",
+          "x": 1320.519195400626,
+          "y": 574.5089941240178
+        }
+      ],
+      "bounds": {
+        "x": 1298.4433845726408,
+        "y": 555.4082437112504,
+        "width": 40.0,
+        "height": 40.0
+      }
+    },
+    {
+      "id": "ornament/rune-27",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 1342.3688722158865,
+          "y": 692.0879689225187
+        },
+        {
+          "op": "line_to",
+          "x": 1362.940352109185,
+          "y": 687.9949792778774
+        },
+        {
+          "op": "move_to",
+          "x": 1343.2148035446958,
+          "y": 696.4303267848277
+        },
+        {
+          "op": "line_to",
+          "x": 1353.8222106588194,
+          "y": 694.4079119292287
+        },
+        {
+          "op": "move_to",
+          "x": 1344.025969311495,
+          "y": 700.7793130708702
+        },
+        {
+          "op": "line_to",
+          "x": 1357.3979506659457,
+          "y": 698.3405008625647
+        }
+      ],
+      "bounds": {
+        "x": 1335.4212938741443,
+        "y": 676.4037340867366,
+        "width": 40.0,
+        "height": 40.0
+      }
+    },
+    {
+      "id": "ornament/dot-87",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "circle",
+      "center": {
+        "x": 499.55691915993555,
+        "y": 507.2535245053147
+      },
+      "radius": 2.016985842529264,
+      "bounds": {
+        "x": 497.5399333174063,
+        "y": 505.23653866278545,
+        "width": 4.033971685058528,
+        "height": 4.033971685058528
+      }
+    },
+    {
+      "id": "ornament/dot-88",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "circle",
+      "center": {
+        "x": 1047.7136979319357,
+        "y": 182.2475244488013
+      },
+      "radius": 2.8803108782512234,
+      "bounds": {
+        "x": 1044.8333870536844,
+        "y": 179.36721357055006,
+        "width": 5.760621756502447,
+        "height": 5.760621756502447
+      }
+    },
+    {
+      "id": "ornament/dot-89",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "circle",
+      "center": {
+        "x": 1407.7987488366787,
+        "y": 570.3977698960175
+      },
+      "radius": 1.544950528947929,
+      "bounds": {
+        "x": 1406.2537983077307,
+        "y": 568.8528193670696,
+        "width": 3.089901057895858,
+        "height": 3.089901057895858
+      }
+    },
+    {
+      "id": "ornament/dot-90",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "circle",
+      "center": {
+        "x": 218.05371173425954,
+        "y": 706.2913016255967
+      },
+      "radius": 2.829818470771013,
+      "bounds": {
+        "x": 215.22389326348852,
+        "y": 703.4614831548257,
+        "width": 5.659636941542026,
+        "height": 5.659636941542026
+      }
+    },
+    {
+      "id": "ornament/dot-91",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "circle",
+      "center": {
+        "x": 451.3549100955892,
+        "y": 1349.6610858206604
+      },
+      "radius": 1.862136939081415,
+      "bounds": {
+        "x": 449.4927731565078,
+        "y": 1347.798948881579,
+        "width": 3.72427387816283,
+        "height": 3.72427387816283
+      }
+    },
+    {
+      "id": "ornament/dot-92",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "circle",
+      "center": {
+        "x": 195.24323080781107,
+        "y": 726.5471154076266
+      },
+      "radius": 2.297790692923941,
+      "bounds": {
+        "x": 192.94544011488713,
+        "y": 724.2493247147027,
+        "width": 4.595581385847882,
+        "height": 4.595581385847882
+      }
+    },
+    {
+      "id": "ornament/dot-93",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "circle",
+      "center": {
+        "x": 546.0121756754367,
+        "y": 689.7193580668068
+      },
+      "radius": 2.2136381661587774,
+      "bounds": {
+        "x": 543.7985375092778,
+        "y": 687.5057199006479,
+        "width": 4.427276332317555,
+        "height": 4.427276332317555
+      }
+    },
+    {
+      "id": "ornament/dot-94",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "circle",
+      "center": {
+        "x": 807.5721851648314,
+        "y": 1312.7978051584682
+      },
+      "radius": 2.6575934499336764,
+      "bounds": {
+        "x": 804.9145917148977,
+        "y": 1310.1402117085345,
+        "width": 5.315186899867353,
+        "height": 5.315186899867353
+      }
+    },
+    {
+      "id": "ornament/dot-95",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "circle",
+      "center": {
+        "x": 1056.9785702631784,
+        "y": 396.3793734887636
+      },
+      "radius": 1.518966376462395,
+      "bounds": {
+        "x": 1055.459603886716,
+        "y": 394.8604071123012,
+        "width": 3.03793275292479,
+        "height": 3.03793275292479
+      }
+    },
+    {
+      "id": "ornament/dot-96",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "circle",
+      "center": {
+        "x": 1353.7918140446807,
+        "y": 1132.2956954754577
+      },
+      "radius": 2.8609941284340574,
+      "bounds": {
+        "x": 1350.9308199162467,
+        "y": 1129.4347013470237,
+        "width": 5.721988256868115,
+        "height": 5.721988256868115
+      }
+    },
+    {
+      "id": "ornament/dot-97",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "circle",
+      "center": {
+        "x": 650.5530955036114,
+        "y": 213.27314513523186
+      },
+      "radius": 1.3358211242851983,
+      "bounds": {
+        "x": 649.2172743793262,
+        "y": 211.93732401094667,
+        "width": 2.6716422485703966,
+        "height": 2.6716422485703966
+      }
+    },
+    {
+      "id": "ornament/dot-98",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "circle",
+      "center": {
+        "x": 1233.3746153315642,
+        "y": 415.8837276040891
+      },
+      "radius": 1.6323067052130018,
+      "bounds": {
+        "x": 1231.7423086263511,
+        "y": 414.25142089887606,
+        "width": 3.2646134104260036,
+        "height": 3.2646134104260036
+      }
+    },
+    {
+      "id": "ornament/dot-99",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "circle",
+      "center": {
+        "x": 694.5746631813233,
+        "y": 317.580992393805
+      },
+      "radius": 1.2721797134735273,
+      "bounds": {
+        "x": 693.3024834678498,
+        "y": 316.30881268033147,
+        "width": 2.5443594269470546,
+        "height": 2.5443594269470546
+      }
+    },
+    {
+      "id": "ornament/dot-100",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "circle",
+      "center": {
+        "x": 1238.755643919279,
+        "y": 1116.1630554201747
+      },
+      "radius": 1.4083265577286972,
+      "bounds": {
+        "x": 1237.3473173615503,
+        "y": 1114.754728862446,
+        "width": 2.8166531154573944,
+        "height": 2.8166531154573944
+      }
+    },
+    {
+      "id": "ornament/dot-101",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "circle",
+      "center": {
+        "x": 398.2809996673924,
+        "y": 360.06911420574784
+      },
+      "radius": 1.795438706456828,
+      "bounds": {
+        "x": 396.4855609609356,
+        "y": 358.273675499291,
+        "width": 3.590877412913656,
+        "height": 3.590877412913656
+      }
+    },
+    {
+      "id": "ornament/dot-102",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "circle",
+      "center": {
+        "x": 591.5239302504837,
+        "y": 534.501127263178
+      },
+      "radius": 2.516485308764034,
+      "bounds": {
+        "x": 589.0074449417197,
+        "y": 531.984641954414,
+        "width": 5.032970617528068,
+        "height": 5.032970617528068
+      }
+    },
+    {
+      "id": "ornament/dot-103",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "circle",
+      "center": {
+        "x": 319.06563773739987,
+        "y": 677.7298850786119
+      },
+      "radius": 2.845367638443225,
+      "bounds": {
+        "x": 316.22027009895663,
+        "y": 674.8845174401687,
+        "width": 5.69073527688645,
+        "height": 5.69073527688645
+      }
+    },
+    {
+      "id": "ornament/dot-104",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "circle",
+      "center": {
+        "x": 1058.7701340341762,
+        "y": 1142.6422306562367
+      },
+      "radius": 1.9233067514529418,
+      "bounds": {
+        "x": 1056.8468272827233,
+        "y": 1140.7189239047839,
+        "width": 3.8466135029058837,
+        "height": 3.8466135029058837
+      }
+    },
+    {
+      "id": "ornament/dot-105",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "circle",
+      "center": {
+        "x": 1255.8816976238,
+        "y": 1034.7667911969138
+      },
+      "radius": 2.2078069565095326,
+      "bounds": {
+        "x": 1253.6738906672904,
+        "y": 1032.5589842404042,
+        "width": 4.415613913019065,
+        "height": 4.415613913019065
+      }
+    },
+    {
+      "id": "ornament/dot-106",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "circle",
+      "center": {
+        "x": 1253.1128676822227,
+        "y": 1036.152823771934
+      },
+      "radius": 1.3387327339770414,
+      "bounds": {
+        "x": 1251.7741349482458,
+        "y": 1034.814091037957,
+        "width": 2.677465467954083,
+        "height": 2.677465467954083
+      }
+    },
+    {
+      "id": "ornament/dot-107",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "circle",
+      "center": {
+        "x": 729.4562454111044,
+        "y": 1428.7330977843258
+      },
+      "radius": 1.687664856025513,
+      "bounds": {
+        "x": 727.7685805550789,
+        "y": 1427.0454329283002,
+        "width": 3.375329712051026,
+        "height": 3.375329712051026
+      }
+    },
+    {
+      "id": "ornament/dot-108",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "circle",
+      "center": {
+        "x": 1279.3897002448207,
+        "y": 581.3094766230687
+      },
+      "radius": 2.4184168022478514,
+      "bounds": {
+        "x": 1276.971283442573,
+        "y": 578.8910598208208,
+        "width": 4.836833604495703,
+        "height": 4.836833604495703
+      }
+    },
+    {
+      "id": "ornament/dot-109",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "circle",
+      "center": {
+        "x": 434.6215697150412,
+        "y": 1127.5795318746204
+      },
+      "radius": 1.5727802978155032,
+      "bounds": {
+        "x": 433.0487894172257,
+        "y": 1126.0067515768048,
+        "width": 3.1455605956310064,
+        "height": 3.1455605956310064
+      }
+    },
+    {
+      "id": "ornament/dot-110",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "circle",
+      "center": {
+        "x": 151.7024016075104,
+        "y": 925.3610668803728
+      },
+      "radius": 1.3753858558809335,
+      "bounds": {
+        "x": 150.3270157516295,
+        "y": 923.9856810244919,
+        "width": 2.750771711761867,
+        "height": 2.750771711761867
+      }
+    },
+    {
+      "id": "ornament/dot-111",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "circle",
+      "center": {
+        "x": 1166.0420361068354,
+        "y": 250.01620289950426
+      },
+      "radius": 1.509144973699873,
+      "bounds": {
+        "x": 1164.5328911331355,
+        "y": 248.5070579258044,
+        "width": 3.018289947399746,
+        "height": 3.018289947399746
+      }
+    },
+    {
+      "id": "ornament/dot-112",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "circle",
+      "center": {
+        "x": 264.24655210444143,
+        "y": 1213.105197307365
+      },
+      "radius": 2.470665621973472,
+      "bounds": {
+        "x": 261.77588648246797,
+        "y": 1210.6345316853915,
+        "width": 4.941331243946944,
+        "height": 4.941331243946944
+      }
+    },
+    {
+      "id": "ornament/dot-113",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "circle",
+      "center": {
+        "x": 387.70482358052004,
+        "y": 890.5082574096202
+      },
+      "radius": 2.891079539282979,
+      "bounds": {
+        "x": 384.81374404123704,
+        "y": 887.6171778703373,
+        "width": 5.782159078565958,
+        "height": 5.782159078565958
+      }
+    },
+    {
+      "id": "ornament/dot-114",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "circle",
+      "center": {
+        "x": 1064.7770332528044,
+        "y": 1197.981996962319
+      },
+      "radius": 2.2372399173444446,
+      "bounds": {
+        "x": 1062.53979333546,
+        "y": 1195.7447570449747,
+        "width": 4.474479834688889,
+        "height": 4.474479834688889
+      }
+    },
+    {
+      "id": "ornament/dot-115",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "circle",
+      "center": {
+        "x": 1449.3575806942613,
+        "y": 796.238756793174
+      },
+      "radius": 1.7538859268456743,
+      "bounds": {
+        "x": 1447.6036947674156,
+        "y": 794.4848708663284,
+        "width": 3.5077718536913487,
+        "height": 3.5077718536913487
+      }
+    },
+    {
+      "id": "ornament/dot-116",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "circle",
+      "center": {
+        "x": 835.7490751015747,
+        "y": 236.14959405746242
+      },
+      "radius": 2.6069960843148117,
+      "bounds": {
+        "x": 833.1420790172599,
+        "y": 233.54259797314762,
+        "width": 5.213992168629623,
+        "height": 5.213992168629623
+      }
+    },
+    {
+      "id": "ornament/dot-117",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "circle",
+      "center": {
+        "x": 686.2092592599167,
+        "y": 1048.8822292613006
+      },
+      "radius": 1.3938437750941013,
+      "bounds": {
+        "x": 684.8154154848227,
+        "y": 1047.4883854862064,
+        "width": 2.7876875501882026,
+        "height": 2.7876875501882026
+      }
+    },
+    {
+      "id": "ornament/dot-118",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "circle",
+      "center": {
+        "x": 641.055736100275,
+        "y": 683.6366314809418
+      },
+      "radius": 2.0403109772613375,
+      "bounds": {
+        "x": 639.0154251230136,
+        "y": 681.5963205036804,
+        "width": 4.080621954522675,
+        "height": 4.080621954522675
+      }
+    },
+    {
+      "id": "ornament/dot-119",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "circle",
+      "center": {
+        "x": 773.4732184985011,
+        "y": 1412.5483959983383
+      },
+      "radius": 2.1905870574738393,
+      "bounds": {
+        "x": 771.2826314410272,
+        "y": 1410.3578089408645,
+        "width": 4.381174114947679,
+        "height": 4.381174114947679
+      }
+    },
+    {
+      "id": "ornament/dot-120",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "circle",
+      "center": {
+        "x": 318.1739360322308,
+        "y": 633.3354770212297
+      },
+      "radius": 1.9685918617085048,
+      "bounds": {
+        "x": 316.2053441705223,
+        "y": 631.3668851595212,
+        "width": 3.9371837234170095,
+        "height": 3.9371837234170095
+      }
+    },
+    {
+      "id": "ornament/dot-121",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "circle",
+      "center": {
+        "x": 1144.3238776044632,
+        "y": 385.4361820551286
+      },
+      "radius": 1.3752995911378976,
+      "bounds": {
+        "x": 1142.9485780133252,
+        "y": 384.0608824639907,
+        "width": 2.750599182275795,
+        "height": 2.750599182275795
+      }
+    },
+    {
+      "id": "ornament/dot-122",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "circle",
+      "center": {
+        "x": 464.41755396976316,
+        "y": 247.32325962392906
+      },
+      "radius": 1.2091027537587502,
+      "bounds": {
+        "x": 463.2084512160044,
+        "y": 246.11415687017032,
+        "width": 2.4182055075175004,
+        "height": 2.4182055075175004
+      }
+    },
+    {
+      "id": "ornament/dot-123",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "circle",
+      "center": {
+        "x": 984.8354032781677,
+        "y": 384.31266143216044
+      },
+      "radius": 2.6168074115883764,
+      "bounds": {
+        "x": 982.2185958665793,
+        "y": 381.6958540205721,
+        "width": 5.233614823176753,
+        "height": 5.233614823176753
+      }
+    },
+    {
+      "id": "ornament/dot-124",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "circle",
+      "center": {
+        "x": 994.9755977240096,
+        "y": 1175.835764276564
+      },
+      "radius": 1.4066754598122928,
+      "bounds": {
+        "x": 993.5689222641973,
+        "y": 1174.4290888167518,
+        "width": 2.8133509196245856,
+        "height": 2.8133509196245856
+      }
+    },
+    {
+      "id": "ornament/dot-125",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "circle",
+      "center": {
+        "x": 872.8575226389536,
+        "y": 318.3875895708081
+      },
+      "radius": 2.6830114794999007,
+      "bounds": {
+        "x": 870.1745111594537,
+        "y": 315.7045780913082,
+        "width": 5.366022958999801,
+        "height": 5.366022958999801
+      }
+    },
+    {
+      "id": "ornament/dot-126",
+      "layer": "ornament-back",
+      "semantic": "ornament",
+      "geometry": "circle",
+      "center": {
+        "x": 1324.1453689719142,
+        "y": 925.7104150993472
+      },
+      "radius": 2.6662068203489384,
+      "bounds": {
+        "x": 1321.4791621515653,
+        "y": 923.0442082789982,
+        "width": 5.332413640697877,
+        "height": 5.332413640697877
+      }
+    }
+  ],
+  "hit_regions": [
+    {
+      "element_id": "node/n0",
+      "graph_ref": {
+        "kind": "node",
+        "id": "n0"
+      },
+      "center": {
+        "x": 800.0,
+        "y": 800.0
+      },
+      "radius": 54.0,
+      "tab_index": 0
+    },
+    {
+      "element_id": "node/n1",
+      "graph_ref": {
+        "kind": "node",
+        "id": "n1"
+      },
+      "center": {
+        "x": 950.0671648338891,
+        "y": 709.9730815882364
+      },
+      "radius": 24.0,
+      "tab_index": 1
+    },
+    {
+      "element_id": "node/n2",
+      "graph_ref": {
+        "kind": "node",
+        "id": "n2"
+      },
+      "center": {
+        "x": 1436.798828573462,
+        "y": 783.992129202594
+      },
+      "radius": 30.0,
+      "tab_index": 2
+    },
+    {
+      "element_id": "node/n3",
+      "graph_ref": {
+        "kind": "node",
+        "id": "n3"
+      },
+      "center": {
+        "x": 1016.1613504765636,
+        "y": 915.3224633805064
+      },
+      "radius": 24.0,
+      "tab_index": 3
+    },
+    {
+      "element_id": "node/n4",
+      "graph_ref": {
+        "kind": "node",
+        "id": "n4"
+      },
+      "center": {
+        "x": 815.8269602266274,
+        "y": 1114.6021413308954
+      },
+      "radius": 24.0,
+      "tab_index": 4
+    },
+    {
+      "element_id": "node/n5",
+      "graph_ref": {
+        "kind": "node",
+        "id": "n5"
+      },
+      "center": {
+        "x": 480.2205788096122,
+        "y": 1014.3971123479525
+      },
+      "radius": 32.0,
+      "tab_index": 5
+    },
+    {
+      "element_id": "node/n6",
+      "graph_ref": {
+        "kind": "node",
+        "id": "n6"
+      },
+      "center": {
+        "x": 830.7106201013378,
+        "y": 1239.119716665593
+      },
+      "radius": 24.0,
+      "tab_index": 6
+    },
+    {
+      "element_id": "node/n7",
+      "graph_ref": {
+        "kind": "node",
+        "id": "n7"
+      },
+      "center": {
+        "x": 765.4561205911001,
+        "y": 1229.9221392754393
+      },
+      "radius": 24.0,
+      "tab_index": 7
+    },
+    {
+      "element_id": "node/n8",
+      "graph_ref": {
+        "kind": "node",
+        "id": "n8"
+      },
+      "center": {
+        "x": 654.6685969790999,
+        "y": 1420.1997930473508
+      },
+      "radius": 30.0,
+      "tab_index": 8
+    },
+    {
+      "element_id": "node/n9",
+      "graph_ref": {
+        "kind": "node",
+        "id": "n9"
+      },
+      "center": {
+        "x": 364.1526674345267,
+        "y": 861.6957895406247
+      },
+      "radius": 34.0,
+      "tab_index": 9
+    },
+    {
+      "element_id": "node/n10",
+      "graph_ref": {
+        "kind": "node",
+        "id": "n10"
+      },
+      "center": {
+        "x": 415.6393947065686,
+        "y": 854.4076543323307
+      },
+      "radius": 24.0,
+      "tab_index": 10
+    },
+    {
+      "element_id": "node/n11",
+      "graph_ref": {
+        "kind": "node",
+        "id": "n11"
+      },
+      "center": {
+        "x": 312.66594016248473,
+        "y": 868.9839247489186
+      },
+      "radius": 24.0,
+      "tab_index": 11
+    },
+    {
+      "element_id": "node/n12",
+      "graph_ref": {
+        "kind": "node",
+        "id": "n12"
+      },
+      "center": {
+        "x": 476.4491950905615,
+        "y": 492.86189908611624
+      },
+      "radius": 24.0,
+      "tab_index": 12
+    },
+    {
+      "element_id": "node/n13",
+      "graph_ref": {
+        "kind": "node",
+        "id": "n13"
+      },
+      "center": {
+        "x": 388.3036911279609,
+        "y": 606.2704223378923
+      },
+      "radius": 24.0,
+      "tab_index": 13
+    },
+    {
+      "element_id": "node/n14",
+      "graph_ref": {
+        "kind": "node",
+        "id": "n14"
+      },
+      "center": {
+        "x": 800.0,
+        "y": 1325.0
+      },
+      "radius": 40.0,
+      "tab_index": 14
+    }
+  ],
+  "legend": [
+    {
+      "key": "node/n0",
+      "graph_ref": {
+        "kind": "node",
+        "id": "n0"
+      },
+      "semantic": {
+        "node": {
+          "kind": "source"
+        }
+      },
+      "summary": "source",
+      "source_span": {
+        "start": 117,
+        "end": 145
+      }
+    },
+    {
+      "key": "node/n1",
+      "graph_ref": {
+        "kind": "node",
+        "id": "n1"
+      },
+      "semantic": {
+        "node": {
+          "kind": "scatter"
+        }
+      },
+      "summary": "scatter",
+      "source_span": {
+        "start": 151,
+        "end": 152
+      }
+    },
+    {
+      "key": "node/n2",
+      "graph_ref": {
+        "kind": "node",
+        "id": "n2"
+      },
+      "semantic": {
+        "node": {
+          "kind": "effect"
+        }
+      },
+      "summary": "fs invocation",
+      "source_span": {
+        "start": 158,
+        "end": 171
+      },
+      "capabilities": [
+        "fs"
+      ],
+      "attributes": {
+        "placeholder": true
+      }
+    },
+    {
+      "key": "node/n3",
+      "graph_ref": {
+        "kind": "node",
+        "id": "n3"
+      },
+      "semantic": {
+        "node": {
+          "kind": "stage"
+        }
+      },
+      "summary": "stage",
+      "source_span": {
+        "start": 177,
+        "end": 189
+      },
+      "capabilities": [
+        "custom"
+      ]
+    },
+    {
+      "key": "node/n4",
+      "graph_ref": {
+        "kind": "node",
+        "id": "n4"
+      },
+      "semantic": {
+        "node": {
+          "kind": "ward"
+        }
+      },
+      "summary": "ward",
+      "source_span": {
+        "start": 195,
+        "end": 209
+      },
+      "attributes": {
+        "placeholder": true
+      }
+    },
+    {
+      "key": "node/n5",
+      "graph_ref": {
+        "kind": "node",
+        "id": "n5"
+      },
+      "semantic": {
+        "node": {
+          "kind": "fork"
+        }
+      },
+      "summary": "fork",
+      "source_span": {
+        "start": 215,
+        "end": 332
+      }
+    },
+    {
+      "key": "node/n6",
+      "graph_ref": {
+        "kind": "node",
+        "id": "n6"
+      },
+      "semantic": {
+        "node": {
+          "kind": "ward"
+        }
+      },
+      "summary": "ward",
+      "source_span": {
+        "start": 225,
+        "end": 235
+      },
+      "region": "s0",
+      "branch_ordinal": 0,
+      "attributes": {
+        "placeholder": true
+      }
+    },
+    {
+      "key": "node/n7",
+      "graph_ref": {
+        "kind": "node",
+        "id": "n7"
+      },
+      "semantic": {
+        "node": {
+          "kind": "stage"
+        }
+      },
+      "summary": "stage",
+      "source_span": {
+        "start": 239,
+        "end": 244
+      },
+      "region": "s0",
+      "branch_ordinal": 0,
+      "attributes": {
+        "placeholder": true
+      }
+    },
+    {
+      "key": "node/n8",
+      "graph_ref": {
+        "kind": "node",
+        "id": "n8"
+      },
+      "semantic": {
+        "node": {
+          "kind": "effect"
+        }
+      },
+      "summary": "clock invocation",
+      "source_span": {
+        "start": 248,
+        "end": 260
+      },
+      "capabilities": [
+        "clock"
+      ],
+      "region": "s0",
+      "branch_ordinal": 0
+    },
+    {
+      "key": "node/n9",
+      "graph_ref": {
+        "kind": "node",
+        "id": "n9"
+      },
+      "semantic": {
+        "node": {
+          "kind": "orbit"
+        }
+      },
+      "summary": "orbit",
+      "source_span": {
+        "start": 270,
+        "end": 295
+      },
+      "region": "s1",
+      "branch_ordinal": 1,
+      "attributes": {
+        "deduplicates": true,
+        "max_items": 6
+      }
+    },
+    {
+      "key": "node/n10",
+      "graph_ref": {
+        "kind": "node",
+        "id": "n10"
+      },
+      "semantic": {
+        "node": {
+          "kind": "ward"
+        }
+      },
+      "summary": "ward",
+      "source_span": {
+        "start": 273,
+        "end": 284
+      },
+      "region": "s3",
+      "branch_ordinal": 1,
+      "attributes": {
+        "placeholder": true
+      }
+    },
+    {
+      "key": "node/n11",
+      "graph_ref": {
+        "kind": "node",
+        "id": "n11"
+      },
+      "semantic": {
+        "node": {
+          "kind": "stage"
+        }
+      },
+      "summary": "stage",
+      "source_span": {
+        "start": 288,
+        "end": 293
+      },
+      "region": "s3",
+      "branch_ordinal": 1,
+      "attributes": {
+        "placeholder": true
+      }
+    },
+    {
+      "key": "node/n12",
+      "graph_ref": {
+        "kind": "node",
+        "id": "n12"
+      },
+      "semantic": {
+        "node": {
+          "kind": "stage"
+        }
+      },
+      "summary": "stage",
+      "source_span": {
+        "start": 320,
+        "end": 325
+      },
+      "region": "s2",
+      "branch_ordinal": 2,
+      "attributes": {
+        "placeholder": true
+      }
+    },
+    {
+      "key": "node/n13",
+      "graph_ref": {
+        "kind": "node",
+        "id": "n13"
+      },
+      "semantic": {
+        "node": {
+          "kind": "ward"
+        }
+      },
+      "summary": "ward",
+      "source_span": {
+        "start": 338,
+        "end": 349
+      },
+      "attributes": {
+        "placeholder": true
+      }
+    },
+    {
+      "key": "node/n14",
+      "graph_ref": {
+        "kind": "node",
+        "id": "n14"
+      },
+      "semantic": {
+        "node": {
+          "kind": "collect"
+        }
+      },
+      "summary": "collect",
+      "source_span": {
+        "start": 355,
+        "end": 357
+      }
+    }
+  ],
+  "metadata": {
+    "renderer_version": "0.1.0",
+    "graph_fingerprint": "70a29a6ec3bc9781cea1da6bd456b8c4",
+    "seed": 0,
+    "tracery": "flowing",
+    "node_count": 15,
+    "edge_count": 18,
+    "region_count": 4,
+    "census": {
+      "collect": 1,
+      "effect": 2,
+      "fork": 1,
+      "orbit": 1,
+      "scatter": 1,
+      "source": 1,
+      "stage": 4,
+      "ward": 4
+    },
+    "source_schema": "cant.graph@1"
+  }
+}

@@ -298,7 +298,7 @@ b ← ⟨y: 2⟩
 }
 
 #[tokio::test]
-async fn record_spread_accepts_both_sigils_in_both_dialects() {
+async fn record_spread_accepts_both_glyphs_in_both_dialects() {
     // `..` is canonical; `...` is a synonym the formatter normalises.
     assert_eq!(eval("a ← ⟨x: 1⟩\n⟨...a, y: 2⟩.x").await, Value::Int(1));
     assert_eq!(eval("a <- <<x: 1>>\n<<..a, y: 2>>.y").await, Value::Int(2));

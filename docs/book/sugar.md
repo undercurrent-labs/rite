@@ -1,6 +1,6 @@
 # Sugar pack
 
-Rite is a **sigil language**: dense glyphs with ASCII twins, all desugaring into the same IR. This chapter is the map of the sugar pack.
+Rite is a **glyph language**: dense symbols with ASCII twins, all desugaring into the same IR. This chapter is the map of the sugar pack.
 
 ## Quick table
 

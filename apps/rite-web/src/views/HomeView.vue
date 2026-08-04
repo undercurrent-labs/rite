@@ -56,7 +56,7 @@ do host.console.println(str(square(12)))`;
         </p>
         <h1 class="max-w-3xl text-4xl font-semibold tracking-tight text-white md:text-5xl md:leading-tight">
           Scripts that look like
-          <span class="text-rite-accent">sigils</span>
+          <span class="text-rite-accent">glyphs</span>
           and behave like
           <span class="text-rite-pink">contracts</span>.
         </h1>

@@ -1,0 +1,59 @@
+[package]
+name = "cant-sigil-wasm"
+# Sigil's number, not the workspace's: this is a binding layer over `rite-sigil`
+# and moves with it.
+#
+# `cant-`, not `rite-`, and the prefix is load-bearing. Rendering pasted Cant
+# source means parsing it, so this crate depends on `cant-syntax` and `cant-sem`
+# — and ADR 0001 fixes the edge as `cant-* -> rite-*`, never the reverse, with
+# `crates/cant-cli/tests/boundaries.rs` enforcing it by directory name.
+#
+# `.internal/sigil_mvp.md` §5 names this crate `rite-sigil-wasm` and §5.1 has it
+# depending on "pure Cant syntax/graph crates" in the same breath. Those two
+# cannot both hold in this repository. The naming rule predates the spec, is
+# mechanically enforced, and encodes something real — that deleting Cant leaves a
+# Rite that builds — so the name gives way rather than the rule. The *renderer*,
+# `rite-sigil`, remains Cant-free and Rite-side; only this binding knows what
+# Cant is. Recorded in `docs/sigil/implementation-log.md`.
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+description = "Browser-facing Sigil renderer (WASM)"
+repository.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+# What is deliberately absent, and enforced by `tests/boundaries.rs`:
+#
+#   * the Rite runtime, capabilities, compiler, or any native I/O — ADR 0003
+#   * `resvg` and a font stack — `rite-sigil` is taken without its `png`
+#     feature, so the browser rasterises through canvas instead
+#   * an async runtime
+#
+# Path form with an explicit `default-features = false` for `rite-sigil`: cargo
+# ignores that flag on a workspace dependency whose table does not specify it,
+# which is how a wasm32 build in this repository once acquired axum and failed
+# inside `mio`.
+[dependencies]
+rite-sigil = { path = "../rite-sigil", default-features = false }
+cant-syntax = { workspace = true }
+cant-sem = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+rite-core = { workspace = true }
+
+wasm-bindgen = { version = "0.2", optional = true }
+console_error_panic_hook = { version = "0.1", optional = true }
+
+[dev-dependencies]
+# The parity test spells out the native pipeline and compares it to the browser
+# API's, so it needs the renderer directly rather than through the binding layer.
+rite-sigil = { path = "../rite-sigil", default-features = false }
+
+[features]
+default = ["native"]
+# `native` exists so the API below can be tested with `cargo test` rather than
+# only in a browser. The functions are the same ones the bindings call.
+native = []
+wasm = ["wasm-bindgen", "console_error_panic_hook"]

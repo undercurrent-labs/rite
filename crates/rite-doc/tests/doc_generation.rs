@@ -35,7 +35,7 @@ fn tags_are_pulled_out_of_the_prose() {
 }
 
 #[test]
-fn a_module_sigil_is_stripped_like_a_declaration_sigil() {
+fn a_module_glyph_is_stripped_like_a_declaration_glyph() {
     let d = parse_doc_comment(&["//! Module level.", "//! @returns nothing really"]);
     assert_eq!(
         d.text, "Module level.",
@@ -46,7 +46,7 @@ fn a_module_sigil_is_stripped_like_a_declaration_sigil() {
 
 #[test]
 fn already_stripped_lines_parse_the_same_as_raw_ones() {
-    // The parser hands back doc text with the sigil already removed; the same function
+    // The parser hands back doc text with the glyph already removed; the same function
     // has to read both, or wiring it to the AST would silently mangle every line.
     let raw = parse_doc_comment(&["/// Prose.", "/// @returns a value"]);
     let stripped = parse_doc_comment(&["Prose.", "@returns a value"]);

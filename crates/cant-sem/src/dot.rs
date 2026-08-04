@@ -1,9 +1,10 @@
 //! Graphviz DOT export.
 //!
-//! Required because Sigil does not exist yet and a topology you cannot look at
-//! is a topology nobody checks. `dot -Tsvg` is two seconds away from anyone with
-//! a terminal, which makes this the working visual debugger until there is a
-//! real one.
+//! The technical topology view, and it stays that way. A topology you cannot
+//! look at is a topology nobody checks, and `dot -Tsvg` is two seconds away from
+//! anyone with a terminal. Sigil is the stylized semantic artifact and does not
+//! replace this or take its layout from it — see
+//! `docs/adr/0008-graphviz-stays-the-technical-view.md`.
 //!
 //! Output is deterministic — nodes in identifier order, edges in construction
 //! order — so it can be snapshot-tested like the JSON.

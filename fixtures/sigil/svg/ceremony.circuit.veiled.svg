@@ -1,0 +1,179 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 1600" role="img">
+<title>This sigil contains one source, four stages, four wards, one scatter, one collect, one fork, one orbit, and two invocations.</title>
+<defs><filter id="sigil-glow" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>
+<style>.sigil-node{fill:none;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}.sigil-edge{fill:none;stroke-width:1.8;stroke-linecap:round}.sigil-region{fill:none;stroke-width:1.4}.sigil-boundary{fill:none;stroke:#D8B35C;stroke-width:1.4;stroke-opacity:0.55}.sigil-ornament{fill:none;stroke:#8E5CFF;stroke-opacity:0.28;stroke-width:1}.sigil-text{fill:#EDEBFF;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:15px;text-anchor:middle;dominant-baseline:middle}</style>
+<rect x="0" y="0" width="1600" height="1600" fill="#05030A"/>
+<g class="sigil-layer sigil-layer-guide-geometry">
+<circle cx="800" cy="800" r="105" id="ornament-guide-0" class="sigil-ornament" stroke="#8E5CFF"/>
+<circle cx="800" cy="800" r="455" id="ornament-guide-1" class="sigil-ornament" stroke="#8E5CFF"/>
+<circle cx="800" cy="800" r="595" id="ornament-guide-2" class="sigil-ornament" stroke="#8E5CFF"/>
+<path d="M800 94L800 59.481" id="ornament-cardinal-0" class="sigil-ornament" stroke="#8E5CFF"/>
+<path d="M1299.217 300.783L1312.026 287.974" id="ornament-cardinal-1" class="sigil-ornament" stroke="#8E5CFF"/>
+<path d="M1506 800L1542.906 800" id="ornament-cardinal-2" class="sigil-ornament" stroke="#8E5CFF"/>
+<path d="M1299.217 1299.217L1314.492 1314.492" id="ornament-cardinal-3" class="sigil-ornament" stroke="#8E5CFF"/>
+<path d="M800 1506L800 1542.657" id="ornament-cardinal-4" class="sigil-ornament" stroke="#8E5CFF"/>
+<path d="M300.783 1299.217L286.287 1313.713" id="ornament-cardinal-5" class="sigil-ornament" stroke="#8E5CFF"/>
+<path d="M94 800L59.509 800" id="ornament-cardinal-6" class="sigil-ornament" stroke="#8E5CFF"/>
+<path d="M300.783 300.783L285.793 285.793" id="ornament-cardinal-7" class="sigil-ornament" stroke="#8E5CFF"/>
+</g>
+<g class="sigil-layer sigil-layer-ornament-back">
+<path d="M1401.985 804.182L1473.239 804.677" id="ornament-filament-0" class="sigil-ornament" stroke="#8E5CFF"/>
+<path d="M1396.51 881.119L1474.331 891.702" id="ornament-filament-1" class="sigil-ornament" stroke="#8E5CFF"/>
+<path d="M1380.213 960.49L1444.226 978.197" id="ornament-filament-2" class="sigil-ornament" stroke="#8E5CFF"/>
+<path d="M1355.426 1032.177L1432.22 1064.278" id="ornament-filament-3" class="sigil-ornament" stroke="#8E5CFF"/>
+<path d="M1320.409 1102.62L1382.467 1138.707" id="ornament-filament-4" class="sigil-ornament" stroke="#8E5CFF"/>
+<path d="M1275.97 1168.587L1328.844 1209.532" id="ornament-filament-5" class="sigil-ornament" stroke="#8E5CFF"/>
+<path d="M1223.492 1227.853L1272.341 1277.205" id="ornament-filament-6" class="sigil-ornament" stroke="#8E5CFF"/>
+<path d="M1163.099 1280.17L1197.897 1326.188" id="ornament-filament-7" class="sigil-ornament" stroke="#8E5CFF"/>
+<path d="M1095.412 1324.534L1130.88 1387.512" id="ornament-filament-8" class="sigil-ornament" stroke="#8E5CFF"/>
+<path d="M1024.21 1358.69L1055.545 1436.772" id="ornament-filament-9" class="sigil-ornament" stroke="#8E5CFF"/>
+<path d="M949.32 1383.187L966.871 1451.734" id="ornament-filament-10" class="sigil-ornament" stroke="#8E5CFF"/>
+<path d="M871.632 1397.723L881.993 1484.181" id="ornament-filament-11" class="sigil-ornament" stroke="#8E5CFF"/>
+<path d="M796.757 1401.991L796.302 1486.438" id="ornament-filament-12" class="sigil-ornament" stroke="#8E5CFF"/>
+<path d="M720.875 1396.777L710.923 1471.841" id="ornament-filament-13" class="sigil-ornament" stroke="#8E5CFF"/>
+<path d="M639.143 1380.111L617.366 1458.648" id="ornament-filament-14" class="sigil-ornament" stroke="#8E5CFF"/>
+<path d="M568.209 1355.587L541.703 1419.121" id="ornament-filament-15" class="sigil-ornament" stroke="#8E5CFF"/>
+<path d="M495.686 1319.42L460.884 1378.822" id="ornament-filament-16" class="sigil-ornament" stroke="#8E5CFF"/>
+<path d="M431.093 1275.722L387.451 1332" id="ornament-filament-17" class="sigil-ornament" stroke="#8E5CFF"/>
+<path d="M369.822 1221.13L314.522 1275.267" id="ornament-filament-18" class="sigil-ornament" stroke="#8E5CFF"/>
+<path d="M319.529 1162.701L263.48 1205.011" id="ornament-filament-19" class="sigil-ornament" stroke="#8E5CFF"/>
+<path d="M275.432 1095.351L209.896 1132.249" id="ornament-filament-20" class="sigil-ornament" stroke="#8E5CFF"/>
+<path d="M242.988 1028.346L170.369 1058.116" id="ornament-filament-21" class="sigil-ornament" stroke="#8E5CFF"/>
+<path d="M218.064 954.125L163.356 968.614" id="ornament-filament-22" class="sigil-ornament" stroke="#8E5CFF"/>
+<path d="M202.518 873.619L141.279 881.164" id="ornament-filament-23" class="sigil-ornament" stroke="#8E5CFF"/>
+<path d="M198.001 798.82L118.514 798.664" id="ornament-filament-24" class="sigil-ornament" stroke="#8E5CFF"/>
+<path d="M204.021 715.069L141.562 706.169" id="ornament-filament-25" class="sigil-ornament" stroke="#8E5CFF"/>
+<path d="M219.678 639.904L150.631 620.856" id="ornament-filament-26" class="sigil-ornament" stroke="#8E5CFF"/>
+<path d="M246.517 563.229L189.68 538.915" id="ornament-filament-27" class="sigil-ornament" stroke="#8E5CFF"/>
+<path d="M280.628 495.604L210.645 454.588" id="ornament-filament-28" class="sigil-ornament" stroke="#8E5CFF"/>
+<path d="M325.717 429.245L255.932 374.693" id="ornament-filament-29" class="sigil-ornament" stroke="#8E5CFF"/>
+<path d="M378.902 369.791L327.429 317.205" id="ornament-filament-30" class="sigil-ornament" stroke="#8E5CFF"/>
+<path d="M436.33 320.262L393.914 264.309" id="ornament-filament-31" class="sigil-ornament" stroke="#8E5CFF"/>
+<path d="M499.775 278.206L465.599 218.807" id="ornament-filament-32" class="sigil-ornament" stroke="#8E5CFF"/>
+<path d="M569.916 243.704L538.794 168.459" id="ornament-filament-33" class="sigil-ornament" stroke="#8E5CFF"/>
+<path d="M650.657 216.819L628.741 131.236" id="ornament-filament-34" class="sigil-ornament" stroke="#8E5CFF"/>
+<path d="M726.307 202.528L715.461 114.595" id="ornament-filament-35" class="sigil-ornament" stroke="#8E5CFF"/>
+<path d="M802.949 198.007L803.359 114.381" id="ornament-filament-36" class="sigil-ornament" stroke="#8E5CFF"/>
+<path d="M878.918 203.195L889.632 122.17" id="ornament-filament-37" class="sigil-ornament" stroke="#8E5CFF"/>
+<path d="M957.676 219.016L975.709 152.569" id="ornament-filament-38" class="sigil-ornament" stroke="#8E5CFF"/>
+<path d="M1032.141 244.559L1062.547 171.805" id="ornament-filament-39" class="sigil-ornament" stroke="#8E5CFF"/>
+<path d="M1105.347 281.187L1139.082 223.867" id="ornament-filament-40" class="sigil-ornament" stroke="#8E5CFF"/>
+<path d="M1167.04 322.836L1216.658 258.331" id="ornament-filament-41" class="sigil-ornament" stroke="#8E5CFF"/>
+<path d="M1226.617 375.263L1281.805 320.318" id="ornament-filament-42" class="sigil-ornament" stroke="#8E5CFF"/>
+<path d="M1280.102 436.812L1331.792 397.709" id="ornament-filament-43" class="sigil-ornament" stroke="#8E5CFF"/>
+<path d="M1321.507 499.277L1382.496 464.108" id="ornament-filament-44" class="sigil-ornament" stroke="#8E5CFF"/>
+<path d="M1357.017 571.667L1428.584 542.33" id="ornament-filament-45" class="sigil-ornament" stroke="#8E5CFF"/>
+<path d="M1381.743 645.147L1451.121 626.679" id="ornament-filament-46" class="sigil-ornament" stroke="#8E5CFF"/>
+<path d="M1397.224 724.318L1477.937 714.09" id="ornament-filament-47" class="sigil-ornament" stroke="#8E5CFF"/>
+<path d="M1352.717 817.693L1367.662 818.171M1352.558 822.114L1370.324 822.825" id="ornament-rune-0" class="sigil-ornament" stroke="#8E5CFF"/>
+<path d="M1334.922 940.24L1352.431 944.831M1333.783 944.515L1344.158 947.324" id="ornament-rune-1" class="sigil-ornament" stroke="#8E5CFF"/>
+<path d="M1291.323 1053.792L1302.977 1059.812M1289.277 1057.715L1300.048 1063.388M1287.2 1061.621L1302.625 1069.904M1296.654 1056.546L1290.354 1068.391" id="ornament-rune-2" class="sigil-ornament" stroke="#8E5CFF"/>
+<path d="M1223.954 1155.066L1238.626 1167.354M1221.1 1158.446L1237.571 1172.466M1218.219 1161.804L1225.89 1168.44M1215.311 1165.138L1228.859 1177.049M1227.115 1160.63L1218.338 1170.776" id="ornament-rune-3" class="sigil-ornament" stroke="#8E5CFF"/>
+<path d="M1132.55 1241.836L1140.02 1251.761M1129.005 1244.482L1140.693 1260.273M1125.439 1247.1L1137.527 1263.707" id="ornament-rune-4" class="sigil-ornament" stroke="#8E5CFF"/>
+<path d="M1027.912 1303.85L1034.905 1319.31M1023.874 1305.657L1029.004 1317.245M1019.822 1307.432L1025.089 1319.591M1015.755 1309.175L1022.426 1324.917" id="ornament-rune-5" class="sigil-ornament" stroke="#8E5CFF"/>
+<path d="M905.742 1342.796L909.913 1364.211M901.396 1343.625L905.328 1364.703M909.083 1348.254L895.895 1350.713" id="ornament-rune-6" class="sigil-ornament" stroke="#8E5CFF"/>
+<path d="M784.518 1352.783L784.172 1365.127M780.096 1352.642L779.68 1364.198M775.676 1352.465L774.892 1370.268" id="ornament-rune-7" class="sigil-ornament" stroke="#8E5CFF"/>
+<path d="M659.76 1334.922L655.815 1349.969M655.485 1333.783L651.077 1350.063M660.402 1341.289L647.452 1337.783" id="ornament-rune-8" class="sigil-ornament" stroke="#8E5CFF"/>
+<path d="M546.208 1291.323L537.791 1307.618M542.285 1289.277L533.003 1306.9M538.379 1287.2L532.811 1297.568" id="ornament-rune-9" class="sigil-ornament" stroke="#8E5CFF"/>
+<path d="M441.554 1221.1L432.983 1231.169M438.196 1218.219L430.818 1226.747" id="ornament-rune-10" class="sigil-ornament" stroke="#8E5CFF"/>
+<path d="M356.837 1130.78L340.385 1143.061M354.205 1127.225L342.274 1135.983M353.37 1136.159L345.432 1125.344" id="ornament-rune-11" class="sigil-ornament" stroke="#8E5CFF"/>
+<path d="M294.343 1023.874L284.52 1028.223M292.568 1019.822L273.132 1028.241M289.766 1028.346L284.433 1016.036" id="ornament-rune-12" class="sigil-ornament" stroke="#8E5CFF"/>
+<path d="M258.067 910.081L239.179 913.917M257.204 905.742L244.231 908.269M256.375 901.396L236.727 905.061M255.582 897.044L239.333 899.94" id="ornament-rune-13" class="sigil-ornament" stroke="#8E5CFF"/>
+<path d="M247.283 782.307L233.147 781.855M247.442 777.886L232.163 777.274M241.219 784.35L241.756 770.945" id="ornament-rune-14" class="sigil-ornament" stroke="#8E5CFF"/>
+<path d="M263.973 664.043L253.761 661.453M265.078 659.76L247.471 655.144M266.217 655.485L256.228 652.78M267.39 651.219L254.107 647.509M258.711 660.402L262.217 647.452" id="ornament-rune-15" class="sigil-ornament" stroke="#8E5CFF"/>
+<path d="M308.677 546.208L290.566 536.852M310.723 542.285L291.341 532.076M312.8 538.379L303.907 533.604M303.346 543.454L309.646 531.609" id="ornament-rune-16" class="sigil-ornament" stroke="#8E5CFF"/>
+<path d="M376.046 444.934L363.41 434.351M378.9 441.554L369.235 433.327M381.781 438.196L365.788 424.361M384.689 434.862L368.457 420.592M372.885 439.37L381.662 429.224" id="ornament-rune-17" class="sigil-ornament" stroke="#8E5CFF"/>
+<path d="M467.45 358.164L457.216 344.567M470.995 355.518L460.107 340.809M474.561 352.9L466.818 342.262" id="ornament-rune-18" class="sigil-ornament" stroke="#8E5CFF"/>
+<path d="M574.105 295.242L565.617 276.276M578.15 293.451L573.123 281.972M582.21 291.693L574.312 273.259" id="ornament-rune-19" class="sigil-ornament" stroke="#8E5CFF"/>
+<path d="M692.088 257.631L689.259 243.413M696.43 256.785L692.734 237.4M700.779 255.974L698.429 243.087" id="ornament-rune-20" class="sigil-ornament" stroke="#8E5CFF"/>
+<path d="M813.271 247.159L813.736 227.767M817.693 247.283L818.224 230.704M822.114 247.442L822.733 231.972M826.534 247.637L827.169 234.418" id="ornament-rune-21" class="sigil-ornament" stroke="#8E5CFF"/>
+<path d="M940.24 265.078L944.069 250.474M944.515 266.217L948.116 252.917" id="ornament-rune-22" class="sigil-ornament" stroke="#8E5CFF"/>
+<path d="M1051.825 307.666L1059.452 292.754M1055.756 309.696L1063.523 294.805M1059.67 311.758L1067.959 296.172M1063.567 313.851L1069.081 303.681" id="ornament-rune-23" class="sigil-ornament" stroke="#8E5CFF"/>
+<path d="M1158.446 378.9L1166.9 368.968M1161.804 381.781L1174.737 366.831" id="ornament-rune-24" class="sigil-ornament" stroke="#8E5CFF"/>
+<path d="M1241.836 467.45L1254.188 458.153M1244.482 470.995L1259.819 459.643M1247.1 474.561L1262.814 463.123M1246.63 463.841L1254.568 474.656" id="ornament-rune-25" class="sigil-ornament" stroke="#8E5CFF"/>
+<path d="M1305.657 576.126L1315.366 571.828M1307.432 580.178L1320.519 574.509" id="ornament-rune-26" class="sigil-ornament" stroke="#8E5CFF"/>
+<path d="M1342.369 692.088L1362.94 687.995M1343.215 696.43L1353.822 694.408M1344.026 700.779L1357.398 698.341" id="ornament-rune-27" class="sigil-ornament" stroke="#8E5CFF"/>
+<circle cx="499.557" cy="507.254" r="2.017" id="ornament-dot-87" class="sigil-ornament" stroke="#8E5CFF"/>
+<circle cx="1047.714" cy="182.248" r="2.88" id="ornament-dot-88" class="sigil-ornament" stroke="#8E5CFF"/>
+<circle cx="1407.799" cy="570.398" r="1.545" id="ornament-dot-89" class="sigil-ornament" stroke="#8E5CFF"/>
+<circle cx="218.054" cy="706.291" r="2.83" id="ornament-dot-90" class="sigil-ornament" stroke="#8E5CFF"/>
+<circle cx="451.355" cy="1349.661" r="1.862" id="ornament-dot-91" class="sigil-ornament" stroke="#8E5CFF"/>
+<circle cx="195.243" cy="726.547" r="2.298" id="ornament-dot-92" class="sigil-ornament" stroke="#8E5CFF"/>
+<circle cx="546.012" cy="689.719" r="2.214" id="ornament-dot-93" class="sigil-ornament" stroke="#8E5CFF"/>
+<circle cx="807.572" cy="1312.798" r="2.658" id="ornament-dot-94" class="sigil-ornament" stroke="#8E5CFF"/>
+<circle cx="1056.979" cy="396.379" r="1.519" id="ornament-dot-95" class="sigil-ornament" stroke="#8E5CFF"/>
+<circle cx="1353.792" cy="1132.296" r="2.861" id="ornament-dot-96" class="sigil-ornament" stroke="#8E5CFF"/>
+<circle cx="650.553" cy="213.273" r="1.336" id="ornament-dot-97" class="sigil-ornament" stroke="#8E5CFF"/>
+<circle cx="1233.375" cy="415.884" r="1.632" id="ornament-dot-98" class="sigil-ornament" stroke="#8E5CFF"/>
+<circle cx="694.575" cy="317.581" r="1.272" id="ornament-dot-99" class="sigil-ornament" stroke="#8E5CFF"/>
+<circle cx="1238.756" cy="1116.163" r="1.408" id="ornament-dot-100" class="sigil-ornament" stroke="#8E5CFF"/>
+<circle cx="398.281" cy="360.069" r="1.795" id="ornament-dot-101" class="sigil-ornament" stroke="#8E5CFF"/>
+<circle cx="591.524" cy="534.501" r="2.516" id="ornament-dot-102" class="sigil-ornament" stroke="#8E5CFF"/>
+<circle cx="319.066" cy="677.73" r="2.845" id="ornament-dot-103" class="sigil-ornament" stroke="#8E5CFF"/>
+<circle cx="1058.77" cy="1142.642" r="1.923" id="ornament-dot-104" class="sigil-ornament" stroke="#8E5CFF"/>
+<circle cx="1255.882" cy="1034.767" r="2.208" id="ornament-dot-105" class="sigil-ornament" stroke="#8E5CFF"/>
+<circle cx="1253.113" cy="1036.153" r="1.339" id="ornament-dot-106" class="sigil-ornament" stroke="#8E5CFF"/>
+<circle cx="729.456" cy="1428.733" r="1.688" id="ornament-dot-107" class="sigil-ornament" stroke="#8E5CFF"/>
+<circle cx="1279.39" cy="581.309" r="2.418" id="ornament-dot-108" class="sigil-ornament" stroke="#8E5CFF"/>
+<circle cx="434.622" cy="1127.58" r="1.573" id="ornament-dot-109" class="sigil-ornament" stroke="#8E5CFF"/>
+<circle cx="151.702" cy="925.361" r="1.375" id="ornament-dot-110" class="sigil-ornament" stroke="#8E5CFF"/>
+<circle cx="1166.042" cy="250.016" r="1.509" id="ornament-dot-111" class="sigil-ornament" stroke="#8E5CFF"/>
+<circle cx="264.247" cy="1213.105" r="2.471" id="ornament-dot-112" class="sigil-ornament" stroke="#8E5CFF"/>
+<circle cx="387.705" cy="890.508" r="2.891" id="ornament-dot-113" class="sigil-ornament" stroke="#8E5CFF"/>
+<circle cx="1064.777" cy="1197.982" r="2.237" id="ornament-dot-114" class="sigil-ornament" stroke="#8E5CFF"/>
+<circle cx="1449.358" cy="796.239" r="1.754" id="ornament-dot-115" class="sigil-ornament" stroke="#8E5CFF"/>
+<circle cx="835.749" cy="236.15" r="2.607" id="ornament-dot-116" class="sigil-ornament" stroke="#8E5CFF"/>
+<circle cx="686.209" cy="1048.882" r="1.394" id="ornament-dot-117" class="sigil-ornament" stroke="#8E5CFF"/>
+<circle cx="641.056" cy="683.637" r="2.04" id="ornament-dot-118" class="sigil-ornament" stroke="#8E5CFF"/>
+<circle cx="773.473" cy="1412.548" r="2.191" id="ornament-dot-119" class="sigil-ornament" stroke="#8E5CFF"/>
+<circle cx="318.174" cy="633.335" r="1.969" id="ornament-dot-120" class="sigil-ornament" stroke="#8E5CFF"/>
+<circle cx="1144.324" cy="385.436" r="1.375" id="ornament-dot-121" class="sigil-ornament" stroke="#8E5CFF"/>
+<circle cx="464.418" cy="247.323" r="1.209" id="ornament-dot-122" class="sigil-ornament" stroke="#8E5CFF"/>
+<circle cx="984.835" cy="384.313" r="2.617" id="ornament-dot-123" class="sigil-ornament" stroke="#8E5CFF"/>
+<circle cx="994.976" cy="1175.836" r="1.407" id="ornament-dot-124" class="sigil-ornament" stroke="#8E5CFF"/>
+<circle cx="872.858" cy="318.388" r="2.683" id="ornament-dot-125" class="sigil-ornament" stroke="#8E5CFF"/>
+<circle cx="1324.145" cy="925.71" r="2.666" id="ornament-dot-126" class="sigil-ornament" stroke="#8E5CFF"/>
+</g>
+<g class="sigil-layer sigil-layer-semantic-regions">
+<circle cx="800" cy="800" r="595" id="boundary-host" class="sigil-boundary sigil-invocation-boundary"><title>host boundary</title></circle>
+<circle cx="364.153" cy="861.696" r="52" id="region-s3-ring" class="sigil-region sigil-region-orbit" stroke="#8E5CFF"><title>orbit ring</title></circle>
+</g>
+<g class="sigil-layer sigil-layer-semantic-edges">
+<path d="M800 800L950.067 800L950.067 709.973M954.567 800A4.5 4.5 0 0 1 945.567 800A4.5 4.5 0 0 1 954.567 800Z" id="edge-e0_n0.0-_n1.0" class="sigil-edge sigil-edge-flow" stroke="#38F2FF"/>
+<path d="M950.067 709.973L1436.799 709.973L1436.799 783.992M1441.299 709.973A4.5 4.5 0 0 1 1432.299 709.973A4.5 4.5 0 0 1 1441.299 709.973Z" id="edge-e1_n1.0-_n2.0" class="sigil-edge sigil-edge-flow" stroke="#38F2FF"/>
+<path d="M1436.799 783.992L1016.161 783.992L1016.161 915.322M1020.661 783.992A4.5 4.5 0 0 1 1011.661 783.992A4.5 4.5 0 0 1 1020.661 783.992Z" id="edge-e2_n2.0-_n3.0" class="sigil-edge sigil-edge-flow" stroke="#38F2FF"/>
+<path d="M1016.161 915.322L815.827 915.322L815.827 1114.602M820.327 915.322A4.5 4.5 0 0 1 811.327 915.322A4.5 4.5 0 0 1 820.327 915.322Z" id="edge-e3_n3.0-_n4.0" class="sigil-edge sigil-edge-flow" stroke="#38F2FF"/>
+<path d="M830.711 1239.12L765.456 1239.12L765.456 1229.922M769.956 1239.12A4.5 4.5 0 0 1 760.956 1239.12A4.5 4.5 0 0 1 769.956 1239.12Z" id="edge-e4_n6.0-_n7.0" class="sigil-edge sigil-edge-flow" stroke="#38F2FF"/>
+<path d="M765.456 1229.922L654.669 1229.922L654.669 1420.2M659.169 1229.922A4.5 4.5 0 0 1 650.169 1229.922A4.5 4.5 0 0 1 659.169 1229.922Z" id="edge-e5_n7.0-_n8.0" class="sigil-edge sigil-edge-flow" stroke="#38F2FF"/>
+<path d="M480.221 1014.397L480.221 1171.703L830.711 1171.703L830.711 1239.12M484.721 1171.703A4.5 4.5 0 0 1 475.721 1171.703A4.5 4.5 0 0 1 484.721 1171.703ZM835.211 1171.703A4.5 4.5 0 0 1 826.211 1171.703A4.5 4.5 0 0 1 835.211 1171.703Z" id="edge-e6_n5.1-_n6.0" class="sigil-edge sigil-edge-enter" stroke="#8E5CFF" stroke-dasharray="10 6"/>
+<path d="M654.669 1420.2L480.221 1420.2L480.221 1014.397M484.721 1420.2A4.5 4.5 0 0 1 475.721 1420.2A4.5 4.5 0 0 1 484.721 1420.2Z" id="edge-e7_n8.0-_n5.1" class="sigil-edge sigil-edge-join" stroke="#8E5CFF" stroke-dasharray="4 5"/>
+<path d="M415.639 854.408L343.558 854.408L343.558 868.984L312.666 868.984M348.058 854.408A4.5 4.5 0 0 1 339.058 854.408A4.5 4.5 0 0 1 348.058 854.408ZM348.058 868.984A4.5 4.5 0 0 1 339.058 868.984A4.5 4.5 0 0 1 348.058 868.984Z" id="edge-e8_n10.0-_n11.0" class="sigil-edge sigil-edge-flow" stroke="#38F2FF"/>
+<path d="M364.153 861.696L415.639 861.696L415.639 854.408M420.139 861.696A4.5 4.5 0 0 1 411.139 861.696A4.5 4.5 0 0 1 420.139 861.696Z" id="edge-e9_n9.1-_n10.0" class="sigil-edge sigil-edge-enter" stroke="#8E5CFF" stroke-dasharray="10 6"/>
+<path d="M312.666 868.984L364.153 868.984L364.153 861.696M368.653 868.984A4.5 4.5 0 0 1 359.653 868.984A4.5 4.5 0 0 1 368.653 868.984Z" id="edge-e10_n11.0-_n9.1" class="sigil-edge sigil-edge-feedback" stroke="#FF3CCF" stroke-dasharray="14 5 3 5"/>
+<path d="M480.221 1014.397L364.153 1014.397L364.153 861.696M368.653 1014.397A4.5 4.5 0 0 1 359.653 1014.397A4.5 4.5 0 0 1 368.653 1014.397Z" id="edge-e11_n5.2-_n9.0" class="sigil-edge sigil-edge-enter" stroke="#8E5CFF" stroke-dasharray="10 6"/>
+<path d="M364.153 861.696L364.153 1014.397L480.221 1014.397M368.653 1014.397A4.5 4.5 0 0 1 359.653 1014.397A4.5 4.5 0 0 1 368.653 1014.397Z" id="edge-e12_n9.0-_n5.1" class="sigil-edge sigil-edge-join" stroke="#8E5CFF" stroke-dasharray="4 5"/>
+<path d="M480.221 1014.397L476.449 492.862M482.835 753.63A4.5 4.5 0 0 1 473.835 753.63A4.5 4.5 0 0 1 482.835 753.63Z" id="edge-e13_n5.3-_n12.0" class="sigil-edge sigil-edge-enter" stroke="#8E5CFF" stroke-dasharray="10 6"/>
+<path d="M476.449 492.862L480.221 1014.397M482.835 753.63A4.5 4.5 0 0 1 473.835 753.63A4.5 4.5 0 0 1 482.835 753.63Z" id="edge-e14_n12.0-_n5.1" class="sigil-edge sigil-edge-join" stroke="#8E5CFF" stroke-dasharray="4 5"/>
+<path d="M815.827 1114.602L480.221 1114.602L480.221 1014.397M484.721 1114.602A4.5 4.5 0 0 1 475.721 1114.602A4.5 4.5 0 0 1 484.721 1114.602Z" id="edge-e15_n4.0-_n5.0" class="sigil-edge sigil-edge-flow" stroke="#38F2FF"/>
+<path d="M480.221 1014.397L480.221 606.27L388.304 606.27M484.721 606.27A4.5 4.5 0 0 1 475.721 606.27A4.5 4.5 0 0 1 484.721 606.27Z" id="edge-e16_n5.0-_n13.0" class="sigil-edge sigil-edge-flow" stroke="#38F2FF"/>
+<path d="M388.304 606.27L594.152 606.27L594.152 1325L800 1325M598.652 606.27A4.5 4.5 0 0 1 589.652 606.27A4.5 4.5 0 0 1 598.652 606.27ZM598.652 1325A4.5 4.5 0 0 1 589.652 1325A4.5 4.5 0 0 1 598.652 1325Z" id="edge-e17_n13.0-_n14.0" class="sigil-edge sigil-edge-flow" stroke="#38F2FF"/>
+</g>
+<g class="sigil-layer sigil-layer-semantic-nodes">
+<path d="M846.44 800C846.44 825.648 825.648 846.44 800 846.44C774.352 846.44 753.56 825.648 753.56 800C753.56 774.352 774.352 753.56 800 753.56C825.648 753.56 846.44 774.352 846.44 800M800 771.92L826.706 791.323L816.505 822.717L783.495 822.717L773.294 791.323ZM810.8 800C810.8 805.965 805.965 810.8 800 810.8C794.035 810.8 789.2 805.965 789.2 800C789.2 794.035 794.035 789.2 800 789.2C805.965 789.2 810.8 794.035 810.8 800M800 753.56L800 747.08M774.184 754.636L778.504 754.636L778.504 758.956L774.184 758.956ZM822.743 841.416L827.063 841.416L827.063 845.736L822.743 845.736Z" id="node-n0" class="sigil-node sigil-node-source" stroke="#EDEBFF" filter="url(#sigil-glow)" transform="rotate(0.464 800 800)"><title>source</title></path>
+<path d="M946.32 707.824L930.29 698.628M947.902 706.235L938.64 690.244M950.067 705.653L950.067 687.173M952.232 706.235L961.495 690.244M953.814 707.824L969.844 698.628M961.9 700.696L964.049 704.443M947.667 715.253L952.467 715.253L952.467 720.053L947.667 720.053ZM941.605 689.124L943.525 689.124L943.525 691.044L941.605 691.044ZM927.075 709.248L928.995 709.248L928.995 711.168L927.075 711.168ZM937.989 727.698L939.909 727.698L939.909 729.618L937.989 729.618Z" id="node-n1" class="sigil-node sigil-node-scatter" stroke="#FF3CCF" filter="url(#sigil-glow)" transform="rotate(-31.088 950.067 709.973)"><title>scatter</title></path>
+<path d="M1413.999 798.992L1413.999 767.192L1427.199 757.592M1459.599 798.992L1459.599 767.192L1446.399 757.592M1413.999 798.992L1459.599 798.992M1425.999 775.592L1447.599 775.592M1425.999 782.792L1447.599 782.792M1425.999 789.992L1447.599 789.992M1432.364 756.31L1434.764 756.31L1434.764 758.71L1432.364 758.71ZM1411.952 770.765L1414.352 770.765L1414.352 773.165L1411.952 773.165ZM1415.053 765.676L1417.453 765.676L1417.453 768.076L1415.053 768.076Z" id="node-n2" class="sigil-node sigil-node-effect" stroke="#8E5CFF" filter="url(#sigil-glow)" transform="rotate(0.531 1436.799 783.992)"><title>fs invocation</title></path>
+<path d="M1016.161 896.602L1016.161 934.042M1008.001 903.322L1016.161 896.602M1024.321 927.322L1016.161 934.042" id="node-n3" class="sigil-node sigil-node-stage" stroke="#38F2FF" filter="url(#sigil-glow)" transform="rotate(29.051 1016.161 915.322)"><title>stage</title></path>
+<path d="M793.747 1114.602L810.547 1114.602M821.107 1114.602L837.907 1114.602M810.547 1104.042L810.547 1125.162M821.107 1104.042L821.107 1125.162M815.827 1118.682L811.747 1114.602L815.827 1110.522L819.907 1114.602ZM793.747 1109.802L793.747 1119.402M837.907 1109.802L837.907 1119.402M827.576 1095.665L829.496 1095.665L829.496 1097.585L827.576 1097.585ZM835.398 1121.737L837.318 1121.737L837.318 1123.657L835.398 1123.657ZM793.336 1113.528L795.256 1113.528L795.256 1115.448L793.336 1115.448Z" id="node-n4" class="sigil-node sigil-node-ward" stroke="#FF3CCF" filter="url(#sigil-glow)" transform="rotate(85.749 815.827 1114.602)"><title>ward</title></path>
+<path d="M480.221 1043.197L480.221 1019.517M462.621 1019.517L462.621 991.357M480.221 1019.517L462.621 1019.517M480.221 1019.517L480.221 991.357M476.381 991.357L484.061 991.357M497.821 1019.517L497.821 991.357M480.221 1019.517L497.821 1019.517" id="node-n5" class="sigil-node sigil-node-fork" stroke="#FF3CCF" filter="url(#sigil-glow)" transform="rotate(145.411 480.221 1014.397)"><title>fork</title></path>
+<path d="M808.631 1239.12L825.431 1239.12M835.991 1239.12L852.791 1239.12M825.431 1228.56L825.431 1249.68M835.991 1228.56L835.991 1249.68M830.711 1243.2L826.631 1239.12L830.711 1235.04L834.791 1239.12ZM808.631 1234.32L808.631 1243.92M852.791 1234.32L852.791 1243.92M812.56 1251.854L814.48 1251.854L814.48 1253.774L812.56 1253.774ZM808.789 1241.237L810.709 1241.237L810.709 1243.157L808.789 1243.157ZM835.648 1259.594L837.568 1259.594L837.568 1261.514L835.648 1261.514Z" id="node-n6" class="sigil-node sigil-node-ward" stroke="#FF3CCF" filter="url(#sigil-glow)" transform="rotate(83.986 830.711 1239.12)"><title>ward</title></path>
+<path d="M765.456 1211.202L765.456 1248.642M762.816 1208.562L768.096 1208.562L768.096 1213.842L762.816 1213.842ZM762.816 1246.002L768.096 1246.002L768.096 1251.282L762.816 1251.282ZM755.376 1221.945L775.536 1221.945M745.681 1240.028L747.601 1240.028L747.601 1241.948L745.681 1241.948Z" id="node-n7" class="sigil-node sigil-node-stage" stroke="#38F2FF" filter="url(#sigil-glow)" transform="rotate(95.057 765.456 1229.922)"><title>stage</title></path>
+<path d="M631.869 1435.2L631.869 1403.4L645.069 1393.8M677.469 1435.2L677.469 1403.4L664.269 1393.8M631.869 1435.2L677.469 1435.2M666.069 1420.2C666.069 1426.496 660.965 1431.6 654.669 1431.6C648.373 1431.6 643.269 1426.496 643.269 1420.2C643.269 1413.904 648.373 1408.8 654.669 1408.8C660.965 1408.8 666.069 1413.904 666.069 1420.2M654.669 1420.2L654.669 1411.8M654.669 1420.2L660.669 1423.2M652.933 1392.02L655.333 1392.02L655.333 1394.42L652.933 1394.42Z" id="node-n8" class="sigil-node sigil-node-effect" stroke="#8E5CFF" filter="url(#sigil-glow)" transform="rotate(103.843 654.669 1420.2)"><title>clock invocation</title></path>
+<path d="M375.251 833.91L380.859 836.875L385.717 840.955L389.605 845.968L392.349 851.688L393.825 857.857L393.968 864.2L392.77 870.43L390.285 876.267L386.625 881.449L381.956 885.743L376.486 888.956L370.461 890.943L364.153 891.616L357.844 890.943L351.82 888.956L346.35 885.743L341.68 881.449L338.02 876.267L335.536 870.43L334.338 864.2L334.48 857.857L335.956 851.688L338.7 845.968L342.588 840.955L347.446 836.875L353.055 833.91M378.497 835.439L375.563 840.809M391.588 849.758L385.976 852.2M393.143 869.098L387.213 867.584M382.507 885.325L378.752 880.492M364.153 891.616L364.153 885.496M345.799 885.325L349.553 880.492M335.163 869.098L341.093 867.584M336.717 849.758L342.329 852.2M364.153 851.496L372.986 866.796L355.319 866.796ZM364.153 831.776L364.153 847.416" id="node-n9" class="sigil-node sigil-node-orbit" stroke="#FF3CCF" filter="url(#sigil-glow)" transform="rotate(169.715 364.153 861.696)"><title>orbit</title></path>
+<path d="M393.559 854.408L410.359 854.408M420.919 854.408L437.719 854.408M410.359 843.848L410.359 864.968M420.919 843.848L420.919 864.968M415.639 858.488L412.106 852.368L419.173 852.368Z" id="node-n10" class="sigil-node sigil-node-ward" stroke="#FF3CCF" filter="url(#sigil-glow)" transform="rotate(171.424 415.639 854.408)"><title>ward</title></path>
+<path d="M312.666 850.264L312.666 887.704M304.506 856.984L312.666 850.264M320.826 880.984L312.666 887.704M333.133 864.348L335.053 864.348L335.053 866.268L333.133 866.268ZM331.527 875.893L333.447 875.893L333.447 877.813L331.527 877.813ZM317.211 889.599L319.131 889.599L319.131 891.519L317.211 891.519Z" id="node-n11" class="sigil-node sigil-node-stage" stroke="#38F2FF" filter="url(#sigil-glow)" transform="rotate(173.95 312.666 868.984)"><title>stage</title></path>
+<path d="M476.449 474.142L476.449 511.582M473.809 471.502L479.089 471.502L479.089 476.782L473.809 476.782ZM473.809 508.942L479.089 508.942L479.089 514.222L473.809 514.222ZM466.005 472.019L467.925 472.019L467.925 473.939L466.005 473.939ZM496.518 486.676L498.438 486.676L498.438 488.596L496.518 488.596ZM476.101 513.995L478.021 513.995L478.021 515.915L476.101 515.915Z" id="node-n12" class="sigil-node sigil-node-stage" stroke="#38F2FF" filter="url(#sigil-glow)" transform="rotate(-134.596 476.449 492.862)"><title>stage</title></path>
+<path d="M366.224 606.27L383.024 606.27M393.584 606.27L410.384 606.27M383.024 595.71L383.024 616.83M393.584 595.71L393.584 616.83M388.304 610.35L384.423 607.531L385.906 602.97L390.702 602.97L392.184 607.531ZM366.224 601.47L366.224 611.07M410.384 601.47L410.384 611.07" id="node-n13" class="sigil-node sigil-node-ward" stroke="#FF3CCF" filter="url(#sigil-glow)" transform="rotate(-156.305 388.304 606.27)"><title>ward</title></path>
+<path d="M831.921 1343.311L810.409 1330.971M812.619 1359.569L804.115 1336.272M787.381 1359.569L795.885 1336.272M768.079 1343.311L789.591 1330.971M812 1325C812 1331.627 806.627 1337 800 1337C793.373 1337 788 1331.627 788 1325C788 1318.373 793.373 1313 800 1313C806.627 1313 812 1318.373 812 1325M791.6 1316.6L808.4 1333.4M808.4 1316.6L791.6 1333.4M818.4 1325C818.4 1335.162 810.162 1343.4 800 1343.4C789.838 1343.4 781.6 1335.162 781.6 1325C781.6 1314.838 789.838 1306.6 800 1306.6C810.162 1306.6 818.4 1314.838 818.4 1325M833.425 1330.951L836.625 1330.951L836.625 1334.151L833.425 1334.151ZM764.812 1337.718L768.012 1337.718L768.012 1340.918L764.812 1340.918Z" id="node-n14" class="sigil-node sigil-node-collect" stroke="#D8B35C" filter="url(#sigil-glow)" transform="rotate(87.72 800 1325)"><title>collect</title></path>
+</g>
+<desc>sigil/0.1.0 graph=70a29a6ec3bc9781cea1da6bd456b8c4 theme=neon-ritual@1 tracery=circuit seed=0 mode=veiled metadata=safe format=svg</desc>
+</svg>

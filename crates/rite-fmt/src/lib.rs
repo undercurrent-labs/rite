@@ -707,7 +707,7 @@ impl<'a> Formatter<'a> {
         matches!(self.opts.dialect, Dialect::Ascii)
     }
 
-    fn sigil(&self, glyph: &str, ascii: &str) -> String {
+    fn glyph(&self, glyph: &str, ascii: &str) -> String {
         if self.ascii_mode() {
             ascii.to_string()
         } else {
@@ -721,12 +721,12 @@ impl<'a> Formatter<'a> {
                 if func.is_pub {
                     self.out.push_str("pub ");
                 }
-                self.out.push_str(&self.sigil("◆", "def"));
+                self.out.push_str(&self.glyph("◆", "def"));
                 // The effect marker is part of the declaration's meaning, not
                 // decoration: dropping it here would silently turn a checked
                 // effectful function into one callers may call unmarked.
                 if func.is_effectful {
-                    self.out.push_str(&self.sigil("!", "!"));
+                    self.out.push_str(&self.glyph("!", "!"));
                 }
                 self.out.push(' ');
                 self.out.push_str(&func.name.name);
@@ -744,7 +744,7 @@ impl<'a> Formatter<'a> {
                 self.out.push(')');
                 if let Some(ret) = &func.return_type {
                     self.out.push(' ');
-                    self.out.push_str(&self.sigil("→", "->"));
+                    self.out.push_str(&self.glyph("→", "->"));
                     self.out.push(' ');
                     self.type_expr(ret);
                 }
@@ -755,7 +755,7 @@ impl<'a> Formatter<'a> {
                 if imp.is_pub {
                     self.out.push_str("pub ");
                 }
-                self.out.push_str(&self.sigil("⊏ ", "use "));
+                self.out.push_str(&self.glyph("⊏ ", "use "));
                 // Relative imports (`./lib/helpers`) keep their slashes; only
                 // module paths are dot-separated.
                 let segments = &imp.path.segments;
@@ -774,7 +774,7 @@ impl<'a> Formatter<'a> {
                 }
             }
             Item::Test(t) => {
-                self.out.push_str(&self.sigil("◆", "def"));
+                self.out.push_str(&self.glyph("◆", "def"));
                 self.out.push_str(" test ");
                 self.out.push('"');
                 self.out.push_str(&t.name);
@@ -783,7 +783,7 @@ impl<'a> Formatter<'a> {
                 self.block(&t.body);
             }
             Item::Event(e) => {
-                self.out.push_str(&self.sigil("◆", "def"));
+                self.out.push_str(&self.glyph("◆", "def"));
                 self.out.push(' ');
                 self.out.push_str(match e.kind {
                     rite_syntax::EventKind::Item => "item",
@@ -791,17 +791,17 @@ impl<'a> Formatter<'a> {
                     rite_syntax::EventKind::World => "world",
                 });
                 self.out.push(' ');
-                self.out.push_str(&self.sigil("#", ":"));
+                self.out.push_str(&self.glyph("#", ":"));
                 self.out.push_str(&e.atom.parts.join("."));
                 self.out.push(' ');
                 self.block(&e.body);
             }
             Item::Data(d) => {
-                self.out.push_str(&self.sigil("◆", "def"));
+                self.out.push_str(&self.glyph("◆", "def"));
                 self.out.push(' ');
                 self.out.push_str(&d.name.name);
                 self.out.push(' ');
-                self.out.push_str(&self.sigil("⟨", "<<"));
+                self.out.push_str(&self.glyph("⟨", "<<"));
                 for (i, e) in d.fields.iter().enumerate() {
                     if i > 0 {
                         self.out.push_str(", ");
@@ -810,7 +810,7 @@ impl<'a> Formatter<'a> {
                     self.out.push_str(": ");
                     self.expr(&e.value);
                 }
-                self.out.push_str(&self.sigil("⟩", ">>"));
+                self.out.push_str(&self.glyph("⟩", ">>"));
             }
             Item::Statement(s) => self.stmt(s),
         }
@@ -822,9 +822,9 @@ impl<'a> Formatter<'a> {
                 self.pattern(&b.pattern);
                 self.out.push(' ');
                 self.out.push_str(&if b.mutable {
-                    self.sigil("↢", "<~")
+                    self.glyph("↢", "<~")
                 } else {
-                    self.sigil("←", "<-")
+                    self.glyph("←", "<-")
                 });
                 self.out.push(' ');
                 self.expr(&b.value);
@@ -843,7 +843,7 @@ impl<'a> Formatter<'a> {
                 self.expr(&a.value);
             }
             Stmt::Return(r) => {
-                self.out.push_str(&self.sigil("^", "return"));
+                self.out.push_str(&self.glyph("^", "return"));
                 match &r.value {
                     // `^ 200 ⟨…⟩` — juxtaposition, not a list literal. Printing the
                     // lowered `^ [200, ⟨…⟩]` reworded the central HTTP handler idiom.
@@ -865,7 +865,7 @@ impl<'a> Formatter<'a> {
     }
 
     fn block(&mut self, block: &Block) {
-        self.out.push_str(&self.sigil("⟦", "[["));
+        self.out.push_str(&self.glyph("⟦", "[["));
         // The empty `||` of a zero-argument closure has to survive formatting.
         // Printing on `!params.is_empty()` dropped it, and `{ || 42 }` came back as
         // `⟦ 42 ⟧` — a formatter quietly turning a function into its own body, which
@@ -888,7 +888,7 @@ impl<'a> Formatter<'a> {
             .is_some_and(|t| t.start < inner_end);
         if block.body.is_empty() && !holds_comments {
             self.out.push(' ');
-            self.out.push_str(&self.sigil("⟧", "]]"));
+            self.out.push_str(&self.glyph("⟧", "]]"));
             return;
         }
         // A block the author wrote on one line stays on one line — `◆ sq(n) ⟦ ^ n * n ⟧`
@@ -906,7 +906,7 @@ impl<'a> Formatter<'a> {
                 self.out.truncate(before);
             } else {
                 self.out.push(' ');
-                self.out.push_str(&self.sigil("⟧", "]]"));
+                self.out.push_str(&self.glyph("⟧", "]]"));
                 return;
             }
         }
@@ -920,7 +920,7 @@ impl<'a> Formatter<'a> {
         self.flush_leading(inner_end);
         self.indent -= 1;
         self.pad();
-        self.out.push_str(&self.sigil("⟧", "]]"));
+        self.out.push_str(&self.glyph("⟧", "]]"));
     }
 
     fn expr(&mut self, expr: &Expr) {
@@ -946,7 +946,7 @@ impl<'a> Formatter<'a> {
             },
             Expr::Ident(i) => self.out.push_str(&i.name),
             Expr::Atom(a) => {
-                self.out.push_str(&self.sigil("#", ":"));
+                self.out.push_str(&self.glyph("#", ":"));
                 self.out.push_str(&a.parts.join("."));
             }
             Expr::List(l) => {
@@ -976,7 +976,7 @@ impl<'a> Formatter<'a> {
             }
             Expr::Record(r) => {
                 let multi = !r.entries.is_empty() && self.spans_lines(r.span);
-                self.out.push_str(&self.sigil("⟨", "<<"));
+                self.out.push_str(&self.glyph("⟨", "<<"));
                 if multi {
                     self.indent += 1;
                 }
@@ -1004,7 +1004,7 @@ impl<'a> Formatter<'a> {
                     self.out.push('\n');
                     self.pad();
                 }
-                self.out.push_str(&self.sigil("⟩", ">>"));
+                self.out.push_str(&self.glyph("⟩", ">>"));
             }
             Expr::Binary(b) => {
                 // `÷` and `∘` are glyph-only. Their "ASCII spellings" — `idiv` and
@@ -1050,23 +1050,23 @@ impl<'a> Formatter<'a> {
                     BinOp::And => self.out.push_str("and"),
                     BinOp::Or => self.out.push_str("or"),
                     BinOp::In => {
-                        self.out.push_str(&self.sigil("∈", "in"));
+                        self.out.push_str(&self.glyph("∈", "in"));
                         self.out.push(' ');
                         self.expr(&b.right);
                         return;
                     }
                     BinOp::NotIn => {
-                        self.out.push_str(&self.sigil("∉", "not in"));
+                        self.out.push_str(&self.glyph("∉", "not in"));
                         self.out.push(' ');
                         self.expr(&b.right);
                         return;
                     }
-                    BinOp::Xor => self.out.push_str(&self.sigil("⊻", "xor")),
+                    BinOp::Xor => self.out.push_str(&self.glyph("⊻", "xor")),
                     BinOp::Power => self.out.push_str("**"),
-                    BinOp::Idiv => self.out.push_str(&self.sigil("÷", "idiv")),
+                    BinOp::Idiv => self.out.push_str(&self.glyph("÷", "idiv")),
                     BinOp::Range => self.out.push_str(".."),
-                    BinOp::RangeIncl => self.out.push_str(&self.sigil("‥", "..=")),
-                    BinOp::Compose => self.out.push_str(&self.sigil("∘", "compose")),
+                    BinOp::RangeIncl => self.out.push_str(&self.glyph("‥", "..=")),
+                    BinOp::Compose => self.out.push_str(&self.glyph("∘", "compose")),
                 }
                 self.out.push(' ');
                 self.expr(&b.right);
@@ -1076,7 +1076,7 @@ impl<'a> Formatter<'a> {
                     UnaryOp::Neg => self.out.push('-'),
                     UnaryOp::Not => self.out.push_str("not "),
                     UnaryOp::Effect => {
-                        self.out.push_str(&self.sigil("!", "do"));
+                        self.out.push_str(&self.glyph("!", "do"));
                         self.out.push(' ');
                     }
                     UnaryOp::Spread => self.out.push_str(".."),
@@ -1091,7 +1091,7 @@ impl<'a> Formatter<'a> {
                 // so nobody can have written this call themselves).
                 if let Expr::Ident(callee) = c.callee.as_ref() {
                     if callee.name == "__middleware_use" && c.args.len() == 1 {
-                        self.out.push_str(&self.sigil("⊏", "use"));
+                        self.out.push_str(&self.glyph("⊏", "use"));
                         self.out.push(' ');
                         self.expr(&c.args[0]);
                         return;
@@ -1166,7 +1166,7 @@ impl<'a> Formatter<'a> {
                     } else {
                         self.out.push(' ');
                     }
-                    self.out.push_str(&self.sigil("→", "->"));
+                    self.out.push_str(&self.glyph("→", "->"));
                     self.out.push(' ');
                     self.expr(s);
                 }
@@ -1175,7 +1175,7 @@ impl<'a> Formatter<'a> {
                 }
             }
             Expr::If(i) => {
-                self.out.push_str(&self.sigil("?", "if"));
+                self.out.push_str(&self.glyph("?", "if"));
                 self.out.push(' ');
                 self.expr(&i.condition);
                 self.out.push(' ');
@@ -1184,17 +1184,17 @@ impl<'a> Formatter<'a> {
                     // Was a hardcoded " : ", so an ASCII-dialect file came back with the
                     // glyph spelling of `else` while its `if` stayed ASCII.
                     self.out.push(' ');
-                    self.out.push_str(&self.sigil(":", "else"));
+                    self.out.push_str(&self.glyph(":", "else"));
                     self.out.push(' ');
                     self.block(e);
                 }
             }
             Expr::Match(m) => {
-                self.out.push_str(&self.sigil("~", "match"));
+                self.out.push_str(&self.glyph("~", "match"));
                 self.out.push(' ');
                 self.expr(&m.scrutinee);
                 self.out.push(' ');
-                self.out.push_str(&self.sigil("⟦", "[["));
+                self.out.push_str(&self.glyph("⟦", "[["));
                 self.out.push('\n');
                 self.indent += 1;
                 self.last_line = Some(self.line_at(m.span.start.as_usize()));
@@ -1208,7 +1208,7 @@ impl<'a> Formatter<'a> {
                     self.pad();
                     self.pattern(&arm.pattern);
                     self.out.push(' ');
-                    self.out.push_str(&self.sigil("→", "->"));
+                    self.out.push_str(&self.glyph("→", "->"));
                     self.out.push(' ');
                     self.expr(&arm.body);
                     self.last_line = Some(self.line_at(end.saturating_sub(1).max(start)));
@@ -1218,11 +1218,11 @@ impl<'a> Formatter<'a> {
                 self.flush_leading(arms_end);
                 self.indent -= 1;
                 self.pad();
-                self.out.push_str(&self.sigil("⟧", "]]"));
+                self.out.push_str(&self.glyph("⟧", "]]"));
             }
             Expr::Block(b) => self.block(b),
             Expr::Capability(c) => {
-                self.out.push_str(&self.sigil("@", "host."));
+                self.out.push_str(&self.glyph("@", "host."));
                 self.out.push_str(&c.path.join("."));
             }
             Expr::Placeholder(_) => self.out.push('$'),
@@ -1236,7 +1236,7 @@ impl<'a> Formatter<'a> {
                 self.expr(&c.right);
             }
             Expr::HttpListen(h) => {
-                self.out.push_str(&self.sigil("@", "host."));
+                self.out.push_str(&self.glyph("@", "host."));
                 self.out.push_str("http.listen ");
                 self.expr(&h.addr);
                 self.out.push(' ');
@@ -1265,7 +1265,7 @@ impl<'a> Formatter<'a> {
                 self.block(&r.body);
             }
             Expr::McpServe(m) => {
-                self.out.push_str(&self.sigil("@", "host."));
+                self.out.push_str(&self.glyph("@", "host."));
                 self.out.push_str("mcp.serve ");
                 self.expr(&m.config);
                 self.out.push(' ');
@@ -1299,7 +1299,7 @@ impl<'a> Formatter<'a> {
         match p {
             Pattern::Ident(i) => self.out.push_str(&i.name),
             Pattern::Atom(a) => {
-                self.out.push_str(&self.sigil("#", ":"));
+                self.out.push_str(&self.glyph("#", ":"));
                 self.out.push_str(&a.parts.join("."));
             }
             Pattern::Literal(l) => self.expr(&Expr::Literal(l.clone())),
@@ -1322,7 +1322,7 @@ impl<'a> Formatter<'a> {
                 self.out.push(']');
             }
             Pattern::Record(r) => {
-                self.out.push_str(&self.sigil("⟨", "<<"));
+                self.out.push_str(&self.glyph("⟨", "<<"));
                 for (i, f) in r.fields.iter().enumerate() {
                     if i > 0 {
                         self.out.push_str(", ");
@@ -1333,7 +1333,7 @@ impl<'a> Formatter<'a> {
                         self.pattern(p);
                     }
                 }
-                self.out.push_str(&self.sigil("⟩", ">>"));
+                self.out.push_str(&self.glyph("⟩", ">>"));
             }
             Pattern::Result(r) => {
                 self.out.push_str(match r.kind {
@@ -1359,7 +1359,7 @@ impl<'a> Formatter<'a> {
                 self.out.push('"');
             }
             rite_syntax::RecordKey::Atom(a) => {
-                self.out.push_str(&self.sigil("#", ":"));
+                self.out.push_str(&self.glyph("#", ":"));
                 self.out.push_str(&a.parts.join("."));
             }
             rite_syntax::RecordKey::Spread => self.out.push_str(".."),
@@ -1385,7 +1385,7 @@ impl<'a> Formatter<'a> {
                 self.out.push('>');
             }
             rite_syntax::TypeExpr::Record(fields) => {
-                self.out.push_str(&self.sigil("⟨", "<<"));
+                self.out.push_str(&self.glyph("⟨", "<<"));
                 for (i, (name, ty)) in fields.iter().enumerate() {
                     if i > 0 {
                         self.out.push_str(", ");
@@ -1394,7 +1394,7 @@ impl<'a> Formatter<'a> {
                     self.out.push_str(": ");
                     self.type_expr(ty);
                 }
-                self.out.push_str(&self.sigil("⟩", ">>"));
+                self.out.push_str(&self.glyph("⟩", ">>"));
             }
             rite_syntax::TypeExpr::Any(_) => self.out.push_str("any"),
         }

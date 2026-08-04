@@ -19,7 +19,7 @@ body {
  * Taken from grammar/palette.json rather than picked: the site, `rite render`
  * and Studio already agree on what a string or a comment looks like, and Cant
  * reusing those values is what makes generated Rite and the Cant above it read
- * as one document. The one addition is `--c-op`, the sigil pink, which carries
+ * as one document. The one addition is `--c-op`, the glyph pink, which carries
  * the structural operators.
  */
 :root {

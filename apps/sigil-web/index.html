@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Sigil — a program's topology as a ritual artifact</title>
+    <meta
+      name="description"
+      content="Render a Cant program as a deterministic ritual diagram. Everything happens in your browser; your source is never uploaded."
+    />
+    <link rel="canonical" href="https://sigil.rite.foo/" />
+    <meta property="og:title" content="Sigil" />
+    <meta
+      property="og:description"
+      content="A Cant program's topology as a ritual artifact — rendered in your browser, never uploaded."
+    />
+    <meta property="og:url" content="https://sigil.rite.foo/" />
+    <meta property="og:site_name" content="Sigil" />
+    <meta property="og:type" content="website" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="theme-color" content="#0b0f14" />
+    <link rel="icon" href="/brand/logo.svg" type="image/svg+xml" />
+    <!-- No font links: the CSP is `default-src 'self'`, so the two family
+         typefaces are self-hosted and declared in src/style.css. -->
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

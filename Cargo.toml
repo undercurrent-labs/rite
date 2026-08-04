@@ -10,6 +10,7 @@ members = [
     "crates/rite-compiler",
     "crates/rite-fmt",
     "crates/rite-render",
+    "crates/rite-sigil",
     "crates/rite-doc",
     "crates/rite-test",
     "crates/rite-repl",
@@ -24,13 +25,14 @@ members = [
     "crates/cant-sem",
     "crates/cant",
     "crates/cant-wasm",
+    "crates/cant-sigil-wasm",
     "crates/cant-cli",
     "xtask",
 ]
 default-members = ["crates/rite-cli"]
 
 [workspace.package]
-version = "0.7.0"
+version = "0.8.0"
 edition = "2021"
 license = "MIT"
 repository = "https://github.com/undercurrent-labs/rite"
@@ -41,6 +43,7 @@ rust-version = "1.75"
 rite-core = { path = "crates/rite-core" }
 rite-syntax = { path = "crates/rite-syntax" }
 rite-render = { path = "crates/rite-render" }
+rite-sigil = { path = "crates/rite-sigil" }
 rite-sem = { path = "crates/rite-sem" }
 rite-runtime = { path = "crates/rite-runtime" }
 rite-caps = { path = "crates/rite-caps" }
@@ -58,6 +61,7 @@ cant-syntax = { path = "crates/cant-syntax" }
 cant-sem = { path = "crates/cant-sem" }
 cant = { path = "crates/cant" }
 cant-wasm = { path = "crates/cant-wasm" }
+cant-sigil-wasm = { path = "crates/cant-sigil-wasm" }
 
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }

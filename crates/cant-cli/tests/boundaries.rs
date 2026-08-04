@@ -83,7 +83,18 @@ fn no_rite_source_file_imports_a_cant_crate() {
         rust_files(&dir, &mut files);
         for file in files {
             let text = std::fs::read_to_string(&file).unwrap_or_default();
-            if text.contains("cant_syntax") || text.contains("cant_sem") || text.contains("cant::")
+            // Comments stripped first. This used to scan the raw file, which
+            // could not tell an import from a sentence *about* one — and
+            // `crates/rite-sigil` is full of the latter, because ADR 0006 is
+            // precisely the rule that it must not depend on `cant-sem`, and the
+            // doc comments say so by name. A boundary test that fires on its own
+            // explanation trains people to weaken it.
+            let code: String = text
+                .lines()
+                .map(|line| line.split("//").next().unwrap_or(""))
+                .collect::<Vec<_>>()
+                .join("\n");
+            if code.contains("cant_syntax") || code.contains("cant_sem") || code.contains("cant::")
             {
                 offenders.push(file);
             }
@@ -118,7 +129,7 @@ fn cant_does_not_appear_in_rites_language_surface() {
         "grammar/aliases.json",
         "grammar/rite.ebnf",
         "grammar/keywords.toml",
-        "grammar/sigils.toml",
+        "grammar/glyphs.toml",
     ] {
         let text = std::fs::read_to_string(root.join(file))
             .unwrap_or_else(|e| panic!("cannot read {file}: {e}"));
