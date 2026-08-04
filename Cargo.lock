@@ -2737,6 +2737,7 @@ name = "rite-sigil"
 version = "0.1.0"
 dependencies = [
  "hex",
+ "libm",
  "proptest",
  "rite-core",
  "rite-render",

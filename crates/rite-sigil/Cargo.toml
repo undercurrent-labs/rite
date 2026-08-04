@@ -35,6 +35,10 @@ rite-core = { workspace = true }
 # dependency whose table does not specify it, which is how a wasm32 build once
 # acquired axum and failed inside `mio`.
 rite-render = { path = "../rite-render", optional = true, default-features = false, features = ["png"] }
+# Pure-Rust transcendental functions, so the same angle is the same coordinate
+# on every platform. The system libm's sin/cos/atan2 differ from glibc's in the
+# last bit on some inputs, which made scene goldens platform-dependent.
+libm = "0.2"
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }

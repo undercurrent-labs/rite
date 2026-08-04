@@ -39,6 +39,7 @@ use std::f64::consts::TAU;
 use crate::canonical::Prng;
 use crate::layout::{CENTER, SAFE_RADIUS, VIEW_SIZE};
 use crate::scene::*;
+use crate::trig::DeterministicTrig;
 
 /// How much non-semantic geometry to draw.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -294,7 +295,10 @@ fn outer_containment(out: &mut Vec<SceneElement>, prng: &mut Prng) {
 }
 
 fn polar(radius: f64, theta: f64) -> Point {
-    Point::new(CENTER + radius * theta.cos(), CENTER + radius * theta.sin())
+    Point::new(
+        CENTER + radius * theta.dcos(),
+        CENTER + radius * theta.dsin(),
+    )
 }
 
 fn segment(id: String, a: Point, b: Point, layer: SceneLayerKind) -> SceneElement {

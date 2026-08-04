@@ -55,6 +55,7 @@ use crate::graph::{NodeId, RegionId, RegionKind, SigilGraph, SigilNode, SigilNod
 use crate::ornament::{self, OrnamentLevel};
 use crate::scene::*;
 use crate::tracery::Tracery;
+use crate::trig::DeterministicTrig;
 use crate::NormalizedGraph;
 
 /// The canvas. Square, because a radial composition in a rectangle wastes two
@@ -185,8 +186,8 @@ impl Polar {
     fn to_point(self, rotation: f64) -> Point {
         let angle = self.angle + rotation;
         Point::new(
-            CENTER + self.radius * angle.cos(),
-            CENTER + self.radius * angle.sin(),
+            CENTER + self.radius * angle.dcos(),
+            CENTER + self.radius * angle.dsin(),
         )
     }
 }
@@ -552,8 +553,8 @@ fn place_nodes(
             points.insert(
                 member.clone(),
                 Point::new(
-                    origin_point.x + radius * theta.cos(),
-                    origin_point.y + radius * theta.sin(),
+                    origin_point.x + radius * theta.dcos(),
+                    origin_point.y + radius * theta.dsin(),
                 ),
             );
         }
@@ -940,7 +941,7 @@ fn emit_nodes(
         // Marks align with the direction of flow, which for a radial
         // composition is the outward radial. Small deterministic jitter keeps a
         // row of identical stages from reading as a printed font.
-        let outward = (position.y - CENTER).atan2(position.x - CENTER);
+        let outward = (position.y - CENTER).datan2(position.x - CENTER);
         let jitter = (node_prng.next_f64() - 0.5) * 0.08;
 
         let legend_key = format!("node/{}", node.id);
@@ -1002,11 +1003,11 @@ fn emit_inscriptions(
             continue;
         };
 
-        let outward = (position.y - CENTER).atan2(position.x - CENTER);
+        let outward = (position.y - CENTER).datan2(position.x - CENTER);
         let offset = mark_size(&node.kind, Placement::Flow) + 22.0;
         let anchor = Point::new(
-            position.x + offset * outward.cos(),
-            position.y + offset * outward.sin(),
+            position.x + offset * outward.dcos(),
+            position.y + offset * outward.dsin(),
         );
 
         // Kept upright. A label rotated to the radial is unreadable on the left
@@ -1353,7 +1354,7 @@ mod tests {
         let fork = node_center(&scene, "fork");
         let angle_of = |scene: &SigilScene, id: &str| {
             let p = node_center(scene, id);
-            (p.y - fork.y).atan2(p.x - fork.x)
+            (p.y - fork.y).datan2(p.x - fork.x)
         };
 
         // Clockwise from the fork: in SVG's downward-y space, that is increasing

@@ -58,6 +58,7 @@ use std::f64::consts::{PI, TAU};
 use crate::canonical::Prng;
 use crate::graph::{CapabilityFamily, SigilNodeKind};
 use crate::scene::{PathCommand, Point};
+use crate::trig::DeterministicTrig;
 
 /// How elaborate a mark should be.
 ///
@@ -166,7 +167,7 @@ impl Builder {
         let sides = sides.max(3);
         for i in 0..sides {
             let theta = phase + i as f64 * TAU / sides as f64;
-            let (x, y) = (radius * theta.cos(), radius * theta.sin());
+            let (x, y) = (radius * theta.dcos(), radius * theta.dsin());
             if i == 0 {
                 self.move_to(x, y);
             } else {
@@ -204,7 +205,7 @@ impl Builder {
         let steps = ((end - start).abs() / 0.22).ceil().max(2.0) as usize;
         for i in 0..=steps {
             let theta = start + (end - start) * i as f64 / steps as f64;
-            let (x, y) = (radius * theta.cos(), radius * theta.sin());
+            let (x, y) = (radius * theta.dcos(), radius * theta.dsin());
             if i == 0 {
                 self.move_to(x, y);
             } else {
@@ -300,18 +301,18 @@ fn scatter(b: &mut Builder, prng: &mut Prng) {
         let t = i as f64 / (rays - 1).max(1) as f64;
         let theta = -PI / 2.0 - spread / 2.0 + t * spread;
         b.segment(
-            (0.18 * theta.cos(), 0.18 * theta.sin()),
-            (0.95 * theta.cos(), 0.95 * theta.sin()),
+            (0.18 * theta.dcos(), 0.18 * theta.dsin()),
+            (0.95 * theta.dcos(), 0.95 * theta.dsin()),
         );
         // Multiplicity ticks: repeated, small, and countable — §9.6's "no
         // implication that branch count equals runtime cardinality" is why they
         // are ticks on the rays rather than a number.
         if prng.chance(0.6) {
             let m = 0.62;
-            let (nx, ny) = (-theta.sin() * 0.09, theta.cos() * 0.09);
+            let (nx, ny) = (-theta.dsin() * 0.09, theta.dcos() * 0.09);
             b.segment(
-                (m * theta.cos() - nx, m * theta.sin() - ny),
-                (m * theta.cos() + nx, m * theta.sin() + ny),
+                (m * theta.dcos() - nx, m * theta.dsin() - ny),
+                (m * theta.dcos() + nx, m * theta.dsin() + ny),
             );
         }
     }
@@ -327,8 +328,8 @@ fn collect(b: &mut Builder, prng: &mut Prng) {
         let t = i as f64 / (rays - 1).max(1) as f64;
         let theta = PI / 2.0 - spread / 2.0 + t * spread;
         b.segment(
-            (0.92 * theta.cos(), 0.92 * theta.sin()),
-            (0.3 * theta.cos(), 0.3 * theta.sin()),
+            (0.92 * theta.dcos(), 0.92 * theta.dsin()),
+            (0.3 * theta.dcos(), 0.3 * theta.dsin()),
         );
     }
     // The sealing ring, and the braid inside it.
@@ -371,8 +372,8 @@ fn orbit(b: &mut Builder, prng: &mut Prng) {
     for i in 0..ticks {
         let theta = -PI / 2.0 + 0.5 + i as f64 * (TAU - 1.0) / ticks as f64;
         b.segment(
-            (0.88 * theta.cos(), 0.88 * theta.sin()),
-            (0.7 * theta.cos(), 0.7 * theta.sin()),
+            (0.88 * theta.dcos(), 0.88 * theta.dsin()),
+            (0.7 * theta.dcos(), 0.7 * theta.dsin()),
         );
     }
     // The inner lock: identity, if the orbit deduplicates.
@@ -487,7 +488,7 @@ fn literal(b: &mut Builder, prng: &mut Prng) {
     let count = prng.range(3, 6) as usize;
     for i in 0..count {
         let theta = -PI / 2.0 + i as f64 * TAU / count as f64;
-        b.dot(0.5 * theta.cos(), 0.5 * theta.sin(), 0.13);
+        b.dot(0.5 * theta.dcos(), 0.5 * theta.dsin(), 0.13);
     }
     b.dot(0.0, 0.0, 0.1);
 }
@@ -504,8 +505,8 @@ fn unknown(b: &mut Builder, prng: &mut Prng) {
         let a = i as f64 * TAU / 6.0 - PI / 2.0;
         let c = (i + 1) as f64 * TAU / 6.0 - PI / 2.0;
         b.segment(
-            (0.85 * a.cos(), 0.85 * a.sin()),
-            (0.85 * c.cos(), 0.85 * c.sin()),
+            (0.85 * a.dcos(), 0.85 * a.dsin()),
+            (0.85 * c.dcos(), 0.85 * c.dsin()),
         );
     }
     // A question the mark cannot answer: a stroke that stops.
@@ -533,7 +534,7 @@ fn satellites(b: &mut Builder, prng: &mut Prng) {
         let theta = prng.next_f64() * TAU;
         let r = 0.88 + prng.next_f64() * 0.05;
         debug_assert!(r + HALF * std::f64::consts::SQRT_2 <= 1.0);
-        b.dot(r * theta.cos(), r * theta.sin(), HALF);
+        b.dot(r * theta.dcos(), r * theta.dsin(), HALF);
     }
 }
 

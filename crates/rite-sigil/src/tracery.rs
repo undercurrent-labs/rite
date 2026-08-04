@@ -25,6 +25,7 @@ use std::f64::consts::{PI, TAU};
 use crate::graph::{EdgeKind, NodeId};
 use crate::layout::{CENTER, SAFE_RADIUS};
 use crate::scene::{PathCommand, Point, Rect};
+use crate::trig::DeterministicTrig;
 
 /// The trace style for a whole render. An axis like theme or ornament: it
 /// changes how every edge is drawn and nothing about where any node is.
@@ -515,12 +516,15 @@ fn via_dot(center: Point) -> Vec<PathCommand> {
 fn polar(p: Point) -> (f64, f64) {
     (
         dist(p.x - CENTER, p.y - CENTER),
-        (p.y - CENTER).atan2(p.x - CENTER),
+        (p.y - CENTER).datan2(p.x - CENTER),
     )
 }
 
 fn at_polar(radius: f64, angle: f64) -> Point {
-    Point::new(CENTER + radius * angle.cos(), CENTER + radius * angle.sin())
+    Point::new(
+        CENTER + radius * angle.dcos(),
+        CENTER + radius * angle.dsin(),
+    )
 }
 
 /// Wrap to `(-PI, PI]`, so "the short way round" is a sign and a magnitude.

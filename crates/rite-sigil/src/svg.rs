@@ -31,6 +31,7 @@ use crate::graph::SigilNodeKind;
 use crate::marks::{self, MarkDetail};
 use crate::scene::*;
 use crate::theme::{Theme, ThemeId, THEME_VERSION};
+use crate::trig::DeterministicTrig;
 
 /// What is allowed to be *visible* in the artifact.
 ///
@@ -626,10 +627,13 @@ fn path_data(commands: &[PathCommand]) -> String {
 
 fn arc_path(center: Point, radius: f64, start: f64, end: f64) -> String {
     let a = Point::new(
-        center.x + radius * start.cos(),
-        center.y + radius * start.sin(),
+        center.x + radius * start.dcos(),
+        center.y + radius * start.dsin(),
     );
-    let b = Point::new(center.x + radius * end.cos(), center.y + radius * end.sin());
+    let b = Point::new(
+        center.x + radius * end.dcos(),
+        center.y + radius * end.dsin(),
+    );
     let large = (end - start).abs() > std::f64::consts::PI;
     let sweep = end > start;
     format!(

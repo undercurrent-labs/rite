@@ -70,6 +70,7 @@ pub mod scene;
 pub mod svg;
 pub mod theme;
 pub mod tracery;
+pub(crate) mod trig;
 pub mod validate;
 
 pub use analysis::{analyze, Placement, Topology};
