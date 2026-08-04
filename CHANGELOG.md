@@ -1,6 +1,18 @@
 # Changelog
 
-## [Unreleased]
+## [0.8.0] — 2026-08-04
+
+Cant programs become artifacts. Sigil renders a program's semantic topology as
+a deterministic radial diagram — circular, symbolic, readable with every label
+removed — from the CLI (`cant sigil`), and in the browser at `sigil.rite.foo`,
+where the source never leaves the tab. Three themes, three traceries, four
+ornament levels, three disclosure modes; SVG, PNG, interactive HTML and scene
+JSON. Beside it: Cant Studio, the `cant.graph` schema at version 1, and Cant
+versioning on its own number.
+
+The minor bump is the new renderer and its site. One in-repo API is renamed —
+`rite_render::Kind::Sigil` is `Kind::Glyph` — and nothing anyone types has
+changed.
 
 ### Fixed
 
