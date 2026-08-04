@@ -28,6 +28,19 @@
 //! * **source snippets** — a comment edit that does not move a span should not
 //!   re-seed the ornament. Spans themselves are kept: moving a stage is a real
 //!   change to where the program is.
+//! * **labels, short labels, and capability names** — display text, and by this
+//!   project's own rule not semantic at all: nothing may infer meaning from a
+//!   label (§7, ADR 0006). Whether a label was *carried* is a rendering option —
+//!   `--mode revealed` and `--metadata full` ask for them, Veiled does not — so a
+//!   fingerprint that moved when they arrived would make the same program have
+//!   two identities depending on how it was being looked at.
+//!
+//!   That is not hypothetical: it shipped. `--metadata full` changed the graph
+//!   fingerprint, which changed the default seed, which rotated the whole
+//!   composition — so asking for more embedded metadata silently redrew the
+//!   picture. A capability's *family* stays, because the family decides which
+//!   invocation mark a node gets and is a classification this renderer invented;
+//!   its *name* is the user's text and goes.
 //!
 //! This is the list the specification's §7.1 asks for, and each exclusion is a
 //! decision about what "the same program" means rather than a convenience.
@@ -123,6 +136,8 @@ const NOT_SEMANTIC: &[&str] = &[
     "producer",
     "producer_version",
     "snippet",
+    "label",
+    "short_label",
 ];
 
 /// The canonical JSON text of a graph, for hashing and for golden tests.
@@ -159,6 +174,17 @@ fn strip(value: &mut Value) {
         Value::Object(map) => {
             for key in NOT_SEMANTIC {
                 map.remove(*key);
+            }
+            // A capability's `name`, identified by the `family` beside it.
+            //
+            // A targeted rule rather than another entry in the flat list,
+            // because `name` does *not* mean the same thing at every depth —
+            // `source_schema.name` is which format a graph came from, and
+            // stripping that would make two different schemas hash alike. The
+            // flat list only holds keys that are unambiguous wherever they
+            // appear.
+            if map.contains_key("family") {
+                map.remove("name");
             }
             for (_, child) in map.iter_mut() {
                 strip(child);
@@ -423,6 +449,77 @@ mod tests {
             fingerprint(&with_snippet),
             fingerprint(&with_other_snippet),
             "the snippet is display text; the span is the position"
+        );
+    }
+
+    /// The bug this caught, as a test: asking for labels must not change the
+    /// program's identity. It did, and the visible symptom was that
+    /// `--metadata full` rotated the whole composition, because the fingerprint
+    /// is the default seed.
+    #[test]
+    fn carrying_labels_does_not_change_the_fingerprint() {
+        let base = fingerprint(&graph());
+
+        let mut labelled = graph();
+        labelled.nodes[0].label = Some("[1, 2, 3]".into());
+        labelled.nodes[0].short_label = Some("[1, 2…".into());
+        labelled.nodes[1].label = Some("collect".into());
+        assert_eq!(
+            fingerprint(&labelled),
+            base,
+            "a label changed the program's identity"
+        );
+    }
+
+    /// Same for a capability's name. The family stays — it decides which mark a
+    /// node gets — and the name goes, because it is the user's text and is
+    /// carried only when labels were asked for.
+    #[test]
+    fn a_capability_name_does_not_change_the_fingerprint_but_its_family_does() {
+        use crate::graph::{Capability, CapabilityFamily, EffectMetadata};
+
+        let named = |name: Option<&str>, family: CapabilityFamily| {
+            let mut g = graph();
+            g.nodes[1].effect = Some(EffectMetadata {
+                performs: true,
+                capabilities: vec![Capability {
+                    name: name.map(str::to_string),
+                    family,
+                }],
+            });
+            fingerprint(&g)
+        };
+
+        assert_eq!(
+            named(None, CapabilityFamily::Fs),
+            named(Some("@fs.read"), CapabilityFamily::Fs),
+            "a capability name changed the identity"
+        );
+        assert_ne!(
+            named(None, CapabilityFamily::Fs),
+            named(None, CapabilityFamily::Net),
+            "the family must still count — it decides the mark"
+        );
+    }
+
+    /// The targeted rule must not take `source_schema.name` with it.
+    #[test]
+    fn the_source_schema_name_survives_the_capability_rule() {
+        use crate::graph::SourceSchema;
+        let mut a = graph();
+        a.source_schema = Some(SourceSchema {
+            name: "cant.graph".into(),
+            version: "1".into(),
+        });
+        let mut b = graph();
+        b.source_schema = Some(SourceSchema {
+            name: "rite.graph".into(),
+            version: "1".into(),
+        });
+        assert_ne!(
+            fingerprint(&a),
+            fingerprint(&b),
+            "two different source schemas hashed alike"
         );
     }
 

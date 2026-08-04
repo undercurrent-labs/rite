@@ -261,15 +261,29 @@ fn place_nodes(
 
     // 1. The spine. Angle from position along the chain, radius from depth, so
     //    a linear program reads as a spiral moving outward and clockwise.
-    let spine_len = topology.spine.len().max(1);
+    // `len - 1`, so the last spine node reaches the end of the sweep. Dividing
+    // by the length meant a chain of three covered two thirds of it and a chain
+    // of two covered half — the spiral left a gap proportional to how *short*
+    // the program was, which is backwards: a small program has more room, not
+    // less. It was most of why small graphs used only a corner of the circle.
+    let spine_len = topology.spine.len();
+    let spine_span = (spine_len.saturating_sub(1)).max(1) as f64;
     for (index, id) in topology.spine.iter().enumerate() {
-        let along = index as f64 / spine_len as f64;
+        let along = index as f64 / spine_span;
         let angle = CANONICAL_AXIS + along * TAU * SPINE_SWEEP;
-        let depth_fraction = depth_fraction(topology, id);
+        // Radius from progress *along the spine*, not from global depth.
+        //
+        // Depth is the whole graph's, so a program with deep branches gave its
+        // spine tiny depth fractions and bunched the main narrative near the
+        // centre while the branches spread past it — the spiral stopped being
+        // the thing the eye follows. The spine is the composition's backbone and
+        // walks the flow band from core to seal whatever is hanging off it;
+        // branch members still place by depth, which is what makes a deep branch
+        // reach further out than a shallow one.
         let radius = if index == 0 {
             band(0.0, CORE_BAND)
         } else {
-            band(depth_fraction, FLOW_BAND)
+            band(along, FLOW_BAND)
         };
         polar.insert(id.clone(), Polar { radius, angle });
     }
@@ -297,7 +311,10 @@ fn place_nodes(
             .map(|r| topology.regions.get(&r.id).map(|a| a.weight).unwrap_or(1.0))
             .collect();
         let total: f64 = weights.iter().sum();
-        let fan = MAX_FORK_FAN.min(MIN_BRANCH_SECTOR.max(0.35) * branches.len() as f64 * 1.6);
+        // Wide enough that two branches read as a *fan* rather than a splay.
+        // The old figure gave two branches 1.12 radians — 64° — which looks like
+        // one thick spoke, and it was the other half of the cramping.
+        let fan = MAX_FORK_FAN.min(1.9 + 0.55 * branches.len().saturating_sub(1) as f64);
 
         // Sector widths, floored then renormalized so the floors cannot push the
         // total past the fan — a floor that overflows its own budget is how
@@ -540,7 +557,11 @@ fn place_branch(
         // Half the sector width, so the branch's own spread never reaches its
         // neighbour's boundary.
         let angle = center_angle + (along - 0.5) * width * 0.5;
-        let radius = band((depth_fraction(topology, member) + along) / 2.0, FLOW_BAND);
+        // Biased outward. A branch hangs off a fork that is already partway out,
+        // so *averaging* its depth with its position pulled every member back
+        // toward the middle of the band and stacked the branches at one radius.
+        let reach = 0.45 + 0.55 * depth_fraction(topology, member).max(along);
+        let radius = band(reach, FLOW_BAND);
         polar.insert(member.clone(), Polar { radius, angle });
     }
 }

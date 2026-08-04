@@ -504,6 +504,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "cant-sigil-wasm"
+version = "0.1.0"
+dependencies = [
+ "cant-sem",
+ "cant-syntax",
+ "console_error_panic_hook",
+ "rite-core",
+ "rite-sigil",
+ "serde",
+ "serde_json",
+ "wasm-bindgen",
+]
+
+[[package]]
 name = "cant-syntax"
 version = "0.1.0"
 dependencies = [

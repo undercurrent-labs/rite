@@ -1,0 +1,56 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+
+  body {
+    @apply bg-abyss text-spectral font-mono antialiased;
+    /* A faint circuit field, drawn rather than fetched: §22 forbids an external
+       asset and a background image would be one. */
+    background-image:
+      linear-gradient(rgba(142, 92, 255, 0.045) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(142, 92, 255, 0.045) 1px, transparent 1px);
+    background-size: 48px 48px;
+  }
+
+  /* Focus is a ring, everywhere, because §23 requires a visible focus indicator
+     and the default one disappears against a near-black ground. */
+  :focus-visible {
+    @apply outline-none ring-2 ring-cyan ring-offset-2 ring-offset-abyss;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+@layer components {
+  /* Controls read as instruments rather than form fields: square, hairline,
+     lit when active. §20.9. */
+  .instrument {
+    @apply border border-ultraviolet/30 bg-violet/60 px-2.5 py-1.5 text-xs
+           tracking-wide text-spectral/80 transition-colors;
+  }
+  .instrument:hover {
+    @apply border-cyan/60 text-spectral;
+  }
+  .instrument[aria-pressed="true"],
+  .instrument.is-active {
+    @apply border-cyan bg-cyan/10 text-cyan;
+  }
+  .instrument-label {
+    @apply mb-1 block text-[0.6rem] uppercase tracking-[0.22em] text-spectral/35;
+  }
+  .panel {
+    @apply border-ultraviolet/20 bg-violet/40 backdrop-blur-sm;
+  }
+}

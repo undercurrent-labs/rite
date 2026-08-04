@@ -25,6 +25,7 @@ members = [
     "crates/cant-sem",
     "crates/cant",
     "crates/cant-wasm",
+    "crates/cant-sigil-wasm",
     "crates/cant-cli",
     "xtask",
 ]
@@ -60,6 +61,7 @@ cant-syntax = { path = "crates/cant-syntax" }
 cant-sem = { path = "crates/cant-sem" }
 cant = { path = "crates/cant" }
 cant-wasm = { path = "crates/cant-wasm" }
+cant-sigil-wasm = { path = "crates/cant-sigil-wasm" }
 
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }
