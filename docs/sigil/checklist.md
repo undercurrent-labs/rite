@@ -137,7 +137,7 @@ worth showing. Carried here so they are not lost between phases.
 
 | # | What | Why it matters |
 |---|---|---|
-| **OD1** | **The composition does not fill the circle.** On `complex.cant` the upper right stays empty. Two mechanical causes are fixed — the spine reaching its full sweep, and its radius coming from progress rather than whole-graph depth — and a structural one is not: of five spine nodes, two get relocated (the effect to the boundary, the collect to the seal), so only three marks remain on the spiral and everything else hangs off one fork in one direction. The fix is that the spine should lay out over its *visible* members, and a fork should distribute branches into the free angular space rather than fanning symmetrically about itself. **Revisit before release.** | The first render is supposed to stand alone as an artifact. A picture using a corner of its own canvas does not. |
+| ~~OD1~~ | ~~The composition does not fill the circle.~~ **Fixed.** Three causes: the spine divided by its length rather than length−1, so the gap grew as the program got *shorter*; its radius came from whole-graph depth, so deep branches bunched the backbone at the centre; and — the structural one — it allocated an angular slot to every spine node and then relocated some of them, reserving space for marks that would not be there. The sweep is now divided over the nodes that stay on the spiral, and a relocated node borrows a position without consuming a slot. | |
 | OD2 | Edge routing minimizes nothing (§11.6). On a dense graph traces cross. | Crossings read as connections that are not there. |
 | OD3 | Nested fork-inside-fork sectors subdivide by weight but are not recursively renormalized. | Deep nesting gets cramped before it gets illegible. |
 

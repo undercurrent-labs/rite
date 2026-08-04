@@ -558,8 +558,28 @@ anywhere". That was the wrong guarantee. Veiled is about the **artifact**;
 asserted, including that the scene *does* keep labels — otherwise there is
 nothing to decode.
 
-**The composition used a corner of the circle.** Partly fixed; see OD1 in the
-checklist, which is the open item to return to.
+**The composition used a corner of the circle.** Three causes, all now fixed.
+
+Two were arithmetic: the spine divided by its length rather than length minus
+one, so a chain of three covered two thirds of the sweep — the gap grew as the
+program got *shorter*, which is backwards — and its radius came from whole-graph
+depth, so a program with deep branches gave its own backbone tiny fractions and
+bunched it near the centre while the branches spread past it.
+
+The third was structural and is the one that mattered. The spine allocated an
+angular slot to *every* spine node and the placement pass then moved some of them
+elsewhere — an invocation to the outer boundary, an exit to the seal. Those slots
+stayed empty. On `complex.cant`, three of five spine nodes move, so most of the
+circle was reserved for marks that were never going to be there while the
+survivors crowded together. The sweep is now divided over the nodes that will
+still be on the spiral; a relocated node borrows a position between its
+neighbours, so its spoke still points back along the flow it came from, without
+consuming a slot.
+
+Worth noting how it was found: not by a test, which had no way to say "this
+looks empty", but by rendering one and looking at it. The tests said everything
+was deterministic, bounded, and in the right band — all true, and none of it the
+question being asked.
 
 ### Known limitations at the end of Phase 5
 

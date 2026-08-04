@@ -52,6 +52,13 @@ const CANT_PATHS: &[&str] = &[
     "examples/sigil",
     "fixtures/sigil",
     "apps/cant-web",
+    // Sigil's site renders Cant programs and has no other producer, so it goes
+    // with Cant — as does the WASM binding it loads and the scripts that build
+    // them. The *renderer* (`crates/rite-sigil`) survives, which is the boundary
+    // that carries the architecture.
+    "apps/sigil-web",
+    "scripts/build-sigil-wasm.sh",
+    "scripts/build-sigil-site.sh",
     "scripts/build-cant-site.sh",
     "scripts/build-cant-graphs.sh",
     "scripts/build-cant-wasm.sh",

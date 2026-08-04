@@ -261,15 +261,46 @@ fn place_nodes(
 
     // 1. The spine. Angle from position along the chain, radius from depth, so
     //    a linear program reads as a spiral moving outward and clockwise.
-    // `len - 1`, so the last spine node reaches the end of the sweep. Dividing
-    // by the length meant a chain of three covered two thirds of it and a chain
-    // of two covered half — the spiral left a gap proportional to how *short*
-    // the program was, which is backwards: a small program has more room, not
-    // less. It was most of why small graphs used only a corner of the circle.
-    let spine_len = topology.spine.len();
-    let spine_span = (spine_len.saturating_sub(1)).max(1) as f64;
-    for (index, id) in topology.spine.iter().enumerate() {
-        let along = index as f64 / spine_span;
+    // The spiral is laid out over the spine nodes that will still *be* on it.
+    //
+    // Allocating an angular slot to every spine node and then relocating some of
+    // them — an invocation to the boundary, an exit to the seal — left those
+    // slots empty, and on a program where three of five spine nodes move, most
+    // of the circle went unused while the survivors bunched together. The
+    // vacated angle is now reclaimed rather than reserved for something that
+    // will not be there.
+    //
+    // A relocated node still gets an angle from this pass, so its spoke points
+    // back along the flow it came from; it is simply not counted when deciding
+    // how the sweep is divided.
+    let stays_on_the_spiral = |id: &NodeId| {
+        matches!(
+            topology.placement(id),
+            Placement::Core | Placement::Flow | Placement::Ring
+        )
+    };
+    let visible: Vec<&NodeId> = topology
+        .spine
+        .iter()
+        .filter(|id| stays_on_the_spiral(id))
+        .collect();
+    // `len - 1`, so the last one reaches the end of the sweep. Dividing by the
+    // length meant a chain of three covered two thirds of it — the gap grew as
+    // the program got *shorter*, which is backwards.
+    let spine_span = visible.len().saturating_sub(1).max(1) as f64;
+
+    let mut visible_index = 0usize;
+    for id in topology.spine.iter() {
+        // A relocated node borrows the position it would have had, so its angle
+        // still reads as "between these two", without consuming a slot.
+        let along = if stays_on_the_spiral(id) {
+            let along = visible_index as f64 / spine_span;
+            visible_index += 1;
+            along
+        } else {
+            (visible_index as f64 - 0.5).max(0.0) / spine_span
+        };
+        let index = visible_index.saturating_sub(1);
         let angle = CANONICAL_AXIS + along * TAU * SPINE_SWEEP;
         // Radius from progress *along the spine*, not from global depth.
         //
@@ -1249,12 +1280,21 @@ mod tests {
             (p.y - fork.y).atan2(p.x - fork.x)
         };
 
-        // Clockwise from the fork: in SVG's downward-y space, that is
-        // increasing angle. Branch 0 first.
-        let angles: Vec<f64> = (0..3).map(|i| angle_of(&scene, &format!("b{i}"))).collect();
+        // Clockwise from the fork: in SVG's downward-y space, that is increasing
+        // angle — but `atan2` wraps at ±π, and a wide fan crosses it. Measuring
+        // relative to branch 0 and unwrapping into `[0, τ)` compares the thing
+        // actually under test, which is the *order*, rather than where the
+        // discontinuity happens to fall.
+        let base = angle_of(&scene, "b0");
+        let relative: Vec<f64> = (0..3)
+            .map(|i| {
+                let delta = angle_of(&scene, &format!("b{i}")) - base;
+                delta.rem_euclid(std::f64::consts::TAU)
+            })
+            .collect();
         assert!(
-            angles[0] < angles[1] && angles[1] < angles[2],
-            "branches are not in clockwise ordinal order: {angles:?}"
+            relative[0] < relative[1] && relative[1] < relative[2],
+            "branches are not in clockwise ordinal order: {relative:?}"
         );
 
         // And the array order of the region list must not matter.
