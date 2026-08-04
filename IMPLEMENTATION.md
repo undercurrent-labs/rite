@@ -245,11 +245,26 @@ view and does not supply Sigil's geometry.
 - [`docs/sigil/implementation-log.md`](docs/sigil/implementation-log.md) —
   deviations, discovered constraints, per-phase test results
 
-Status: **Phase 0 of nine complete.** ADRs written, the `sigil`→`glyph`
-terminology migration finished, and `cant.graph` versioned to 1 with the per-node
-capability metadata a renderer needs so it never has to recover meaning from a
-label. No renderer code yet — deliberately: the specification's Phase 0 requires
-none, and the contracts had to be settled first.
+Status: **Phases 0–8 complete, Phase 9 partial. Not yet deployed.**
+
+`cant sigil` renders SVG, PNG, interactive HTML and scene JSON in three themes,
+four ornament levels and three disclosure modes. `apps/sigil-web` runs the same
+renderer as WebAssembly in the browser, with selection, a Codex, and a gallery —
+and no server round trip: there is no render endpoint, and a test reads the
+Worker's source to keep it that way.
+
+Of 71 acceptance criteria: **52 met with a test behind them, 14 partial with the
+gap named, 5 not started.** The two that matter most are that the site has never
+been deployed — the Cloudflare configuration is written and dry-runs clean, but
+no zone is attached — and that five of the eight planned documentation pages are
+unwritten. `docs/sigil/checklist.md` is the per-criterion state and
+`docs/sigil/implementation-log.md` records what each phase cost.
+
+Two conflicts with the specification were resolved in the repository's favour and
+recorded: the browser binding is `cant-sigil-wasm` rather than `rite-sigil-wasm`,
+because it parses Cant source and ADR 0001 fixes the dependency edge by directory
+name; and the gallery renders thumbnails live rather than baking them at build
+time, which is stronger against drift.
 
 ### Key decisions
 

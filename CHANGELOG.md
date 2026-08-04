@@ -48,7 +48,48 @@
   nothing — `crates/rite-sigil/tests/boundaries.rs` reads the manifest and the
   sources to keep it that way. Six golden scene fixtures under `fixtures/sigil/`,
   generated from `examples/sigil/`, asserted structurally rather than merely
-  written. No SVG yet: that is the next phase. See `docs/sigil/`.
+  written. See `docs/sigil/`.
+
+- **Sigil renders.** `cant sigil <file|-|-e|--graph>` produces SVG, PNG,
+  self-contained interactive HTML, or scene JSON, in three themes, four ornament
+  levels, three disclosure modes and four metadata modes.
+
+  Marks come from a constrained grammar rather than noise: a fixed skeleton per
+  node kind plus deterministic variation that only ever adds strokes outside the
+  skeleton it varies. Every kind differs from every other in *topology* — a
+  stroke count, a closed versus open form — because colour is not permitted to
+  carry the distinction, and `void` is the theme where a mark that only works in
+  colour fails.
+
+  Ornament is generated from the level and the seed and nothing from the placed
+  scene, which is what makes "removable without relayout" true rather than
+  careful: it cannot avoid a node because it cannot see one.
+
+  Veiled is the default and means the artifact draws no source text at all —
+  enforced by never generating a text element, not by hiding one. `--metadata`
+  is a separate axis governing what is *embedded*; `none` strips titles,
+  descriptions, identifiers and snippets. The contradictory pairing warns rather
+  than silently resolving.
+
+  Standard SVG contains no script, no event handler, no external reference and
+  no unescaped user text — asserted over twelve hostile strings across
+  thirty-six option combinations.
+
+- **`sigil.rite.foo` — the Sigil web application.** `apps/sigil-web`: Vue 3,
+  TypeScript, Tailwind, Cloudflare Workers Static Assets, and the same renderer
+  compiled to WebAssembly through `cant-sigil-wasm`. Paste or open a Cant
+  program, or a `cant graph` document, and it renders in the tab.
+
+  **Nothing is uploaded.** There is no render endpoint, no source in a URL, and
+  nothing persisted. The Worker answers `/api/health`, `/api/version` and
+  `/api/schema` and serves static assets; a test reads its source and fails if it
+  grows a request-body read or a render route, because a behavioural test cannot
+  prove absence.
+
+  Pan, zoom, fit, fullscreen; hover and keyboard-focus revelation; selection with
+  upstream-and-downstream path highlighting; a collapsible Codex that decodes a
+  Veiled render, and Deep Veil to suppress that; a gallery rendered live from the
+  repository's own examples; and SVG, PNG, scene JSON and copy exports.
 
 - **ADRs 0003–0009, for Sigil.** The semantic renderer that turns a Cant graph
   into a ritual artifact is being built, and the decisions that constrain it are

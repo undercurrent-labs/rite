@@ -65,14 +65,29 @@ One decision, made once, in this priority order:
 
 ### The four structures
 
-**The spine spirals.** Angle advances with position along the top-level chain,
-radius with depth, sweeping 0.82 of a turn — less than a full one so the end does
-not land on its own beginning and read as a join. This is what makes an unlabelled
-render still show where a program starts and which way it goes.
+**The spine spirals.** Angle and radius both advance with position along the
+top-level chain, sweeping 0.82 of a turn — less than a full one so the end does
+not land on its own beginning and read as a join. This is what makes an
+unlabelled render still show where a program starts and which way it goes.
 
-Depth is **longest path** from the entry, not shortest. A shortcut edge would
-otherwise let a node sit at the same radius as its own predecessor, and two nodes
-at the same radius on the same spoke overlap.
+Two details, each of which was a bug first:
+
+*The sweep is divided over the spine nodes that will still be on the spiral.*
+Some are moved elsewhere by placement — an invocation to the boundary, an exit to
+the seal — and allocating a slot to each of them anyway reserved space for marks
+that were never going to be there. A relocated node borrows a position between
+its neighbours, so its spoke still points back along the flow, without consuming
+a slot.
+
+*Radius comes from progress along the spine, not from whole-graph depth.* Depth
+is the whole graph's, so a program with deep branches gave its own backbone tiny
+fractions and bunched it near the centre while the branches spread past it. The
+spine walks the flow band whatever hangs off it; **branch members still place by
+depth**, which is what makes a deep branch reach further out than a shallow one.
+
+Depth, where it is used, is **longest path** from the entry, not shortest. A
+shortcut edge would otherwise let a node sit at the same radius as its own
+predecessor, and two nodes at the same radius on the same spoke overlap.
 
 **A fork fans.** Branches take angular sectors clockwise by ordinal, widths
 weighted by content — a branch holding an orbit needs room for a ring, one
@@ -145,6 +160,18 @@ what it was. That is a property test, not a convention.
 }
 ```
 
+An edge element also carries `ends` — the two nodes it joins, as fields:
+
+```json
+{ "id": "edge/e0", "semantic": {"edge": "flow"}, "ends": { "from": "n0", "to": "n1" } }
+```
+
+Present so a consumer highlighting a path does not have to recover the endpoints
+from the element *identifier* with a regular expression. That worked only because
+the Cant adapter happens to build ids that way, which made a string format a
+structural dependency — and one that would have failed silently the moment edge
+naming changed.
+
 Element IDs are derived from the graph reference and a role, **never from draw
 order** — an ID that changed whenever something moved would be useless for the
 three things that need it: the Codex mapping a click back to a node, the
@@ -155,8 +182,9 @@ value stays in `graph_ref`, so the Codex still shows what the author wrote.
 
 Geometry is one of `circle`, `arc`, `polygon`, `path`, `mark`, `text`.
 Deliberately few — a scene made of a hundred primitive types would be a drawing
-format. Phase 3's generated marks arrive as path data inside `mark`, not as new
-variants.
+format. Generated marks arrive as path data inside `mark` rather than as new
+variants, and are filled in by the SVG writer when the scene left `path` empty,
+so scene JSON does not carry every path twice.
 
 ### Titles never carry a label
 
