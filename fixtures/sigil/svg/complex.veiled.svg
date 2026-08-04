@@ -142,14 +142,14 @@
 <path d="M800 800C827.726 843.689 878.737 924.069 950.032 1036.412" id="edge-e0_n0.0-_n1.0" class="sigil-edge sigil-edge-flow" stroke="#38F2FF"/>
 <path d="M950.032 1036.412C793.476 1031.89 599.239 1113.969 378.744 1277.821" id="edge-e1_n1.0-_n2.0" class="sigil-edge sigil-edge-flow" stroke="#38F2FF"/>
 <path d="M411.85 1008.788C415.989 988.456 413.131 970.828 403.444 956.94" id="edge-e2_n4.0-_n5.0" class="sigil-edge sigil-edge-flow" stroke="#38F2FF"/>
-<path d="M388.304 606.27C438.645 738.3 446.651 875.156 411.85 1008.788" id="edge-e3_n3.1-_n4.0" class="sigil-edge sigil-edge-enter" stroke="#8E5CFF" stroke-dasharray="10 6"/>
+<path d="M388.304 606.27C469.119 808.473 477.124 945.329 411.85 1008.788" id="edge-e3_n3.1-_n4.0" class="sigil-edge sigil-edge-enter" stroke="#8E5CFF" stroke-dasharray="10 6"/>
 <path d="M403.444 956.94C435.475 842.904 430.327 723.677 388.304 606.27" id="edge-e4_n5.0-_n3.1" class="sigil-edge sigil-edge-join" stroke="#8E5CFF" stroke-dasharray="4 5"/>
-<path d="M526.338 523.905C512.808 510.255 487.916 485.141 453.125 450.041" id="edge-e5_n7.0-_n8.0" class="sigil-edge sigil-edge-flow" stroke="#38F2FF"/>
+<path d="M526.338 523.905C541.365 539.066 516.473 513.953 453.125 450.041" id="edge-e5_n7.0-_n8.0" class="sigil-edge sigil-edge-flow" stroke="#38F2FF"/>
 <path d="M489.731 486.973C505.677 503.061 518.123 515.618 526.338 523.905" id="edge-e6_n6.1-_n7.0" class="sigil-edge sigil-edge-enter" stroke="#8E5CFF" stroke-dasharray="10 6"/>
 <path d="M453.125 450.041C456.99 453.941 469.437 466.498 489.731 486.973" id="edge-e7_n8.0-_n6.1" class="sigil-edge sigil-edge-feedback" stroke="#FF3CCF" stroke-dasharray="14 5 3 5"/>
 <path d="M388.304 606.27C435.309 576.402 469.794 535.841 489.731 486.973" id="edge-e8_n3.2-_n6.0" class="sigil-edge sigil-edge-enter" stroke="#8E5CFF" stroke-dasharray="10 6"/>
 <path d="M489.731 486.973C469.794 535.841 435.309 576.402 388.304 606.27" id="edge-e9_n6.0-_n3.1" class="sigil-edge sigil-edge-join" stroke="#8E5CFF" stroke-dasharray="4 5"/>
-<path d="M378.744 1277.821C474.197 1024.729 477.447 796.402 388.304 606.27" id="edge-e10_n2.0-_n3.0" class="sigil-edge sigil-edge-flow" stroke="#38F2FF"/>
+<path d="M378.744 1277.821C506.502 1013.711 509.752 785.384 388.304 606.27" id="edge-e10_n2.0-_n3.0" class="sigil-edge sigil-edge-flow" stroke="#38F2FF"/>
 <path d="M388.304 606.27C617.864 768.055 757.841 1012.423 800 1325" id="edge-e11_n3.0-_n9.0" class="sigil-edge sigil-edge-flow" stroke="#38F2FF"/>
 </g>
 <g class="sigil-layer sigil-layer-semantic-nodes">
@@ -164,5 +164,5 @@
 <path d="M453.125 431.321L453.125 468.761M445.925 431.321L460.325 431.321M445.925 468.761L460.325 468.761" id="node-n8" class="sigil-node sigil-node-stage" stroke="#38F2FF" filter="url(#sigil-glow)" transform="rotate(-134.091 453.125 450.041)"><title>stage</title></path>
 <path d="M831.921 1343.311L810.409 1330.971M821.681 1354.735L807.07 1334.696M807.671 1360.992L802.502 1336.736M792.329 1360.992L797.498 1336.736M778.319 1354.735L792.93 1334.696M768.079 1343.311L789.591 1330.971M812 1325C812 1331.627 806.627 1337 800 1337C793.373 1337 788 1331.627 788 1325C788 1318.373 793.373 1313 800 1313C806.627 1313 812 1318.373 812 1325M791.6 1316.6L808.4 1333.4M808.4 1316.6L791.6 1333.4" id="node-n9" class="sigil-node sigil-node-collect" stroke="#D8B35C" filter="url(#sigil-glow)" transform="rotate(87.772 800 1325)"><title>collect</title></path>
 </g>
-<desc>sigil/0.1.0 graph=a67b51b9c916d72906f4a5da3aa929ca theme=neon-ritual@1 seed=0 mode=veiled metadata=safe format=svg</desc>
+<desc>sigil/0.1.0 graph=a67b51b9c916d72906f4a5da3aa929ca theme=neon-ritual@1 tracery=flowing seed=0 mode=veiled metadata=safe format=svg</desc>
 </svg>

@@ -44,6 +44,8 @@ pub struct RenderOptions {
     /// CLI given the same input.
     pub seed: String,
     pub background: String,
+    /// How traces are drawn: `flowing`, `concentric`, or `circuit`.
+    pub tracery: String,
     pub canonical: bool,
     pub simplify: bool,
 }
@@ -57,6 +59,7 @@ impl Default for RenderOptions {
             ornament: "ritual".into(),
             seed: "graph".into(),
             background: "theme".into(),
+            tracery: "flowing".into(),
             canonical: false,
             simplify: false,
         }
@@ -95,6 +98,10 @@ pub struct RenderResult {
     pub scene_json: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub graph_json: Option<String>,
+    /// The self-contained interactive page, present only when asked for
+    /// through [`render_cant_html`] / [`render_graph_html`].
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub html: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub fingerprint: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -185,7 +192,14 @@ fn failure(code: &str, message: impl Into<String>) -> RenderResult {
 /// else: a value with diagnostics, never an exception.
 fn resolve(
     options: &RenderOptions,
-) -> Result<(rite_sigil::SvgOptions, rite_sigil::OrnamentLevel), Box<RenderResult>> {
+) -> Result<
+    (
+        rite_sigil::SvgOptions,
+        rite_sigil::OrnamentLevel,
+        rite_sigil::Tracery,
+    ),
+    Box<RenderResult>,
+> {
     let theme = rite_sigil::ThemeId::parse(&options.theme).ok_or_else(|| {
         Box::new(failure(
             "SIGIL-T001",
@@ -210,6 +224,12 @@ fn resolve(
             format!("unknown ornament level `{}`", options.ornament),
         ))
     })?;
+    let tracery = rite_sigil::Tracery::parse(&options.tracery).ok_or_else(|| {
+        Box::new(failure(
+            "SIGIL-C001",
+            format!("unknown tracery `{}`", options.tracery),
+        ))
+    })?;
     let background = match options.background.as_str() {
         "theme" => rite_sigil::Background::Theme,
         "transparent" => rite_sigil::Background::Transparent,
@@ -232,6 +252,7 @@ fn resolve(
             height: None,
         },
         ornament,
+        tracery,
     ))
 }
 
@@ -240,9 +261,10 @@ fn render_normalized(
     normalized: rite_sigil::NormalizedGraph,
     options: &RenderOptions,
     graph_json: Option<String>,
+    with_html: bool,
 ) -> RenderResult {
-    let (svg_options, ornament) = match resolve(options) {
-        Ok(pair) => pair,
+    let (svg_options, ornament, tracery) = match resolve(options) {
+        Ok(triple) => triple,
         Err(result) => return *result,
     };
 
@@ -274,6 +296,7 @@ fn render_normalized(
         },
         legend: true,
         ornament,
+        tracery,
     };
 
     let mut diagnostics: Vec<Diagnostic> =
@@ -292,11 +315,25 @@ fn render_normalized(
     }
 
     let rendered = rite_sigil::render_svg(&scene, &svg_options);
+    // Only on request: the page embeds the SVG and a stylesheet over again,
+    // and exports are rare while renders are constant. The scene is never
+    // embedded from the browser — §16's `--embed-scene` stays a CLI decision.
+    let html = with_html.then(|| {
+        rite_sigil::render_html(
+            &scene,
+            &rite_sigil::HtmlOptions {
+                svg: svg_options.clone(),
+                codex: true,
+                embed_scene: false,
+            },
+        )
+    });
     RenderResult {
         ok: true,
         svg: Some(rendered.svg),
         scene_json: serde_json::to_string(&scene).ok(),
         graph_json,
+        html,
         fingerprint: Some(rendered.fingerprint.to_line()),
         summary: Some(scene.summary()),
         diagnostics,
@@ -306,6 +343,25 @@ fn render_normalized(
 
 /// Render Cant source.
 pub fn render_cant(source_name: &str, source: &str, options: &RenderOptions) -> RenderResult {
+    render_cant_impl(source_name, source, options, false)
+}
+
+/// [`render_cant`], with the self-contained interactive HTML page included.
+///
+/// The page's Codex carries labels under the same policy every render uses:
+/// they travel unless `metadata` is `none`. Disclosure still governs the
+/// canvas, so a Veiled export is a veiled picture with a decodable Codex
+/// beside it — §13.4's web default, in a file.
+pub fn render_cant_html(source_name: &str, source: &str, options: &RenderOptions) -> RenderResult {
+    render_cant_impl(source_name, source, options, true)
+}
+
+fn render_cant_impl(
+    source_name: &str,
+    source: &str,
+    options: &RenderOptions,
+    with_html: bool,
+) -> RenderResult {
     // Browser limits, not native ones: a tab should refuse rather than hang.
     let limits = rite_sigil::NormalizeOptions {
         keep_snippets: options.metadata == "full",
@@ -385,7 +441,7 @@ pub fn render_cant(source_name: &str, source: &str, options: &RenderOptions) -> 
     let sigil_graph = cant_sem::to_sigil_graph(&cant_graph, adapt);
 
     match rite_sigil::normalize(sigil_graph, &limits) {
-        Ok(normalized) => render_normalized(normalized, options, graph_json),
+        Ok(normalized) => render_normalized(normalized, options, graph_json, with_html),
         Err(diagnostics) => RenderResult {
             ok: false,
             diagnostics: diagnostics.iter().map(diagnostic_of).collect(),
@@ -396,6 +452,15 @@ pub fn render_cant(source_name: &str, source: &str, options: &RenderOptions) -> 
 
 /// Render a `cant.graph` JSON document, without parsing any source.
 pub fn render_graph(graph_json: &str, options: &RenderOptions) -> RenderResult {
+    render_graph_impl(graph_json, options, false)
+}
+
+/// [`render_graph`], with the self-contained interactive HTML page included.
+pub fn render_graph_html(graph_json: &str, options: &RenderOptions) -> RenderResult {
+    render_graph_impl(graph_json, options, true)
+}
+
+fn render_graph_impl(graph_json: &str, options: &RenderOptions, with_html: bool) -> RenderResult {
     let limits = rite_sigil::NormalizeOptions {
         keep_snippets: options.metadata == "full",
         ..rite_sigil::NormalizeOptions::browser()
@@ -430,7 +495,9 @@ pub fn render_graph(graph_json: &str, options: &RenderOptions) -> RenderResult {
     };
     let sigil_graph = cant_sem::to_sigil_graph(&analysis.graph, adapt);
     match rite_sigil::normalize(sigil_graph, &limits) {
-        Ok(normalized) => render_normalized(normalized, options, Some(graph_json.to_string())),
+        Ok(normalized) => {
+            render_normalized(normalized, options, Some(graph_json.to_string()), with_html)
+        }
         Err(diagnostics) => RenderResult {
             ok: false,
             diagnostics: diagnostics.iter().map(diagnostic_of).collect(),
@@ -504,6 +571,20 @@ mod bindings {
         to_json(&super::render_graph(graph_json, &options_of(options)))
     }
 
+    #[wasm_bindgen(js_name = renderCantHtml)]
+    pub fn render_cant_html_js(source_name: &str, source: &str, options: Option<String>) -> String {
+        to_json(&super::render_cant_html(
+            source_name,
+            source,
+            &options_of(options),
+        ))
+    }
+
+    #[wasm_bindgen(js_name = renderGraphHtml)]
+    pub fn render_graph_html_js(graph_json: &str, options: Option<String>) -> String {
+        to_json(&super::render_graph_html(graph_json, &options_of(options)))
+    }
+
     #[wasm_bindgen(js_name = validateGraph)]
     pub fn validate_graph_js(graph_json: &str) -> String {
         to_json(&super::validate_graph(graph_json))
@@ -538,6 +619,26 @@ mod tests {
             .summary
             .expect("a summary")
             .starts_with("This sigil contains"));
+        // HTML is absent unless asked for — an export, not a payload tax.
+        assert!(result.html.is_none());
+    }
+
+    /// The HTML export (§16, W8): present when asked, a whole document, and as
+    /// self-contained as the CLI's — no script other than its own inline one,
+    /// no external reference.
+    #[test]
+    fn cant_source_renders_to_a_self_contained_page() {
+        let result = render_cant_html("t.cant", PROGRAM, &RenderOptions::default());
+        assert!(result.ok, "{:?}", result.diagnostics);
+        let html = result.html.expect("an html page");
+        assert!(html.starts_with("<!doctype html>"));
+        assert!(html.contains("<svg"));
+        // Self-contained: nothing fetched from anywhere.
+        let without_ns = html.replace("xmlns=\"http://www.w3.org/2000/svg\"", "");
+        assert!(!without_ns.contains("http://"));
+        assert!(!without_ns.contains("https://"));
+        // The Codex decodes it — the point of the format.
+        assert!(html.to_lowercase().contains("codex"));
     }
 
     /// A syntax error is a result, not an exception. A UI that had to catch to

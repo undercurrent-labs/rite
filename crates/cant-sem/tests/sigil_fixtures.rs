@@ -35,7 +35,15 @@ fn repo_root() -> PathBuf {
 }
 
 /// Every example, by the name its fixtures are stored under.
-const EXAMPLES: &[&str] = &["basic-flow", "ward", "fork", "orbit", "effects", "complex"];
+const EXAMPLES: &[&str] = &[
+    "basic-flow",
+    "ward",
+    "fork",
+    "orbit",
+    "effects",
+    "complex",
+    "ceremony",
+];
 
 fn source_of(name: &str) -> String {
     let path = repo_root()
@@ -175,6 +183,9 @@ fn each_example_contains_the_construct_it_demonstrates() {
         ("orbit", SigilNodeKind::Orbit),
         ("effects", SigilNodeKind::Effect),
         ("complex", SigilNodeKind::Fork),
+        // The densest example: the one place an effect fires from *inside* a
+        // fork branch rather than from the spine.
+        ("ceremony", SigilNodeKind::Effect),
     ];
     for (name, kind) in expected {
         let scene = scene_of(name);
@@ -409,5 +420,103 @@ fn malicious_labels_do_not_escape_into_element_ids() {
         assert_eq!(a.id, b.id);
         assert_eq!(a.semantic, b.semantic);
         assert_eq!(a.graph_ref, b.graph_ref);
+    }
+}
+
+/// The tracery axis, over the densest example.
+///
+/// Three claims. The traceries are *distinct* — each draws traces the others
+/// do not. They are *node-invariant* — a tracery changes every edge's shape
+/// and no mark's position, which is what makes it an axis like theme rather
+/// than a different layout. And the two non-default ones have goldens of
+/// their own, so a change to either is a reviewed diff rather than a drift.
+/// (`flowing` is the default and is already pinned by every other golden.)
+#[test]
+fn traceries_are_distinct_and_move_no_mark() {
+    use rite_sigil::Tracery;
+
+    let scene_with = |tracery: Tracery| {
+        let source = source_of("ceremony");
+        let (parsed, _) = parse_source("ceremony.cant", &source);
+        let program = cant_sem::lower(
+            &parsed.program.expect("program"),
+            "ceremony.cant",
+            source.len(),
+        );
+        let graph = to_sigil_graph(&program, AdaptOptions::default());
+        let normalized = normalize(graph, &NormalizeOptions::default()).expect("normalizes");
+        build_scene(
+            &normalized,
+            &rite_sigil::LayoutOptions {
+                tracery,
+                ..rite_sigil::LayoutOptions::canonical()
+            },
+        )
+    };
+
+    let scenes: Vec<_> = Tracery::ALL.iter().map(|t| (*t, scene_with(*t))).collect();
+
+    // Marks stay put across every tracery.
+    let node_geometry = |scene: &rite_sigil::SigilScene| {
+        scene
+            .elements
+            .iter()
+            .filter(|e| matches!(e.graph_ref, Some(rite_sigil::SceneRef::Node(_))))
+            .map(|e| (e.id.clone(), format!("{:?}", e.geometry)))
+            .collect::<Vec<_>>()
+    };
+    let baseline = node_geometry(&scenes[0].1);
+    for (tracery, scene) in &scenes[1..] {
+        assert_eq!(
+            node_geometry(scene),
+            baseline,
+            "{} moved a mark",
+            tracery.name()
+        );
+    }
+
+    // And the pictures differ.
+    let svgs: Vec<String> = scenes
+        .iter()
+        .map(|(_, scene)| render_svg(scene, &SvgOptions::default()).svg)
+        .collect();
+    for i in 0..svgs.len() {
+        for j in (i + 1)..svgs.len() {
+            assert_ne!(
+                svgs[i],
+                svgs[j],
+                "{} and {} rendered identically",
+                scenes[i].0.name(),
+                scenes[j].0.name()
+            );
+        }
+    }
+
+    // Goldens for the two non-default traceries.
+    for (tracery, scene) in &scenes {
+        if *tracery == Tracery::Flowing {
+            continue;
+        }
+        let rendered = render_svg(scene, &SvgOptions::default());
+        let path = repo_root()
+            .join("fixtures/sigil/svg")
+            .join(format!("ceremony.{}.veiled.svg", tracery.name()));
+        if std::env::var_os("SIGIL_BLESS").is_some() {
+            std::fs::create_dir_all(path.parent().expect("parent")).expect("mkdir");
+            std::fs::write(&path, &rendered.svg).expect("write");
+            continue;
+        }
+        let expected = std::fs::read_to_string(&path).unwrap_or_else(|e| {
+            panic!(
+                "missing SVG fixture {}: {e}\nregenerate with SIGIL_BLESS=1",
+                path.display()
+            )
+        });
+        assert_eq!(
+            expected,
+            rendered.svg,
+            "ceremony's {} SVG changed",
+            tracery.name()
+        );
     }
 }

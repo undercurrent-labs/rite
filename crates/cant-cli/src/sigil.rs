@@ -24,6 +24,7 @@ use std::process::ExitCode;
 use rite_sigil::{
     build_scene, normalize, render_svg, Background, DisclosureMode, HtmlOptions, LayoutOptions,
     MarkDetail, MetadataMode, NormalizeOptions, Orientation, OrnamentLevel, SvgOptions, ThemeId,
+    Tracery,
 };
 
 /// Everything `cant sigil` accepts. Mirrors §17.1.
@@ -41,6 +42,7 @@ pub struct SigilArgs {
     pub canonical: bool,
     pub background: String,
     pub ornament: String,
+    pub tracery: String,
     pub width: Option<f64>,
     pub scale: f64,
     pub embed_scene: bool,
@@ -107,6 +109,12 @@ fn render(args: &SigilArgs) -> Result<Artifact, Failure> {
         Failure::usage(format!(
             "unknown --ornament `{}` — expected none, sparse, ritual, or maximal",
             args.ornament
+        ))
+    })?;
+    let tracery = Tracery::parse(&args.tracery).ok_or_else(|| {
+        Failure::usage(format!(
+            "unknown --tracery `{}` — expected flowing, concentric, or circuit",
+            args.tracery
         ))
     })?;
     let background = match args.background.as_str() {
@@ -179,6 +187,7 @@ fn render(args: &SigilArgs) -> Result<Artifact, Failure> {
         },
         legend: true,
         ornament,
+        tracery,
     };
     let scene = build_scene(&normalized, &layout);
     for warning in &scene.warnings {

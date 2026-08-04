@@ -69,6 +69,7 @@ pub mod ornament;
 pub mod scene;
 pub mod svg;
 pub mod theme;
+pub mod tracery;
 pub mod validate;
 
 pub use analysis::{analyze, Placement, Topology};
@@ -99,6 +100,7 @@ pub use svg::{
     SvgOptions,
 };
 pub use theme::{Theme, ThemeId, THEME_VERSION};
+pub use tracery::Tracery;
 pub use validate::Validated;
 
 /// This renderer's version, reported in every render fingerprint.

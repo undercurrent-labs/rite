@@ -498,3 +498,53 @@ fn the_well_formedness_check_rejects_what_it_should() {
     assert!(check_well_formed("<a>bare & amp</a>").is_err());
     assert!(check_well_formed("</a>").is_err());
 }
+
+/// The non-default traceries, against the same hostile corpus.
+///
+/// A tracery changes edge geometry and never touches text handling — but the
+/// axis is new, its paths carry commands the default never emits (`LineTo`,
+/// `ArcTo`, `Close`), and the invariants are cheap. Revealed + Full is the
+/// leakiest option pair, so it is the one worth sweeping.
+#[test]
+fn every_tracery_is_as_script_free_as_the_default() {
+    use rite_sigil::Tracery;
+
+    for tracery in [Tracery::Concentric, Tracery::Circuit] {
+        for text in HOSTILE {
+            let graph = poisoned_graph(text);
+            let normalized = normalize(graph, &NormalizeOptions::default().with_snippets())
+                .unwrap_or_else(|d| panic!("hostile graph did not normalize:\n{d}"));
+            let scene = build_scene(
+                &normalized,
+                &LayoutOptions {
+                    tracery,
+                    ..LayoutOptions::canonical()
+                },
+            );
+            let svg = render_svg(
+                &scene,
+                &SvgOptions {
+                    disclosure: DisclosureMode::Revealed,
+                    metadata: MetadataMode::Full,
+                    ..Default::default()
+                },
+            )
+            .svg;
+
+            let lower = svg.to_lowercase();
+            assert!(
+                !lower.contains("<script"),
+                "{}: script in output for {text:?}",
+                tracery.name()
+            );
+            assert!(
+                !has_event_handler(&lower),
+                "{}: event handler for {text:?}",
+                tracery.name()
+            );
+            check_well_formed(&svg).unwrap_or_else(|e| {
+                panic!("{}: not well formed for {text:?}: {e}", tracery.name())
+            });
+        }
+    }
+}

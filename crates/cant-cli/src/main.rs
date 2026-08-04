@@ -385,6 +385,13 @@ enum Commands {
             value_name = "none|sparse|ritual|maximal"
         )]
         ornament: String,
+        /// How traces are drawn
+        #[arg(
+            long,
+            default_value = "flowing",
+            value_name = "flowing|concentric|circuit"
+        )]
+        tracery: String,
         /// Pixel width (the canvas is square, so this sets both dimensions)
         #[arg(long)]
         width: Option<f64>,
@@ -565,6 +572,7 @@ async fn main() -> ExitCode {
             canonical,
             background,
             ornament,
+            tracery,
             width,
             scale,
             embed_scene,
@@ -584,6 +592,7 @@ async fn main() -> ExitCode {
             canonical,
             background,
             ornament,
+            tracery,
             width,
             scale,
             embed_scene,

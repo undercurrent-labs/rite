@@ -182,6 +182,7 @@ pub struct RenderFingerprint {
     pub renderer_version: String,
     pub theme: String,
     pub theme_version: u32,
+    pub tracery: String,
     pub seed: u64,
     pub disclosure: String,
     pub metadata: String,
@@ -192,11 +193,12 @@ impl RenderFingerprint {
     /// A single line, for `--check`, for a filename, and for the metadata block.
     pub fn to_line(&self) -> String {
         format!(
-            "sigil/{} graph={} theme={}@{} seed={} mode={} metadata={} format={}",
+            "sigil/{} graph={} theme={}@{} tracery={} seed={} mode={} metadata={} format={}",
             self.renderer_version,
             self.graph,
             self.theme,
             self.theme_version,
+            self.tracery,
             self.seed,
             self.disclosure,
             self.metadata,
@@ -213,6 +215,7 @@ pub fn render_svg(scene: &SigilScene, options: &SvgOptions) -> RenderedSvg {
         renderer_version: scene.metadata.renderer_version.clone(),
         theme: options.theme.name().to_string(),
         theme_version: THEME_VERSION,
+        tracery: scene.metadata.tracery.clone(),
         seed: scene.metadata.seed,
         disclosure: options.disclosure.name().to_string(),
         metadata: options.metadata.name().to_string(),

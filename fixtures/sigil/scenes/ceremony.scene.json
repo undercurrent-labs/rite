@@ -31,6 +31,31 @@
       }
     },
     {
+      "id": "region/s3/ring",
+      "layer": "semantic-regions",
+      "semantic": {
+        "region": "orbit"
+      },
+      "graph_ref": {
+        "kind": "region",
+        "id": "s3"
+      },
+      "geometry": "circle",
+      "center": {
+        "x": 364.1526674345267,
+        "y": 861.6957895406247
+      },
+      "radius": 52.0,
+      "title": "orbit ring",
+      "legend_key": "region/s3",
+      "bounds": {
+        "x": 312.1526674345267,
+        "y": 809.6957895406247,
+        "width": 104.0,
+        "height": 104.0
+      }
+    },
+    {
       "id": "edge/e0_n0.0-_n1.0",
       "layer": "semantic-edges",
       "semantic": {
@@ -50,16 +75,16 @@
         {
           "op": "cubic_to",
           "c1": {
-            "x": 840.5245518474959,
-            "y": 805.9841451820306
+            "x": 827.7324120613027,
+            "y": 783.3630254775061
           },
           "c2": {
-            "x": 915.0827100084731,
-            "y": 816.993936101351
+            "x": 878.755248104825,
+            "y": 752.7538732175065
           },
           "to": {
-            "x": 1019.2887004734624,
-            "y": 832.3817379980012
+            "x": 950.0671648338891,
+            "y": 709.9730815882364
           }
         }
       ],
@@ -69,9 +94,9 @@
       },
       "bounds": {
         "x": 789.5,
-        "y": 789.5,
-        "width": 240.28870047346243,
-        "height": 53.3817379980012
+        "y": 699.4730815882364,
+        "width": 171.06716483388914,
+        "height": 111.02691841176363
       }
     },
     {
@@ -88,22 +113,22 @@
       "commands": [
         {
           "op": "move_to",
-          "x": 1019.2887004734624,
-          "y": 832.3817379980012
+          "x": 950.0671648338891,
+          "y": 709.9730815882364
         },
         {
           "op": "cubic_to",
           "c1": {
-            "x": 894.4666703543304,
-            "y": 869.3877720362859
+            "x": 1039.8429902882476,
+            "y": 743.946228933838
           },
           "c2": {
-            "x": 786.6602211515075,
-            "y": 968.501633983071
+            "x": 1205.3317559597024,
+            "y": 769.1127051227196
           },
           "to": {
-            "x": 702.210908700454,
-            "y": 1123.8930966650162
+            "x": 1436.798828573462,
+            "y": 783.992129202594
           }
         }
       ],
@@ -112,10 +137,10 @@
         "to": "n2"
       },
       "bounds": {
-        "x": 691.710908700454,
-        "y": 821.8817379980012,
-        "width": 338.07779177300847,
-        "height": 312.511358667015
+        "x": 939.5671648338891,
+        "y": 699.4730815882364,
+        "width": 507.7316637395729,
+        "height": 95.01904761435765
       }
     },
     {
@@ -132,22 +157,22 @@
       "commands": [
         {
           "op": "move_to",
-          "x": 702.210908700454,
-          "y": 1123.8930966650162
+          "x": 1436.798828573462,
+          "y": 783.992129202594
         },
         {
           "op": "cubic_to",
           "c1": {
-            "x": 683.7856177510753,
-            "y": 931.3198606196402
+            "x": 1234.4336095894816,
+            "y": 819.9311174054451
           },
           "c2": {
-            "x": 577.0571637764276,
-            "y": 755.328151348418
+            "x": 1091.4168670365361,
+            "y": 864.5834310259353
           },
           "to": {
-            "x": 388.3036911279609,
-            "y": 606.2704223378923
+            "x": 1016.1613504765636,
+            "y": 915.3224633805064
           }
         }
       ],
@@ -156,10 +181,10 @@
         "to": "n3"
       },
       "bounds": {
-        "x": 377.8036911279609,
-        "y": 595.7704223378923,
-        "width": 334.90721757249304,
-        "height": 538.6226743271238
+        "x": 1005.6613504765636,
+        "y": 773.492129202594,
+        "width": 441.63747809689846,
+        "height": 152.3303341779124
       }
     },
     {
@@ -176,18 +201,634 @@
       "commands": [
         {
           "op": "move_to",
+          "x": 1016.1613504765636,
+          "y": 915.3224633805064
+        },
+        {
+          "op": "cubic_to",
+          "c1": {
+            "x": 930.5671023017219,
+            "y": 944.976869947633
+          },
+          "c2": {
+            "x": 862.4534096167436,
+            "y": 1012.7319604507652
+          },
+          "to": {
+            "x": 815.8269602266274,
+            "y": 1114.6021413308954
+          }
+        }
+      ],
+      "ends": {
+        "from": "n3",
+        "to": "n4"
+      },
+      "bounds": {
+        "x": 805.3269602266274,
+        "y": 904.8224633805064,
+        "width": 221.33439024993618,
+        "height": 220.279677950389
+      }
+    },
+    {
+      "id": "edge/e4_n6.0-_n7.0",
+      "layer": "semantic-edges",
+      "semantic": {
+        "edge": "flow"
+      },
+      "graph_ref": {
+        "kind": "edge",
+        "id": "e4:n6.0->n7.0"
+      },
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 830.7106201013378,
+          "y": 1239.119716665593
+        },
+        {
+          "op": "cubic_to",
+          "c1": {
+            "x": 809.218841056261,
+            "y": 1226.516000667959
+          },
+          "c2": {
+            "x": 787.0323112227802,
+            "y": 1223.3888243553067
+          },
+          "to": {
+            "x": 765.4561205911001,
+            "y": 1229.9221392754393
+          }
+        }
+      ],
+      "ends": {
+        "from": "n6",
+        "to": "n7"
+      },
+      "bounds": {
+        "x": 754.9561205911001,
+        "y": 1216.1217648229385,
+        "width": 86.25449951023768,
+        "height": 33.4979518426544
+      }
+    },
+    {
+      "id": "edge/e5_n7.0-_n8.0",
+      "layer": "semantic-edges",
+      "semantic": {
+        "edge": "flow"
+      },
+      "graph_ref": {
+        "kind": "edge",
+        "id": "e5:n7.0->n8.0"
+      },
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 765.4561205911001,
+          "y": 1229.9221392754393
+        },
+        {
+          "op": "cubic_to",
+          "c1": {
+            "x": 734.293801713398,
+            "y": 1261.2024858109853
+          },
+          "c2": {
+            "x": 696.626043685318,
+            "y": 1325.8968880934353
+          },
+          "to": {
+            "x": 654.6685969790999,
+            "y": 1420.1997930473508
+          }
+        }
+      ],
+      "ends": {
+        "from": "n7",
+        "to": "n8"
+      },
+      "bounds": {
+        "x": 644.1685969790999,
+        "y": 1219.4221392754393,
+        "width": 131.7875236120002,
+        "height": 211.27765377191145
+      }
+    },
+    {
+      "id": "edge/e6_n5.1-_n6.0",
+      "layer": "semantic-edges",
+      "semantic": {
+        "edge": "enter"
+      },
+      "graph_ref": {
+        "kind": "edge",
+        "id": "e6:n5.1->n6.0"
+      },
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 480.2205788096122,
+          "y": 1014.3971123479525
+        },
+        {
+          "op": "cubic_to",
+          "c1": {
+            "x": 613.6675186359361,
+            "y": 1048.3473425008517
+          },
+          "c2": {
+            "x": 732.8341326751228,
+            "y": 1124.7530279688494
+          },
+          "to": {
+            "x": 830.7106201013378,
+            "y": 1239.119716665593
+          }
+        }
+      ],
+      "ends": {
+        "from": "n5",
+        "to": "n6"
+      },
+      "bounds": {
+        "x": 469.7205788096122,
+        "y": 1003.8971123479525,
+        "width": 371.49004129172556,
+        "height": 245.7226043176404
+      }
+    },
+    {
+      "id": "edge/e7_n8.0-_n5.1",
+      "layer": "semantic-edges",
+      "semantic": {
+        "edge": "join"
+      },
+      "graph_ref": {
+        "kind": "edge",
+        "id": "e7:n8.0->n5.1"
+      },
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 654.6685969790999,
+          "y": 1420.1997930473508
+        },
+        {
+          "op": "cubic_to",
+          "c1": {
+            "x": 619.8072907915796,
+            "y": 1245.5401936736262
+          },
+          "c2": {
+            "x": 560.4949646139538,
+            "y": 1107.5672822358308
+          },
+          "to": {
+            "x": 480.2205788096122,
+            "y": 1014.3971123479525
+          }
+        }
+      ],
+      "ends": {
+        "from": "n8",
+        "to": "n5"
+      },
+      "bounds": {
+        "x": 469.7205788096122,
+        "y": 1003.8971123479525,
+        "width": 195.44801816948768,
+        "height": 426.80268069939825
+      }
+    },
+    {
+      "id": "edge/e8_n10.0-_n11.0",
+      "layer": "semantic-edges",
+      "semantic": {
+        "edge": "flow"
+      },
+      "graph_ref": {
+        "kind": "edge",
+        "id": "e8:n10.0->n11.0"
+      },
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 415.6393947065686,
+          "y": 854.4076543323307
+        },
+        {
+          "op": "cubic_to",
+          "c1": {
+            "x": 436.7757259862873,
+            "y": 851.4157290666218
+          },
+          "c2": {
+            "x": 401.7647514412988,
+            "y": 856.3716610082618
+          },
+          "to": {
+            "x": 312.66594016248473,
+            "y": 868.9839247489186
+          }
+        }
+      ],
+      "ends": {
+        "from": "n10",
+        "to": "n11"
+      },
+      "bounds": {
+        "x": 302.16594016248473,
+        "y": 843.0610252589314,
+        "width": 129.95443032964351,
+        "height": 36.42289948998723
+      }
+    },
+    {
+      "id": "edge/e9_n9.1-_n10.0",
+      "layer": "semantic-edges",
+      "semantic": {
+        "edge": "enter"
+      },
+      "graph_ref": {
+        "kind": "edge",
+        "id": "e9:n9.1->n10.0"
+      },
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 364.1526674345267,
+          "y": 861.6957895406247
+        },
+        {
+          "op": "cubic_to",
+          "c1": {
+            "x": 386.58028583422816,
+            "y": 858.5210778438918
+          },
+          "c2": {
+            "x": 404.0857731067224,
+            "y": 856.0431118730719
+          },
+          "to": {
+            "x": 415.6393947065686,
+            "y": 854.4076543323307
+          }
+        }
+      ],
+      "ends": {
+        "from": "n9",
+        "to": "n10"
+      },
+      "bounds": {
+        "x": 353.6526674345267,
+        "y": 843.9076543323307,
+        "width": 72.48672727204195,
+        "height": 28.288135208293966
+      }
+    },
+    {
+      "id": "edge/e10_n11.0-_n9.1",
+      "layer": "semantic-edges",
+      "semantic": {
+        "edge": "feedback"
+      },
+      "graph_ref": {
+        "kind": "edge",
+        "id": "e10:n11.0->n9.1"
+      },
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 312.66594016248473,
+          "y": 868.9839247489186
+        },
+        {
+          "op": "cubic_to",
+          "c1": {
+            "x": 318.10293856241236,
+            "y": 868.2142976709229
+          },
+          "c2": {
+            "x": 335.6084258349066,
+            "y": 865.7363317001028
+          },
+          "to": {
+            "x": 364.1526674345267,
+            "y": 861.6957895406247
+          }
+        }
+      ],
+      "ends": {
+        "from": "n11",
+        "to": "n9"
+      },
+      "bounds": {
+        "x": 302.16594016248473,
+        "y": 851.1957895406247,
+        "width": 72.48672727204195,
+        "height": 28.288135208293966
+      }
+    },
+    {
+      "id": "edge/e11_n5.2-_n9.0",
+      "layer": "semantic-edges",
+      "semantic": {
+        "edge": "enter"
+      },
+      "graph_ref": {
+        "kind": "edge",
+        "id": "e11:n5.2->n9.0"
+      },
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 480.2205788096122,
+          "y": 1014.3971123479525
+        },
+        {
+          "op": "cubic_to",
+          "c1": {
+            "x": 460.9426995161792,
+            "y": 957.0544421974608
+          },
+          "c2": {
+            "x": 421.47960964865007,
+            "y": 905.1359924429694
+          },
+          "to": {
+            "x": 364.1526674345267,
+            "y": 861.6957895406247
+          }
+        }
+      ],
+      "ends": {
+        "from": "n5",
+        "to": "n9"
+      },
+      "bounds": {
+        "x": 353.6526674345267,
+        "y": 851.1957895406247,
+        "width": 137.06791137508554,
+        "height": 173.70132280732787
+      }
+    },
+    {
+      "id": "edge/e12_n9.0-_n5.1",
+      "layer": "semantic-edges",
+      "semantic": {
+        "edge": "join"
+      },
+      "graph_ref": {
+        "kind": "edge",
+        "id": "e12:n9.0->n5.1"
+      },
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 364.1526674345267,
+          "y": 861.6957895406247
+        },
+        {
+          "op": "cubic_to",
+          "c1": {
+            "x": 421.47960964865007,
+            "y": 905.1359924429694
+          },
+          "c2": {
+            "x": 460.9426995161792,
+            "y": 957.0544421974608
+          },
+          "to": {
+            "x": 480.2205788096122,
+            "y": 1014.3971123479525
+          }
+        }
+      ],
+      "ends": {
+        "from": "n9",
+        "to": "n5"
+      },
+      "bounds": {
+        "x": 353.6526674345267,
+        "y": 851.1957895406247,
+        "width": 137.06791137508554,
+        "height": 173.70132280732787
+      }
+    },
+    {
+      "id": "edge/e13_n5.3-_n12.0",
+      "layer": "semantic-edges",
+      "semantic": {
+        "edge": "enter"
+      },
+      "graph_ref": {
+        "kind": "edge",
+        "id": "e13:n5.3->n12.0"
+      },
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 480.2205788096122,
+          "y": 1014.3971123479525
+        },
+        {
+          "op": "cubic_to",
+          "c1": {
+            "x": 533.4880738904787,
+            "y": 850.1488225132656
+          },
+          "c2": {
+            "x": 532.2058034260015,
+            "y": 672.8268500042412
+          },
+          "to": {
+            "x": 476.4491950905615,
+            "y": 492.86189908611624
+          }
+        }
+      ],
+      "ends": {
+        "from": "n5",
+        "to": "n12"
+      },
+      "bounds": {
+        "x": 465.9491950905615,
+        "y": 482.36189908611624,
+        "width": 63.76973064064032,
+        "height": 542.5352132618364
+      }
+    },
+    {
+      "id": "edge/e14_n12.0-_n5.1",
+      "layer": "semantic-edges",
+      "semantic": {
+        "edge": "join"
+      },
+      "graph_ref": {
+        "kind": "edge",
+        "id": "e14:n12.0->n5.1"
+      },
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 476.4491950905615,
+          "y": 492.86189908611624
+        },
+        {
+          "op": "cubic_to",
+          "c1": {
+            "x": 532.2058034260015,
+            "y": 672.8268500042412
+          },
+          "c2": {
+            "x": 533.4880738904787,
+            "y": 850.1488225132656
+          },
+          "to": {
+            "x": 480.2205788096122,
+            "y": 1014.3971123479525
+          }
+        }
+      ],
+      "ends": {
+        "from": "n12",
+        "to": "n5"
+      },
+      "bounds": {
+        "x": 465.9491950905615,
+        "y": 482.36189908611624,
+        "width": 63.76973064064032,
+        "height": 542.5352132618364
+      }
+    },
+    {
+      "id": "edge/e15_n4.0-_n5.0",
+      "layer": "semantic-edges",
+      "semantic": {
+        "edge": "flow"
+      },
+      "graph_ref": {
+        "kind": "edge",
+        "id": "e15:n4.0->n5.0"
+      },
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 815.8269602266274,
+          "y": 1114.6021413308954
+        },
+        {
+          "op": "cubic_to",
+          "c1": {
+            "x": 730.4130912151362,
+            "y": 1037.4392625818439
+          },
+          "c2": {
+            "x": 616.306921533351,
+            "y": 1003.3695527276434
+          },
+          "to": {
+            "x": 480.2205788096122,
+            "y": 1014.3971123479525
+          }
+        }
+      ],
+      "ends": {
+        "from": "n4",
+        "to": "n5"
+      },
+      "bounds": {
+        "x": 469.7205788096122,
+        "y": 1001.8717977380095,
+        "width": 356.6063814170152,
+        "height": 123.2303435928859
+      }
+    },
+    {
+      "id": "edge/e16_n5.0-_n13.0",
+      "layer": "semantic-edges",
+      "semantic": {
+        "edge": "flow"
+      },
+      "graph_ref": {
+        "kind": "edge",
+        "id": "e16:n5.0->n13.0"
+      },
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
+          "x": 480.2205788096122,
+          "y": 1014.3971123479525
+        },
+        {
+          "op": "cubic_to",
+          "c1": {
+            "x": 510.60808724720084,
+            "y": 877.999684650259
+          },
+          "c2": {
+            "x": 479.3563454354394,
+            "y": 739.2366100468386
+          },
+          "to": {
+            "x": 388.3036911279609,
+            "y": 606.2704223378923
+          }
+        }
+      ],
+      "ends": {
+        "from": "n5",
+        "to": "n13"
+      },
+      "bounds": {
+        "x": 377.8036911279609,
+        "y": 595.7704223378923,
+        "width": 124.17888361549012,
+        "height": 429.1266900100602
+      }
+    },
+    {
+      "id": "edge/e17_n13.0-_n14.0",
+      "layer": "semantic-edges",
+      "semantic": {
+        "edge": "flow"
+      },
+      "graph_ref": {
+        "kind": "edge",
+        "id": "e17:n13.0->n14.0"
+      },
+      "geometry": "path",
+      "commands": [
+        {
+          "op": "move_to",
           "x": 388.3036911279609,
           "y": 606.2704223378923
         },
         {
           "op": "cubic_to",
           "c1": {
-            "x": 617.8640901940298,
-            "y": 768.0552118493085
+            "x": 656.4423326990752,
+            "y": 742.1505626366957
           },
           "c2": {
-            "x": 757.840835210523,
-            "y": 1012.423268254425
+            "x": 796.4190777155685,
+            "y": 986.5186190418124
           },
           "to": {
             "x": 800.0,
@@ -196,8 +837,8 @@
         }
       ],
       "ends": {
-        "from": "n3",
-        "to": "n4"
+        "from": "n13",
+        "to": "n14"
       },
       "bounds": {
         "x": 377.8036911279609,
@@ -248,16 +889,16 @@
       },
       "geometry": "mark",
       "center": {
-        "x": 1019.2887004734624,
-        "y": 832.3817379980012
+        "x": 950.0671648338891,
+        "y": 709.9730815882364
       },
       "size": 24.0,
-      "rotation": 0.1443790128021372,
+      "rotation": -0.5425825807828307,
       "title": "scatter",
       "legend_key": "node/n1",
       "bounds": {
-        "x": 995.2887004734624,
-        "y": 808.3817379980012,
+        "x": 926.0671648338891,
+        "y": 685.9730815882364,
         "width": 48.0,
         "height": 48.0
       }
@@ -267,7 +908,7 @@
       "layer": "semantic-nodes",
       "semantic": {
         "node": {
-          "kind": "ward"
+          "kind": "effect"
         }
       },
       "graph_ref": {
@@ -276,18 +917,18 @@
       },
       "geometry": "mark",
       "center": {
-        "x": 702.210908700454,
-        "y": 1123.8930966650162
+        "x": 1436.798828573462,
+        "y": 783.992129202594
       },
-      "size": 24.0,
-      "rotation": 1.8984162206888229,
-      "title": "ward",
+      "size": 30.0,
+      "rotation": 0.009271838330161014,
+      "title": "fs invocation",
       "legend_key": "node/n2",
       "bounds": {
-        "x": 678.210908700454,
-        "y": 1099.8930966650162,
-        "width": 48.0,
-        "height": 48.0
+        "x": 1406.798828573462,
+        "y": 753.992129202594,
+        "width": 60.0,
+        "height": 60.0
       }
     },
     {
@@ -304,16 +945,16 @@
       },
       "geometry": "mark",
       "center": {
-        "x": 388.3036911279609,
-        "y": 606.2704223378923
+        "x": 1016.1613504765636,
+        "y": 915.3224633805064
       },
       "size": 24.0,
-      "rotation": -2.684816614880065,
+      "rotation": 0.5070415211671654,
       "title": "stage",
       "legend_key": "node/n3",
       "bounds": {
-        "x": 364.3036911279609,
-        "y": 582.2704223378923,
+        "x": 992.1613504765636,
+        "y": 891.3224633805064,
         "width": 48.0,
         "height": 48.0
       }
@@ -323,7 +964,7 @@
       "layer": "semantic-nodes",
       "semantic": {
         "node": {
-          "kind": "collect"
+          "kind": "ward"
         }
       },
       "graph_ref": {
@@ -332,13 +973,293 @@
       },
       "geometry": "mark",
       "center": {
+        "x": 815.8269602266274,
+        "y": 1114.6021413308954
+      },
+      "size": 24.0,
+      "rotation": 1.4965956543655845,
+      "title": "ward",
+      "legend_key": "node/n4",
+      "bounds": {
+        "x": 791.8269602266274,
+        "y": 1090.6021413308954,
+        "width": 48.0,
+        "height": 48.0
+      }
+    },
+    {
+      "id": "node/n5",
+      "layer": "semantic-nodes",
+      "semantic": {
+        "node": {
+          "kind": "fork"
+        }
+      },
+      "graph_ref": {
+        "kind": "node",
+        "id": "n5"
+      },
+      "geometry": "mark",
+      "center": {
+        "x": 480.2205788096122,
+        "y": 1014.3971123479525
+      },
+      "size": 32.0,
+      "rotation": 2.5379065007698456,
+      "title": "fork",
+      "legend_key": "node/n5",
+      "bounds": {
+        "x": 448.2205788096122,
+        "y": 982.3971123479525,
+        "width": 64.0,
+        "height": 64.0
+      }
+    },
+    {
+      "id": "node/n6",
+      "layer": "semantic-nodes",
+      "semantic": {
+        "node": {
+          "kind": "ward"
+        }
+      },
+      "graph_ref": {
+        "kind": "node",
+        "id": "n6"
+      },
+      "geometry": "mark",
+      "center": {
+        "x": 830.7106201013378,
+        "y": 1239.119716665593
+      },
+      "size": 24.0,
+      "rotation": 1.4658319399707866,
+      "title": "ward",
+      "legend_key": "node/n6",
+      "bounds": {
+        "x": 806.7106201013378,
+        "y": 1215.119716665593,
+        "width": 48.0,
+        "height": 48.0
+      }
+    },
+    {
+      "id": "node/n7",
+      "layer": "semantic-nodes",
+      "semantic": {
+        "node": {
+          "kind": "stage"
+        }
+      },
+      "graph_ref": {
+        "kind": "node",
+        "id": "n7"
+      },
+      "geometry": "mark",
+      "center": {
+        "x": 765.4561205911001,
+        "y": 1229.9221392754393
+      },
+      "size": 24.0,
+      "rotation": 1.6590592359036265,
+      "title": "stage",
+      "legend_key": "node/n7",
+      "bounds": {
+        "x": 741.4561205911001,
+        "y": 1205.9221392754393,
+        "width": 48.0,
+        "height": 48.0
+      }
+    },
+    {
+      "id": "node/n8",
+      "layer": "semantic-nodes",
+      "semantic": {
+        "node": {
+          "kind": "effect"
+        }
+      },
+      "graph_ref": {
+        "kind": "node",
+        "id": "n8"
+      },
+      "geometry": "mark",
+      "center": {
+        "x": 654.6685969790999,
+        "y": 1420.1997930473508
+      },
+      "size": 30.0,
+      "rotation": 1.8124098557418895,
+      "title": "clock invocation",
+      "legend_key": "node/n8",
+      "bounds": {
+        "x": 624.6685969790999,
+        "y": 1390.1997930473508,
+        "width": 60.0,
+        "height": 60.0
+      }
+    },
+    {
+      "id": "node/n9",
+      "layer": "semantic-nodes",
+      "semantic": {
+        "node": {
+          "kind": "orbit"
+        }
+      },
+      "graph_ref": {
+        "kind": "node",
+        "id": "n9"
+      },
+      "geometry": "mark",
+      "center": {
+        "x": 364.1526674345267,
+        "y": 861.6957895406247
+      },
+      "size": 34.0,
+      "rotation": 2.962090238130362,
+      "title": "orbit",
+      "legend_key": "node/n9",
+      "bounds": {
+        "x": 330.1526674345267,
+        "y": 827.6957895406247,
+        "width": 68.0,
+        "height": 68.0
+      }
+    },
+    {
+      "id": "node/n10",
+      "layer": "semantic-nodes",
+      "semantic": {
+        "node": {
+          "kind": "ward"
+        }
+      },
+      "graph_ref": {
+        "kind": "node",
+        "id": "n10"
+      },
+      "geometry": "mark",
+      "center": {
+        "x": 415.6393947065686,
+        "y": 854.4076543323307
+      },
+      "size": 24.0,
+      "rotation": 2.991908299451592,
+      "title": "ward",
+      "legend_key": "node/n10",
+      "bounds": {
+        "x": 391.6393947065686,
+        "y": 830.4076543323307,
+        "width": 48.0,
+        "height": 48.0
+      }
+    },
+    {
+      "id": "node/n11",
+      "layer": "semantic-nodes",
+      "semantic": {
+        "node": {
+          "kind": "stage"
+        }
+      },
+      "graph_ref": {
+        "kind": "node",
+        "id": "n11"
+      },
+      "geometry": "mark",
+      "center": {
+        "x": 312.66594016248473,
+        "y": 868.9839247489186
+      },
+      "size": 24.0,
+      "rotation": 3.0360085862180926,
+      "title": "stage",
+      "legend_key": "node/n11",
+      "bounds": {
+        "x": 288.66594016248473,
+        "y": 844.9839247489186,
+        "width": 48.0,
+        "height": 48.0
+      }
+    },
+    {
+      "id": "node/n12",
+      "layer": "semantic-nodes",
+      "semantic": {
+        "node": {
+          "kind": "stage"
+        }
+      },
+      "graph_ref": {
+        "kind": "node",
+        "id": "n12"
+      },
+      "geometry": "mark",
+      "center": {
+        "x": 476.4491950905615,
+        "y": 492.86189908611624
+      },
+      "size": 24.0,
+      "rotation": -2.349149040189349,
+      "title": "stage",
+      "legend_key": "node/n12",
+      "bounds": {
+        "x": 452.4491950905615,
+        "y": 468.86189908611624,
+        "width": 48.0,
+        "height": 48.0
+      }
+    },
+    {
+      "id": "node/n13",
+      "layer": "semantic-nodes",
+      "semantic": {
+        "node": {
+          "kind": "ward"
+        }
+      },
+      "graph_ref": {
+        "kind": "node",
+        "id": "n13"
+      },
+      "geometry": "mark",
+      "center": {
+        "x": 388.3036911279609,
+        "y": 606.2704223378923
+      },
+      "size": 24.0,
+      "rotation": -2.728042823078725,
+      "title": "ward",
+      "legend_key": "node/n13",
+      "bounds": {
+        "x": 364.3036911279609,
+        "y": 582.2704223378923,
+        "width": 48.0,
+        "height": 48.0
+      }
+    },
+    {
+      "id": "node/n14",
+      "layer": "semantic-nodes",
+      "semantic": {
+        "node": {
+          "kind": "collect"
+        }
+      },
+      "graph_ref": {
+        "kind": "node",
+        "id": "n14"
+      },
+      "geometry": "mark",
+      "center": {
         "x": 800.0,
         "y": 1325.0
       },
       "size": 40.0,
-      "rotation": 1.5468611368230212,
+      "rotation": 1.5310090768427067,
       "title": "collect",
-      "legend_key": "node/n4",
+      "legend_key": "node/n14",
       "bounds": {
         "x": 760.0,
         "y": 1285.0,
@@ -3745,8 +4666,8 @@
         "id": "n1"
       },
       "center": {
-        "x": 1019.2887004734624,
-        "y": 832.3817379980012
+        "x": 950.0671648338891,
+        "y": 709.9730815882364
       },
       "radius": 24.0,
       "tab_index": 1
@@ -3758,10 +4679,10 @@
         "id": "n2"
       },
       "center": {
-        "x": 702.210908700454,
-        "y": 1123.8930966650162
+        "x": 1436.798828573462,
+        "y": 783.992129202594
       },
-      "radius": 24.0,
+      "radius": 30.0,
       "tab_index": 2
     },
     {
@@ -3771,8 +4692,8 @@
         "id": "n3"
       },
       "center": {
-        "x": 388.3036911279609,
-        "y": 606.2704223378923
+        "x": 1016.1613504765636,
+        "y": 915.3224633805064
       },
       "radius": 24.0,
       "tab_index": 3
@@ -3784,11 +4705,141 @@
         "id": "n4"
       },
       "center": {
+        "x": 815.8269602266274,
+        "y": 1114.6021413308954
+      },
+      "radius": 24.0,
+      "tab_index": 4
+    },
+    {
+      "element_id": "node/n5",
+      "graph_ref": {
+        "kind": "node",
+        "id": "n5"
+      },
+      "center": {
+        "x": 480.2205788096122,
+        "y": 1014.3971123479525
+      },
+      "radius": 32.0,
+      "tab_index": 5
+    },
+    {
+      "element_id": "node/n6",
+      "graph_ref": {
+        "kind": "node",
+        "id": "n6"
+      },
+      "center": {
+        "x": 830.7106201013378,
+        "y": 1239.119716665593
+      },
+      "radius": 24.0,
+      "tab_index": 6
+    },
+    {
+      "element_id": "node/n7",
+      "graph_ref": {
+        "kind": "node",
+        "id": "n7"
+      },
+      "center": {
+        "x": 765.4561205911001,
+        "y": 1229.9221392754393
+      },
+      "radius": 24.0,
+      "tab_index": 7
+    },
+    {
+      "element_id": "node/n8",
+      "graph_ref": {
+        "kind": "node",
+        "id": "n8"
+      },
+      "center": {
+        "x": 654.6685969790999,
+        "y": 1420.1997930473508
+      },
+      "radius": 30.0,
+      "tab_index": 8
+    },
+    {
+      "element_id": "node/n9",
+      "graph_ref": {
+        "kind": "node",
+        "id": "n9"
+      },
+      "center": {
+        "x": 364.1526674345267,
+        "y": 861.6957895406247
+      },
+      "radius": 34.0,
+      "tab_index": 9
+    },
+    {
+      "element_id": "node/n10",
+      "graph_ref": {
+        "kind": "node",
+        "id": "n10"
+      },
+      "center": {
+        "x": 415.6393947065686,
+        "y": 854.4076543323307
+      },
+      "radius": 24.0,
+      "tab_index": 10
+    },
+    {
+      "element_id": "node/n11",
+      "graph_ref": {
+        "kind": "node",
+        "id": "n11"
+      },
+      "center": {
+        "x": 312.66594016248473,
+        "y": 868.9839247489186
+      },
+      "radius": 24.0,
+      "tab_index": 11
+    },
+    {
+      "element_id": "node/n12",
+      "graph_ref": {
+        "kind": "node",
+        "id": "n12"
+      },
+      "center": {
+        "x": 476.4491950905615,
+        "y": 492.86189908611624
+      },
+      "radius": 24.0,
+      "tab_index": 12
+    },
+    {
+      "element_id": "node/n13",
+      "graph_ref": {
+        "kind": "node",
+        "id": "n13"
+      },
+      "center": {
+        "x": 388.3036911279609,
+        "y": 606.2704223378923
+      },
+      "radius": 24.0,
+      "tab_index": 13
+    },
+    {
+      "element_id": "node/n14",
+      "graph_ref": {
+        "kind": "node",
+        "id": "n14"
+      },
+      "center": {
         "x": 800.0,
         "y": 1325.0
       },
       "radius": 40.0,
-      "tab_index": 4
+      "tab_index": 14
     }
   ],
   "legend": [
@@ -3805,8 +4856,8 @@
       },
       "summary": "source",
       "source_span": {
-        "start": 0,
-        "end": 18
+        "start": 117,
+        "end": 145
       }
     },
     {
@@ -3822,8 +4873,8 @@
       },
       "summary": "scatter",
       "source_span": {
-        "start": 22,
-        "end": 23
+        "start": 151,
+        "end": 152
       }
     },
     {
@@ -3834,14 +4885,17 @@
       },
       "semantic": {
         "node": {
-          "kind": "ward"
+          "kind": "effect"
         }
       },
-      "summary": "ward",
+      "summary": "fs invocation",
       "source_span": {
-        "start": 27,
-        "end": 37
+        "start": 158,
+        "end": 171
       },
+      "capabilities": [
+        "fs"
+      ],
       "attributes": {
         "placeholder": true
       }
@@ -3859,12 +4913,12 @@
       },
       "summary": "stage",
       "source_span": {
-        "start": 41,
-        "end": 47
+        "start": 177,
+        "end": 189
       },
-      "attributes": {
-        "placeholder": true
-      }
+      "capabilities": [
+        "custom"
+      ]
     },
     {
       "key": "node/n4",
@@ -3874,30 +4928,245 @@
       },
       "semantic": {
         "node": {
+          "kind": "ward"
+        }
+      },
+      "summary": "ward",
+      "source_span": {
+        "start": 195,
+        "end": 209
+      },
+      "attributes": {
+        "placeholder": true
+      }
+    },
+    {
+      "key": "node/n5",
+      "graph_ref": {
+        "kind": "node",
+        "id": "n5"
+      },
+      "semantic": {
+        "node": {
+          "kind": "fork"
+        }
+      },
+      "summary": "fork",
+      "source_span": {
+        "start": 215,
+        "end": 332
+      }
+    },
+    {
+      "key": "node/n6",
+      "graph_ref": {
+        "kind": "node",
+        "id": "n6"
+      },
+      "semantic": {
+        "node": {
+          "kind": "ward"
+        }
+      },
+      "summary": "ward",
+      "source_span": {
+        "start": 225,
+        "end": 235
+      },
+      "region": "s0",
+      "branch_ordinal": 0,
+      "attributes": {
+        "placeholder": true
+      }
+    },
+    {
+      "key": "node/n7",
+      "graph_ref": {
+        "kind": "node",
+        "id": "n7"
+      },
+      "semantic": {
+        "node": {
+          "kind": "stage"
+        }
+      },
+      "summary": "stage",
+      "source_span": {
+        "start": 239,
+        "end": 244
+      },
+      "region": "s0",
+      "branch_ordinal": 0,
+      "attributes": {
+        "placeholder": true
+      }
+    },
+    {
+      "key": "node/n8",
+      "graph_ref": {
+        "kind": "node",
+        "id": "n8"
+      },
+      "semantic": {
+        "node": {
+          "kind": "effect"
+        }
+      },
+      "summary": "clock invocation",
+      "source_span": {
+        "start": 248,
+        "end": 260
+      },
+      "capabilities": [
+        "clock"
+      ],
+      "region": "s0",
+      "branch_ordinal": 0
+    },
+    {
+      "key": "node/n9",
+      "graph_ref": {
+        "kind": "node",
+        "id": "n9"
+      },
+      "semantic": {
+        "node": {
+          "kind": "orbit"
+        }
+      },
+      "summary": "orbit",
+      "source_span": {
+        "start": 270,
+        "end": 295
+      },
+      "region": "s1",
+      "branch_ordinal": 1,
+      "attributes": {
+        "deduplicates": true,
+        "max_items": 6
+      }
+    },
+    {
+      "key": "node/n10",
+      "graph_ref": {
+        "kind": "node",
+        "id": "n10"
+      },
+      "semantic": {
+        "node": {
+          "kind": "ward"
+        }
+      },
+      "summary": "ward",
+      "source_span": {
+        "start": 273,
+        "end": 284
+      },
+      "region": "s3",
+      "branch_ordinal": 1,
+      "attributes": {
+        "placeholder": true
+      }
+    },
+    {
+      "key": "node/n11",
+      "graph_ref": {
+        "kind": "node",
+        "id": "n11"
+      },
+      "semantic": {
+        "node": {
+          "kind": "stage"
+        }
+      },
+      "summary": "stage",
+      "source_span": {
+        "start": 288,
+        "end": 293
+      },
+      "region": "s3",
+      "branch_ordinal": 1,
+      "attributes": {
+        "placeholder": true
+      }
+    },
+    {
+      "key": "node/n12",
+      "graph_ref": {
+        "kind": "node",
+        "id": "n12"
+      },
+      "semantic": {
+        "node": {
+          "kind": "stage"
+        }
+      },
+      "summary": "stage",
+      "source_span": {
+        "start": 320,
+        "end": 325
+      },
+      "region": "s2",
+      "branch_ordinal": 2,
+      "attributes": {
+        "placeholder": true
+      }
+    },
+    {
+      "key": "node/n13",
+      "graph_ref": {
+        "kind": "node",
+        "id": "n13"
+      },
+      "semantic": {
+        "node": {
+          "kind": "ward"
+        }
+      },
+      "summary": "ward",
+      "source_span": {
+        "start": 338,
+        "end": 349
+      },
+      "attributes": {
+        "placeholder": true
+      }
+    },
+    {
+      "key": "node/n14",
+      "graph_ref": {
+        "kind": "node",
+        "id": "n14"
+      },
+      "semantic": {
+        "node": {
           "kind": "collect"
         }
       },
       "summary": "collect",
       "source_span": {
-        "start": 51,
-        "end": 53
+        "start": 355,
+        "end": 357
       }
     }
   ],
   "metadata": {
     "renderer_version": "0.1.0",
-    "graph_fingerprint": "30545c71984c716f316afb0519de3e21",
+    "graph_fingerprint": "70a29a6ec3bc9781cea1da6bd456b8c4",
     "seed": 0,
     "tracery": "flowing",
-    "node_count": 5,
-    "edge_count": 4,
-    "region_count": 0,
+    "node_count": 15,
+    "edge_count": 18,
+    "region_count": 4,
     "census": {
       "collect": 1,
+      "effect": 2,
+      "fork": 1,
+      "orbit": 1,
       "scatter": 1,
       "source": 1,
-      "stage": 1,
-      "ward": 1
+      "stage": 4,
+      "ward": 4
     },
     "source_schema": "cant.graph@1"
   }

@@ -380,6 +380,10 @@ pub struct SceneMetadata {
     pub renderer_version: String,
     pub graph_fingerprint: String,
     pub seed: u64,
+    /// How traces were drawn. Recorded so a scene says how it was built —
+    /// defaulted on deserialization because scenes older than the field exist.
+    #[serde(default = "default_tracery")]
+    pub tracery: String,
     /// Counts, for the accessible summary and the diagnostics panel.
     pub node_count: usize,
     pub edge_count: usize,
@@ -388,6 +392,10 @@ pub struct SceneMetadata {
     pub census: BTreeMap<String, usize>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub source_schema: Option<String>,
+}
+
+fn default_tracery() -> String {
+    "flowing".to_string()
 }
 
 /// A layout-ready scene.
@@ -553,6 +561,7 @@ mod tests {
                 renderer_version: "0.1.0".into(),
                 graph_fingerprint: "0".repeat(32),
                 seed: 0,
+                tracery: "flowing".into(),
                 node_count: 12,
                 edge_count: 11,
                 region_count: 0,
@@ -582,6 +591,7 @@ mod tests {
                 renderer_version: "0.1.0".into(),
                 graph_fingerprint: "0".repeat(32),
                 seed: 0,
+                tracery: "flowing".into(),
                 node_count: 0,
                 edge_count: 0,
                 region_count: 0,

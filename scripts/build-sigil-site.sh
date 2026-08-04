@@ -9,6 +9,11 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
 bash scripts/build-sigil-wasm.sh
+
+# The executed-wasm parity gate (AR4/Q2): the bundle just built, run in Node,
+# must draw byte-for-byte what the native renderer drew. See the script.
+node scripts/check-sigil-wasm-parity.mjs
+
 pnpm --dir apps/sigil-web typecheck
 pnpm --dir apps/sigil-web build
 

@@ -79,6 +79,7 @@ fn native_svg(source: &str, options: &RenderOptions) -> (String, String) {
             },
             legend: true,
             ornament: rite_sigil::OrnamentLevel::parse(&options.ornament).expect("a level"),
+            tracery: rite_sigil::Tracery::parse(&options.tracery).expect("a tracery"),
         },
     );
     let rendered = rite_sigil::render_svg(

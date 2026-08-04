@@ -51,9 +51,10 @@ use std::f64::consts::{PI, TAU};
 
 use crate::analysis::{analyze, Placement, Topology};
 use crate::canonical::Prng;
-use crate::graph::{EdgeKind, NodeId, RegionKind, SigilGraph, SigilNode, SigilNodeKind};
+use crate::graph::{NodeId, RegionId, RegionKind, SigilGraph, SigilNode, SigilNodeKind};
 use crate::ornament::{self, OrnamentLevel};
 use crate::scene::*;
+use crate::tracery::Tracery;
 use crate::NormalizedGraph;
 
 /// The canvas. Square, because a radial composition in a rectangle wastes two
@@ -123,6 +124,9 @@ pub struct LayoutOptions {
     /// Generated last, from the seed alone, and appended — so changing it moves
     /// nothing semantic. See `ornament`.
     pub ornament: OrnamentLevel,
+    /// How traces are drawn. Changes every edge's shape and no node's
+    /// position. See [`crate::tracery`].
+    pub tracery: Tracery,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -144,6 +148,7 @@ impl LayoutOptions {
             orientation: Orientation::Canonical,
             legend: true,
             ornament: OrnamentLevel::default(),
+            tracery: Tracery::default(),
         }
     }
 
@@ -153,6 +158,7 @@ impl LayoutOptions {
             orientation: Orientation::Seeded,
             legend: true,
             ornament: OrnamentLevel::default(),
+            tracery: Tracery::default(),
         }
     }
 
@@ -203,7 +209,7 @@ pub fn build_scene(graph: &NormalizedGraph, options: &LayoutOptions) -> SigilSce
 
     emit_background(&mut elements);
     emit_regions(&graph.graph, &topology, &positions, &mut elements);
-    emit_edges(&graph.graph, &positions, &mut elements);
+    emit_edges(&graph.graph, &topology, &positions, options, &mut elements);
     emit_nodes(
         &graph.graph,
         &topology,
@@ -235,6 +241,7 @@ pub fn build_scene(graph: &NormalizedGraph, options: &LayoutOptions) -> SigilSce
             renderer_version: crate::RENDERER_VERSION.to_string(),
             graph_fingerprint: graph.fingerprint.as_str().to_string(),
             seed: options.seed,
+            tracery: options.tracery.name().to_string(),
             node_count: graph.graph.nodes.len(),
             edge_count: graph.graph.edges.len(),
             region_count: graph.graph.regions.len(),
@@ -321,18 +328,42 @@ fn place_nodes(
 
     // 2. Fork sectors. Clockwise by ordinal, weighted by content, floored at
     //    `MIN_BRANCH_SECTOR` so a one-stage branch stays visible.
-    for node in &graph.nodes {
-        if node.kind != SigilNodeKind::Fork {
-            continue;
-        }
+    //
+    //    Recursively renormalized. Forks are processed outer-first — sorted by
+    //    how deeply the region holding them is nested — so a nested fork's own
+    //    position exists before its branches are placed, and its fan is capped
+    //    to the sector its parent branch was allocated. Without the cap a
+    //    fork-inside-a-fork opened the same near-two-radian fan as a top-level
+    //    one and sprayed its branches across its siblings' sectors; before the
+    //    recursion its branch regions (whose `parent` is the enclosing branch)
+    //    were not placed by this pass at all and fell to the leftover pass
+    //    below, which scatters them near the seal band.
+    let region_of: BTreeMap<&NodeId, &RegionId> = topology
+        .regions
+        .iter()
+        .flat_map(|(id, analysis)| analysis.direct_members.iter().map(move |m| (m, id)))
+        .collect();
+    let mut forks: Vec<&SigilNode> = graph
+        .nodes
+        .iter()
+        .filter(|n| n.kind == SigilNodeKind::Fork)
+        .collect();
+    forks.sort_by_key(|n| (region_depth(graph, region_of.get(&n.id).copied()), &n.id));
+
+    // Each branch region's allocated sector width, for the forks nested in it.
+    let mut sector_width: BTreeMap<RegionId, f64> = BTreeMap::new();
+
+    for node in forks {
         let Some(origin) = polar.get(&node.id).copied() else {
             continue;
         };
-        let branches = graph
-            .child_regions(None)
-            .into_iter()
+        let mut branches = graph
+            .regions
+            .iter()
             .filter(|r| r.kind == RegionKind::Branch && r.owner.as_ref() == Some(&node.id))
             .collect::<Vec<_>>();
+        // Ordinal order — branch order is spatial, and asserted to be.
+        branches.sort_by_key(|r| (r.ordinal, r.id.0.clone()));
         if branches.is_empty() {
             continue;
         }
@@ -345,14 +376,26 @@ fn place_nodes(
         // Wide enough that two branches read as a *fan* rather than a splay.
         // The old figure gave two branches 1.12 radians — 64° — which looks like
         // one thick spoke, and it was the other half of the cramping.
-        let fan = MAX_FORK_FAN.min(1.9 + 0.55 * branches.len().saturating_sub(1) as f64);
+        let mut fan = MAX_FORK_FAN.min(1.9 + 0.55 * branches.len().saturating_sub(1) as f64);
+        // A nested fork subdivides what its branch was given, not the circle.
+        // 0.9, not 1.0: a fan that exactly fills the sector puts its outermost
+        // branches on the boundary shared with the neighbouring branch.
+        if let Some(parent_width) = region_of
+            .get(&node.id)
+            .and_then(|region| sector_width.get(*region))
+        {
+            fan = fan.min(parent_width * 0.9);
+        }
 
         // Sector widths, floored then renormalized so the floors cannot push the
         // total past the fan — a floor that overflows its own budget is how
-        // branches end up overlapping.
+        // branches end up overlapping. The floor also yields to the fan: a
+        // nested fork's cap may be narrower than the floors alone, and floors
+        // that ignored it would undo the renormalization they sit inside.
+        let floor = MIN_BRANCH_SECTOR.min(fan / branches.len() as f64);
         let floored: Vec<f64> = weights
             .iter()
-            .map(|w| (w / total * fan).max(MIN_BRANCH_SECTOR))
+            .map(|w| (w / total * fan).max(floor))
             .collect();
         let floored_total: f64 = floored.iter().sum();
         let scale = if floored_total > fan {
@@ -364,6 +407,7 @@ fn place_nodes(
         let mut cursor = origin.angle - fan / 2.0;
         for (region, width) in branches.iter().zip(floored.iter()) {
             let width = width * scale;
+            sector_width.insert(region.id.clone(), width);
             let members = topology
                 .regions
                 .get(&region.id)
@@ -559,6 +603,25 @@ fn report_ring_overlaps(
             }
         }
     }
+}
+
+/// How deeply nested a region is: ancestors counted up the `parent` chain.
+///
+/// Bounded by the region count, so a cyclic `parent` chain — which validation
+/// refuses, but this function should not have to trust that — terminates.
+fn region_depth(graph: &SigilGraph, region: Option<&RegionId>) -> usize {
+    let mut depth = 0;
+    let mut current = region;
+    for _ in 0..graph.regions.len() {
+        let Some(id) = current else { break };
+        depth += 1;
+        current = graph
+            .regions
+            .iter()
+            .find(|r| &r.id == id)
+            .and_then(|r| r.parent.as_ref());
+    }
+    depth
 }
 
 /// A node's depth as a fraction of the deepest, for radial interpolation.
@@ -772,35 +835,60 @@ fn emit_regions(
 
 fn emit_edges(
     graph: &SigilGraph,
+    topology: &Topology,
     positions: &BTreeMap<NodeId, Point>,
+    options: &LayoutOptions,
     elements: &mut Vec<SceneElement>,
 ) {
+    // Every placed mark, with the clearance its drawn size needs. Computed once:
+    // the same list serves every edge, and the graph's node order is stable.
+    let obstacles: Vec<(&NodeId, Point, f64)> = graph
+        .nodes
+        .iter()
+        .filter_map(|n| {
+            let p = positions.get(&n.id)?;
+            let size = mark_size(&n.kind, topology.placement(&n.id));
+            Some((&n.id, *p, size + EDGE_CLEARANCE))
+        })
+        .collect();
+
+    // Grows as edges are routed, in graph order, so a later edge can prefer a
+    // shape that does not cross an earlier one — §11.6, within the positions
+    // the layout already committed to.
+    let mut traces: Vec<crate::tracery::RoutedTrace> = Vec::with_capacity(graph.edges.len());
+
     for edge in &graph.edges {
         let (Some(from), Some(to)) = (positions.get(&edge.from.node), positions.get(&edge.to.node))
         else {
             continue;
         };
 
-        // Curved toward the centre, so a trace reads as an arc of the
-        // composition rather than as a chord across it. Feedback bows the other
-        // way, which is what makes a returning arc distinguishable from the
-        // outgoing one it parallels.
-        let bow = match edge.kind {
-            EdgeKind::Feedback => -0.34,
-            EdgeKind::Enter | EdgeKind::Join => 0.16,
-            EdgeKind::Flow => 0.22,
-        };
-        let commands = arc_between(*from, *to, bow);
-
-        let (min_x, max_x) = (from.x.min(to.x), from.x.max(to.x));
-        let (min_y, max_y) = (from.y.min(to.y), from.y.max(to.y));
+        let routed = crate::tracery::route(
+            options.tracery,
+            &crate::tracery::EdgeSpan {
+                kind: edge.kind,
+                from: *from,
+                to: *to,
+                from_id: &edge.from.node,
+                to_id: &edge.to.node,
+            },
+            &obstacles,
+            &traces,
+        );
+        traces.push(crate::tracery::RoutedTrace {
+            from: edge.from.node.clone(),
+            to: edge.to.node.clone(),
+            samples: routed.samples,
+        });
 
         elements.push(SceneElement {
             id: format!("edge/{}", sanitize(edge.id.as_str())),
             layer: SceneLayerKind::SemanticEdges,
             semantic: SemanticKind::Edge(edge.kind),
             graph_ref: Some(SceneRef::Edge(edge.id.0.clone())),
-            geometry: Geometry::Path { commands },
+            geometry: Geometry::Path {
+                commands: routed.commands,
+            },
             title: None,
             legend_key: None,
             // The endpoints, as fields. A consumer highlighting a path reads
@@ -809,40 +897,18 @@ fn emit_edges(
                 from: edge.from.node.0.clone(),
                 to: edge.to.node.0.clone(),
             }),
-            // Generous: the control point pulls the curve off the chord, and a
-            // bounding box that did not contain the curve would be useless for
-            // hit testing. Half the chord length in every direction covers the
-            // maximum excursion for the bows above.
-            bounds: Rect::new(min_x, min_y, max_x - min_x, max_y - min_y)
-                .expanded((max_x - min_x).hypot(max_y - min_y) * 0.5),
+            bounds: routed.bounds,
         });
     }
 }
 
-/// A cubic bowed toward the canvas centre by `bow` of the chord length.
-fn arc_between(from: Point, to: Point, bow: f64) -> Vec<PathCommand> {
-    let mid = Point::new((from.x + to.x) / 2.0, (from.y + to.y) / 2.0);
-    // Toward the centre, so every trace curves with the composition.
-    let (tx, ty) = (CENTER - mid.x, CENTER - mid.y);
-    let length = tx.hypot(ty).max(1e-9);
-    let pull = (from.x - to.x).hypot(from.y - to.y) * bow;
-    let control = Point::new(mid.x + tx / length * pull, mid.y + ty / length * pull);
-
-    vec![
-        PathCommand::MoveTo(from),
-        PathCommand::CubicTo {
-            c1: Point::new(
-                from.x + (control.x - from.x) * 0.66,
-                from.y + (control.y - from.y) * 0.66,
-            ),
-            c2: Point::new(
-                to.x + (control.x - to.x) * 0.66,
-                to.y + (control.y - to.y) * 0.66,
-            ),
-            to,
-        },
-    ]
-}
+/// How much air an edge keeps between itself and a mark it does not end at.
+///
+/// A trace that clips a mark's strokes reads as *touching* it — a relationship
+/// the graph does not assert. The margin is over the mark's drawn size, so a
+/// large seal pushes traces further than a small stage does. Routing itself —
+/// the candidate shapes, the avoidance — lives in [`crate::tracery`].
+const EDGE_CLEARANCE: f64 = 14.0;
 
 #[allow(clippy::too_many_arguments)]
 fn emit_nodes(
