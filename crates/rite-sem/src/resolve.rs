@@ -42,6 +42,9 @@ use std::collections::{HashMap, HashSet};
 /// which needs no marker. Hence `@game.look` and `@store.get` are pure here
 /// while `@game.go` and `@store.set` are not.
 pub const HOST_EFFECTS: &[(&str, bool)] = &[
+    // @stdin — the process's own input. Reads are effects.
+    ("stdin.read", true),
+    ("stdin.lines", true),
     // @console — the terminal.
     ("console.print", true),
     ("console.println", true),
@@ -72,6 +75,13 @@ pub const HOST_EFFECTS: &[(&str, bool)] = &[
     ("fs.flush", true),
     ("fs.close", true),
     // @json — encode/decode are pure string transforms; read/write touch disk.
+    // @regex — pure text transforms; a pattern is data.
+    ("regex.is_match", false),
+    ("regex.find", false),
+    ("regex.find_all", false),
+    ("regex.captures", false),
+    ("regex.replace", false),
+    ("regex.split", false),
     ("json.decode", false),
     ("json.encode", false),
     ("json.encode_pretty", false),
@@ -234,9 +244,14 @@ pub const BUILTIN_NAMES: &[&str] = &[
     "min",
     "max",
     "sort",
+    "sort_by",
+    "min_by",
+    "max_by",
     "unique",
     "zip",
     "chunk",
+    "nth",
+    "frequencies",
     "parallel",
     "ok",
     "err",

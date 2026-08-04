@@ -12,6 +12,8 @@ use crate::mcp::McpCap;
 use crate::permissions::PermissionSet;
 use crate::process::ProcessCap;
 use crate::random::RandomCap;
+use crate::regex::RegexCap;
+use crate::stdin::StdinCap;
 use crate::store::StoreCap;
 use crate::tcp::TcpCap;
 use crate::udp::UdpCap;
@@ -47,6 +49,8 @@ pub struct HostCapabilities {
     pub csv: CsvCap,
     pub crypto: CryptoCap,
     pub clock: ClockCap,
+    pub stdin: StdinCap,
+    pub regex: RegexCap,
     pub env: EnvCap,
     pub process: ProcessCap,
     pub random: Arc<RwLock<RandomCap>>,
@@ -68,6 +72,8 @@ impl HostCapabilities {
             csv: CsvCap,
             crypto: CryptoCap,
             clock: ClockCap::new(),
+            stdin: StdinCap::new(),
+            regex: RegexCap::new(),
             env: EnvCap,
             process: ProcessCap,
             random: Arc::new(RwLock::new(RandomCap::from_entropy())),
@@ -90,6 +96,8 @@ impl HostCapabilities {
             ("csv", CsvCap::DESCRIPTORS),
             ("crypto", CryptoCap::DESCRIPTORS),
             ("clock", ClockCap::DESCRIPTORS),
+            ("stdin", StdinCap::DESCRIPTORS),
+            ("regex", RegexCap::DESCRIPTORS),
             ("env", EnvCap::DESCRIPTORS),
             ("process", ProcessCap::DESCRIPTORS),
             ("random", RandomCap::DESCRIPTORS),
@@ -148,6 +156,8 @@ impl CapabilityHost for HostCapabilities {
             // Pure value transforms, apart from `random_bytes` — nothing to await.
             "crypto" => self.crypto.call(method, args, &self.perms),
             "clock" => self.clock.call(method, args, effect, &self.perms).await,
+            "stdin" => self.stdin.call(method, args, effect, &self.perms).await,
+            "regex" => self.regex.call(method, args, &self.perms),
             "env" => self.env.call(method, args, &self.perms).await,
             "process" => self.process.call(method, args, &self.perms, ctx).await,
             "random" => {

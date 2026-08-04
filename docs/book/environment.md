@@ -281,11 +281,35 @@ ok(7)
 process — a second `rite run` starts empty. For state that outlives the run, write a
 file ([Files, JSON, and CSV](files-json.md)) or use [a database](db.md).
 
+## Standard input (`@stdin`)
+
+The process's own input, for scripts that sit in a pipe:
+
+```rite native_only
+// cat access.log | rite run filter.rite
+lines ← ! @stdin.lines
+errors ← filter(lines, { |line| contains(line, "500") })
+^ errors
+```
+
+- `! @stdin.read` — the whole input as one string.
+- `! @stdin.lines` — the input as a list of lines, without terminators. An
+  empty pipe is an empty list, so a pipeline over it runs zero times rather
+  than once over `""`.
+
+Standard input can only be consumed once, so the first call drains it to EOF
+and later calls answer from a cache — `read` after `lines` sees the same
+bytes. On a terminal with nothing piped in, the first read waits for
+end-of-input (Ctrl-D), exactly as `cat` does. Reading stdin is an effect and
+carries its own permission, allowed by default and revocable with
+`--deny stdin`.
+
 ## Permissions at a glance
 
 | Capability | Default | Grant |
 |---|---|---|
 | `@env` | denied | `--allow env=NAME[,NAME…]` or `--allow env` |
+| `@stdin` | **allowed** | `--deny stdin` to revoke |
 | `@clock` | **allowed** | `--deny clock` to revoke |
 | `@random` | **allowed** | `--deny random` to revoke |
 | `@store` | always | — |

@@ -1,0 +1,9 @@
+pairs <- [ [ "b", 2 ], [ "c", 9 ], [ "a", 1 ] ]
+by_name <- sort_by(pairs, { |p| first(p) })
+heaviest <- max_by(pairs, { |p| nth(p, 1) })
+lightest <- min_by(pairs, { |p| nth(p, 1) })
+words <- ["the", "cat", "the", "hat", "the"]
+common <- frequencies(words)
+tagged <- enumerate(["x", "y"])
+missing <- nth(words, 99) ?? "absent"
+^ [ by_name, heaviest, lightest, first(common), tagged, missing ]

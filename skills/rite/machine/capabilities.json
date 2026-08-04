@@ -739,6 +739,66 @@
       "permission": "random"
     }
   ],
+  "regex": [
+    {
+      "arity": 2,
+      "docs": "Whether the pattern matches anywhere in the text. Answers `ok(bool)`, or `err` for a pattern that does not compile.",
+      "effectful": false,
+      "name": "is_match",
+      "permission": ""
+    },
+    {
+      "arity": 2,
+      "docs": "The first match of the pattern in the text, as `ok(string)` — `ok(none)` when nothing matches.",
+      "effectful": false,
+      "name": "find",
+      "permission": ""
+    },
+    {
+      "arity": 2,
+      "docs": "Every non-overlapping match, in order, as `ok(list)`.",
+      "effectful": false,
+      "name": "find_all",
+      "permission": ""
+    },
+    {
+      "arity": 2,
+      "docs": "The first match's groups as `ok(list)` — the whole match first, then each group, `none` for a group that did not participate. `ok(none)` when nothing matches.",
+      "effectful": false,
+      "name": "captures",
+      "permission": ""
+    },
+    {
+      "arity": 3,
+      "docs": "Every match replaced. `$1`, `$2`, `${name}` in the replacement refer to capture groups. Answers `ok(string)`.",
+      "effectful": false,
+      "name": "replace",
+      "permission": ""
+    },
+    {
+      "arity": 2,
+      "docs": "The text split around every match of the pattern, as `ok(list)`.",
+      "effectful": false,
+      "name": "split",
+      "permission": ""
+    }
+  ],
+  "stdin": [
+    {
+      "arity": 0,
+      "docs": "The whole of standard input as one string, read to EOF on first use and cached. Empty when nothing was piped in.",
+      "effectful": true,
+      "name": "read",
+      "permission": "stdin"
+    },
+    {
+      "arity": 0,
+      "docs": "Standard input as a list of lines, without their terminators. An empty input is an empty list, so a pipeline over `@stdin.lines` runs zero times rather than once over `\"\"`.",
+      "effectful": true,
+      "name": "lines",
+      "permission": "stdin"
+    }
+  ],
   "store": [
     {
       "arity": 2,

@@ -394,4 +394,84 @@ impl Evaluator<'_> {
         }
         Ok(Value::List(out))
     }
+
+    /// The key for one item, the way `group` reads keys: a string names a
+    /// field, a callable is applied, anything else is an error — silence here
+    /// would order by a key nobody computed.
+    async fn key_of(&mut self, who: &str, key: &Value, item: &Value) -> Result<Value, EvalError> {
+        match key {
+            Value::String(s) => Ok(item.get_field(s)),
+            f if f.is_callable() => self.call_value(f.clone(), vec![item.clone()]).await,
+            other => Err(EvalError::Message(format!(
+                "{who}: the key must be a function or a field name, got {}",
+                other.type_name()
+            ))),
+        }
+    }
+
+    /// `sort_by(xs, key)` — decorate, sort by the key's natural order,
+    /// undecorate. The one-argument sibling of `sort`'s two-argument
+    /// comparator: "order by this" without writing a comparison.
+    pub(super) async fn builtin_sort_by(&mut self, args: Vec<Value>) -> Result<Value, EvalError> {
+        let mut it = args.into_iter();
+        let list = Self::hof_list("sort_by", it.next())?;
+        let key = it
+            .next()
+            .ok_or_else(|| EvalError::Message("sort_by: expects a key function".into()))?;
+        let mut decorated: Vec<(Value, Value)> = Vec::with_capacity(list.len());
+        for item in list {
+            let k = self.key_of("sort_by", &key, &item).await?;
+            decorated.push((k, item));
+        }
+        let mut failure: Option<EvalError> = None;
+        decorated.sort_by(
+            |a, b| match crate::builtins::try_compare_values(&a.0, &b.0) {
+                Ok(o) => o,
+                Err(e) => {
+                    failure.get_or_insert(e);
+                    std::cmp::Ordering::Equal
+                }
+            },
+        );
+        if let Some(e) = failure {
+            return Err(e);
+        }
+        Ok(Value::list(decorated.into_iter().map(|(_, v)| v)))
+    }
+
+    /// `min_by` / `max_by`: the item whose key orders first or last. An empty
+    /// list answers `none`, as `min` and `max` do.
+    pub(super) async fn builtin_min_max_by(
+        &mut self,
+        args: Vec<Value>,
+        want_max: bool,
+    ) -> Result<Value, EvalError> {
+        let who = if want_max { "max_by" } else { "min_by" };
+        let mut it = args.into_iter();
+        let list = Self::hof_list(who, it.next())?;
+        let key = it
+            .next()
+            .ok_or_else(|| EvalError::Message(format!("{who}: expects a key function")))?;
+        let mut best: Option<(Value, Value)> = None;
+        for item in list {
+            let k = self.key_of(who, &key, &item).await?;
+            best = match best {
+                None => Some((k, item)),
+                Some((bk, bi)) => {
+                    let ordering = crate::builtins::try_compare_values(&k, &bk)?;
+                    let replace = if want_max {
+                        ordering == std::cmp::Ordering::Greater
+                    } else {
+                        ordering == std::cmp::Ordering::Less
+                    };
+                    if replace {
+                        Some((k, item))
+                    } else {
+                        Some((bk, bi))
+                    }
+                }
+            };
+        }
+        Ok(best.map(|(_, v)| v).unwrap_or(Value::None))
+    }
 }

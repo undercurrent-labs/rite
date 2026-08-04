@@ -1,0 +1,7 @@
+line <- "ERROR 42: disk full"
+hit <- @regex.is_match(line, "^ERROR [0-9]+")?
+n <- nth(@regex.captures(line, "ERROR ([0-9]+)")? ?? [], 1)
+swapped <- @regex.replace("a-b-c", "-", "+")?
+parts <- @regex.split("one, two,three", ",[ ]*")?
+bad <- @regex.find("x", "(")
+^ [ hit, n, swapped, parts, is_err(bad) ]

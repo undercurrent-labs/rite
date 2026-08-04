@@ -5,6 +5,9 @@ use std::path::{Path, PathBuf};
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Permission {
     Console,
+    /// The process's own standard input (`@stdin`). Allowed by default, like
+    /// `console`; revocable with `--deny stdin`.
+    Stdin,
     FsRead(PathBuf),
     FsWrite(PathBuf),
     Net(String),
@@ -28,6 +31,9 @@ impl Permission {
         }
         if spec == "console" {
             return Ok(Permission::Console);
+        }
+        if spec == "stdin" {
+            return Ok(Permission::Stdin);
         }
         if spec == "process" {
             return Ok(Permission::Process);
@@ -83,6 +89,7 @@ impl Permission {
 pub struct PermissionSet {
     pub allow_all: bool,
     pub console: bool,
+    pub stdin: bool,
     pub clock: bool,
     pub random: bool,
     pub process: bool,
@@ -103,6 +110,7 @@ impl PermissionSet {
         Self {
             allow_all: false,
             console: true,
+            stdin: true,
             clock: true,
             random: true,
             process: false,
@@ -152,6 +160,7 @@ impl PermissionSet {
         Self {
             allow_all: true,
             console: true,
+            stdin: true,
             clock: true,
             random: true,
             process: true,
@@ -165,6 +174,7 @@ impl PermissionSet {
         match p {
             Permission::All => *self = Self::allow_all(),
             Permission::Console => self.console = true,
+            Permission::Stdin => self.stdin = true,
             Permission::Clock => self.clock = true,
             Permission::Random => self.random = true,
             Permission::Process => self.process = true,
@@ -203,6 +213,10 @@ impl PermissionSet {
             Permission::Console => {
                 self.allow_all = false;
                 self.console = false;
+            }
+            Permission::Stdin => {
+                self.allow_all = false;
+                self.stdin = false;
             }
             Permission::Clock => {
                 self.allow_all = false;
@@ -253,6 +267,14 @@ impl PermissionSet {
             Ok(())
         } else {
             Err("console permission denied".into())
+        }
+    }
+
+    pub fn check_stdin(&self) -> Result<(), String> {
+        if self.allow_all || self.stdin {
+            Ok(())
+        } else {
+            Err("stdin permission denied".into())
         }
     }
 

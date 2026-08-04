@@ -412,6 +412,74 @@ Normalize a duration to whole milliseconds. Accepts an integer or float of milli
 - effectful: false
 - permission: clock
 
+## @stdin
+
+### read
+
+The whole of standard input as one string, read to EOF on first use and cached. Empty when nothing was piped in.
+
+- arity: 0
+- effectful: true
+- permission: stdin
+
+### lines
+
+Standard input as a list of lines, without their terminators. An empty input is an empty list, so a pipeline over `@stdin.lines` runs zero times rather than once over `""`.
+
+- arity: 0
+- effectful: true
+- permission: stdin
+
+## @regex
+
+### is_match
+
+Whether the pattern matches anywhere in the text. Answers `ok(bool)`, or `err` for a pattern that does not compile.
+
+- arity: 2
+- effectful: false
+- permission: 
+
+### find
+
+The first match of the pattern in the text, as `ok(string)` — `ok(none)` when nothing matches.
+
+- arity: 2
+- effectful: false
+- permission: 
+
+### find_all
+
+Every non-overlapping match, in order, as `ok(list)`.
+
+- arity: 2
+- effectful: false
+- permission: 
+
+### captures
+
+The first match's groups as `ok(list)` — the whole match first, then each group, `none` for a group that did not participate. `ok(none)` when nothing matches.
+
+- arity: 2
+- effectful: false
+- permission: 
+
+### replace
+
+Every match replaced. `$1`, `$2`, `${name}` in the replacement refer to capture groups. Answers `ok(string)`.
+
+- arity: 3
+- effectful: false
+- permission: 
+
+### split
+
+The text split around every match of the pattern, as `ok(list)`.
+
+- arity: 2
+- effectful: false
+- permission: 
+
 ## @env
 
 ### get

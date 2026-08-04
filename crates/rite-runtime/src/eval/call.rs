@@ -208,6 +208,9 @@ impl<'a> Evaluator<'a> {
             // `sort` moved here from the pure table when it learned to take a
             // comparator: a pure builtin cannot invoke a Rite closure.
             "sort" => self.builtin_sort(args).await,
+            "sort_by" => self.builtin_sort_by(args).await,
+            "min_by" => self.builtin_min_max_by(args, false).await,
+            "max_by" => self.builtin_min_max_by(args, true).await,
             "parallel" => self.builtin_parallel(args).await,
             "import" => Ok(Value::None), // module loading handled at higher layer
             "while_loop" => self.builtin_while_loop(args).await,

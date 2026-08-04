@@ -41,6 +41,8 @@ pub fn call_builtin(
         "min" => builtin_min_max(args, true),
         "max" => builtin_min_max(args, false),
         "unique" => builtin_unique(args),
+        "nth" => builtin_nth(args),
+        "frequencies" => builtin_frequencies(args),
         "range" => builtin_range(args, limits),
         "range_incl" => builtin_range_incl(args, limits),
         "lines" => builtin_lines(args),
@@ -105,9 +107,11 @@ pub fn call_builtin(
         // says what is actually true; `while_loop`, `compose`, `print` and `println` used
         // to fall through to "unknown builtin", which was simply wrong.
         "map" | "keep" | "reject" | "reduce" | "each" | "find" | "any" | "all" | "group"
-        | "parallel" | "while_loop" | "compose" | "print" | "println" | "and_then" | "sort" => Err(
-            EvalError::Message(format!("builtin `{}` requires evaluator dispatch", name)),
-        ),
+        | "parallel" | "while_loop" | "compose" | "print" | "println" | "and_then" | "sort"
+        | "sort_by" | "min_by" | "max_by" => Err(EvalError::Message(format!(
+            "builtin `{}` requires evaluator dispatch",
+            name
+        ))),
         other => Err(EvalError::Message(format!("unknown builtin `{}`", other))),
     }
 }
@@ -824,6 +828,42 @@ fn builtin_expect(args: Vec<Value>) -> Result<Value, EvalError> {
 /// is unordered against everything including itself.
 ///
 /// Equality is untouched and stays total: `"a" = 1` is `false`, not an error.
+/// `nth(xs, i)` — positional access, zero-based. Out of range is `none`
+/// rather than an error: "is there a third field on this line" is a question,
+/// not a mistake, and `?? fallback` composes with the answer.
+fn builtin_nth(args: Vec<Value>) -> Result<Value, EvalError> {
+    let mut it = args.into_iter();
+    let seq = Seq::of(it.next(), "nth")?;
+    let i = int_arg("nth", "an index", it.next(), 1)?;
+    if i < 0 {
+        return Ok(Value::None);
+    }
+    Ok(seq.items.get(i as usize).cloned().unwrap_or(Value::None))
+}
+
+/// `frequencies(xs)` — `[value, count]` pairs, most frequent first, first
+/// appearance breaking ties. The one-word spelling of the group–count–sort
+/// dance every text pipeline performs.
+fn builtin_frequencies(args: Vec<Value>) -> Result<Value, EvalError> {
+    let seq = Seq::of(args.into_iter().next(), "frequencies")?;
+    let mut counts: indexmap::IndexMap<String, (Value, i64)> = indexmap::IndexMap::new();
+    for item in seq.items {
+        let key = item.to_string();
+        counts
+            .entry(key)
+            .and_modify(|(_, n)| *n += 1)
+            .or_insert((item, 1));
+    }
+    let mut pairs: Vec<(Value, i64)> = counts.into_values().collect();
+    // Stable, so equal counts keep first-appearance order.
+    pairs.sort_by_key(|(_, n)| std::cmp::Reverse(*n));
+    Ok(Value::list(
+        pairs
+            .into_iter()
+            .map(|(v, n)| Value::list(vec![v, Value::Int(n)])),
+    ))
+}
+
 pub fn try_compare_values(a: &Value, b: &Value) -> Result<std::cmp::Ordering, EvalError> {
     use std::cmp::Ordering;
     fn nope(a: &Value, b: &Value) -> EvalError {
