@@ -21,7 +21,7 @@ and Codex · **P7** export and gallery · **P8** Cloudflare · **P9** hardening.
 | AR1 | Sigil does not execute programs | P1 | ADR 0003; `rite_sigil_cannot_execute_anything` reads the manifest and fails on `rite-runtime`, `rite-caps`, `rite-compiler`, `rite-repl`, `rite-lsp`, `tokio`, `axum`, `hyper`, `reqwest` | [x] |
 | AR2 | Rite language semantics are unchanged | P0–P9 | ADR 0003; `grammar/aliases.json`, `rite.ebnf`, the lexer, `rite_sem::ExprIr` untouched; the existing Rite suite green at every phase | [x] |
 | AR3 | Layout is non-semantic | P2 | ADR 0004; `the_graph_model_declares_no_coordinate_fields` scans the type, `a_serialized_graph_carries_no_geometry` scans an instance, `semantic_geometry_is_independent_of_the_ornament_layers` asserts the invariance; `LayoutHint` is not read | [x] |
-| AR4 | Native and browser use the same Rust scene/layout renderer | P5 | ADR 0005; parity test — native scene JSON == browser scene JSON, native canonical SVG == browser canonical SVG, over the canonical fixture set | [ ] |
+| AR4 | Native and browser use the same Rust scene/layout renderer | P5 | `cant-sigil-wasm/tests/parity.rs` — 6 programs × 37 option sets, SVG and scene, plus both input paths agreeing. Does not yet compare a *browser-executed* build against a native fixture | [~] |
 | AR5 | `rite-sigil` does not depend on Cant parsing internals | P1 | ADR 0006; `rite_sigil_does_not_know_what_cant_is` (manifest) and `no_rite_sigil_source_mentions_cant` (every source line, comments stripped) | [x] |
 | AR6 | Cant adapts into a normalized Sigil graph | P1 | `cant_sem::sigil::to_sigil_graph`; `every_construct_adapts_into_something_renderable` over 8 programs × 2 option sets | [x] |
 | AR7 | Rite core crates do not depend on Sigil | P1 | `no_rite_crate_depends_on_sigil` scans every non-Sigil, non-Cant crate manifest | [x] |
@@ -62,9 +62,9 @@ and Codex · **P7** export and gallery · **P8** Cloudflare · **P9** hardening.
 | D1 | Veiled mode shows no visible source labels | P3 | `veiled_output_never_draws_a_label` over hostile input × every metadata mode; a Veiled render emits no `<text>` at all | [x] |
 | D2 | Inscribed mode shows minimal symbolic annotation | P4 | Inscriptions layer, abbreviated to 14 characters. Abbreviated *capability* marks remain unimplemented | [~] |
 | D3 | Revealed mode provides readable labels and a full Codex | P4 | labels drawn upright beside each mark; a Codex per node in the HTML export. The in-app Codex is P6 | [x] |
-| D4 | Codex can be hidden/collapsed | P6 | `apps/sigil-web` component test | [ ] |
-| D5 | Hover/focus can reveal values in the web app | P6 | component + E2E test, keyboard focus included | [ ] |
-| D6 | Deep Veil can suppress interactive revelation | P6 | E2E: with Deep Veil on, hover and focus produce no tooltip | [ ] |
+| D4 | Codex can be hidden/collapsed | P6 | collapsed by default in both the app and the HTML export; no component test yet | [~] |
+| D5 | Hover/focus can reveal values in the web app | P6 | hover and keyboard focus both reveal, in the app and the HTML export; no E2E yet | [~] |
+| D6 | Deep Veil can suppress interactive revelation | P6 | suppresses tooltips *and* Codex labels in the app; no E2E yet | [~] |
 | D7 | Metadata can be stripped completely | P3 | `metadata_none_contains_no_label_snippet_or_identifier` — no label, no title, no desc, no graph-derived id | [x] |
 
 ## Rendering
@@ -93,14 +93,14 @@ and Codex · **P7** export and gallery · **P8** Cloudflare · **P9** hardening.
 
 | # | Criterion | Phase | Artifact / proof | Done |
 |---|---|---|---|---|
-| W1 | Vue/TypeScript/Tailwind application exists | P5 | `apps/sigil-web`; `typecheck` is a CI gate, as it is for the other two apps | [ ] |
-| W2 | Cant and graph JSON input modes work | P5 | component tests | [ ] |
-| W3 | Canvas dominates the interface | P5 | layout test on the desktop breakpoint | [ ] |
+| W1 | Vue/TypeScript/Tailwind application exists | P5 | `apps/sigil-web`, running against the WASM engine; `typecheck` clean. Not yet a CI job | [~] |
+| W2 | Cant and graph JSON input modes work | P5 | both tabs render; no component test yet | [~] |
+| W3 | Canvas dominates the interface | P5 | the canvas is the flex-1 column and both panels collapse; no layout test yet | [~] |
 | W4 | Panels can be hidden | P6 | E2E: all panels hidden leaves a fullscreen artifact | [ ] |
-| W5 | Pan/zoom/fit/fullscreen work | P6 | component + E2E, with keyboard-operable zoom (see A3) | [ ] |
+| W5 | Pan/zoom/fit/fullscreen work | P6 | implemented with keyboard-operable buttons; no E2E yet | [~] |
 | W6 | Codex selection synchronizes with the canvas | P6 | component test both directions | [ ] |
 | W7 | Mobile alternatives to hover work | P6 | E2E at a mobile viewport, tap and focus only | [ ] |
-| W8 | Exports work | P7 | SVG, PNG, HTML, scene JSON, copy SVG, copy fingerprint | [ ] |
+| W8 | Exports work | P7 | SVG, PNG (canvas), scene JSON, copy SVG, copy fingerprint in the app; HTML export is CLI-only | [~] |
 | W9 | Built-in gallery works | P7 | generated from `fixtures/sigil/` at build time, so it cannot drift | [ ] |
 | W10 | Source stays client-side | P5–P8 | ADR 0007; E2E asserts **no** network request carries source, graph JSON, or an exported artifact | [ ] |
 
@@ -121,14 +121,25 @@ and Codex · **P7** export and gallery · **P8** Cloudflare · **P9** hardening.
 | # | Criterion | Phase | Artifact / proof | Done |
 |---|---|---|---|---|
 | Q1 | Existing Rite/Cant tests remain green | P0–P9 | `cargo test --workspace --all-features`; 1329 → 1545 passing, 0 failing, at every phase | [x] through P4 |
-| Q2 | Native/WASM scene parity passes | P5 | see AR4 | [ ] |
-| Q3 | Scene and SVG golden tests pass | P2/P3 | `fixtures/sigil/{scenes,svg}/`, structurally asserted rather than merely written | [ ] |
+| Q2 | Native/WASM scene parity passes | P5 | see AR4 | [~] |
+| Q3 | Scene and SVG golden tests pass | P2/P3 | `fixtures/sigil/{scenes,svg}/`, structurally asserted rather than merely written | [x] |
 | Q4 | Visual regressions are reviewed | P4 | `tests/visual.rs` — an 8×8 perceptual hash over rasterised output: stable across runs, contrast present per theme, ground polarity, ornament changes without burying | [x] |
 | Q5 | Fuzz smoke tests pass | P9 | graph JSON parser, adapter, scene builder, mark generator, SVG serializer, metadata stripping | [ ] |
 | Q6 | Malicious labels cannot inject markup | P1/P3 | `tests/svg_security.rs` — one escaper, one sanitizer, 12 hostile strings across 36 option sets, plus a hostile-identifier suite | [x] |
 | Q7 | Large graph limits work | P1 | `a_graph_over_the_node_cap_is_refused_with_a_way_out` asserts the refusal names an alternative; `a_large_but_legal_graph_warns_once` | [~] `--simplify` itself is P3 |
 | Q8 | Accessibility checklist passes | P6 | keyboard selection, focus indicators, structured Codex, reduced motion, no colour-only differentiation, screen-reader graph summary | [ ] |
 | Q9 | Documentation examples are generated and tested | P7 | `examples/sigil/*.cant` → graph JSON, scene JSON, veiled + revealed SVG, PNG thumbnail, in CI | [ ] |
+
+## Open design work
+
+Not acceptance criteria, but things that must be right before this is a product
+worth showing. Carried here so they are not lost between phases.
+
+| # | What | Why it matters |
+|---|---|---|
+| **OD1** | **The composition does not fill the circle.** On `complex.cant` the upper right stays empty. Two mechanical causes are fixed — the spine reaching its full sweep, and its radius coming from progress rather than whole-graph depth — and a structural one is not: of five spine nodes, two get relocated (the effect to the boundary, the collect to the seal), so only three marks remain on the spiral and everything else hangs off one fork in one direction. The fix is that the spine should lay out over its *visible* members, and a fork should distribute branches into the free angular space rather than fanning symmetrically about itself. **Revisit before release.** | The first render is supposed to stand alone as an artifact. A picture using a corner of its own canvas does not. |
+| OD2 | Edge routing minimizes nothing (§11.6). On a dense graph traces cross. | Crossings read as connections that are not there. |
+| OD3 | Nested fork-inside-fork sectors subdivide by weight but are not recursively renormalized. | Deep nesting gets cramped before it gets illegible. |
 
 ## Non-negotiables that are not criteria but gate every `[x]`
 

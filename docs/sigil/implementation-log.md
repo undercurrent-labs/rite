@@ -508,7 +508,72 @@ either, the gate has to be on the field, not on the concept.
 - `--legend`, `--orientation`, `--embed-graph`, `--embed-scene`, `--open` are
   specified and unimplemented.
 
+---
+
+## Phase 5 — WASM and the web application
+
+**Status: foundation complete.** `cant-sigil-wasm`, `apps/sigil-web`, and a
+parity gate. No browser test suite, no Cloudflare configuration.
+
+### The crate is `cant-sigil-wasm`, and the specification says otherwise
+
+`.internal/sigil_mvp.md` §5 names it `rite-sigil-wasm`; §5.1 has it depending on
+"pure Cant syntax/graph crates". Both cannot hold in this repository: ADR 0001
+fixes the dependency edge as `cant-* -> rite-*` and
+`crates/cant-cli/tests/boundaries.rs` enforces it **by directory name**, so a
+`rite-*` crate importing `cant-sem` fails the build.
+
+Rendering pasted Cant source means parsing it, so the binding genuinely depends
+on Cant. The naming rule predates the spec, is mechanically enforced, and encodes
+something real — deleting Cant leaves a Rite that builds — so the name gave way
+rather than the rule. `rite-sigil`, the renderer, stays Cant-free and Rite-side,
+which is the boundary that actually carries the architecture. The crate is now in
+`CANT_PATHS`: it cannot outlive Cant, and says so.
+
+Found by the boundary test, not by review. This is the first place the
+specification and the repository genuinely conflicted.
+
+### Three bugs found by using it
+
+**The metadata mode rotated the composition.** `--metadata full` asks the adapter
+for labels; labels were part of the graph fingerprint; the fingerprint is the
+default seed; the seed is the rotation. Asking for more *embedded* metadata
+silently redrew the picture. Snippets had been excluded from the fingerprint for
+exactly this reason and labels never were — inconsistent with the project's own
+rule that nothing may infer meaning from a label. Labels, short labels and
+capability names are now excluded; a capability's *family* stays, because it
+decides which mark a node gets.
+
+**A Veiled sigil could not have a full Codex.** Labels were carried only when the
+artifact would draw them, so Veiled produced an empty decoder — while §13.1 says
+a Veiled render may be decoded through the Codex, with Deep Veil to suppress it.
+Tying the two together made the intended default unaskable. Labels now travel
+unless `metadata none` forbids them; the picture stays clean because the
+serializer never generates a text element in Veiled mode, which was already true
+and is the guard doing the work.
+
+This also corrected a test that asserted "a veiled render returns no source text
+anywhere". That was the wrong guarantee. Veiled is about the **artifact**;
+`metadata none` is the setting that means nothing anywhere. Both are now
+asserted, including that the scene *does* keep labels — otherwise there is
+nothing to decode.
+
+**The composition used a corner of the circle.** Partly fixed; see OD1 in the
+checklist, which is the open item to return to.
+
+### Known limitations at the end of Phase 5
+
+- Parity is asserted between two *native* calls of the same functions. It does
+  not compare a browser-executed WASM build against a native fixture; that
+  belongs in an E2E suite which does not exist.
+- No component tests, no E2E tests, no accessibility audit of the app.
+- No CI job builds the site.
+- No Cloudflare configuration, no `/api/*` endpoints.
+- No gallery, no local persistence, no selection/path highlighting.
+- The app surfaces no accessible structured summary of its own; the scene has one.
+
 ### Next milestone
 
-Phase 5: `rite-sigil-wasm` and the web application foundation, with native/WASM
-scene parity as the gate.
+Phase 6 — interaction and the Codex in the app: selection with path
+highlighting, mobile sheets, the accessibility work, and the component and E2E
+tests that make W2–W7 real rather than implemented.
