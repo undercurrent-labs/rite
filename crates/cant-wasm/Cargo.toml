@@ -1,0 +1,51 @@
+[package]
+name = "cant-wasm"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Browser-facing Cant API (WASM-ready)"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+cant-syntax = { workspace = true }
+cant-sem = { workspace = true }
+# Path rather than `workspace = true`, and deliberately: cargo *ignores*
+# `default-features = false` on a workspace dependency whose table does not
+# specify it, so the workspace form silently pulled Rite's capability stack —
+# axum, hyper, tokio, mio — into a wasm32 build and failed inside `mio`.
+#
+# Without `native`: everything up to and including `expand`, and none of the
+# runtime, capability or compiler machinery a browser has no answer for.
+cant = { path = "../cant", default-features = false }
+rite-core = { workspace = true }
+# Execution. Cant does not evaluate anything — it expands to Rite and hands the
+# result to Rite's own browser runtime, which is ADR 0002 holding in the browser
+# exactly as it does on the command line.
+rite-wasm = { path = "../rite-wasm", default-features = false }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+# WASM glue
+wasm-bindgen = { version = "0.2", optional = true }
+serde-wasm-bindgen = { version = "0.6", optional = true }
+console_error_panic_hook = { version = "0.1", optional = true }
+getrandom = { version = "0.2", optional = true, features = ["js"] }
+
+[features]
+default = ["native"]
+# `native` exists so the API below can be tested with `cargo test` rather than
+# only in a browser. The functions are the same ones the bindings call.
+native = ["rite-wasm/native"]
+# Note what this does *not* enable: `rite-wasm/wasm`. That feature adds Rite's
+# own `#[wasm_bindgen(start)]`, and linking two of those is a duplicate-symbol
+# error at the very last step of the build. Cant needs Rite's plain Rust API —
+# `run_blocking` — which is there with no features at all, on the
+# `not(feature = "native")` side.
+wasm = [
+  "wasm-bindgen",
+  "serde-wasm-bindgen",
+  "console_error_panic_hook",
+  "getrandom",
+]

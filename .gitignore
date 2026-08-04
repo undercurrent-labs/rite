@@ -29,7 +29,8 @@ editors/vscode/*.vsix
 editors/vscode/out/
 *.tsbuildinfo
 
-# WASM build products (regenerate: bash scripts/build-wasm.sh)
+# WASM build products
+# (regenerate: bash scripts/build-wasm.sh, bash scripts/build-cant-wasm.sh)
 apps/*/public/wasm/
 apps/*/dist/wasm/
 

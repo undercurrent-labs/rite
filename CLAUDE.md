@@ -40,10 +40,10 @@ cargo run -p rite-cli -- docs check          # doctests over fenced `rite` block
 bash scripts/check-packaging.sh
 RITE_SKIP_VSIX=1 cargo test -p rite-cli --test packaging -- --nocapture   # skips the node/npm VSIX half
 
-# The browser build. Run it before pushing anything that touches rite-render or
-# rite-wasm: `--workspace`/`--all-features` enable every feature, so a `resvg`
-# call missing its `#[cfg(feature = "png")]` compiles locally and fails only in
-# CI's WASM job, which builds rite-render with default features off.
+# The browser builds (rite-wasm + cant-wasm). Run before pushing anything that
+# touches either, or rite-render: `--workspace`/`--all-features` enable every
+# feature, so a `resvg` call missing its `#[cfg(feature = "png")]` compiles
+# locally and fails only in CI, which builds these with default features off.
 cargo run -p xtask -- wasm-check
 
 # Benchmarks (criterion; frontend and interpreter measured separately)

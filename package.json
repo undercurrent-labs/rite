@@ -8,6 +8,7 @@
     "site:deploy": "bash scripts/build-site.sh && (cd apps/rite-web && npx wrangler deploy)",
     "cant:dev": "pnpm --dir apps/cant-web dev",
     "cant:build": "bash scripts/build-cant-site.sh",
+    "cant:wasm": "bash scripts/build-cant-wasm.sh",
     "cant:deploy": "bash scripts/build-cant-site.sh && (cd apps/cant-web && npx wrangler deploy)",
     "release:package": "bash scripts/package-release.sh",
     "studio:dev": "pnpm --dir apps/rite-studio dev",

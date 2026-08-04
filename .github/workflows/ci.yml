@@ -213,6 +213,13 @@ jobs:
     # build graph that couples them would quietly make that false.
     steps:
       - uses: actions/checkout@v5
+      # Studio runs the real engine, so this job builds `cant-wasm` the same way
+      # the WASM job builds Rite's.
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: jetli/wasm-pack-action@v0.4.0
+      - uses: Swatinem/rust-cache@v2
       # Must match package.json "packageManager": "pnpm@9.0.0" exactly
       - uses: pnpm/action-setup@v4
         with:

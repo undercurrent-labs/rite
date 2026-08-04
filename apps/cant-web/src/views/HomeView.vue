@@ -175,6 +175,14 @@ const views = [
           </div>
         </div>
         <p class="mt-6 max-w-prose text-sm text-slate-500">
+          All three run in
+          <RouterLink to="/studio" class="text-cant-accent hover:underline"
+            >Studio</RouterLink
+          >
+          too — the same engine, compiled to WebAssembly, with nothing leaving the
+          browser.
+        </p>
+        <p class="mt-3 max-w-prose text-sm text-slate-500">
           Effects work as they do in Rite:
           <code class="font-mono text-slate-400">!@fs.read</code> is a marked host call,
           and it needs the same grant whether it sits at the top level or inside an
@@ -207,8 +215,14 @@ const views = [
 
         <div class="mt-10 flex flex-wrap gap-3">
           <RouterLink
-            to="/docs/language"
+            to="/studio"
             class="rounded-md border border-cant-accent/40 bg-cant-accent/10 px-4 py-2 text-sm font-medium text-cant-accent hover:bg-cant-accent/20"
+          >
+            Try Studio
+          </RouterLink>
+          <RouterLink
+            to="/docs/language"
+            class="rounded-md border border-cant-border px-4 py-2 text-sm text-slate-300 hover:bg-slate-800/50"
           >
             Read the language
           </RouterLink>

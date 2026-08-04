@@ -4,13 +4,13 @@
 //! execution types wherever they are stable, and wraps rather than duplicates
 //! them where Cant needs to add something of its own.
 //!
-//! # Status
+//! # Features
 //!
-//! Phases 1–3 expose parsing, formatting, dialect conversion, the flow graph and
-//! its validation. `expand`, `run`, `build` and `explain` arrive with the phases
-//! that implement them (see `docs/cant/checklist.md`); they are deliberately
-//! absent rather than present and stubbed, so a caller cannot bind to a function
-//! that does not do what its name says.
+//! `native` (default) adds [`run`] and [`build`], which need Rite's runtime,
+//! capabilities and compiler. Without it the crate stops at [`expand`] — the
+//! whole of Cant that needs no host, and exactly what a browser build can use.
+//! The functions are absent rather than present and failing, so a caller cannot
+//! bind to something that cannot work where it is being called.
 //!
 //! # Boundaries
 //!
@@ -19,6 +19,7 @@
 //! by generating canonical ASCII Rite and passing it through Rite's ordinary
 //! front end — `docs/adr/0002-cant-lowers-through-rite.md`.
 
+#[cfg(feature = "native")]
 pub mod run;
 
 pub use cant_sem as sem;
@@ -35,6 +36,7 @@ pub use cant_syntax::{
     FormatError, FormatOptions, FormatResult, ParseResult, CANT_LANGUAGE_VERSION,
 };
 
+#[cfg(feature = "native")]
 pub use run::{build, run, BuildOptions, BuildResult, ExecutionResult, RunOptions};
 
 use rite_core::{FileId, SourceFile, SourceMap};

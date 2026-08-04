@@ -4,7 +4,10 @@ import { RITE_URL } from "../lib/operators";
 
 const route = useRoute();
 
-const links = [{ to: "/docs", label: "Docs", match: /^\/docs/ }];
+const links = [
+  { to: "/studio", label: "Studio", match: /^\/studio/ },
+  { to: "/docs", label: "Docs", match: /^\/docs/ },
+];
 
 const github = "https://github.com/undercurrent-labs/rite/tree/main/docs/cant";
 </script>
@@ -58,6 +61,19 @@ const github = "https://github.com/undercurrent-labs/rite/tree/main/docs/cant";
       </nav>
 
       <div class="ml-auto flex items-center gap-2">
+        <!--
+          Same shape as the Rite site's nav: Studio is both an ordinary link on
+          the left and a call to action on the right, in the site's own accent —
+          pink here, cyan there. Hidden on Studio itself, where it would offer
+          the page you are already on.
+        -->
+        <RouterLink
+          v-if="route.path !== '/studio'"
+          to="/studio"
+          class="hidden items-center rounded-md border border-cant-accent/40 bg-cant-accent/10 px-3 py-1.5 text-sm font-medium text-cant-accent hover:bg-cant-accent/20 sm:inline-flex"
+        >
+          Try Studio
+        </RouterLink>
         <!--
           The sibling link is the point of having two sites: someone who lands
           here looking for the language that actually runs today should be one

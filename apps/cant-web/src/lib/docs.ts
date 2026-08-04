@@ -27,6 +27,12 @@ export const CANT_DOCS: CantDoc[] = [
     blurb: "Emissions, stages, flow, scatter, collect, ward, fork, orbit, effects.",
   },
   {
+    slug: "one-liners",
+    title: "One-liners",
+    file: "one-liners.md",
+    blurb: "Recipes short enough to type into a shell, and what surprises people.",
+  },
+  {
     slug: "cli",
     title: "Command line",
     file: "cli.md",
@@ -50,7 +56,7 @@ export const CANT_DOCS: CantDoc[] = [
  * `crates/cant-cli/tests/docs.rs` checks.
  */
 const docModules = import.meta.glob(
-  "../../../../docs/cant/{README,language,cli,graph-schema}.md",
+  "../../../../docs/cant/{README,language,one-liners,cli,graph-schema}.md",
   {
     query: "?raw",
     import: "default",

@@ -54,16 +54,22 @@ fn main() {
         // wasm-pack packaging.
         "wasm-check" => {
             run(Command::new("rustup").args(["target", "add", "wasm32-unknown-unknown"]));
-            run(Command::new("cargo").args([
-                "check",
-                "-p",
-                "rite-wasm",
-                "--no-default-features",
-                "--features",
-                "wasm",
-                "--target",
-                "wasm32-unknown-unknown",
-            ]));
+            // Both browser crates. `cant-wasm` is the same trap with a second
+            // floor: it must not pull Rite's capability stack, and cargo ignores
+            // `default-features = false` on a workspace dependency, so the
+            // wrong-but-plausible manifest compiles everywhere except here.
+            for package in ["rite-wasm", "cant-wasm"] {
+                run(Command::new("cargo").args([
+                    "check",
+                    "-p",
+                    package,
+                    "--no-default-features",
+                    "--features",
+                    "wasm",
+                    "--target",
+                    "wasm32-unknown-unknown",
+                ]));
+            }
         }
         "cant-og" => {
             if let Err(e) = cant_og() {

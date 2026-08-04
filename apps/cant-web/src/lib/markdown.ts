@@ -44,6 +44,7 @@ function rewriteImages(html: string): string {
 const DOC_ROUTES: Record<string, string> = {
   "README.md": "/docs/overview",
   "language.md": "/docs/language",
+  "one-liners.md": "/docs/one-liners",
   "cli.md": "/docs/cli",
   "graph-schema.md": "/docs/graph-schema",
 };

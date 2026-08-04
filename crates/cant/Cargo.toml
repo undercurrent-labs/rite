@@ -13,12 +13,20 @@ rite-core = { workspace = true }
 # ADR 0002. `rite-sem` pulls `rite-syntax` with it.
 rite-sem = { workspace = true }
 # Execution and native builds go through Rite's own runtime and compiler —
-# ADR 0002. `rite` supplies the shared permission/budget option parsing.
-rite = { workspace = true }
-rite-runtime = { workspace = true }
-rite-caps = { workspace = true }
-rite-compiler = { workspace = true }
+# ADR 0002. Optional because the browser has neither: `cant-wasm` takes this
+# crate without them and gets everything up to and including `expand`, which is
+# the whole of Cant that does not need a host.
+rite-runtime = { workspace = true, optional = true }
+rite-caps = { workspace = true, optional = true }
+rite-compiler = { workspace = true, optional = true }
 serde_json = { workspace = true }
+
+[features]
+default = ["native"]
+# Running and building a program. Without it, `cant::run` does not exist —
+# absent rather than present and failing, so a caller cannot bind to a function
+# that cannot work where it is being called.
+native = ["dep:rite-runtime", "dep:rite-caps", "dep:rite-compiler"]
 
 [dev-dependencies]
 rite-core = { workspace = true }

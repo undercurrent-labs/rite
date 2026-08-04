@@ -14,8 +14,13 @@ flight. It is a separate language that compiles to Rite and runs on Rite's
 runtime, capabilities, budgets and compiler.
 
 - [The language](language.md) — emissions, stages, and every operator
+- [One-liners](one-liners.md) — recipes short enough to type into a shell
 - [Command line](cli.md) — running, formatting, converting, inspecting
 - [Graph schema](graph-schema.md) — the JSON `cant graph` emits
+
+Or run it without installing anything: <https://cant.rite.foo/studio> is the same
+engine compiled to WebAssembly, and it shows the graph, the generated Rite and
+the value side by side.
 
 Cant is experimental: the operator vocabulary and the graph format can still
 change between versions.

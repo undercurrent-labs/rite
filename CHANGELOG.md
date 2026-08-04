@@ -2,6 +2,29 @@
 
 ## [Unreleased]
 
+### Added
+
+- **Cant Studio** — `cant.rite.foo/studio`. The real engine, compiled to
+  WebAssembly: it checks as you type, draws the flow graph, shows the generated
+  Rite, and runs the program. Execution goes through the expansion, exactly as
+  the command line does, so Studio cannot disagree with a terminal about what a
+  program means. Nothing typed into it leaves the browser, and there is no
+  server to send it to.
+
+  A capability the browser cannot serve — `@fs`, `@process`, `@db`, `@net` — is
+  refused by name *before* the program runs, with the expansion still shown, so
+  the answer is "run this elsewhere" rather than a failure inside generated code.
+
+- **`cant-wasm`** — the browser-facing API behind Studio: `check`, `expand`,
+  `graph`, `dot`, `explain`, `format`, `convert`, `run`, `version`. The `cant`
+  crate gained a `native` feature (on by default) so the half that needs no host
+  can be built without Rite's runtime, capabilities and compiler.
+
+- **[One-liners](docs/cant/one-liners.md)** — a field guide of recipes short
+  enough to put in a shell, and the three things that surprise people: a list is
+  one emission, `[]` wraps whatever is in flight, and `*` is scatter only when it
+  is the whole stage.
+
 ## [0.7.0] — 2026-08-03
 
 A second language in the same archive. Cant is terminal-typeable and

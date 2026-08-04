@@ -91,8 +91,8 @@ const neighbours = computed(() => (slug.value ? adjacentDocs(slug.value) : {}));
         <template v-if="!slug">
           <h1 class="text-3xl font-semibold tracking-tight text-white">Cant documentation</h1>
           <p class="mt-3 max-w-prose text-slate-400">
-            Four pages: what the language is, how it works, how to run it, and the
-            shape of the graph it produces.
+            What the language is, how it works, recipes to type into a shell, the
+            command line, and the shape of the graph it produces.
           </p>
 
           <div class="mt-8 space-y-3">

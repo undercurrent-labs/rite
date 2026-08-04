@@ -4,6 +4,9 @@ import HomeView from "./views/HomeView.vue";
 // Only the landing page is eager: a visitor who never opens the docs should not
 // download the markdown renderer.
 const DocsView = () => import("./views/DocsView.vue");
+// Studio pulls in the graph renderer and, at runtime, a megabyte of engine.
+// Nobody reading the front page should pay for either.
+const StudioView = () => import("./views/StudioView.vue");
 const NotFoundView = () => import("./views/NotFoundView.vue");
 
 export const router = createRouter({
@@ -21,6 +24,12 @@ export const router = createRouter({
       name: "docs",
       component: DocsView,
       meta: { title: "Docs · Cant" },
+    },
+    {
+      path: "/studio",
+      name: "studio",
+      component: StudioView,
+      meta: { title: "Studio · Cant" },
     },
     { path: "/:pathMatch(.*)*", name: "not-found", component: NotFoundView },
   ],
