@@ -131,6 +131,12 @@ jobs:
         with:
           targets: wasm32-unknown-unknown
       - uses: jetli/wasm-pack-action@v0.4.0
+        # Pinned: the action's "latest" lookup goes through the GitHub API and,
+        # rate-limited, once fell back to wasm-pack v0.9.1 — which predates
+        # workspace-inherited manifest keys and failed the build on a manifest
+        # it could not parse.
+        with:
+          version: "v0.15.0"
       - uses: Swatinem/rust-cache@v2
       - name: build wasm
         run: bash scripts/build-wasm.sh
@@ -219,6 +225,12 @@ jobs:
         with:
           targets: wasm32-unknown-unknown
       - uses: jetli/wasm-pack-action@v0.4.0
+        # Pinned: the action's "latest" lookup goes through the GitHub API and,
+        # rate-limited, once fell back to wasm-pack v0.9.1 — which predates
+        # workspace-inherited manifest keys and failed the build on a manifest
+        # it could not parse.
+        with:
+          version: "v0.15.0"
       - uses: Swatinem/rust-cache@v2
       # Must match package.json "packageManager": "pnpm@9.0.0" exactly
       - uses: pnpm/action-setup@v4
@@ -253,6 +265,12 @@ jobs:
         with:
           targets: wasm32-unknown-unknown
       - uses: jetli/wasm-pack-action@v0.4.0
+        # Pinned: the action's "latest" lookup goes through the GitHub API and,
+        # rate-limited, once fell back to wasm-pack v0.9.1 — which predates
+        # workspace-inherited manifest keys and failed the build on a manifest
+        # it could not parse.
+        with:
+          version: "v0.15.0"
       - uses: Swatinem/rust-cache@v2
       # Must match package.json "packageManager": "pnpm@9.0.0" exactly
       - uses: pnpm/action-setup@v4
