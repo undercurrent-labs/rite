@@ -54,23 +54,46 @@ function isJsonContentType(ct: string | null): boolean {
   return lower.includes("application/json") || lower.includes("+json");
 }
 
+/**
+ * Load the engine once.
+ *
+ * The package is a real static asset in `public/wasm` — not a bundled module.
+ * Importing its URL directly works in a built site and fails in `pnpm site:dev`,
+ * because Vite's dev server refuses to serve anything under `public/` *as a
+ * module*: the request comes back 500 and Studio falls through to "WASM not
+ * loaded" on a machine where the file is right there. That is the worst way
+ * round, since the only broken configuration is the one you develop in.
+ *
+ * So the glue is fetched as text and imported through a blob URL. One code path,
+ * identical in dev and in production, and nothing about it depends on how the
+ * server treats `public/`. The `.wasm` is then passed to `init` explicitly,
+ * because a blob URL gives the glue no `import.meta.url` to resolve it from.
+ */
 async function loadWasm(): Promise<WasmMod | null> {
   if (wasmPromise) return wasmPromise;
   wasmPromise = (async () => {
+    const base = import.meta.env.BASE_URL || "/";
+    const at = (file: string) => `${base}wasm/${file}`.replace(/([^:]\/)\/+/g, "$1");
+    let blobUrl: string | null = null;
     try {
-      // Runtime URL only — keep this non-literal so Vite/Rollup does not try to bundle it.
-      const base = import.meta.env.BASE_URL || "/";
-      const url = `${base}wasm/rite_wasm.js`.replace(/([^:]\/)\/+/g, "$1");
-      const mod = (await import(/* @vite-ignore */ url)) as WasmMod & {
-        default?: (input?: unknown) => Promise<unknown>;
+      const response = await fetch(at("rite_wasm.js"));
+      if (!response.ok) throw new Error(`${response.status} fetching the engine`);
+      const glue = await response.text();
+      blobUrl = URL.createObjectURL(new Blob([glue], { type: "text/javascript" }));
+      const mod = (await import(/* @vite-ignore */ blobUrl)) as WasmMod & {
+        default?: (init?: { module_or_path: string }) => Promise<unknown>;
       };
       if (typeof mod.default === "function") {
-        await mod.default();
+        // `{ module_or_path }`, not a bare URL: the positional form is
+        // deprecated and warns on every load.
+        await mod.default({ module_or_path: at("rite_wasm_bg.wasm") });
       }
       return mod;
     } catch (err) {
       console.warn("[rite] WASM load failed", err);
       return null;
+    } finally {
+      if (blobUrl) URL.revokeObjectURL(blobUrl);
     }
   })();
   return wasmPromise;

@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **Rite Studio did not run locally.** `pnpm site:dev` loaded the engine by
+  importing `/wasm/rite_wasm.js`, and Vite's dev server refuses to serve anything
+  under `public/` as a module — it answered 500, and Studio reported "WASM not
+  loaded" on a machine where the file was right there. A built site was fine, so
+  the only broken configuration was the one you develop in. Both Studios now
+  fetch the glue and import it through a blob URL: one code path, identical in
+  dev and production.
+
 ### Changed
 
 - The Rite site's footer no longer links Cant.

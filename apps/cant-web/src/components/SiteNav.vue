@@ -2,6 +2,15 @@
 import { useRoute } from "vue-router";
 import { RITE_URL } from "../lib/operators";
 
+/*
+ * `compact` is for Studio, which is full-bleed.
+ *
+ * Without it the bar keeps the site's `max-w-6xl` and the wordmark sits 80px
+ * inside a toolbar that starts at the window edge — two headers, stacked, that
+ * do not line up. Same switch the Rite site's nav takes, for the same reason.
+ */
+withDefaults(defineProps<{ compact?: boolean }>(), { compact: false });
+
 const route = useRoute();
 
 const links = [
@@ -14,7 +23,10 @@ const github = "https://github.com/undercurrent-labs/rite/tree/main/docs/cant";
 
 <template>
   <header class="sticky top-0 z-40 border-b border-cant-border bg-cant-bg/90 backdrop-blur">
-    <div class="mx-auto flex max-w-6xl items-center gap-3 px-4 py-3">
+    <div
+      class="mx-auto flex items-center gap-3 px-4 py-3"
+      :class="compact ? 'max-w-none' : 'max-w-6xl'"
+    >
       <!--
         The wordmark states the relationship rather than explaining it: Rite's
         name, in Rite's style, struck through, and Cant's flow operator pointing

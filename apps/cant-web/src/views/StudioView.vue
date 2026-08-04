@@ -175,7 +175,20 @@ const untouched = computed(() => source.value === EXAMPLES[example.value].source
     <header
       class="flex shrink-0 flex-wrap items-center gap-2 border-b border-cant-border px-4 py-2"
     >
-      <span class="mr-auto hidden text-sm text-slate-500 sm:inline">Playground</span>
+      <span class="hidden text-sm text-slate-500 sm:inline">Playground</span>
+      <!--
+        Status on the left, so the primary action stays flush with the right edge
+        and lines up with the nav above it. A chip after `Run` pushed the button
+        40px inward and the two bars stopped agreeing.
+      -->
+      <span
+        v-if="check"
+        class="mr-auto font-mono text-xs"
+        :class="check.ok ? 'text-cant-green' : 'text-rose-400'"
+      >
+        {{ check.ok ? "ok" : `${problemCount} problem${problemCount === 1 ? "" : "s"}` }}
+      </span>
+      <span v-else class="mr-auto"></span>
 
       <label class="sr-only" for="cant-example">Example</label>
       <select
@@ -212,13 +225,6 @@ const untouched = computed(() => source.value === EXAMPLES[example.value].source
         {{ running ? "running…" : "Run" }}
       </button>
 
-      <span
-        v-if="check"
-        class="ml-1 font-mono text-xs"
-        :class="check.ok ? 'text-cant-green' : 'text-rose-400'"
-      >
-        {{ check.ok ? "ok" : `${problemCount} problem${problemCount === 1 ? "" : "s"}` }}
-      </span>
     </header>
 
     <div

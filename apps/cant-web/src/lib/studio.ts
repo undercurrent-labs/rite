@@ -150,10 +150,12 @@ export function loadEngine(): Promise<Engine | null> {
       const glue = await response.text();
       blobUrl = URL.createObjectURL(new Blob([glue], { type: "text/javascript" }));
       const mod = (await import(/* @vite-ignore */ blobUrl)) as Engine & {
-        default?: (input?: unknown) => Promise<unknown>;
+        default?: (init?: { module_or_path: string }) => Promise<unknown>;
       };
       if (typeof mod.default === "function") {
-        await mod.default(at("cant_wasm_bg.wasm"));
+        // `{ module_or_path }`, not a bare URL: the positional form is
+        // deprecated and warns on every load.
+        await mod.default({ module_or_path: at("cant_wasm_bg.wasm") });
       }
       return mod;
     } catch (err) {

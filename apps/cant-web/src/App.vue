@@ -15,7 +15,7 @@ const isStudio = computed(() => route.meta.chrome === "studio");
 
 <template>
   <div class="flex min-h-screen flex-col" :class="isStudio ? 'h-screen overflow-hidden' : ''">
-    <SiteNav />
+    <SiteNav :compact="isStudio" />
     <main class="min-h-0 flex-1" :class="isStudio ? 'overflow-hidden' : ''">
       <RouterView />
     </main>
