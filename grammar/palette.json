@@ -27,6 +27,6 @@
     "http": { "color": "#ffcb6b", "weight": 500 },
     "punctuation": { "color": "#8b9bb4" },
     "plain": { "color": "#e2e8f0" },
-    "sigil": { "color": "#ff7edb", "glow": "rgb(255 126 219 / 45%)" }
+    "glyph": { "color": "#ff7edb", "glow": "rgb(255 126 219 / 45%)" }
   }
 }

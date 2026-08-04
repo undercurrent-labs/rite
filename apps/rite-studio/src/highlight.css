@@ -9,7 +9,7 @@
  *
  * Cyberpunk, but every colour is checked at 4.5:1 or better against the panel
  * background (#121821) — a neon theme that cannot be read is just a screenshot.
- * Sigils get the accent treatment because they are the language's signature;
+ * Glyphs get the accent treatment because they are the language’s signature;
  * the faint glow is the one purely decorative touch here.
  */
 .tok-comment {
@@ -47,13 +47,13 @@
 .tok-plain {
   color: #e2e8f0;
 }
-.tok-sigil {
+.tok-glyph {
   color: #ff7edb;
   text-shadow: 0 0 10px rgb(255 126 219 / 45%);
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .tok-sigil {
+  .tok-glyph {
     text-shadow: none;
   }
 }

@@ -93,7 +93,7 @@ pub fn parse_doc_comment(lines: &[&str]) -> DocComment {
 
     for line in lines {
         // Accept a raw source line or one the parser already stripped, and both doc
-        // sigils: `//!` is a documented Rite comment form, and leaving it attached
+        // glyphs: `//!` is a documented Rite comment form, and leaving it attached
         // dumped a literal `//!` into the rendered text.
         let line = line
             .trim_start()
@@ -395,12 +395,12 @@ h1,h2,h3 { color: #7ee0ff; }
 code, pre { background: #161b22; padding: 0.2em 0.4em; border-radius: 4px; }
 pre { padding: 1rem; overflow-x: auto; }
 a { color: #ff7edb; }
-.sigil { color: #c3e88d; }
+.glyph { color: #c3e88d; }
 nav a { margin-right: 1rem; }
 </style>
 </head>
 <body>
-<h1>Rite <span class="sigil">◆</span> Documentation</h1>
+<h1>Rite <span class="glyph">◆</span> Documentation</h1>
 <nav>
 "#,
     );
@@ -476,7 +476,7 @@ fn book_sections() -> Vec<DocSection> {
         DocSection {
             id: "tour".into(),
             title: "Language tour".into(),
-            body_markdown: r#"Rite is an expression-oriented scripting language with glyphic sigils and ASCII aliases.
+            body_markdown: r#"Rite is an expression-oriented scripting language with glyphs and ASCII aliases.
 
 ```rite
 ◆ square(value) ⟦
@@ -495,7 +495,7 @@ Install the `rite` CLI, then: `rite run script.rite --allow-all`."#.into(),
             body_markdown: "Build from source with `cargo build -p rite-cli --release`. The binary is `target/release/rite`.".into(),
         },
         DocSection {
-            id: "sigils".into(),
+            id: "glyphs".into(),
             title: "Glyph / ASCII syntax table".into(),
             body_markdown: r#"| Glyph | ASCII | Meaning |
 |-------|-------|---------|

@@ -174,7 +174,7 @@ Compiled builds embed `ProgramIr` (see `.rite/build/*/program.ir.json`) and eval
 crates/          # workspace crates (syntax, sem, runtime, caps, compiler, fmt, doc, cli, …)
 examples/        # hello, data-pipeline, http-service, text-rpg, automation, modules
 conformance/     # versioned language fixtures + differential gate
-grammar/         # EBNF + sigil/keyword tables
+grammar/         # EBNF + glyph/keyword tables
 docs/generated/  # output of `rite doc`
 IMPLEMENTATION.md
 ```

@@ -19,7 +19,7 @@ export type TokenKind =
   | "capability"
   | "capability-fn"
   | "keyword"
-  | "sigil"
+  | "glyph"
   | "operator"
   | "http"
   | "punctuation"
@@ -189,9 +189,9 @@ function tokenizeRite(src: string): Token[] {
         i = j;
         continue;
       }
-      // `@` on something unknown still reads as the host sigil
+      // `@` on something unknown still reads as the host glyph
       if (!hostAscii) {
-        push("sigil", "@");
+        push("glyph", "@");
         i += 1;
         continue;
       }
@@ -217,9 +217,9 @@ function tokenizeRite(src: string): Token[] {
       continue;
     }
 
-    // Single-character glyph sigils, from grammar/aliases.json
+    // Single-character glyphs, from grammar/aliases.json
     if (GLYPHS.has(c)) {
-      push("sigil", c);
+      push("glyph", c);
       i += 1;
       continue;
     }
@@ -269,7 +269,7 @@ function tokenizeShell(src: string): Token[] {
       else if (/^["']/.test(part)) push("string", part);
       else if (part.startsWith("-")) push("operator", part);
       else if (part.startsWith("$")) push("atom", part);
-      else if (part === "|" || part === "&&" || part === ">" || part === ">>") push("sigil", part);
+      else if (part === "|" || part === "&&" || part === ">" || part === ">>") push("glyph", part);
       else if (first && SHELL_BUILTINS.has(part)) push("keyword", part);
       else if (!first && /^[a-z-]+$/.test(part) && first) push("plain", part);
       else push("plain", part);
@@ -334,7 +334,7 @@ function tokenizeRust(src: string): Token[] {
       continue;
     }
     if (c === "!" || c === "?" || c === "&") {
-      push("sigil", c);
+      push("glyph", c);
       i += 1;
       continue;
     }
@@ -411,7 +411,7 @@ function tokenizeText(src: string): Token[] {
   for (const line of src.split("\n")) {
     const prompt = line.match(/^(rite〉|\$ |> |# )/);
     if (prompt) {
-      out.push({ kind: "sigil", text: prompt[0] });
+      out.push({ kind: "glyph", text: prompt[0] });
       out.push({ kind: "plain", text: line.slice(prompt[0].length) });
     } else if (line.startsWith("→") || line.startsWith("#")) {
       out.push({ kind: "comment", text: line });
@@ -446,7 +446,7 @@ export function isHighlighted(lang: string): boolean {
   return lang.toLowerCase() in TOKENIZERS;
 }
 
-/** True when the source uses glyph sigils, so Studio opens in the right dialect. */
+/** True when the source uses glyphs, so Studio opens in the right dialect. */
 export function detectDialect(source: string): "glyph" | "ascii" {
   for (const ch of source) if (GLYPHS.has(ch)) return "glyph";
   return "ascii";

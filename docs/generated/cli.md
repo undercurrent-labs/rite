@@ -92,7 +92,7 @@ One diagnostic code and what triggers it
 
 ## `rite describe language`
 
-Sigils, keywords, capabilities and diagnostics in one payload
+Glyphs, keywords, capabilities and diagnostics in one payload
 
 | Flag | Meaning |
 |---|---|

@@ -203,7 +203,7 @@ as a modifier only immediately after a structural block's closing `}` / `⟧`.
 Everywhere else it is leaf text and is handed to Rite unchanged.
 
 A third case is handled by requiring adjacency: `?{`, `|{` and `~{` are single
-tokens only when the brace immediately follows the sigil. Rite's parser accepts
+tokens only when the brace immediately follows the glyph. Rite’s parser accepts
 `{` as a block opener, so `? cond { … }` with a space is a Rite conditional and
 stays leaf text.
 

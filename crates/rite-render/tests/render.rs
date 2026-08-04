@@ -68,7 +68,7 @@ fn the_pieces_are_classified_as_the_site_classifies_them() {
     // colour — that is what makes a host call recognisable at a glance.
     assert_eq!(kind_of("@fs"), Kind::Capability);
     assert_eq!(kind_of("read"), Kind::CapabilityFn);
-    assert_eq!(kind_of("◆"), Kind::Sigil);
+    assert_eq!(kind_of("◆"), Kind::Glyph);
     assert_eq!(kind_of("*"), Kind::Operator);
 }
 

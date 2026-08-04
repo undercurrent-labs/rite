@@ -381,7 +381,7 @@ enum VscodeCmd {
 
 #[derive(Subcommand, Debug)]
 enum DescribeCmd {
-    /// Sigils, keywords, capabilities and diagnostics in one payload
+    /// Glyphs, keywords, capabilities and diagnostics in one payload
     Language {
         /// Emit JSON instead of text
         #[arg(long)]

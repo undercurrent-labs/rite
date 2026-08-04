@@ -66,8 +66,8 @@ impl<'a> Lexer<'a> {
         let start = self.pos;
         let c = self.peek_char();
 
-        // Multi-byte Unicode sigils
-        if let Some(tok) = self.try_sigil(start) {
+        // Multi-byte Unicode glyphs
+        if let Some(tok) = self.try_glyph(start) {
             return tok;
         }
 
@@ -355,7 +355,7 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    fn try_sigil(&mut self, start: usize) -> Option<Token> {
+    fn try_glyph(&mut self, start: usize) -> Option<Token> {
         let pairs: &[(&str, TokenKind)] = &[
             ("◆", TokenKind::Def),
             ("←", TokenKind::Bind),
@@ -382,9 +382,9 @@ impl<'a> Lexer<'a> {
             ("×", TokenKind::Star), // multiply / also used with repeat via call
             ("⊏", TokenKind::Use),  // use / plug-in (imports + HTTP middleware)
         ];
-        for (sigil, kind) in pairs {
-            if self.starts_with(sigil) {
-                self.pos += sigil.len();
+        for (glyph, kind) in pairs {
+            if self.starts_with(glyph) {
+                self.pos += glyph.len();
                 return Some(self.make(*kind, start, self.pos));
             }
         }
@@ -976,7 +976,7 @@ mod tests {
     }
 
     #[test]
-    fn lex_glyph_sigils() {
+    fn lex_glyphs() {
         let k = lex_kinds("◆ x ← 1 → y");
         assert_eq!(
             k,

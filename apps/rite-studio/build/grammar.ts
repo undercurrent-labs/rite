@@ -44,7 +44,7 @@ export function riteGrammar(): RiteGrammar {
 
   const glyphs = new Set<string>();
   for (const { glyph } of Object.values(aliases.aliases)) {
-    // Single-character sigils only; multi-char ASCII twins match as operators.
+    // Single-character glyphs only; multi-char ASCII twins match as operators.
     if ([...glyph].length === 1) glyphs.add(glyph);
   }
 

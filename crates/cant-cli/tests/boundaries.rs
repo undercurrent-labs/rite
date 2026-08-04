@@ -118,7 +118,7 @@ fn cant_does_not_appear_in_rites_language_surface() {
         "grammar/aliases.json",
         "grammar/rite.ebnf",
         "grammar/keywords.toml",
-        "grammar/sigils.toml",
+        "grammar/glyphs.toml",
     ] {
         let text = std::fs::read_to_string(root.join(file))
             .unwrap_or_else(|e| panic!("cannot read {file}: {e}"));
