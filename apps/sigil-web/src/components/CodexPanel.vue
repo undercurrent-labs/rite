@@ -15,11 +15,14 @@ const props = defineProps<{
    * vocabulary, not the user's source — and the labels go.
    */
   deepVeil?: boolean;
+  selected?: string | null;
 }>();
-defineEmits<{ close: [] }>();
+defineEmits<{ close: []; select: [string | null] }>();
 
 type Entry = {
   key: string;
+  // Snake case: these are the scene's own field names. See SigilCanvas.
+  graph_ref?: { kind: string; id: string };
   summary: string;
   label?: string;
   capabilities?: string[];
@@ -62,8 +65,13 @@ const entries = computed<Entry[]>(() => {
       <li
         v-for="entry in entries"
         :key="entry.key"
-        class="mb-1 border border-transparent p-2 hover:border-cyan/40"
+        class="mb-1 cursor-pointer border border-transparent p-2 hover:border-cyan/40"
+        :class="{ 'border-cyan bg-cyan/5': entry.graph_ref?.id === selected }"
+        :aria-current="entry.graph_ref?.id === selected ? 'true' : 'false'"
         tabindex="0"
+        @click="$emit('select', entry.graph_ref?.id === selected ? null : (entry.graph_ref?.id ?? null))"
+        @keydown.enter.prevent="$emit('select', entry.graph_ref?.id ?? null)"
+        @keydown.space.prevent="$emit('select', entry.graph_ref?.id ?? null)"
       >
         <span class="text-[0.6rem] uppercase tracking-widest text-cyan">{{ entry.summary }}</span>
         <span

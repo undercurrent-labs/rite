@@ -33,6 +33,23 @@
   }
 }
 
+@layer utilities {
+  /* The structured summary a screen reader gets instead of the picture (§23).
+     Visually hidden rather than `display:none`, which would remove it from the
+     accessibility tree along with the pixels. */
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border-width: 0;
+  }
+}
+
 @layer components {
   /* Controls read as instruments rather than form fields: square, hairline,
      lit when active. §20.9. */

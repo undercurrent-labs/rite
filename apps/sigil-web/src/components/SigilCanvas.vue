@@ -14,10 +14,13 @@ import { computed, onBeforeUnmount, ref, watch } from "vue";
 
 const props = defineProps<{
   svg?: string;
+  sceneJson?: string;
   deepVeil: boolean;
   rendering: boolean;
   error: string | null;
+  selected: string | null;
 }>();
+const emit = defineEmits<{ "update:selected": [string | null] }>();
 
 const host = ref<HTMLElement | null>(null);
 const wrap = ref<HTMLElement | null>(null);
@@ -37,6 +40,86 @@ function fit() {
 function zoom(by: number) {
   scale.value = Math.min(8, Math.max(0.2, scale.value * by));
 }
+
+/**
+ * Everything reachable from a node, and everything that reaches it.
+ *
+ * Read off the scene's edges rather than the SVG, because the SVG says which
+ * marks exist and the scene says how they connect — and highlighting a *path*
+ * needs the second. Both directions, because "what does this depend on" and
+ * "what depends on this" are the two questions a selection is asked.
+ */
+const related = computed<{ nodes: Set<string>; edges: Set<string> }>(() => {
+  const empty = { nodes: new Set<string>(), edges: new Set<string>() };
+  const id = props.selected;
+  if (!id || !props.sceneJson) return empty;
+
+  // `graph_ref`, not `graphRef`. The scene's Rust types serialize with their own
+  // field names — only the *WASM boundary* types use camelCase — and reading the
+  // wrong one fails silently: no edges parse, so a selection lights only itself
+  // and looks like a highlighting bug rather than a naming one.
+  type Element = { id: string; graph_ref?: { kind: string; id: string } };
+  let elements: Element[] = [];
+  try {
+    elements = JSON.parse(props.sceneJson).elements ?? [];
+  } catch {
+    return { nodes: new Set([id]), edges: new Set() };
+  }
+
+  // `e0:n0.0->n1.0` — the adapter's edge identity, which names both ends.
+  const edges: { element: string; from: string; to: string }[] = [];
+  for (const element of elements) {
+    if (element.graph_ref?.kind !== "edge") continue;
+    const match = /:(.+?)\.\d+->(.+?)\.\d+$/.exec(element.graph_ref.id);
+    if (match) edges.push({ element: element.id, from: match[1], to: match[2] });
+  }
+
+  const nodes = new Set<string>([id]);
+  for (const forward of [true, false]) {
+    const frontier = [id];
+    while (frontier.length) {
+      const current = frontier.pop() as string;
+      for (const edge of edges) {
+        const [from, to] = forward ? [edge.from, edge.to] : [edge.to, edge.from];
+        if (from === current && !nodes.has(to)) {
+          nodes.add(to);
+          frontier.push(to);
+        }
+      }
+    }
+  }
+
+  // An edge is lit when *both* ends are, so a trace to a node outside the
+  // selection does not read as part of the path.
+  const lit = new Set<string>();
+  for (const edge of edges) {
+    if (nodes.has(edge.from) && nodes.has(edge.to)) lit.add(edge.element);
+  }
+  return { nodes, edges: lit };
+});
+
+/** Dim everything the selection does not reach. */
+function paint() {
+  const svg = host.value?.querySelector("svg");
+  if (!svg) return;
+  const { nodes, edges } = related.value;
+  // Exact identity, not a substring test. Matching `graphId.includes("n1")` lit
+  // `n10` and `n11` too, which meant a selection lit the whole picture and
+  // looked like it was working.
+  svg.querySelectorAll<SVGElement>('[id^="node-"], [id^="edge-"]').forEach((element) => {
+    const on = !props.selected
+      ? true
+      : element.id.startsWith("node-")
+        ? nodes.has(element.id.slice("node-".length))
+        : edges.has(element.id);
+    element.style.opacity = on ? "1" : "0.12";
+    element.style.transition = "opacity .12s";
+  });
+}
+
+watch([() => props.selected, () => props.svg], () => requestAnimationFrame(paint), {
+  flush: "post",
+});
 
 let dragging = false;
 let last = { x: 0, y: 0 };
@@ -103,14 +186,28 @@ function wire() {
     node.addEventListener("focus", show);
     node.addEventListener("mouseleave", hide);
     node.addEventListener("blur", hide);
+
+    const graphId = node.id.replace(/^node-/, "");
+    const pick = () => emit("update:selected", props.selected === graphId ? null : graphId);
+    node.addEventListener("click", pick);
+    node.addEventListener("keydown", (event) => {
+      const key = (event as KeyboardEvent).key;
+      if (key === "Enter" || key === " ") {
+        event.preventDefault();
+        pick();
+      }
+    });
   });
+  paint();
 }
 
 watch(() => props.svg, () => requestAnimationFrame(wire), { flush: "post" });
 watch(() => props.deepVeil, (on) => on && (tip.value = null));
 
 function onKey(event: KeyboardEvent) {
-  if (event.key === "Escape") tip.value = null;
+  if (event.key !== "Escape") return;
+  tip.value = null;
+  emit("update:selected", null);
 }
 window.addEventListener("keydown", onKey);
 onBeforeUnmount(() => window.removeEventListener("keydown", onKey));

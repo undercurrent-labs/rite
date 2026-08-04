@@ -592,8 +592,41 @@ question being asked.
 - No gallery, no local persistence, no selection/path highlighting.
 - The app surfaces no accessible structured summary of its own; the scene has one.
 
+---
+
+## Phase 6 — interaction, in part
+
+Selection with upstream-and-downstream path highlighting, Codex synchronisation
+in both directions, Escape to clear, and the screen-reader summary in a live
+region.
+
+### Two silent failures, both about names
+
+**The scene serializes `graph_ref`; the app read `graphRef`.** Only the WASM
+boundary types use camelCase — the scene's own types keep their Rust field names
+— and the mismatch fails quietly: no edges parse, so a selection lights only
+itself. It looks like a highlighting bug rather than a naming one, and it would
+have been easy to "fix" by loosening the matching instead.
+
+**Which is what the first version did.** Falling back to
+`elementId.includes(nodeId)` meant selecting `n1` also lit `n10` and `n11`, so
+the selection lit the whole picture — and *looked* like it was working. Matching
+is now exact: nodes by identity, edges only when both endpoints are in the
+selection, so a trace to something outside does not read as part of the path.
+
+Both were found by measuring in a real browser rather than by reading the code.
+The lit-element counts are what showed it: 3 of 22 was too few, then 22 of 22 was
+too many, and only 7-to-10 varying by node is right.
+
+### Known limitations at the end of this pass
+
+- No component tests and no E2E suite. W2–W7 are implemented, not proven.
+- Mobile stacks rather than using bottom sheets (§20.2).
+- No gallery, no local persistence.
+- Selection parses edge endpoints out of the element id — see OD4.
+
 ### Next milestone
 
-Phase 6 — interaction and the Codex in the app: selection with path
-highlighting, mobile sheets, the accessibility work, and the component and E2E
-tests that make W2–W7 real rather than implemented.
+Phase 8 — Cloudflare — is small and mostly configuration, and is what gets this
+to `sigil.rite.foo`. Phase 7's gallery and the browser test suite are the other
+two open fronts.

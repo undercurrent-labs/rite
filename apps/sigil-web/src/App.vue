@@ -42,6 +42,7 @@ const versions = ref<Awaited<ReturnType<typeof version>>>(null);
 const showSource = ref(true);
 const showCodex = ref(false);
 const deepVeil = ref(false);
+const selected = ref<string | null>(null);
 
 const diagnostics = computed<Diagnostic[]>(() => result.value?.diagnostics ?? []);
 const errors = computed(() => diagnostics.value.filter((d) => d.severity === "error"));
@@ -72,6 +73,10 @@ async function render() {
 
   if (!isCurrent(token)) return;
   result.value = outcome;
+  // A selection points at a node in the picture that was on screen. After a new
+  // render it may name something that is no longer there, and a highlight over a
+  // node the user did not choose is worse than no highlight.
+  selected.value = null;
   rendering.value = false;
 }
 
@@ -269,7 +274,9 @@ async function copyFingerprint() {
       <!-- The artifact -->
       <main class="relative min-h-0 flex-1">
         <SigilCanvas
+          v-model:selected="selected"
           :svg="result?.svg"
+          :scene-json="result?.sceneJson"
           :deep-veil="deepVeil"
           :rendering="rendering"
           :error="engineError"
@@ -284,9 +291,13 @@ async function copyFingerprint() {
         :fingerprint="result?.fingerprint"
         :elapsed-ms="result?.elapsedMs"
         :deep-veil="deepVeil"
+        :selected="selected"
         @close="showCodex = false"
+        @select="selected = $event"
       />
     </div>
+
+    <p class="sr-only" role="status" aria-live="polite">{{ result?.summary }}</p>
 
     <footer
       class="panel flex shrink-0 flex-wrap items-center gap-2 border-t px-3 py-1.5 text-[0.65rem]"

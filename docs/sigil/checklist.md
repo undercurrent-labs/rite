@@ -98,7 +98,7 @@ and Codex · **P7** export and gallery · **P8** Cloudflare · **P9** hardening.
 | W3 | Canvas dominates the interface | P5 | the canvas is the flex-1 column and both panels collapse; no layout test yet | [~] |
 | W4 | Panels can be hidden | P6 | E2E: all panels hidden leaves a fullscreen artifact | [ ] |
 | W5 | Pan/zoom/fit/fullscreen work | P6 | implemented with keyboard-operable buttons; no E2E yet | [~] |
-| W6 | Codex selection synchronizes with the canvas | P6 | component test both directions | [ ] |
+| W6 | Codex selection synchronizes with the canvas | P6 | both directions — a mark selects its entry, an entry selects its mark; Escape clears. No component test yet | [~] |
 | W7 | Mobile alternatives to hover work | P6 | E2E at a mobile viewport, tap and focus only | [ ] |
 | W8 | Exports work | P7 | SVG, PNG (canvas), scene JSON, copy SVG, copy fingerprint in the app; HTML export is CLI-only | [~] |
 | W9 | Built-in gallery works | P7 | generated from `fixtures/sigil/` at build time, so it cannot drift | [ ] |
@@ -127,7 +127,7 @@ and Codex · **P7** export and gallery · **P8** Cloudflare · **P9** hardening.
 | Q5 | Fuzz smoke tests pass | P9 | graph JSON parser, adapter, scene builder, mark generator, SVG serializer, metadata stripping | [ ] |
 | Q6 | Malicious labels cannot inject markup | P1/P3 | `tests/svg_security.rs` — one escaper, one sanitizer, 12 hostile strings across 36 option sets, plus a hostile-identifier suite | [x] |
 | Q7 | Large graph limits work | P1 | `a_graph_over_the_node_cap_is_refused_with_a_way_out` asserts the refusal names an alternative; `a_large_but_legal_graph_warns_once` | [~] `--simplify` itself is P3 |
-| Q8 | Accessibility checklist passes | P6 | keyboard selection, focus indicators, structured Codex, reduced motion, no colour-only differentiation, screen-reader graph summary | [ ] |
+| Q8 | Accessibility checklist passes | P6 | keyboard selection and focus rings, structured Codex, reduced motion, no colour-only differentiation, and the screen-reader summary in a live region. No audit yet | [~] |
 | Q9 | Documentation examples are generated and tested | P7 | `examples/sigil/*.cant` → graph JSON, scene JSON, veiled + revealed SVG, PNG thumbnail, in CI | [ ] |
 
 ## Open design work
@@ -138,6 +138,7 @@ worth showing. Carried here so they are not lost between phases.
 | # | What | Why it matters |
 |---|---|---|
 | ~~OD1~~ | ~~The composition does not fill the circle.~~ **Fixed.** Three causes: the spine divided by its length rather than length−1, so the gap grew as the program got *shorter*; its radius came from whole-graph depth, so deep branches bunched the backbone at the centre; and — the structural one — it allocated an angular slot to every spine node and then relocated some of them, reserving space for marks that would not be there. The sweep is now divided over the nodes that stay on the spiral, and a relocated node borrows a position without consuming a slot. | |
+| OD4 | Selection reads edge endpoints out of the *element id* (`e0:n0.0->n1.0`) with a regex. It works because the adapter builds that id, but it is a structural dependency on a string format. The scene should carry endpoints as fields. | A change to edge identity would silently stop path highlighting. |
 | OD2 | Edge routing minimizes nothing (§11.6). On a dense graph traces cross. | Crossings read as connections that are not there. |
 | OD3 | Nested fork-inside-fork sectors subdivide by weight but are not recursively renormalized. | Deep nesting gets cramped before it gets illegible. |
 
