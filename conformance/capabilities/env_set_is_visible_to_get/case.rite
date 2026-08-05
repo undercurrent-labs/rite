@@ -1,0 +1,7 @@
+// `@env.set` writes an overlay this run owns, not the operating-system
+// environment: `std::env::set_var` races every C library that reads the
+// environment, and the runtime is multi-threaded. What the overlay guarantees is
+// what this case asserts — a write reads back, and it reads back *over* whatever
+// the process inherited.
+do @env.set("RITE_CONFORMANCE_ONLY", "written")
+^ ! @env.get("RITE_CONFORMANCE_ONLY")

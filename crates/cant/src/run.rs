@@ -38,12 +38,20 @@ pub struct RunOptions {
     pub trace: bool,
     /// Verbatim Rite lines emitted before the generated functions — the
     /// REPL's session bindings (`x <- 5`). Top-level bindings are visible
-    /// inside generated defs, which is what makes a bound name usable in a
+    /// inside generated defs, so a bound name is usable in a
     /// stage.
     pub preamble: Vec<String>,
+    /// Modules made available to the program without it saying `use`:
+    /// `--use`, `CANT_USE`, `cant.toml`. See [`crate::Environment`].
+    pub uses: Vec<String>,
+    /// Extra directories `use` searches, after `script_dir`.
+    pub module_roots: Vec<PathBuf>,
     /// Where the guest's `@console` output goes. `None` means the host's own
     /// streams, which is what a CLI wants.
     pub output: Option<rite_runtime::OutputSink>,
+    /// Variables from `--env-file`, seeded into the run's environment overlay.
+    /// Reading exactly these names is granted by the caller.
+    pub env_values: Vec<(String, String)>,
 }
 
 impl Default for RunOptions {
@@ -51,11 +59,34 @@ impl Default for RunOptions {
         Self {
             trace: false,
             preamble: Vec::new(),
+            uses: Vec::new(),
+            module_roots: Vec::new(),
             script_dir: None,
             permissions: PermissionSet::default_secure(),
             budget: ExecutionBudget::new(),
             args: Vec::new(),
             output: None,
+            env_values: Vec::new(),
+        }
+    }
+}
+
+impl RunOptions {
+    /// The [`crate::Environment`] a check and a run must agree on.
+    ///
+    /// The script's own directory leads the search path, as Rite's module
+    /// loader does for a file it was given directly; anything from `--use`'s
+    /// companion `--module-root` follows.
+    pub fn environment(&self) -> crate::Environment {
+        let mut module_roots = Vec::new();
+        if let Some(dir) = &self.script_dir {
+            module_roots.push(dir.clone());
+        }
+        module_roots.extend(self.module_roots.iter().cloned());
+        crate::Environment {
+            preamble: self.preamble.clone(),
+            uses: self.uses.clone(),
+            module_roots,
         }
     }
 }
@@ -90,7 +121,8 @@ impl ExecutionResult {
 
 /// Expand a Cant program and run it on Rite's runtime.
 pub async fn run(name: &str, text: &str, options: RunOptions) -> ExecutionResult {
-    let checked = crate::check_with(name, text, &options.preamble, options.script_dir.as_deref());
+    let environment = options.environment();
+    let checked = crate::check_with(name, text, &environment);
     if checked.has_errors() {
         let exit_code = checked.exit_code();
         return ExecutionResult {
@@ -117,18 +149,19 @@ pub async fn run(name: &str, text: &str, options: RunOptions) -> ExecutionResult
         };
     };
 
-    if options.trace || !options.preamble.is_empty() {
-        // Re-expand with instrumentation and/or the session preamble. The
-        // graph is the one `check` built; only the generated Rite differs.
+    // Re-expand with instrumentation and/or the host's own imports and
+    // preamble. The graph is the one `check` built; only the generated Rite
+    // differs. `uses` has to be in this condition as well as `preamble` — a
+    // `--use` that was checked and then dropped before the run is a module that
+    // resolves at check time and is missing at run time.
+    if options.trace || !environment.preamble.is_empty() || !environment.uses.is_empty() {
         if let Some(graph) = checked.analysis.graph.as_ref() {
-            let mut imports: Vec<String> = graph.uses.iter().map(|u| format!("use {u}")).collect();
-            imports.extend(options.preamble.iter().cloned());
             expansion = cant_sem::expand(
                 graph,
                 text,
                 &ExpandOptions {
                     source_name: name.to_string(),
-                    imports,
+                    imports: environment.imports(&graph.uses),
                     trace: options.trace,
                 },
             );
@@ -140,10 +173,16 @@ pub async fn run(name: &str, text: &str, options: RunOptions) -> ExecutionResult
     ctx.script_args = options.args.clone();
     if let Some(dir) = &options.script_dir {
         ctx.script_dir = Some(dir.clone());
-        ctx.module_roots.push(dir.clone());
     }
+    // The same roots `check` searched, in the same order. Two different search
+    // paths for one program is a program that checks and then cannot run.
+    ctx.module_roots.extend(environment.module_roots.clone());
     ctx.sink = Some(options.output.clone().unwrap_or_else(inherit_output));
-    rite_caps::install_defaults(&mut ctx, options.permissions.clone());
+    rite_caps::install_defaults_with_env(
+        &mut ctx,
+        options.permissions.clone(),
+        options.env_values.clone(),
+    );
 
     // The generated source gets its own file id so a diagnostic from it cannot
     // be mistaken for one about the `.cant`.
@@ -188,8 +227,8 @@ pub async fn run(name: &str, text: &str, options: RunOptions) -> ExecutionResult
             // `rite run <cant expand>` reported the panic it really is as 1, and
             // the differential harness caught the two paths disagreeing about
             // the same execution. Parity is worth more than a tidier number, and
-            // the *code* — `CANT-O002` — is the stable identifier the
-            // specification actually asks for.
+            // the *code*, `CANT-O002`, is the stable identifier the
+            // specification asks for.
             let exit_code = error.exit_code();
             for diagnostic in runtime_diagnostics(&error, &expansion, cant_file) {
                 diagnostics.push(diagnostic);
@@ -296,7 +335,7 @@ fn runtime_diagnostics(
 /// Classify a runtime message, and strip what the user must not be shown.
 ///
 /// Generated code tags the failures Cant is responsible for with their own code
-/// — `CANT-O001: orbit at …`, `CANT-R003: scatter expected a list …` — so this
+/// (`CANT-O001: orbit at …`, `CANT-R003: scatter expected a list …`), so this
 /// does not have to pattern-match prose. The tag is deliberately left in the
 /// generated Rite too: someone running the expansion directly with `rite run`
 /// sees a code they can look up rather than an anonymous panic.

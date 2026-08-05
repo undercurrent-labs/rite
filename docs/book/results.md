@@ -134,8 +134,7 @@ err(bad)
 err(rejected)
 ```
 
-The function is expected to answer a result of its own, which is what lets steps
-chain: each one may fail, and the first failure is the one that comes out.
+The function is expected to answer a result of its own, so steps chain: each one may fail, and the first failure is the one that comes out.
 
 Inside a function that can propagate, `?` says the same thing more directly —
 `b ← step_one(a)?` then `step_two(b)?`. Reach for `and_then` where `?` is not

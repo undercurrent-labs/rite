@@ -136,7 +136,7 @@ cannot surprise you.
 ```
 
 Naming a host function is not a way around the marker. A capability reference is not a
-value you can pass around — mentioning it *calls* it, with no arguments — so it takes a
+value you can pass around: mentioning it *calls* it, with no arguments, so it takes a
 marker too:
 
 ```rite browser

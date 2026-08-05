@@ -317,7 +317,7 @@ fn is_comment_kind(kind: TokenKind) -> bool {
     )
 }
 
-/// Trailing whitespace is the only thing we are allowed to change in a comment.
+/// Trailing whitespace is all this is allowed to change in a comment.
 fn normalize_comment(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
     for (i, line) in text.split('\n').enumerate() {
@@ -1120,7 +1120,7 @@ impl<'a> Formatter<'a> {
                 // the way it was written. The AST records that the source used the
                 // sugar; without that flag it is indistinguishable from
                 // `keep(⟦ … ⟧)`, and `rite fmt` rewrote every pipeline in the corpus
-                // — `examples/02-pipelines` and every snippet in the book included —
+                // (`examples/02-pipelines` and every snippet in the book included)
                 // into the form the book does not use. Same reasoning as
                 // `@tcp.listen` above.
                 if c.trailing_block && c.args.len() == 1 && matches!(c.args[0], Expr::Block(_)) {

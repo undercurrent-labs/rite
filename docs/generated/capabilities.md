@@ -506,6 +506,72 @@ Return the environment variables this script may read, as a record. With `--allo
 - effectful: true
 - permission: env
 
+### set
+
+Set an environment variable for this run. Needs `--allow env:write` (or `env:write=NAME`), which is a *separate* grant from the `env` read permission. The value is visible to `@env.get`, `@env.require` and `@env.all`, and is inherited by commands started with `@process.run`. It does not modify the operating-system environment of this process: writing that is unsafe while other threads are running, and a program started outside `@process.run` will not see it.
+
+- arity: 2
+- effectful: true
+- permission: env:write
+
+## @sys
+
+### cwd
+
+The process's current working directory, as a string. Effectful: it is where relative paths resolve from, and it is not a constant. Native only.
+
+- arity: 0
+- effectful: true
+- permission: sys
+
+### home
+
+The invoking user's home directory, or `none` when the platform does not say. Read from `HOME` (or `USERPROFILE` on Windows) but gated on `sys` rather than `env`, because it is asking where the user lives rather than reading their environment. Native only.
+
+- arity: 0
+- effectful: true
+- permission: sys
+
+### temp_dir
+
+The directory the platform offers for temporary files, as a string. Nothing is created; writing there still needs an `fs:write` grant. Native only.
+
+- arity: 0
+- effectful: true
+- permission: sys
+
+### os
+
+The operating system this is running on: `linux`, `macos`, `windows`, `wasm`, and so on. `std::env::consts::OS`.
+
+- arity: 0
+- effectful: true
+- permission: sys
+
+### arch
+
+The processor architecture: `x86_64`, `aarch64`, `wasm32`, and so on. `std::env::consts::ARCH`.
+
+- arity: 0
+- effectful: true
+- permission: sys
+
+### pid
+
+This process's identifier, as an integer. Native only.
+
+- arity: 0
+- effectful: true
+- permission: sys
+
+### hostname
+
+The machine's hostname, or `none` when it cannot be determined. Native only.
+
+- arity: 0
+- effectful: true
+- permission: sys
+
 ## @process
 
 ### run

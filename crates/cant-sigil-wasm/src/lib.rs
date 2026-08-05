@@ -2,7 +2,7 @@
 //!
 //! A binding layer and nothing else. Every decision about what a picture looks
 //! like is in `rite-sigil`, which is compiled here rather than reimplemented —
-//! that is ADR 0005, and it is what makes "the browser renders the same scene as
+//! that is ADR 0005, and what keeps "the browser renders the same scene as
 //! the CLI" a testable claim instead of a coincidence maintained by hand.
 //!
 //! # What is not in this build
@@ -425,7 +425,7 @@ fn render_cant_impl(
     // Veiled governs the picture, and the Codex is a separate surface: §13.1
     // says a Veiled render "may reveal details on hover/focus or through the
     // Codex", with Deep Veil to suppress that. Tying the two together made
-    // "veiled sigil, full Codex" — the intended default — impossible to ask for.
+    // "veiled sigil, full Codex", the intended default, impossible to ask for.
     //
     // Carrying them does not leak into the artifact: the serializer refuses to
     // draw a text element in Veiled mode and a `<title>` carries a semantic kind
@@ -481,7 +481,7 @@ fn render_graph_impl(graph_json: &str, options: &RenderOptions, with_html: bool)
     // Veiled governs the picture, and the Codex is a separate surface: §13.1
     // says a Veiled render "may reveal details on hover/focus or through the
     // Codex", with Deep Veil to suppress that. Tying the two together made
-    // "veiled sigil, full Codex" — the intended default — impossible to ask for.
+    // "veiled sigil, full Codex", the intended default, impossible to ask for.
     //
     // Carrying them does not leak into the artifact: the serializer refuses to
     // draw a text element in Veiled mode and a `<title>` carries a semantic kind

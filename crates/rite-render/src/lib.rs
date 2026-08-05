@@ -15,10 +15,11 @@
 
 mod palette;
 mod svg;
+pub mod term;
 mod tokens;
 
 pub use palette::{Kind, Palette, Style};
-pub use tokens::{runs, Run};
+pub use tokens::{capability_names, runs, Run};
 
 /// What to produce.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -330,7 +331,7 @@ mod tests {
     fn the_palette_covers_every_kind() {
         let p = Palette::shared();
         for kind in Kind::ALL {
-            // Panics if the table is missing one, which is the point.
+            // Panics if the table is missing one, which is intended.
             let style = p.style(kind);
             assert!(
                 style.color.starts_with('#'),

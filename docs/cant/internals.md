@@ -112,9 +112,9 @@ in sync right up until they do not. The *meaning* of the strings is now shared;
 the `clap` declarations stay each tool's own, so `rite` gains no argument-parser
 dependency and each `--help` reads like its own tool's.
 
-`rite run` was switched onto it in the same change, which is what makes this
-behaviour-preserving rather than merely claimed. Two latent bugs surfaced while
-doing it:
+`rite run` was switched onto it in the same change, so the behaviour is
+preserved by construction rather than by assertion. Two latent bugs surfaced
+while doing it:
 
 - **A bad `--deny` was discarded silently.** `if let Ok(p) = Permission::parse(d)`
   meant a typo in a *revocation* left the permission in place — the failure mode

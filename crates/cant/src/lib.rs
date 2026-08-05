@@ -148,27 +148,60 @@ impl CheckResult {
     }
 }
 
-/// Parse, build the graph, expand, and run the result through Rite's front end.
-pub fn check(name: &str, text: &str) -> CheckResult {
-    check_with(name, text, &[], None)
+/// What a program is checked and run *in*.
+///
+/// Not part of the language: a Cant program is one flow, and none of this
+/// changes what it means. These are the things a *host* supplies around it —
+/// the REPL's session bindings, the modules a command line made available, and
+/// where modules are looked for.
+#[derive(Debug, Clone, Default)]
+pub struct Environment {
+    /// Verbatim Rite lines emitted after the imports and before the generated
+    /// functions — the REPL's session bindings (`x <- 5`).
+    pub preamble: Vec<String>,
+    /// Modules made available to every program without it saying `use`.
+    ///
+    /// Emitted as `use NAME` above the generated functions, *after* the
+    /// program's own imports and skipping any it already declares: two `use`
+    /// lines for one module is a Rite duplicate-binding error, and it would
+    /// point at generated code.
+    pub uses: Vec<String>,
+    /// Directories `use` searches, in order, before Rite's working-directory
+    /// fallback. The program's own directory belongs here first.
+    pub module_roots: Vec<std::path::PathBuf>,
 }
 
-/// [`check`], with extra generated-Rite preamble lines in the expansion — the
-/// REPL's session bindings — and the directory `use` imports resolve from.
+impl Environment {
+    /// The `use` lines to emit above the generated functions: the program's
+    /// own first, then anything the host added that the program did not
+    /// already name.
+    pub fn imports(&self, declared: &[String]) -> Vec<String> {
+        let mut out: Vec<String> = declared.iter().map(|u| format!("use {u}")).collect();
+        for extra in &self.uses {
+            if !declared.iter().any(|d| d == extra) {
+                out.push(format!("use {extra}"));
+            }
+        }
+        out.extend(self.preamble.iter().cloned());
+        out
+    }
+}
+
+/// Parse, build the graph, expand, and run the result through Rite's front end.
+pub fn check(name: &str, text: &str) -> CheckResult {
+    check_with(name, text, &Environment::default())
+}
+
+/// [`check`], in a host-supplied [`Environment`].
 ///
-/// The directory matters: check compiles the generated Rite, and a `use
+/// The module roots matter: check compiles the generated Rite, and a `use
 /// helpers` in it must find `helpers.rite` beside the *program*, not beside
-/// whatever the process's working directory happens to be. Without it,
+/// whatever the process's working directory happens to be. Without them,
 /// checking a module-importing program from any other directory reported
 /// "module not found" for a module that was right there — and `cant run`
 /// checks before it runs, so the run failed too.
-pub fn check_with(
-    name: &str,
-    text: &str,
-    preamble: &[String],
-    module_root: Option<&std::path::Path>,
-) -> CheckResult {
-    let (expansion, analysis) = expand_with(name, text, preamble);
+pub fn check_with(name: &str, text: &str, env: &Environment) -> CheckResult {
+    let (expansion, analysis) = expand_with(name, text, env);
     let mut diagnostics = analysis.diagnostics.clone();
 
     if let Some(expansion) = &expansion {
@@ -179,10 +212,8 @@ pub fn check_with(
             .map(|f| f.id)
             .unwrap_or(FileId(0));
         let generated = SourceFile::new(FileId(u32::MAX - 1), "<generated>.rite", &expansion.rite);
-        let roots: Vec<std::path::PathBuf> = module_root
-            .map(|d| vec![d.to_path_buf()])
-            .unwrap_or_default();
-        let (_, rite_diagnostics) = rite_sem::compile_to_ir_with_roots(&generated, None, &roots);
+        let (_, rite_diagnostics) =
+            rite_sem::compile_to_ir_with_roots(&generated, None, &env.module_roots);
         let remapped: Vec<_> = rite_diagnostics
             .iter()
             .map(|d| cant_sem::remap_diagnostic(d, &expansion.map, file))
@@ -210,28 +241,26 @@ pub fn check_with(
 /// rejected would be a guess, and printing it as though it were the program is
 /// how an audit tool starts lying.
 pub fn expand(name: &str, text: &str) -> (Option<Expansion>, AnalyzeResult) {
-    expand_with(name, text, &[])
+    expand_with(name, text, &Environment::default())
 }
 
-/// [`expand`], with extra preamble lines after the `use` imports.
+/// [`expand`], in a host-supplied [`Environment`].
 pub fn expand_with(
     name: &str,
     text: &str,
-    preamble: &[String],
+    env: &Environment,
 ) -> (Option<Expansion>, AnalyzeResult) {
     let analysis = analyze(name, text);
     if analysis.has_errors() {
         return (None, analysis);
     }
     let expansion = analysis.graph.as_ref().map(|g| {
-        let mut imports: Vec<String> = g.uses.iter().map(|u| format!("use {u}")).collect();
-        imports.extend(preamble.iter().cloned());
         cant_sem::expand(
             g,
             text,
             &ExpandOptions {
                 source_name: name.to_string(),
-                imports,
+                imports: env.imports(&g.uses),
                 trace: false,
             },
         )

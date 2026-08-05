@@ -57,7 +57,7 @@ Environment variables are where secrets live, so the default is to deny and the
 useful grant is the narrow one. A script that reads `HOME` should not be handed
 `AWS_SECRET_ACCESS_KEY` as well.
 
-`@env.all` answers a record of **everything the script may read** — which is the whole
+`@env.all` answers a record of **everything the script may read**: the whole
 environment under `--allow env`, and exactly the names you listed under a scoped
 grant:
 
@@ -75,6 +75,91 @@ grant stays honest: the record has as many entries as you granted, and no more. 
 nothing granted it is a permission error rather than an empty record — a script
 asking for the environment when it may not have one should hear so.
 
+### Loading a file of variables
+
+A `.env` file is the usual way a tool is configured in development, and typing
+`--allow env=API_KEY,DATABASE_URL,…` beside it defeats the point:
+
+```bash
+printf 'API_KEY=secret\n' > .env
+rite run app.rite --env-file .env
+```
+
+`--env-file` loads `KEY=VALUE` pairs and grants reading **exactly the names the
+file defines** — nothing else. The argument is the one `@process.args` already
+makes: a file you named on this command line is your own input to the program,
+not ambient state you are being asked to expose. `#` starts a comment, a leading
+`export ` is accepted, and values may be quoted. There is no interpolation:
+`$FOO` is those four characters.
+
+### Writing a variable (`@env.set`)
+
+```rite native_only
+◆! main() ⟦
+  ! @env.set("GREETING", "hello")
+  ! @console.println(! @env.get("GREETING")?)
+⟧
+```
+
+```bash
+rite run greet.rite --allow env=GREETING --allow env:write=GREETING
+```
+
+**Writing is a separate grant from reading.** `--allow env` means "you may look
+at my environment"; a script allowed to read `PATH` is not thereby allowed to
+change what the programs it starts will find on it. `env:write` scopes the same
+way, and `env:read` is the explicit spelling of the bare `env` form.
+
+What a write changes is an overlay this run owns, **not the operating system's
+environment for this process**. Writing that is unsafe while other threads are
+running — the C library that reads the environment does not synchronise with the
+one that writes it, and a Rite runtime serving HTTP has plenty of threads. So:
+
+- `@env.get`, `@env.require` and `@env.all` read the overlay first, so a write
+  reads back.
+- `@process.run` passes the overlay to the command it starts, so a subprocess
+  sees it.
+- A program started any other way does not, and nothing outside this process
+  ever does.
+
+## The machine (`@sys`)
+
+`@env` is about *variables*. Everything else ambient — where you are, what you
+are running on — is `@sys`:
+
+```rite native_only
+◆! main() ⟦
+  ! @console.println("running in " + (! @sys.cwd()?))
+  ! @console.println("on " + (! @sys.os()) + "/" + (! @sys.arch()))
+⟧
+```
+
+```bash
+rite run where.rite --allow sys
+```
+
+| | |
+|---|---|
+| `@sys.cwd` | the working directory — where relative paths resolve from |
+| `@sys.home` | the user's home directory, or `none` |
+| `@sys.temp_dir` | where the platform puts temporary files |
+| `@sys.os` / `@sys.arch` | `linux`, `macos`, `windows`; `x86_64`, `aarch64` |
+| `@sys.pid` | this process's identifier |
+| `@sys.hostname` | the machine's name, or `none` |
+
+All of them take `!`. None is constant for the life of a run — a working
+directory can be changed out from under you, a temporary directory can be
+removed — and a pure function that answers differently the second time is worse
+than an effectful one that says it might.
+
+Denied by default, with `--allow sys`. They are small facts, but they are facts
+about the machine rather than about the program, and the default is that ambient
+authority is asked for. `@sys.temp_dir` tells you where to write; it does not
+let you — that is still `fs:write`.
+
+In the browser, `os` and `arch` answer; the rest refuse with a message saying so
+rather than inventing a working directory.
+
 ## Time (`@clock`)
 
 ```rite native_only
@@ -85,11 +170,11 @@ asking for the environment when it may not have one should hear so.
 2026-07-31T16:31:13.680626617+00:00
 ```
 
-RFC3339, always UTC. That format is fixed rather than configurable for a reason
-worth knowing: **RFC3339 in UTC sorts lexicographically**, so `<` and `>` on the
-plain strings really are time comparisons, with no parsing step. `@fs.metadata`
-reports `mtime` in the same spelling precisely so the two can be compared directly —
-see [Auditing a directory](../tutorials/fs-audit.md).
+RFC3339, always UTC. The format is fixed rather than configurable because
+**RFC3339 in UTC sorts lexicographically**, so `<` and `>` on the plain strings
+really are time comparisons, with no parsing step. `@fs.metadata` reports
+`mtime` in the same spelling so the two can be compared directly; see
+[Auditing a directory](../tutorials/fs-audit.md).
 
 | Call | Answers | Marked? |
 |---|---|---|
@@ -226,8 +311,7 @@ b
 [2, 3, 5, 4, 1]
 ```
 
-Run that twice and it prints the same three lines, which is what makes a test over
-random input worth writing.
+Run that twice and it prints the same three lines, which is what a test over random input needs.
 
 > **Seeding covers `uuid` too.** After `@random.seed(42)`, `@random.uuid()` returns
 > the *same* UUID on every run. That is exactly what you want in a test and exactly

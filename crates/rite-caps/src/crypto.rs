@@ -8,7 +8,7 @@
 //! the browser build, which has no filesystem and no sockets.
 //!
 //! `random_bytes` is the one exception. It reads the operating system's entropy
-//! pool — outside state, different every call — so it is effectful and rides the
+//! pool, which is outside state and different every call, so it is effectful and rides the
 //! existing `random` permission rather than inventing a `crypto` one.
 //!
 //! ## What is deliberately absent

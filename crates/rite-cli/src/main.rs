@@ -61,6 +61,18 @@ enum Commands {
         /// Stop after this many evaluation steps
         #[arg(long = "max-steps")]
         max_steps: Option<u64>,
+        /// Also search this directory for `use` imports (repeatable)
+        ///
+        /// The script's own directory is always searched first. Also settable
+        /// with `RITE_MODULE_PATH`.
+        #[arg(long = "module-root", value_name = "DIR")]
+        module_root: Vec<PathBuf>,
+        /// Load `KEY=VALUE` pairs from a file into this run's environment
+        ///
+        /// Repeatable; later files win. Reading exactly the names it defines is
+        /// granted implicitly. The process's own environment is not modified.
+        #[arg(long = "env-file", value_name = "PATH")]
+        env_file: Vec<PathBuf>,
         /// Print an execution summary (steps, elapsed) and stack traces to stderr
         #[arg(long)]
         trace: bool,
@@ -146,9 +158,39 @@ enum Commands {
     },
     /// Interactive REPL
     Repl {
+        /// Grant a permission, e.g. `fs:read=./data` or `net=api.example.com`
+        #[arg(long = "allow", value_name = "PERM")]
+        allow: Vec<String>,
         /// Grant every permission for the session — local exploration only
         #[arg(long = "allow-all")]
         allow_all: bool,
+        /// Revoke a permission that is allowed by default (console, clock, random)
+        #[arg(long = "deny", value_name = "PERM")]
+        deny: Vec<String>,
+        /// Wall-clock limit per input, e.g. `30s`
+        ///
+        /// A session has none by default: a timeout bounds a program, and the
+        /// thing waiting on an interactive input is the person who typed it.
+        /// `:timeout` changes it without restarting.
+        #[arg(long)]
+        timeout: Option<String>,
+        /// When to colour output: `auto`, `always`, or `never`
+        #[arg(long, value_name = "WHEN", default_value = "auto")]
+        color: String,
+        /// Load `KEY=VALUE` pairs from a file into the session's environment
+        #[arg(long = "env-file", value_name = "PATH")]
+        env_file: Vec<PathBuf>,
+        /// `use` this module before the first prompt (repeatable)
+        ///
+        /// A REPL has no file to put a `use` line at the top of. Seeded as an
+        /// ordinary input, so `:prelude` shows it.
+        #[arg(long = "use", value_name = "MODULE")]
+        use_modules: Vec<String>,
+        /// Also search this directory for modules (repeatable)
+        ///
+        /// Also settable with `RITE_MODULE_PATH`.
+        #[arg(long = "module-root", value_name = "DIR")]
+        module_root: Vec<PathBuf>,
     },
     /// Run Rite tests
     Test {
@@ -415,6 +457,17 @@ enum DescribeCmd {
 enum FormatStyle {
     Glyph,
     Ascii,
+}
+
+/// Extra module search roots from `RITE_MODULE_PATH`.
+///
+/// Platform-separated (`:` on Unix, `;` on Windows), like every other `*_PATH`.
+/// Searched after the script's own directory and after `--module-root`: the
+/// command line is more specific than the shell it was typed in.
+fn module_path_from_environment() -> Vec<PathBuf> {
+    std::env::var_os("RITE_MODULE_PATH")
+        .map(|value| std::env::split_paths(&value).collect())
+        .unwrap_or_default()
 }
 
 #[tokio::main]
@@ -915,6 +968,8 @@ async fn run(cli: Cli) -> anyhow::Result<ExitCode> {
             deny,
             timeout,
             max_steps,
+            module_root,
+            env_file,
             trace,
             json_errors,
             args,
@@ -928,6 +983,7 @@ async fn run(cli: Cli) -> anyhow::Result<ExitCode> {
                 allow_all,
                 timeout: timeout.clone(),
                 max_steps,
+                env_files: env_file,
                 ..Default::default()
             };
             let perms = match options.permissions() {
@@ -971,6 +1027,10 @@ async fn run(cli: Cli) -> anyhow::Result<ExitCode> {
                 ctx.script_dir = Some(parent.to_path_buf());
                 ctx.module_roots.push(parent.to_path_buf());
             }
+            // The script's own directory first, then anything asked for. Both
+            // come before the working-directory fallback in `rite_sem::modules`.
+            ctx.module_roots.extend(module_root);
+            ctx.module_roots.extend(module_path_from_environment());
             // A bad --timeout used to be discarded silently, leaving the default
             // 60s budget in place.
             match options.budget() {
@@ -980,7 +1040,14 @@ async fn run(cli: Cli) -> anyhow::Result<ExitCode> {
                     return Ok(ExitCode::from(2));
                 }
             }
-            rite_caps::install_defaults(&mut ctx, perms);
+            let env_values = match options.env_file() {
+                Ok(values) => values,
+                Err(e) => {
+                    eprintln!("{e}");
+                    return Ok(ExitCode::from(2));
+                }
+            };
+            rite_caps::install_defaults_with_env(&mut ctx, perms, env_values);
 
             let started = std::time::Instant::now();
             let result = rite_runtime::run_file(&sf, &mut ctx).await;
@@ -1079,13 +1146,56 @@ async fn run(cli: Cli) -> anyhow::Result<ExitCode> {
                 }
             }
         }
-        Commands::Repl { allow_all } => {
-            let perms = if allow_all {
-                PermissionSet::allow_all()
-            } else {
-                PermissionSet::default_secure()
+        Commands::Repl {
+            allow,
+            allow_all,
+            deny,
+            timeout,
+            color,
+            env_file,
+            use_modules,
+            module_root,
+        } => {
+            // The same parser `rite run` uses, so a permission spelled one way
+            // on one command means the same thing on the other.
+            let options = rite::RuntimeOptions {
+                allow,
+                deny,
+                allow_all,
+                env_files: env_file,
+                ..Default::default()
             };
-            rite_repl::run_repl(perms).await?;
+            let usage = |e: String| {
+                eprintln!("{e}");
+                Ok(ExitCode::from(2))
+            };
+            let perms = match options.permissions() {
+                Ok(perms) => perms,
+                Err(e) => return usage(e),
+            };
+            let eval_timeout = match timeout.as_deref().map(rite::parse_duration).transpose() {
+                Ok(t) => t,
+                Err(e) => return usage(e),
+            };
+            let color = match rite_render::term::ColorMode::parse(&color) {
+                Ok(mode) => rite_render::term::enabled(mode),
+                Err(e) => return usage(e),
+            };
+            let mut module_roots = module_root;
+            module_roots.extend(module_path_from_environment());
+            let env_values = match options.env_file() {
+                Ok(values) => values,
+                Err(e) => return usage(e),
+            };
+            rite_repl::run_repl(rite_repl::ReplOptions {
+                perms,
+                color,
+                eval_timeout,
+                uses: use_modules,
+                module_roots,
+                env_values,
+            })
+            .await?;
             Ok(ExitCode::SUCCESS)
         }
         Commands::Test {

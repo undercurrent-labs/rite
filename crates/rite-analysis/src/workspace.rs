@@ -278,7 +278,7 @@ mod tests {
     fn symbol_and_reference_columns_use_the_same_convention() {
         // The defect: symbols reported character columns while references reported
         // UTF-16 units. They agree on every ASCII line and on every BMP glyph, so only
-        // an astral character — one character, two UTF-16 units — separates them. An
+        // an astral character, one character but two UTF-16 units, separates them. An
         // editor asked to jump to `target` landed in two different places depending on
         // which feature it asked.
         let mut ws = WorkspaceIndex::new(vec![]);

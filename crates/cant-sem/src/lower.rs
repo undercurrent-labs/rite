@@ -1,6 +1,6 @@
 //! AST → [`CantProgram`].
 //!
-//! A depth-first walk in source order, which is what makes identifiers stable:
+//! A depth-first walk in source order, which keeps identifiers stable:
 //! the same source and tool version always assign the same numbers, so graph
 //! JSON is snapshot-testable and a diff between two versions of a program reads
 //! like a diff of the program.

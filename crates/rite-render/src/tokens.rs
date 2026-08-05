@@ -150,6 +150,17 @@ fn kind_of(token: TokenKind) -> Kind {
     }
 }
 
+/// Every capability namespace the host offers, sorted — `clock`, `fs`, `http`, …
+///
+/// Read from the manifest `rite docs agent` generates, which is the same file
+/// the highlighter classifies `@fs.read` against. A hand-kept list of these
+/// drifts the first time a capability is added; this one cannot.
+pub fn capability_names() -> Vec<String> {
+    let mut names: Vec<String> = capability_tables().0.iter().cloned().collect();
+    names.sort();
+    names
+}
+
 /// Split source into coloured runs, covering every byte exactly once.
 pub fn runs(source: &str) -> Vec<Run> {
     let file = SourceFile::new(FileId(0), "render.rite", source);

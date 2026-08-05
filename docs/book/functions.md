@@ -80,7 +80,7 @@ The `{ |args| body }` form is the small anonymous function used by `map`, `keep`
 
 ### No arguments is still a function
 
-The `|…|` is what makes a block a function, not the names inside it. Write `||`
+The `|…|` marks a block as a function, not the names inside it. Write `||`
 for a function that takes nothing — a thunk, for deferring work rather than doing
 it now:
 
@@ -98,8 +98,8 @@ later ← { || 6 * 7 }        // a function: runs when called
 function
 ```
 
-The two look almost the same and mean quite different things, which is the reason
-to write `||` deliberately rather than let it be inferred from an empty list of
+The two look almost the same and mean quite different things, so write `||`
+deliberately rather than let it be inferred from an empty list of
 names.
 
 ## Local helpers

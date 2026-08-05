@@ -15,6 +15,7 @@ use crate::random::RandomCap;
 use crate::regex::RegexCap;
 use crate::stdin::StdinCap;
 use crate::store::StoreCap;
+use crate::sys::SysCap;
 use crate::tcp::TcpCap;
 use crate::udp::UdpCap;
 use async_trait::async_trait;
@@ -52,6 +53,7 @@ pub struct HostCapabilities {
     pub stdin: StdinCap,
     pub regex: RegexCap,
     pub env: EnvCap,
+    pub sys: SysCap,
     pub process: ProcessCap,
     pub random: Arc<RwLock<RandomCap>>,
     pub http: HttpCap,
@@ -74,7 +76,8 @@ impl HostCapabilities {
             clock: ClockCap::new(),
             stdin: StdinCap::new(),
             regex: RegexCap::new(),
-            env: EnvCap,
+            env: EnvCap::default(),
+            sys: SysCap,
             process: ProcessCap,
             random: Arc::new(RwLock::new(RandomCap::from_entropy())),
             http: HttpCap::new(),
@@ -99,6 +102,7 @@ impl HostCapabilities {
             ("stdin", StdinCap::DESCRIPTORS),
             ("regex", RegexCap::DESCRIPTORS),
             ("env", EnvCap::DESCRIPTORS),
+            ("sys", SysCap::DESCRIPTORS),
             ("process", ProcessCap::DESCRIPTORS),
             ("random", RandomCap::DESCRIPTORS),
             ("http", HttpCap::DESCRIPTORS),
@@ -159,7 +163,14 @@ impl CapabilityHost for HostCapabilities {
             "stdin" => self.stdin.call(method, args, effect, &self.perms).await,
             "regex" => self.regex.call(method, args, &self.perms),
             "env" => self.env.call(method, args, &self.perms).await,
-            "process" => self.process.call(method, args, &self.perms, ctx).await,
+            "sys" => self.sys.call(method, args, &self.perms).await,
+            // The environment overlay travels with the spawn: a variable this
+            // run set with `@env.set` is inherited by the command it starts.
+            "process" => {
+                self.process
+                    .call(method, args, &self.perms, ctx, &self.env.overlay())
+                    .await
+            }
             "random" => {
                 let mut rng = self.random.write();
                 rng.call(method, args, &self.perms)

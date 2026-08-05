@@ -17,9 +17,9 @@
 //!
 //! # The comment guarantee
 //!
-//! [`format`] re-lexes its own output and refuses — returns `Err` — if the
+//! [`format`] re-lexes its own output and returns `Err` if the
 //! multiset of comment texts changed. A formatter that silently eats a comment
-//! is worse than one that fails, and "the layout code handles every case" is not
+//! is more damaging than one that fails, and "the layout code handles every case" is not
 //! a claim worth trusting without a check. `rite-fmt` does the same thing for the
 //! same reason.
 
@@ -225,7 +225,7 @@ struct Printer<'a> {
 
 impl Printer<'_> {
     fn finish(mut self) -> String {
-        // Anything after the last stage — a trailing comment block — still has to
+        // Anything after the last stage, such as a trailing comment block, still has to
         // be written, at column zero.
         while self.emitted < self.comments.len() {
             let text = self.comments[self.emitted].text.trim_end().to_string();
@@ -280,7 +280,7 @@ impl Printer<'_> {
     /// Render a flow, choosing one line or many.
     ///
     /// Returns a string rather than writing directly so that the one-line form
-    /// can be measured before it is committed to — which is the whole of the
+    /// can be measured before it is committed to, which is the substance of the
     /// layout decision, and is why nesting works without a second pass.
     ///
     /// `first_col` is where the first stage lands; `arrow_col` is where each

@@ -1,7 +1,7 @@
 # One-liners
 
-Cant is meant to be typed. This page is a field guide: recipes short enough to
-put in a shell, and the two or three things that surprise people the first time.
+Recipes short enough to put in a shell, plus the two or three things that catch
+people out the first time.
 
 Every program here runs as written. Try any of them in
 [Studio](https://cant.rite.foo/studio) without installing anything.
@@ -12,9 +12,9 @@ Every program here runs as written. Try any of them in
 cant -e '<program>'
 ```
 
-`-e` runs the expression and prints the result. Quote it — `>`, `|`, `!`, `?`
-and `*` are shell metacharacters, and Cant is not bent out of shape to avoid
-them. Single quotes on bash, zsh and PowerShell alike.
+`-e` runs the expression and prints the result. Quote it: `>`, `|`, `!`, `?`
+and `*` are shell metacharacters. Single quotes work on bash, zsh and PowerShell
+alike.
 
 Files and standard input work the same way:
 
@@ -27,7 +27,7 @@ cat report.cant | cant run -
 
 Scatter, do something per item, collect:
 
-```cant
+```cant run
 [1, 2, 3, 4, 5, 6] -> * -> ?{ $ % 2 = 0 } -> []
 ```
 
@@ -37,7 +37,7 @@ Scatter, do something per item, collect:
 
 Square each element:
 
-```cant
+```cant run
 [1, 2, 3] -> * -> $ * $ -> []
 ```
 
@@ -47,7 +47,7 @@ Square each element:
 
 A whole-list function needs no scatter, because a list is one emission:
 
-```cant
+```cant run
 [1, 2, 3] -> sum
 ```
 
@@ -59,7 +59,7 @@ A whole-list function needs no scatter, because a list is one emission:
 
 Split, transform, collect:
 
-```cant
+```cant run
 "a,b,c" -> split($, ",") -> * -> upper -> []
 ```
 
@@ -69,7 +69,7 @@ Split, transform, collect:
 
 Keep the lines longer than four characters:
 
-```cant
+```cant run
 lines("alpha\nbeta") -> * -> ?{ count($) > 4 } -> []
 ```
 
@@ -79,7 +79,7 @@ lines("alpha\nbeta") -> * -> ?{ count($) > 4 } -> []
 
 Count the words in a string:
 
-```cant
+```cant run
 "hello world" -> words -> count
 ```
 
@@ -92,23 +92,29 @@ Count the words in a string:
 Reading is an effect, so it carries `!` and needs a grant:
 
 ```bash
-cant -e '"notes.txt" -> !@fs.read -> lines -> count' --allow fs:read=.
+cant -e '"notes.txt" -> !@fs.read? -> lines -> count' --allow fs:read=.
 ```
+
+The `?` matters. `@fs.read` answers a *result* and `lines` wants a string, so
+the program fails without it.
 
 Non-empty lines:
 
 ```cant
-"notes.txt" -> !@fs.read -> lines -> * -> ?{ $ != "" } -> []
+"notes.txt" -> !@fs.read? -> lines -> * -> ?{ $ != "" } -> []
 ```
 
 A field out of a JSON file:
 
 ```cant
-"data.json" -> !@fs.read -> @json.decode -> .name
+"data.json" -> !@fs.read? -> @json.decode? -> .name
 ```
 
-The permission model is Rite's, unchanged — `--allow`, `--deny`, and the same
-grammar for both. There is no second thing to learn.
+Two capabilities, two results, two `?`s. Drop the second and `.name` projects a
+field out of an `ok(…)`, finds nothing, and answers `none`.
+
+The permission model is Rite's, unchanged: `--allow`, `--deny`, and the same
+grammar for both.
 
 ## Around the system
 
@@ -122,11 +128,31 @@ grammar for both. There is no second thing to learn.
 
 Both need a grant: `--allow env` and `--allow net=example.com`.
 
+A `.env` file is easier than naming every variable — `--env-file` grants reading
+exactly the names the file defines, and nothing else:
+
+```bash
+cant --env-file .env -e '"API_KEY" -> !@env.get'
+```
+
+`@sys` is where you are rather than what you were configured with:
+
+```cant
+!@sys.cwd
+```
+
+```bash
+cant --allow sys -e '!@sys.cwd'
+```
+
+`cwd`, `home`, `temp_dir`, `os`, `arch`, `pid` and `hostname`, all under
+`--allow sys`.
+
 ## Pipes
 
-The data on the pipe, the program on `-e` — the form `awk`, `sed` and `jq`
-built their careers on. `!@stdin.lines` is the input as a list of lines;
-`!@stdin.read` is the whole of it as one string.
+The data on the pipe, the program on `-e`, in the shape `awk`, `sed` and `jq`
+use. `!@stdin.lines` is the input as a list of lines; `!@stdin.read` is the whole
+of it as one string.
 
 Count the lines that mention an error:
 
@@ -160,10 +186,9 @@ cat speech.txt | cant -e '!@stdin.read -> words -> frequencies -> take($, 2)'
 ```
 
 `frequencies` answers `[value, count]` pairs, most frequent first. The long
-spelling — `group`, a stage rewriting each bucket to `[count, word]`,
-structural `sort`, `reverse` — still works, and is worth knowing the day the
-key is not the value itself: `sort_by`, `min_by` and `max_by` take a key
-function or a field name for exactly that.
+spelling still works: `group`, a stage rewriting each bucket to `[count, word]`,
+structural `sort`, then `reverse`. When the key is not the value itself,
+`sort_by`, `min_by` and `max_by` take a key function or a field name.
 
 Pull a number out of every line that has one, and sum them:
 
@@ -171,10 +196,10 @@ Pull a number out of every line that has one, and sum them:
 cat timings.log | cant -e '!@stdin.lines -> * -> nth(@regex.captures($, "took ([0-9]+)ms")? ?? [], 1) -> ?{ $ != none } -> parse_int($)? -> [] -> sum'
 ```
 
-`@regex` is pure — no `!`, no permission — and a pattern that does not compile
-is an `err` value, so the usual postures apply. `captures` answers the whole
-match first and each group after it; `nth` reaches into the pair, `?? []`
-covers the lines that did not match, and the ward drops them.
+`@regex` is pure: no `!`, no permission. A pattern that does not compile is an
+`err` value, so the usual postures apply. `captures` answers the whole match
+first and each group after it; `nth` reaches into the pair, `?? []` covers the
+lines that did not match, and the ward drops them.
 
 Columns from a CSV:
 
@@ -182,17 +207,17 @@ Columns from a CSV:
 cat report.csv | cant -e '!@stdin.read -> @csv.decode? -> * -> .total -> []'
 ```
 
-An empty pipe is an empty list: every recipe above answers its zero — `0`,
-`none`, `[]` — rather than hanging or throwing. And the value goes to stdout
-with nothing else mixed in, so a Cant one-liner composes with the next tool in
-the pipeline, including `cant` itself.
+An empty pipe is an empty list, so every recipe above answers its zero (`0`,
+`none`, `[]`) rather than hanging or failing. The value goes to stdout with
+nothing else mixed in, so a Cant one-liner composes with the next tool in the
+pipeline, including `cant` itself.
 
 ## Several answers at once
 
 A fork runs each branch from the same input and concatenates what they emit, in
 order:
 
-```cant
+```cant run
 [1, 2, 3] -> |{ sum ; count } -> []
 ```
 
@@ -205,7 +230,7 @@ order:
 An orbit walks breadth-first and stops when the worklist empties — or when
 `:max` is reached, whichever comes first:
 
-```cant
+```cant run
 [1] -> * -> ~{ ?{ $ < 100 } -> $ * 2 } :max 32 -> []
 ```
 
@@ -222,7 +247,7 @@ in the language and it is always bounded.
 **A list is one emission.** `*` is always written, so this counts the list, not
 its elements:
 
-```cant
+```cant run
 [1, 2, 3] -> count
 ```
 
@@ -233,7 +258,7 @@ its elements:
 **Collect wraps whatever is in flight.** `sort` takes a list and returns a list —
 one emission — so collecting after it gives a list containing one list:
 
-```cant
+```cant run
 [3, 1, 2] -> sort -> []
 ```
 
@@ -241,13 +266,13 @@ one emission — so collecting after it gives a list containing one list:
 [[1, 2, 3]]
 ```
 
-Drop the `[]` if you wanted the sorted list itself. `[]` is for gathering
-*several* emissions back into one value.
+Drop the `[]` if you wanted the sorted list itself; `[]` gathers *several*
+emissions back into one value.
 
 **`*` is scatter only when it is the whole stage.** Inside an expression it is
 still multiplication, which is why `$ * 2` means what it looks like:
 
-```cant
+```cant run
 [1, 2, 3] -> * -> $ * 2 -> []
 ```
 
@@ -290,5 +315,8 @@ if cant check -e "$PROGRAM" >/dev/null 2>&1; then
 fi
 ```
 
-See [the command line](cli.md) for the full flag list and
-[the language](language.md) for what the operators mean.
+[Your first program](tutorial.md) is the introduction, and
+[past the one-liner](projects.md) covers files, modules, tests and binaries. See
+[the command line](cli.md) for the full flag list, [the language](language.md)
+for what the operators mean, and [when something goes wrong](diagnostics.md) for
+the diagnostics.

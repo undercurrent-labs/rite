@@ -506,8 +506,8 @@ async fn dispatch_fallback(state: ServerState, req: Request<Body>) -> Response {
     }
     // Two passes, specific before catch-all. Declaration order decides between two
     // routes of the same kind, but a catch-all never shadows an exact route it was
-    // merely written above — which is what lets an SPA's `GET "/*path"` sit at the
-    // top of the block with its API routes below it and still work.
+    // merely written above, so an SPA's `GET "/*path"` can sit at the top of the
+    // block with its API routes below it and still work.
     let matches = |route: &RiteRoute| {
         match_path(&route.path, &path).is_some()
             || normalize_path(&route.path) == path
@@ -775,8 +775,8 @@ async fn dispatch_rite(state: ServerState, idx: usize, req: Request<Body>) -> Re
     response
 }
 
-/// Monotonic ids for `http.next` handles. Global on purpose: uniqueness is the whole
-/// requirement, and a per-request counter would hand out colliding ids.
+/// Monotonic ids for `http.next` handles. Global on purpose: uniqueness is the
+/// only requirement, and a per-request counter would hand out colliding ids.
 static NEXT_ID: AtomicU64 = AtomicU64::new(1);
 
 /// Run custom middleware outer→inner, then the route handler.
@@ -952,7 +952,7 @@ fn next_invoker(conts: Continuations) -> rite_runtime::HttpNextInvoker {
 /// Emit buffered handler stdout/stderr to the real process streams (and optional test sink).
 ///
 /// Shared with `@tcp.listen`, so a connection handler's `! @console.println` reaches
-/// the server process — and the test capture — the same way a request handler's does.
+/// the server process, and the test capture, the same way a request handler's does.
 pub(crate) fn flush_handler_io(ctx: &RuntimeContext) {
     if !ctx.stdout.is_empty() {
         for line in &ctx.stdout {
@@ -1118,7 +1118,7 @@ fn status_body(
 /// Merge a handler's `headers` record onto the response.
 ///
 /// An explicit `content-type` **replaces** the one inferred from the body's type.
-/// That is the whole point of the field: the type of the Rust value is a poor
+/// That is what the field is for: the type of the Rust value is a poor
 /// proxy for the media type, and without an override a string body is always
 /// `text/plain`, which makes a browser render HTML as source text.
 ///
@@ -1405,8 +1405,8 @@ fn match_path(pattern: &str, path: &str) -> Option<HashMap<String, String>> {
     let path_parts: Vec<&str> = path.trim_matches('/').split('/').collect();
     // A catch-all consumes every remaining segment, so it matches a path that is
     // *at least* as long as the fixed prefix — and also one exactly as long as the
-    // prefix, capturing the empty remainder, which is what makes `/assets/*rest`
-    // answer a bare `/assets`.
+    // prefix, capturing the empty remainder, so `/assets/*rest` answers a bare
+    // `/assets`.
     let tail = p_parts.last().and_then(|s| s.strip_prefix('*'));
     match tail {
         Some(_) if path_parts.len() + 1 < p_parts.len() => return None,
@@ -1443,7 +1443,7 @@ fn match_path(pattern: &str, path: &str) -> Option<HashMap<String, String>> {
 /// Two separate gates, and both are load-bearing:
 ///
 /// 1. **Containment.** The joined path is resolved and must still sit under the
-///    resolved root, so `../../etc/passwd` — or a symlink pointing out of the tree —
+///    resolved root, so `../../etc/passwd`, or a symlink pointing out of the tree,
 ///    is refused. This is checked *before* the file is opened, and the refusal is
 ///    `http.forbidden` rather than a not-found, because a traversal attempt is not
 ///    the same event as a missing asset and a server should be able to log it.
@@ -1452,8 +1452,8 @@ fn match_path(pattern: &str, path: &str) -> Option<HashMap<String, String>> {
 ///    Containment alone would let `@http.file` read anything under the CWD, which
 ///    is precisely the authority the permission system exists to withhold.
 ///
-/// A directory resolves to its `index.html`, which is what makes `GET "/"` and an
-/// SPA's client-routed deep links work without a special case in the handler.
+/// A directory resolves to its `index.html`, so `GET "/"` and an SPA's
+/// client-routed deep links work without a special case in the handler.
 fn serve_file(root: &str, sub: &str, perms: &PermissionSet) -> Result<Value, EvalError> {
     let root_path = std::path::Path::new(root);
     let root_canon = crate::permissions::canonicalize_loose(root_path);
@@ -1675,7 +1675,7 @@ mod url_tests {
     use super::host_of;
 
     /// The permission check keys on this, so a wrong answer either blocks a legitimate
-    /// call or — worse — grants one. Credentials and ports must not become part of it.
+    /// call or, worse, grants one. Credentials and ports must not become part of it.
     #[test]
     fn host_is_extracted_without_scheme_port_path_or_credentials() {
         assert_eq!(

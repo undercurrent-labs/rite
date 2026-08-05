@@ -156,7 +156,7 @@ impl RiteEngine {
 /// A script that has been run, with its functions still callable.
 ///
 /// Holding it holds the run: top-level bindings keep their values between calls,
-/// and anything the script left open — a file handle — stays open until this is
+/// and anything the script left open, such as a file handle, stays open until this is
 /// dropped. That is deliberate. A rules script that opens a database connection at
 /// the top and uses it in every function needs the two to share a lifetime, and
 /// the alternative (a fresh context per call) would silently re-run the top level

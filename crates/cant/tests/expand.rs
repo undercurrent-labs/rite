@@ -153,7 +153,14 @@ fn every_expansion_passes_rite_check() {
         // A program that imports modules resolves them beside itself — the
         // 08-modules example is the case that caught check ignoring this.
         let dir = std::path::Path::new(&name).parent().filter(|d| d.is_dir());
-        let result = cant::check_with(&name, &source, &[], dir);
+        let result = cant::check_with(
+            &name,
+            &source,
+            &cant::Environment {
+                module_roots: dir.map(|d| vec![d.to_path_buf()]).unwrap_or_default(),
+                ..cant::Environment::default()
+            },
+        );
         if result.has_errors() {
             failures.push(format!("{name}: {}", result.render()));
         }

@@ -12,6 +12,13 @@ rite-sem = { workspace = true }
 rite-runtime = { workspace = true }
 rite-caps = { workspace = true }
 rite-fmt = { workspace = true }
+# The prompt's colour, and the capability roster `:capabilities` reports. One
+# palette, one manifest — both shared with the site and with `rite render`.
+rite-render = { workspace = true }
+# The REPL's Ctrl-C. A signal handler rather than a `tokio::select!` arm: the
+# interpreter does not yield, so a select racing the evaluation against
+# `tokio::signal::ctrl_c()` never polls the signal branch. See `lib.rs`.
+ctrlc = { workspace = true }
 tokio = { workspace = true }
 anyhow = { workspace = true }
 rustyline = { workspace = true }

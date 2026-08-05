@@ -128,14 +128,14 @@ foobar
 rejected: length 3 is not a multiple of 4 (input must be padded)
 ```
 
-The error payload is a record shaped like `@json.decode`'s — `kind` and `message` —
+The error payload is a record shaped like `@json.decode`'s, with `kind` and `message`,
 so one handler reads both.
 
 `base64_decode` is strict RFC 4648: padded, canonical, standard alphabet. It rejects
 whitespace, the URL-safe `-_` alphabet, unpadded input, and non-canonical trailing
 bits (`"Zh=="` is refused even though a lenient decoder would call it `"f"`). Two
 systems that disagree about which strings are valid base64 is how a signature check
-gets walked around; a decoder that guesses is worse than one that says no.
+gets walked around; a decoder that refuses is safer than one that guesses.
 
 Decoding can also produce bytes that are not text. `@crypto.hex_decode("ff")` is a
 perfectly good hex string whose byte is not valid UTF-8, so it answers `err` rather

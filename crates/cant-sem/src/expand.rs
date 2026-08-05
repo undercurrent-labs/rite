@@ -57,10 +57,9 @@ pub struct Mapping {
 
 /// Bidirectional Cant ↔ generated-Rite span mapping.
 ///
-/// Built as the text is emitted rather than recovered afterwards: the generator
-/// is the only thing that knows which bytes came from which node, and
-/// reconstructing it by searching the output would be a second implementation
-/// of the same knowledge, free to disagree.
+/// Built as the text is emitted rather than recovered afterwards: only the generator
+/// knows which bytes came from which node, and reconstructing it by searching
+/// the output would be a second implementation free to disagree with the first.
 #[derive(Debug, Clone, Default)]
 pub struct SourceMap {
     mappings: Vec<Mapping>,
@@ -124,8 +123,8 @@ pub struct ExpandOptions {
     /// prefix, and `main` returns `<< trace: <<…>>, value: … >>` instead of
     /// the bare value — the host unwraps it. Instrumented stages are marked
     /// effectful, because a `@store` write is one; nothing else about the
-    /// program's meaning changes, which is what makes a traced run's *value*
-    /// comparable to an untraced one.
+    /// program's meaning changes, so a traced run's *value* is comparable to an
+    /// untraced one.
     pub trace: bool,
 }
 
@@ -277,8 +276,8 @@ impl Writer<'_> {
     }
 
     /// The instrumentation line after a node call: add this call's emission
-    /// count to the node's total. Accumulating (not assigning) is what makes
-    /// an orbit body's repeated runs sum rather than overwrite.
+    /// count to the node's total. Accumulating rather than assigning is what
+    /// makes an orbit body's repeated runs sum instead of overwrite.
     fn trace_line(&self, id: NodeId, indent: &str) -> String {
         let ns = self.trace_namespace();
         format!(
@@ -672,7 +671,7 @@ pub fn apply_to(leaf: &LeafExpr, var: &str) -> String {
     }
 }
 
-/// Replace every `$` token — and only real ones — with `var`.
+/// Replace every `$` token, and only real ones, with `var`.
 fn substitute_placeholder(text: &str, var: &str) -> String {
     let file = SourceFile::new(FileId(0), "leaf.cant", text);
     let (tokens, _) = lex(&file);
@@ -713,9 +712,9 @@ const TRAILING_OPS: &[&str] = &["?"];
 
 /// Is this leaf `[!] @path.to.fn [ ( args ) ]`, and where does the receiver go?
 ///
-/// The test is the *outermost* form. `@json.decode(@fs.read(p))` qualifies — it
-/// is a capability call whose argument happens to be another one — and the
-/// receiver goes in front of the existing argument, which is exactly the stage
+/// The test is the *outermost* form. `@json.decode(@fs.read(p))` qualifies,
+/// being a capability call whose argument happens to be another one. The
+/// receiver goes in front of the existing argument, matching the stage
 /// rule: "the current emission as its first argument unless it contains `$`".
 ///
 /// `f(@fs.read(p))` does not qualify: the outermost call is an ordinary one, so
@@ -845,8 +844,8 @@ pub fn remap_diagnostic(
             );
         }
         None => {
-            // No mapping: say so rather than inventing a location. A diagnostic
-            // pointing at the wrong line is worse than one pointing nowhere.
+            // No mapping: say so rather than inventing a location. Pointing at the
+            // wrong line is less useful than pointing nowhere.
             out = out.with_note(
                 "this came from generated Rite that maps to no Cant source; \
                  run `cant expand` to see it",

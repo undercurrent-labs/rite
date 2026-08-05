@@ -81,9 +81,95 @@ pub fn detect_dialect(text: &str) -> Dialect {
     }
 }
 
+/// Whether a source is a whole program, or is still waiting for a closer.
+///
+/// For an interactive host deciding between "run this" and "keep reading".
+/// Counted over tokens rather than characters, so a `}` inside a string or a
+/// comment is not a closer — the same reason everything else here goes through
+/// the lexer.
+///
+/// A program is normally one line. This exists because the *formatter* is not
+/// so restricted: `cant fmt` breaks a long flow across lines, and what it
+/// prints has to be something the REPL will take back.
+pub fn is_complete(text: &str) -> bool {
+    if text.trim().is_empty() {
+        return true;
+    }
+    let file = SourceFile::new(FileId(0), "complete.cant", text);
+    let (tokens, _) = lex(&file);
+    let mut depth = 0i32;
+    let mut unterminated_trivia = false;
+    for token in &tokens {
+        // An unterminated string or block comment swallows the rest of the
+        // line, so the depth count below cannot see what is missing. The lexer
+        // has already said so with a diagnostic; here it just means "not yet".
+        if matches!(
+            token.kind,
+            CantTokenKind::Str | CantTokenKind::RawStr | CantTokenKind::Comment
+        ) && !token_is_terminated(token)
+        {
+            unterminated_trivia = true;
+        }
+        if token.kind.opens_depth() || token.kind.opens_block() {
+            depth += 1;
+        } else if token.kind.closes_depth() {
+            depth -= 1;
+        }
+    }
+    // A negative depth is a program with a stray closer: complete, and wrong.
+    // Saying so lets the parser give the error instead of the prompt hanging.
+    depth <= 0 && !unterminated_trivia
+}
+
+fn token_is_terminated(token: &CantToken) -> bool {
+    match token.kind {
+        CantTokenKind::Str => token.text.len() > 1 && token.text.ends_with('"'),
+        CantTokenKind::RawStr => token.text.len() > 2 && token.text.ends_with('"'),
+        // Only a block comment can be unterminated; a `//` comment ends at the
+        // newline or at the end of the input, and both are endings.
+        CantTokenKind::Comment => !token.text.starts_with("/*") || token.text.ends_with("*/"),
+        _ => true,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The formatter's own output has to be re-typeable at a prompt.
+    #[test]
+    fn a_program_is_complete_when_nothing_is_left_open() {
+        for whole in [
+            "[1, 2, 3] -> * -> []",
+            "[1] -> ?{ $ > 0 } -> []",
+            "",
+            "   ",
+            "// just a comment",
+            "\"a } brace in a string\"",
+            "1 -> ~{ $ + 1 } :max 4",
+            "[1] → ⊣⟦ $ > 0 ⟧ → ⌁",
+        ] {
+            assert!(is_complete(whole), "should be complete: {whole:?}");
+        }
+        for partial in [
+            "[1] -> ?{",
+            "[1, 2",
+            "f(",
+            "\"unterminated",
+            "/* unterminated",
+            "[1] -> ~{ $ -> ?{ $ > 0 }",
+        ] {
+            assert!(!is_complete(partial), "should be waiting: {partial:?}");
+        }
+    }
+
+    /// A stray closer is complete and wrong — the parser says so far better
+    /// than a prompt that never returns.
+    #[test]
+    fn a_stray_closer_does_not_hang_the_prompt() {
+        assert!(is_complete("[1] -> ] -> []"));
+        assert!(is_complete("}"));
+    }
 
     #[test]
     fn a_source_is_ascii_until_a_structural_glyph_appears() {

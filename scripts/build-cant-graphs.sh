@@ -45,7 +45,7 @@ render flow    '[1, 2, 3] -> * -> ?{ $ % 2 = 0 } -> []'
 render fork    '5 -> |{ $ + 1 ; $ * 2 ; $ * $ } -> []'
 render orbit   '[1, 2] -> * -> ~{ ?{ $ < 8 } -> $ * 2 } :by str :max 64 -> []'
 render nested  '4 -> |{ ?{ $ > 2 } -> $ * 10 ; ~{ ?{ $ < 8 } -> $ + 2 } :max 8 } -> []'
-render effects '"data.json" -> !@fs.read? -> @json.decode -> .name'
+render effects '"data.json" -> !@fs.read? -> @json.decode? -> .name'
 
 echo "==> done"
 ls -la "$OUT"

@@ -38,14 +38,19 @@ pub async fn run_source(
 
 pub async fn run_file(file: &SourceFile, ctx: &mut RuntimeContext) -> Result<Value, EvalError> {
     let path = file.path.clone();
-    let roots = ctx.module_roots.clone();
-    let (ir, diags) = if let Some(ref p) = path {
-        rite_sem::compile_to_ir_with_roots(file, Some(p), &roots)
-    } else if let Some(ref dir) = ctx.script_dir {
-        rite_sem::compile_to_ir_with_roots(file, None, std::slice::from_ref(dir))
-    } else {
-        compile_to_ir(file)
-    };
+    // `ctx.module_roots` is honoured whether or not the source has a path of
+    // its own. It used to be consulted only in the first branch, so a host that
+    // evaluated source it had built in memory — a REPL line, or generated code
+    // — had its module search path silently dropped, and a `use` that resolved
+    // when the host checked it failed when the host ran it.
+    let mut roots = Vec::new();
+    if path.is_none() {
+        if let Some(dir) = &ctx.script_dir {
+            roots.push(dir.clone());
+        }
+    }
+    roots.extend(ctx.module_roots.iter().cloned());
+    let (ir, diags) = rite_sem::compile_to_ir_with_roots(file, path.as_deref(), &roots);
     if diags.has_errors() {
         return Err(EvalError::Compile(diags));
     }

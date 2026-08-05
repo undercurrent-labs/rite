@@ -5,10 +5,11 @@
 //! capability is granted or a byte is read.
 //!
 //! Two audiences, one function. A graph that came from [`crate::lower`] cannot
-//! have a dangling edge or a duplicate identifier — the builder assigns them —
+//! have a dangling edge or a duplicate identifier, since the builder assigns
+//! them,
 //! but a graph that came from *JSON* can, and the specification requires that a
 //! fuzzed graph cannot smuggle in an unvalidated cycle. So the structural checks
-//! run on both rather than being skipped as impossible; on a freshly lowered
+//! run on both instead of being skipped as impossible; on a freshly lowered
 //! graph they cost one pass and find nothing, which is the correct price for not
 //! having to trust the input.
 
@@ -344,7 +345,7 @@ impl Validator<'_> {
     ///   concatenation point, not a re-entry.
     ///
     /// Nothing lowering produces can build a cycle in the remaining subgraph,
-    /// which is exactly why this has to run on *deserialized* graphs: JSON is the
+    /// which is why this has to run on *deserialized* graphs: JSON is the
     /// only way one gets in, and admitting it silently would give Cant unbounded
     /// recursion through the back door.
     fn cycles(&mut self) {

@@ -289,6 +289,13 @@
       "effectful": true,
       "name": "all",
       "permission": "env"
+    },
+    {
+      "arity": 2,
+      "docs": "Set an environment variable for this run. Needs `--allow env:write` (or `env:write=NAME`), which is a *separate* grant from the `env` read permission. The value is visible to `@env.get`, `@env.require` and `@env.all`, and is inherited by commands started with `@process.run`. It does not modify the operating-system environment of this process: writing that is unsafe while other threads are running, and a program started outside `@process.run` will not see it.",
+      "effectful": true,
+      "name": "set",
+      "permission": "env:write"
     }
   ],
   "fs": [
@@ -820,6 +827,57 @@
       "effectful": true,
       "name": "delete",
       "permission": ""
+    }
+  ],
+  "sys": [
+    {
+      "arity": 0,
+      "docs": "The process's current working directory, as a string. Effectful: it is where relative paths resolve from, and it is not a constant. Native only.",
+      "effectful": true,
+      "name": "cwd",
+      "permission": "sys"
+    },
+    {
+      "arity": 0,
+      "docs": "The invoking user's home directory, or `none` when the platform does not say. Read from `HOME` (or `USERPROFILE` on Windows) but gated on `sys` rather than `env`, because it is asking where the user lives rather than reading their environment. Native only.",
+      "effectful": true,
+      "name": "home",
+      "permission": "sys"
+    },
+    {
+      "arity": 0,
+      "docs": "The directory the platform offers for temporary files, as a string. Nothing is created; writing there still needs an `fs:write` grant. Native only.",
+      "effectful": true,
+      "name": "temp_dir",
+      "permission": "sys"
+    },
+    {
+      "arity": 0,
+      "docs": "The operating system this is running on: `linux`, `macos`, `windows`, `wasm`, and so on. `std::env::consts::OS`.",
+      "effectful": true,
+      "name": "os",
+      "permission": "sys"
+    },
+    {
+      "arity": 0,
+      "docs": "The processor architecture: `x86_64`, `aarch64`, `wasm32`, and so on. `std::env::consts::ARCH`.",
+      "effectful": true,
+      "name": "arch",
+      "permission": "sys"
+    },
+    {
+      "arity": 0,
+      "docs": "This process's identifier, as an integer. Native only.",
+      "effectful": true,
+      "name": "pid",
+      "permission": "sys"
+    },
+    {
+      "arity": 0,
+      "docs": "The machine's hostname, or `none` when it cannot be determined. Native only.",
+      "effectful": true,
+      "name": "hostname",
+      "permission": "sys"
     }
   ],
   "tcp": [

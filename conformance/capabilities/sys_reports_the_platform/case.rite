@@ -1,0 +1,10 @@
+// `@sys` answers ambient facts about the process and the machine — the things a
+// shell-adjacent script needs and `@env` has no business holding, because `@env`
+// answers a record of *variables* and a working directory is not one.
+//
+// `os` and `arch` are the two that are the same on every run of a given build,
+// so they are the two a fixture can assert. Both are effectful for the same
+// reason the rest are: none of this is constant for the life of a run.
+os ← ! @sys.os
+arch ← ! @sys.arch
+^ [os != "", arch != ""]

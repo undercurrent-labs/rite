@@ -20,7 +20,7 @@ export type DocBase = "docs" | "tutorials";
  * Rewrite relative markdown links to site routes.
  *
  * Cross-section links are written the way they resolve on disk and in a GitHub
- * preview — `../book/effects.md` from a tutorial — so the same file reads
+ * preview, as `../book/effects.md` from a tutorial, so the same file reads
  * correctly in both places.
  */
 function rewriteDocLinks(html: string, base: DocBase = "docs"): string {

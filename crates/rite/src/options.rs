@@ -49,6 +49,11 @@ pub struct RuntimeOptions {
     pub max_call_depth: Option<usize>,
     pub max_collection_size: Option<usize>,
     pub max_string_size: Option<usize>,
+    /// `--env-file .env`, repeatable. Later files win.
+    ///
+    /// The values land in the run's environment overlay, and reading exactly
+    /// those names is granted implicitly — see [`RuntimeOptions::env_file`].
+    pub env_files: Vec<std::path::PathBuf>,
 }
 
 impl RuntimeOptions {
@@ -65,6 +70,15 @@ impl RuntimeOptions {
         for spec in &self.allow {
             perms.grant(Permission::parse(spec)?);
         }
+        // A `--env-file` grants read access to exactly the names it defines,
+        // and to nothing else. The argument is the one already written into
+        // `@process.args`: a file the invoker named on this command line is
+        // their own input to the program, not ambient state they are being
+        // asked to expose. Granted *before* the denials, so `--deny env` still
+        // takes it away.
+        for (name, _) in self.env_file()? {
+            perms.grant(Permission::Env(name));
+        }
         for spec in &self.deny {
             // A bad `--deny` used to be discarded silently by `rite run`, which
             // meant a typo in a *revocation* left the permission in place. It is
@@ -72,6 +86,22 @@ impl RuntimeOptions {
             perms.deny(Permission::parse(spec)?);
         }
         Ok(perms)
+    }
+
+    /// The variables every `--env-file` defines, in order, later files winning.
+    pub fn env_file(&self) -> Result<Vec<(String, String)>, String> {
+        let mut out: Vec<(String, String)> = Vec::new();
+        for path in &self.env_files {
+            let text = std::fs::read_to_string(path)
+                .map_err(|e| format!("cannot read --env-file {}: {e}", path.display()))?;
+            for (name, value) in
+                parse_env_file(&text).map_err(|e| format!("{}: {e}", path.display()))?
+            {
+                out.retain(|(existing, _)| existing != &name);
+                out.push((name, value));
+            }
+        }
+        Ok(out)
     }
 
     /// Build the execution budget, leaving anything unset at its default.
@@ -132,8 +162,186 @@ pub fn parse_duration(s: &str) -> Result<Duration, String> {
         .map_err(|_| invalid(" of seconds"))
 }
 
+/// Parse a `.env` file: `KEY=VALUE`, one per line.
+///
+/// `#` starts a comment, blank lines are skipped, a leading `export ` is
+/// accepted because that is what people paste, and a value may be wrapped in
+/// single or double quotes. Escapes inside double quotes are honoured for
+/// `\n`, `\t`, `\"` and `\\`; single quotes are literal, as in a shell.
+///
+/// \*\*There is no interpolation.\*\* `$FOO` is literal. Expanding it would mean
+/// choosing between the file's `FOO`, the process's, and the overlay's, and
+/// callers disagree about which is right.
+///
+/// Values that override the inherited environment, deliberately: the file was
+/// named on this command line, and a stale exported variable quietly winning
+/// over it is the worse surprise.
+pub fn parse_env_file(text: &str) -> Result<Vec<(String, String)>, String> {
+    let mut out = Vec::new();
+    for (n, raw) in text.lines().enumerate() {
+        let line = raw.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        let line = line.strip_prefix("export ").unwrap_or(line).trim_start();
+        let Some((name, value)) = line.split_once('=') else {
+            return Err(format!("line {}: expected `NAME=VALUE`", n + 1));
+        };
+        let name = name.trim();
+        if name.is_empty() || name.contains(char::is_whitespace) {
+            return Err(format!("line {}: `{name}` is not a variable name", n + 1));
+        }
+        out.push((name.to_string(), unquote_env_value(value.trim())));
+    }
+    Ok(out)
+}
+
+fn unquote_env_value(value: &str) -> String {
+    if let Some(inner) = value.strip_prefix('\'').and_then(|v| v.strip_suffix('\'')) {
+        return inner.to_string();
+    }
+    let Some(inner) = value.strip_prefix('"').and_then(|v| v.strip_suffix('"')) else {
+        // Unquoted: an inline `#` starts a comment, which is the one place a
+        // bare value differs from a quoted one.
+        return value
+            .split_once(" #")
+            .map(|(v, _)| v.trim_end())
+            .unwrap_or(value)
+            .to_string();
+    };
+    let mut out = String::with_capacity(inner.len());
+    let mut chars = inner.chars();
+    while let Some(c) = chars.next() {
+        if c != '\\' {
+            out.push(c);
+            continue;
+        }
+        match chars.next() {
+            Some('n') => out.push('\n'),
+            Some('t') => out.push('\t'),
+            Some('r') => out.push('\r'),
+            Some('"') => out.push('"'),
+            Some('\\') => out.push('\\'),
+            // Anything else keeps both characters: a Windows path in an
+            // unescaped double-quoted value should survive intact.
+            Some(other) => {
+                out.push('\\');
+                out.push(other);
+            }
+            None => out.push('\\'),
+        }
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
+    /// The `.env` shapes people actually paste.
+    #[test]
+    fn an_env_file_takes_the_shapes_people_write() {
+        let parsed = parse_env_file(
+            "# a comment\n\nAPI_KEY=secret\nexport PORT=\"8080\"\n\
+             QUOTED='literal $NOPE'\nESCAPED=\"a\\nb\"\nTRAILING=value # note\n",
+        )
+        .expect("parses");
+        assert_eq!(
+            parsed,
+            vec![
+                ("API_KEY".to_string(), "secret".to_string()),
+                ("PORT".to_string(), "8080".to_string()),
+                ("QUOTED".to_string(), "literal $NOPE".to_string()),
+                ("ESCAPED".to_string(), "a\nb".to_string()),
+                ("TRAILING".to_string(), "value".to_string()),
+            ]
+        );
+    }
+
+    /// No interpolation, deliberately. A file that expanded `$FOO` would have to
+    /// decide whose `FOO`, and every answer surprises someone.
+    #[test]
+    fn an_env_file_does_not_interpolate() {
+        let parsed = parse_env_file("A=$HOME\nB=\"$HOME\"\n").expect("parses");
+        assert_eq!(parsed[0].1, "$HOME");
+        assert_eq!(parsed[1].1, "$HOME");
+    }
+
+    #[test]
+    fn a_malformed_env_line_is_an_error_with_its_number() {
+        let e = parse_env_file("GOOD=1\nnot a pair\n").expect_err("refused");
+        assert!(e.contains("line 2"), "{e}");
+        let e = parse_env_file("HAS SPACE=1\n").expect_err("refused");
+        assert!(e.contains("not a variable name"), "{e}");
+    }
+
+    /// The point of the feature: `--env-file` grants reading exactly the names
+    /// it defines, so a one-liner needs no `--allow`. And nothing else.
+    #[test]
+    fn an_env_file_grants_exactly_its_own_names() {
+        let dir = std::env::temp_dir().join("rite-options-env-file");
+        std::fs::create_dir_all(&dir).expect("temp dir");
+        let path = dir.join("test.env");
+        std::fs::write(&path, "API_KEY=secret\nPORT=8080\n").expect("write");
+
+        let options = RuntimeOptions {
+            env_files: vec![path.clone()],
+            ..Default::default()
+        };
+        let perms = options.permissions().expect("permissions");
+        assert!(perms.check_env("API_KEY").is_ok());
+        assert!(perms.check_env("PORT").is_ok());
+        assert!(perms.check_env("HOME").is_err(), "and nothing else");
+        // Reading is not writing, even for a name the file defined.
+        assert!(perms.check_env_write("API_KEY").is_err());
+
+        // An explicit `--deny env` still takes it away: the implicit grant is a
+        // convenience, not an override.
+        let denied = RuntimeOptions {
+            env_files: vec![path],
+            deny: vec!["env".into()],
+            ..Default::default()
+        }
+        .permissions()
+        .expect("permissions");
+        assert!(denied.check_env("API_KEY").is_err());
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Later files win, and the order of what is left is stable.
+    #[test]
+    fn a_later_env_file_overrides_an_earlier_one() {
+        let dir = std::env::temp_dir().join("rite-options-env-file-order");
+        std::fs::create_dir_all(&dir).expect("temp dir");
+        std::fs::write(dir.join("a.env"), "A=1\nB=1\n").expect("write");
+        std::fs::write(dir.join("b.env"), "B=2\nC=2\n").expect("write");
+        let values = RuntimeOptions {
+            env_files: vec![dir.join("a.env"), dir.join("b.env")],
+            ..Default::default()
+        }
+        .env_file()
+        .expect("reads");
+        assert_eq!(
+            values,
+            vec![
+                ("A".to_string(), "1".to_string()),
+                ("B".to_string(), "2".to_string()),
+                ("C".to_string(), "2".to_string()),
+            ]
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_missing_env_file_is_an_error_naming_the_path() {
+        let e = RuntimeOptions {
+            env_files: vec![std::path::PathBuf::from("/nonexistent/none.env")],
+            ..Default::default()
+        }
+        .permissions()
+        .expect_err("refused");
+        assert!(e.contains("none.env"), "{e}");
+    }
+
     use super::*;
 
     #[test]
@@ -175,8 +383,8 @@ mod tests {
     }
 
     /// `net` and `env` are host- and name-scoped, so the bare word is not a
-    /// permission. Worth pinning: the error is the only thing that tells someone
-    /// `--deny net` did not do what they assumed, and it used to be swallowed.
+    /// permission. Pinned because the error is what tells someone `--deny net`
+    /// did not do what they assumed, and it used to be swallowed.
     #[test]
     fn a_scoped_permission_needs_its_scope() {
         for spec in ["net", "fs"] {

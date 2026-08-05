@@ -11,7 +11,8 @@
 //! is a second description free to be wrong.
 //!
 //! The structure is produced first as [`Explanation`] and rendered second, so a
-//! consumer that wants the steps as data — an editor hover, a Studio panel — gets
+//! consumer that wants the steps as data, such as an editor hover or a Studio
+//! panel, gets
 //! them without parsing prose back out.
 
 use crate::graph::{CantProgram, NodeKind, SubgraphId};
@@ -35,7 +36,7 @@ pub struct Explanation {
     pub effects: Vec<String>,
     /// The largest `:max` any orbit will accept, if there are orbits.
     pub max_orbit_items: Option<u64>,
-    /// Things worth knowing before running it.
+    /// Caveats to be aware of before running it.
     pub hazards: Vec<String>,
 }
 

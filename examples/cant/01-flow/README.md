@@ -13,6 +13,6 @@ Reads left to right:
 
 Result: `[2, 4, 6]`.
 
-Each stage runs once per incoming emission. A list does not scatter itself —
+Each stage runs once per incoming emission. A list does not scatter itself:
 `*` is always explicit, which is what keeps `[[1, 2], [3]] -> count` meaning
 what it looks like.

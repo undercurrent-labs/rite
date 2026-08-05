@@ -1,0 +1,4 @@
+// Small facts are still facts about the machine rather than about the program,
+// so `@sys` is denied by default like `fs`, `net` and `env` — §18.5. The refusal
+// names the grant that would allow it.
+! @sys.cwd

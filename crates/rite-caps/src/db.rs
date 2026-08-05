@@ -4,7 +4,7 @@
 //! Disabled on wasm targets — calls return a clear capability error.
 
 // Most of this module only exists when DuckDB is linked in. Without the feature the
-// capability still answers — with a clear error — so the imports and state it needs are
+// capability still answers, with a clear error, so the imports and state it needs are
 // gated rather than the whole file. `rite build` compiles this crate without the feature
 // for any program that never touches `@db`, and that configuration has to be warning-clean
 // or a user with `-Dwarnings` cannot build at all.

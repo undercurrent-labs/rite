@@ -21,7 +21,14 @@ fn repo_root() -> PathBuf {
 }
 
 /// Every crate that makes up Cant.
-const CANT_CRATES: &[&str] = &["cant-syntax", "cant-sem", "cant", "cant-cli", "cant-wasm"];
+const CANT_CRATES: &[&str] = &[
+    "cant-syntax",
+    "cant-sem",
+    "cant",
+    "cant-cli",
+    "cant-wasm",
+    "cant-render",
+];
 
 fn literal_version(manifest: &str) -> Option<String> {
     let package = manifest.split("[package]").nth(1)?;

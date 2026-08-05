@@ -25,7 +25,7 @@
 use rite_caps::PermissionSet;
 use std::path::Path;
 
-/// Rust source for `rite_perms()` — the baked capability grants — plus the
+/// Rust source for `rite_perms()`, the baked capability grants, plus the
 /// `grant_path` helper it needs.
 pub(crate) fn emit_permission_set(perms: &PermissionSet, build_cwd: &Path) -> String {
     let mut out = String::new();

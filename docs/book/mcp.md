@@ -49,7 +49,7 @@ anything:
 ```
 
 Every parameter is required, annotated or not: a missing one is a slot the body has no
-value for, so the schema says so rather than letting it arrive as `none`.
+value for, so the schema declares it rather than letting it arrive as `none`.
 
 The same annotations are enforced when the call arrives. A client that sends a string
 where `int` was declared gets the tool's own type error back — the contract is checked

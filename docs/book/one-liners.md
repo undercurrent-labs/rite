@@ -27,7 +27,7 @@ rite repl --allow-all                  # full host for local exploration
 
 ```text
 $ rite repl
-Rite 0.8.1 — type :help for commands
+Rite 0.9.0 — type :help for commands
 rite〉1 + 2
 3
 rite〉xs ← [1, 2, 3, 4, 5]
@@ -221,7 +221,7 @@ Copy the function into a `.rite` file when it stabilizes; use `:load` / `:reload
 ## How the session remembers things
 
 Each input is compiled on its own, so the REPL keeps a **prelude** of your definitions
-and replays it before every line. Three consequences worth knowing:
+and replays it before every line. Three consequences:
 
 **Redefining a name replaces it, keeping its original position.** The newest value wins,
 and anything defined in between sees it:

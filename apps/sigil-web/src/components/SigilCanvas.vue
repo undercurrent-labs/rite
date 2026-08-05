@@ -55,7 +55,7 @@ const related = computed<{ nodes: Set<string>; edges: Set<string> }>(() => {
   if (!id || !props.sceneJson) return empty;
 
   // `graph_ref`, not `graphRef`. The scene's Rust types serialize with their own
-  // field names — only the *WASM boundary* types use camelCase — and reading the
+  // field names, since only the *WASM boundary* types use camelCase, and reading the
   // wrong one fails silently: no edges parse, so a selection lights only itself
   // and looks like a highlighting bug rather than a naming one.
   type Element = { id: string; graph_ref?: { kind: string }; ends?: { from: string; to: string } };

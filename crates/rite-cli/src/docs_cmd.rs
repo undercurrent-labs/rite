@@ -45,7 +45,7 @@ pub fn cli_reference_markdown() -> String {
 
 /// `rite_doc::generate` plus the CLI reference.
 ///
-/// Only this crate can write that page — it needs clap's command tree — so
+/// Only this crate can write that page, since it needs clap's command tree, so
 /// every path that regenerates documentation has to come through here. When
 /// `docs check` regenerated directly it quietly replaced the published CLI
 /// reference with rite-doc's one-line placeholder.

@@ -11,7 +11,7 @@ use rite_runtime::{EvalError, Key, Value};
 /// does not compile — a bad pattern is data, not a crash, so `?` and the usual
 /// postures apply. Matching is the `regex` crate's guaranteed-linear-time
 /// engine: no backtracking, so no pathological pattern can hang a script,
-/// which is what lets this capability need no permission — like `@json`, it
+/// which is why this capability needs no permission: like `@json`, it
 /// computes and touches nothing.
 pub struct RegexCap {
     /// Compiled patterns, keyed by source. A pipeline applies one pattern per

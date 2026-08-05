@@ -9,7 +9,7 @@
 //!
 //! A diagnostic that originated in generated Rite carries where it came from in
 //! [`CantDiagnostic::rite`]. The primary label still points at `.cant` source;
-//! the Rite code and generated span are related metadata, never the headline.
+//! the Rite code and generated span travel as related metadata.
 
 use rite_core::{render_snippet, Label, Severity, SourceMap, SourceSpan};
 use serde::{Deserialize, Serialize};
@@ -145,7 +145,7 @@ codes! {
 
     CANT_X001_GENERATED_RITE_INVALID = (Expand, 1, "Generated Rite that Rite's own parser rejected — always a bug in Cant.");
 
-    CANT_O001_BUDGET_EXHAUSTED = (Orbit, 1, "One of Rite's global budgets — steps, time, collection or string size — was exhausted.");
+    CANT_O001_BUDGET_EXHAUSTED = (Orbit, 1, "One of Rite's global budgets (steps, time, collection or string size) was exhausted.");
     CANT_O002_ORBIT_LIMIT_REACHED = (Orbit, 2, "An orbit accepted its `:max` candidates and stopped.");
 
     CANT_R001_RITE_RUNTIME = (Runtime, 1, "A Rite runtime failure, remapped onto Cant source.");

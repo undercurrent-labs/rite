@@ -6,7 +6,7 @@ use std::io::Read;
 
 /// The process's own standard input.
 ///
-/// This is what makes a script a shell citizen: `cat access.log | rite run
+/// This is what a script in a pipe needs: `cat access.log | rite run
 /// filter.rite`, with the data arriving on the pipe rather than through a
 /// filename. Reading stdin is an effect (it observes state
 /// outside the program) and carries its own permission, allowed by default

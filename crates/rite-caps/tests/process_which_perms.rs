@@ -11,7 +11,13 @@ async fn which(perms: &PermissionSet, name: &str) -> Result<Value, String> {
     // `which` ignores it.
     let ctx = RuntimeContext::new();
     ProcessCap
-        .call("which", vec![Value::string(name)], perms, &ctx)
+        .call(
+            "which",
+            vec![Value::string(name)],
+            perms,
+            &ctx,
+            &Default::default(),
+        )
         .await
         .map_err(|e| e.to_string())
 }
@@ -112,7 +118,13 @@ async fn args_reads_script_args_without_any_permission() {
     let mut ctx = RuntimeContext::new();
     ctx.script_args = vec!["alpha".into(), "beta".into()];
     let out = ProcessCap
-        .call("args", vec![], &PermissionSet::default_secure(), &ctx)
+        .call(
+            "args",
+            vec![],
+            &PermissionSet::default_secure(),
+            &ctx,
+            &Default::default(),
+        )
         .await
         .expect("args must not require a grant");
     assert_eq!(
@@ -125,7 +137,13 @@ async fn args_reads_script_args_without_any_permission() {
 async fn args_is_empty_when_the_host_set_none() {
     let ctx = RuntimeContext::new();
     let out = ProcessCap
-        .call("args", vec![], &PermissionSet::default_secure(), &ctx)
+        .call(
+            "args",
+            vec![],
+            &PermissionSet::default_secure(),
+            &ctx,
+            &Default::default(),
+        )
         .await
         .expect("args");
     assert_eq!(out, Value::list(Vec::<Value>::new()));

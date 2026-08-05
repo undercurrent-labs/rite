@@ -28,8 +28,8 @@
 //! # What it must not do
 //!
 //! Nothing here reads leaf text to decide what a node *means*. Leaf text becomes
-//! a label — something to draw or withhold — and capability metadata comes from
-//! the field. That is the whole point of the version 1 graph.
+//! a label, something to draw or withhold, and capability metadata comes from
+//! the field. That separation is what the version 1 graph added.
 
 use rite_sigil::{
     Capability, CapabilityFamily, EdgeId, EdgeKind, EffectMetadata, GraphMetadata, NodeId, PortRef,
@@ -150,7 +150,7 @@ fn adapt_node(
     out.region = node.subgraph.map(region_id);
 
     // Effect metadata is read from the field, never from the text. This is the
-    // line ADR 0006 draws, and it is the reason `cant.graph` went to version 1.
+    // line ADR 0006 draws, and why `cant.graph` went to version 1.
     if performs || !node.capabilities.is_empty() {
         out.effect = Some(EffectMetadata {
             performs,
@@ -192,7 +192,7 @@ fn adapt_node(
     }
 
     // Orbit policy is what the ring's tick group and inner lock are drawn from,
-    // so it travels as attributes rather than being recovered from a label.
+    // so it travels as attributes instead of being recovered from a label.
     if let NodeKind::Orbit {
         identity,
         max_items,

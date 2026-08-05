@@ -470,7 +470,7 @@ pub struct RunFailure {
     ///
     /// Both runners flush buffered output on the failure path, and that is a
     /// documented promise — a script that prints and then fails must not lose what
-    /// it printed. Carrying it here is what lets a fixture check the promise; while
+    /// it printed. Carrying it here is what a fixture checks the promise against; while
     /// the error was a bare `String` there was nothing to compare against.
     pub stdout: String,
 }

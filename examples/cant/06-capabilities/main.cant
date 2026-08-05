@@ -1,1 +1,1 @@
-"data.json" -> !@fs.read? -> @json.decode -> .name
+"data.json" -> !@fs.read? -> @json.decode? -> .name

@@ -41,8 +41,15 @@ fn cant(args: &[&str], dir: Option<&Path>) -> Output {
 
 // ---- examples
 
+/// Every example produces the value its `main.expect` names.
+///
+/// `cant test`, not `cant run`: exiting 0 is not the same as working.
+/// `06-capabilities` was `!@fs.read? -> @json.decode -> .name` — one `?` short,
+/// so `.name` projected a field out of an `ok(…)`, found nothing, and answered
+/// `none`. A program that answers nothing still exits 0, so the gate passed for
+/// months while the README beside it said the value was `"cant"`.
 #[test]
-fn every_example_runs() {
+fn every_example_produces_the_value_it_claims() {
     let root = repo_root().join("examples/cant");
     let mut cases: Vec<PathBuf> = std::fs::read_dir(&root)
         .expect("examples/cant")
@@ -59,24 +66,62 @@ fn every_example_runs() {
             failures.push(format!("{}: no main.cant", case.display()));
             continue;
         }
+        if !case.join("main.expect").is_file() {
+            failures.push(format!(
+                "{}: no main.expect — an example has to say what it answers, or \
+                 the only thing checked is that it did not crash",
+                case.display()
+            ));
+            continue;
+        }
         // From inside the example's own directory, so a relative path in the
         // program means what a reader following the README would expect.
-        let out = cant(&["run", "main.cant", "--allow-all"], Some(&case));
+        let out = cant(&["test", "main.cant", "--allow-all"], Some(&case));
         if !out.status.success() {
             failures.push(format!(
-                "{}: exited {:?}\n{}",
+                "{}: exited {:?}\n{}{}",
                 case.display(),
                 out.status.code(),
+                String::from_utf8_lossy(&out.stdout),
                 String::from_utf8_lossy(&out.stderr)
             ));
         }
     }
     assert!(
         failures.is_empty(),
-        "{} example(s) that do not run:\n{}",
+        "{} example(s) that do not answer what they claim:\n{}",
         failures.len(),
         failures.join("\n")
     );
+}
+
+/// And the README quotes that value, so the page and the program agree.
+#[test]
+fn every_example_readme_quotes_the_value_it_answers() {
+    let root = repo_root().join("examples/cant");
+    let mut failures = Vec::new();
+    for entry in std::fs::read_dir(&root).expect("examples/cant") {
+        let case = entry.expect("entry").path();
+        if !case.is_dir() {
+            continue;
+        }
+        let Ok(expected) = std::fs::read_to_string(case.join("main.expect")) else {
+            continue;
+        };
+        let expected = expected.trim();
+        if expected.is_empty() {
+            failures.push(format!("{}: main.expect is empty", case.display()));
+            continue;
+        }
+        let readme = std::fs::read_to_string(case.join("README.md")).expect("README.md");
+        if !readme.contains(expected) {
+            failures.push(format!(
+                "{}: the README never shows the value the program answers:\n  {expected}",
+                case.display()
+            ));
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
 
 /// An example's README must show the program it sits beside.
@@ -241,7 +286,7 @@ fn the_documented_graph_pictures_are_current() {
         ),
         (
             "effects",
-            r#""data.json" -> !@fs.read? -> @json.decode -> .name"#,
+            r#""data.json" -> !@fs.read? -> @json.decode? -> .name"#,
         ),
     ];
 
@@ -490,4 +535,109 @@ fn every_ignored_fence_explains_itself() {
         }
     }
     assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+/// Every diagnostic code the compiler can emit is documented, and every code the
+/// page documents exists.
+///
+/// A reader who hits `CANT-G014` looks it up; a page that has fifteen of the
+/// sixteen codes is a page that fails exactly the person who needed it. Checked
+/// in both directions, so a code deleted from the source cannot leave a
+/// documented one behind either.
+#[test]
+fn every_diagnostic_code_is_documented() {
+    let page = repo_root().join("docs/cant/diagnostics.md");
+    let text = std::fs::read_to_string(&page).expect("docs/cant/diagnostics.md");
+
+    let mut undocumented = Vec::new();
+    for (code, _) in cant_syntax::ALL_CODES {
+        let spelling = code.to_string();
+        if !text.contains(&spelling) {
+            undocumented.push(spelling);
+        }
+    }
+    assert!(
+        undocumented.is_empty(),
+        "{} diagnostic code(s) missing from docs/cant/diagnostics.md: {}",
+        undocumented.len(),
+        undocumented.join(", ")
+    );
+
+    // And nothing invented: every `CANT-Xnnn` the page names is a real code.
+    let known: Vec<String> = cant_syntax::ALL_CODES
+        .iter()
+        .map(|(code, _)| code.to_string())
+        .collect();
+    let mut invented = Vec::new();
+    let bytes: Vec<char> = text.chars().collect();
+    for (i, _) in text.match_indices("CANT-") {
+        let start = text[..i].chars().count();
+        let spelling: String = bytes[start..]
+            .iter()
+            .take_while(|c| c.is_ascii_alphanumeric() || **c == '-')
+            .collect();
+        // A group prefix such as `CANT-Lxxx` is a heading, not a code.
+        if spelling.ends_with("xxx") || spelling.len() < 9 {
+            continue;
+        }
+        if !known.contains(&spelling) && !invented.contains(&spelling) {
+            invented.push(spelling);
+        }
+    }
+    assert!(
+        invented.is_empty(),
+        "docs/cant/diagnostics.md names code(s) that do not exist: {}",
+        invented.join(", ")
+    );
+}
+
+/// A fence that *can* be executed has to be.
+///
+/// The distinction between ` ```cant ` and ` ```cant run ` is checked versus
+/// executed, and checking is much weaker than it looks: three recipes in
+/// `one-liners.md` were `!@fs.read -> lines`, which parses, resolves, and fails
+/// at run time because a capability answers a result. They passed for as long as
+/// they existed.
+///
+/// The rule is mechanical. A fence is run here with **no permissions granted**;
+/// if it succeeds, nothing was stopping it from being marked `run`, so it must
+/// be. A fence that needs a grant or a file exits non-zero ungranted and is
+/// exempt automatically — which is the right exemption, because those are
+/// exactly the ones that cannot be executed in a test.
+#[test]
+fn a_fence_that_can_run_says_run() {
+    let root = repo_root();
+    let mut unmarked = Vec::new();
+    for path in doc_files() {
+        let Ok(text) = std::fs::read_to_string(&path) else {
+            continue;
+        };
+        let relative = path
+            .strip_prefix(&root)
+            .unwrap_or(&path)
+            .display()
+            .to_string();
+        for fence in fences(&text, &relative) {
+            if fence.run {
+                continue;
+            }
+            // No `--allow-all`: an ungranted run cannot touch anything, so this
+            // is safe to do to every fence in the documentation.
+            let out = cant(&["run", "-e", fence.source.trim()], None);
+            if out.status.success() {
+                unmarked.push(format!(
+                    "{}:{} — runs with no permissions, so mark it ```cant run\n    {}",
+                    fence.file,
+                    fence.line,
+                    fence.source.trim().replace('\n', "\n    ")
+                ));
+            }
+        }
+    }
+    assert!(
+        unmarked.is_empty(),
+        "{} fence(s) checked when they could be executed:\n\n{}",
+        unmarked.len(),
+        unmarked.join("\n")
+    );
 }

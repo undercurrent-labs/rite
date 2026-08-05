@@ -385,7 +385,7 @@ what the path *resolves to*, because `@fs.metadata` follows links. A symlink to 
 file reports `is_file: true` with the target's length, the same split `ls -l`
 shows. Only `is_symlink` describes the path you asked about.
 
-One consequence worth knowing: a **broken** link cannot be detected. Following it
+One consequence: a **broken** link cannot be detected. Following it
 fails before anything can report on it, so `@fs.metadata` on a dangling symlink
 returns `err(⟨kind: "io.not_found", …⟩)` rather than a record saying
 `is_symlink: true`.
@@ -411,7 +411,7 @@ real time comparison — no parsing step required. `@clock.parse` accepts an
 
 What you **cannot** do yet is arithmetic on them. There is no "seven days ago":
 Rite has no date maths, so a cutoff has to be a timestamp you already hold —
-one recorded on the last run, or a literal. Comparison is the whole toolkit.
+one recorded on the last run, or a literal. Comparison is all there is.
 
 Always assume **permissioned** access.
 

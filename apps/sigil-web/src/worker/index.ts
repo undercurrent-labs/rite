@@ -23,7 +23,7 @@ interface Env {
  * bundled by wrangler, not by Vite: `define`d constants exist in the app
  * bundle and in the test runner but never in the deployed Worker, and the
  * first production deploy answered `/api/version` with an exception while the
- * tests — which stubbed the same globals — stayed green. An asset exists in
+ * tests, which stubbed the same globals, stayed green. An asset exists in
  * exactly one place, and both the Worker and the tests read it the same way.
  */
 interface BuildInfo {

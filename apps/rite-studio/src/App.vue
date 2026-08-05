@@ -117,7 +117,7 @@ watch(dialect, async (to) => {
     cursor.value = { line: mapped.line, character: mapped.character };
   } catch (e) {
     // Leave the editor exactly as it was: silently replacing what someone typed
-    // with a half-converted version is worse than not converting. Source that does
+    // with a half-converted version is the wrong outcome. Source that does
     // not parse cannot be converted, and that is the usual reason to land here.
     panel.value = "diag";
     content.diag = `Could not convert to ${to}: ${e instanceof Error ? e.message : String(e)}`;

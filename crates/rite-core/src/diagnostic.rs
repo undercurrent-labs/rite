@@ -137,7 +137,7 @@ impl Diagnostic {
 /// independent of what kind of code the diagnostic carries, and a tool that has
 /// spans and labels but not a [`ErrorCode`] had no way to reach it.
 ///
-/// `header` is the whole first line, without its newline: callers own their own
+/// `header` is the entire first line, without its newline: callers own their own
 /// code namespace. Rite passes `"error[E021]: …"`; a tool with codes of its own
 /// passes whatever it uses.
 pub fn render_snippet(

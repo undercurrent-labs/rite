@@ -360,7 +360,7 @@ fn path_arg_for(who: &str, args: &[Value], i: usize) -> Result<PathBuf, EvalErro
 /// merely the format. chrono writes a UTC offset as `+00:00`, and mixed
 /// sub-second precision still orders correctly under plain string comparison
 /// (`…:00+00:00` < `…:00.5+00:00`, because `+` sorts below `.`). Switching to
-/// the `Z` spelling would silently break it — `Z` sorts *above* both — so a
+/// the `Z` spelling would silently break it, since `Z` sorts *above* both, so a
 /// file modified at the same second as `@clock.now` would compare as later.
 /// Rite has no date arithmetic, so ordering is the only tool a script has here.
 fn mtime(m: &std::fs::Metadata) -> Value {
@@ -378,8 +378,8 @@ fn mtime(m: &std::fs::Metadata) -> Value {
 /// and telling them apart needs the second, non-following stat.
 ///
 /// Must be given the path as the script wrote it. `check_fs_read` canonicalizes,
-/// and canonicalization resolves links — which is exactly how a symlink is stopped
-/// from escaping a granted root, so that behaviour stays. It does mean the checked
+/// and canonicalization resolves links, which is how a symlink is stopped from
+/// escaping a granted root, so that behaviour stays. It does mean the checked
 /// path can never answer `true` here.
 ///
 /// A broken link answers `false` only because `metadata` already failed and this is
@@ -467,7 +467,7 @@ fn open_handle(
     ctx: &rite_runtime::RuntimeContext,
 ) -> Result<Value, EvalError> {
     let path = path_arg_for("fs.open", args, 0)?;
-    // The mode is an atom — `#read` — so a typo is a resolve-time unknown rather
+    // The mode is an atom (`#read`), so a typo is a resolve-time unknown rather
     // than a string that silently means something else.
     let mode = match args.get(1) {
         Some(Value::Atom(id)) => ctx.atoms.name(*id),

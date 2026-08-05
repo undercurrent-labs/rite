@@ -16,11 +16,11 @@ values are in flight:
 Result: `[3, 7, 5]`.
 
 Note the spaces in `[ [1, 2], … ]`. A stage is Rite expression text, and Rite
-lexes `[[` as its block opener — so `[[1, 2], [3]]` is not a valid list in Rite
+lexes `[[` as its block opener, so `[[1, 2], [3]]` is not a valid list in Rite
 either, and Cant inherits that. `cant check` catches it and reports it against
 the stage, as `CANT-S004`.
 
-At the end of a program collection is implicit — zero emissions become `none`,
+At the end of a program collection is implicit: zero emissions become `none`,
 one becomes that value, many become a list. Writing `[]` explicitly matters when
 the list has to go somewhere: `... -> [] -> sum` sums the collection, while
 `... -> sum` sums each emission separately.

@@ -257,7 +257,14 @@ Interactive REPL
 
 | Flag | Meaning |
 |---|---|
+| `--allow` | Grant a permission, e.g. `fs:read=./data` or `net=api.example.com` |
 | `--allow-all` | Grant every permission for the session — local exploration only |
+| `--deny` | Revoke a permission that is allowed by default (console, clock, random) |
+| `--timeout` | Wall-clock limit per input, e.g. `30s` |
+| `--color` | When to colour output: `auto`, `always`, or `never` |
+| `--env-file` | Load `KEY=VALUE` pairs from a file into the session's environment |
+| `--use` | `use` this module before the first prompt (repeatable) |
+| `--module-root` | Also search this directory for modules (repeatable) |
 
 ## `rite run`
 
@@ -279,6 +286,8 @@ Arguments after `--` are readable with `! @process.args`.
 | `--deny` | Revoke a permission that is allowed by default (console, clock, random) |
 | `--timeout` | Wall-clock limit for the run, e.g. `30s` or `5m` |
 | `--max-steps` | Stop after this many evaluation steps |
+| `--module-root` | Also search this directory for `use` imports (repeatable) |
+| `--env-file` | Load `KEY=VALUE` pairs from a file into this run's environment |
 | `--trace` | Print an execution summary (steps, elapsed) and stack traces to stderr |
 | `--json-errors` | Report diagnostics as JSON on stderr instead of rendered text |
 

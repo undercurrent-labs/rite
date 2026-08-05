@@ -267,7 +267,7 @@ impl UdpCap {
 }
 
 /// A payload is text or bytes. Anything else is rejected rather than stringified:
-/// silently sending `<bytes len=3>` down the wire is worse than a message.
+/// silently sending `<bytes len=3>` down the wire is the wrong failure.
 #[cfg(not(target_arch = "wasm32"))]
 fn payload_bytes(v: Option<&Value>) -> Result<Vec<u8>, EvalError> {
     match v {

@@ -12,7 +12,7 @@ const snippet = `request -> ?{ $.found } -> render -> []`;
       Nothing was emitted here
     </h1>
     <p class="mt-4 max-w-prose text-slate-400">
-      The ward did not pass. Nothing downstream ran, which is exactly what a ward is
+      The ward did not pass. Nothing downstream ran, which is what a ward is
       for — and is also why this page is empty.
     </p>
     <div class="mt-8 max-w-xl">

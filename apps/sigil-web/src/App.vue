@@ -2,7 +2,7 @@
 /**
  * The chamber.
  *
- * Three columns on a desktop — source, canvas, Codex — with the canvas dominant
+ * Three columns on a desktop (source, canvas, Codex) with the canvas dominant
  * and every panel collapsible so the artifact can take the whole viewport
  * (§20.2). On a narrow screen the panels become sheets and nothing depends on
  * hover.
@@ -111,7 +111,7 @@ async function render() {
   result.value = outcome;
   // A selection points at a node in the picture that was on screen. After a new
   // render it may name something that is no longer there, and a highlight over a
-  // node the user did not choose is worse than no highlight.
+  // node the user did not choose is the wrong feedback.
   selected.value = null;
   rendering.value = false;
 }

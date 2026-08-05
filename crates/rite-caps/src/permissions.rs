@@ -11,9 +11,22 @@ pub enum Permission {
     FsRead(PathBuf),
     FsWrite(PathBuf),
     Net(String),
+    /// Read named environment variables (`--allow env=PATH,HOME`).
     Env(String),
+    /// Read every environment variable (`--allow env`).
     EnvAll,
+    /// Write named environment variables (`--allow env:write=PORT`).
+    ///
+    /// A separate class from reading, because they are separate privileges:
+    /// `--allow env` is "you may look at my environment", and reusing it to
+    /// mean "and change it" would widen every existing grant in the world.
+    EnvWrite(String),
+    /// Write any environment variable (`--allow env:write`).
+    EnvWriteAll,
     Process,
+    /// Ambient facts about the process and the machine — `@sys.cwd`,
+    /// `@sys.home`, `@sys.os`. Denied by default, like `fs` and `env`.
+    Sys,
     Clock,
     Random,
     /// In-memory DuckDB only (`--allow db`).
@@ -69,9 +82,33 @@ impl Permission {
         if let Some(rest) = spec.strip_prefix("net=") {
             return Ok(Permission::Net(rest.to_string()));
         }
+        if spec == "sys" {
+            return Ok(Permission::Sys);
+        }
+        // Checked before the bare `env` forms, or `env:write=PORT` would parse
+        // as a *read* grant for a variable literally named `:write=PORT`.
+        if let Some(rest) = spec.strip_prefix("env:write") {
+            let rest = rest.trim_start_matches('=');
+            return Ok(if rest.is_empty() {
+                Permission::EnvWriteAll
+            } else {
+                Permission::EnvWrite(rest.to_string())
+            });
+        }
+        if let Some(rest) = spec.strip_prefix("env:read") {
+            let rest = rest.trim_start_matches('=');
+            return Ok(if rest.is_empty() {
+                Permission::EnvAll
+            } else {
+                Permission::Env(rest.to_string())
+            });
+        }
         if let Some(rest) = spec.strip_prefix("env=") {
             return Ok(Permission::Env(rest.to_string()));
         }
+        // Bare `env` stays read-all: it is what every existing grant means, and
+        // it must not start meaning "and write" because a write class was
+        // added. `env:read` is its explicit spelling.
         if spec == "env" {
             return Ok(Permission::EnvAll);
         }
@@ -95,6 +132,11 @@ pub struct PermissionSet {
     pub process: bool,
     pub env_all: bool,
     pub env_vars: HashSet<String>,
+    /// Write access, tracked apart from reads — see [`Permission::EnvWrite`].
+    pub env_write_all: bool,
+    pub env_write_vars: HashSet<String>,
+    /// Ambient process and machine facts (`@sys`).
+    pub sys: bool,
     pub fs_read: Vec<PathBuf>,
     pub fs_write: Vec<PathBuf>,
     pub net: HashSet<String>,
@@ -116,6 +158,9 @@ impl PermissionSet {
             process: false,
             env_all: false,
             env_vars: HashSet::new(),
+            env_write_all: false,
+            env_write_vars: HashSet::new(),
+            sys: false,
             fs_read: Vec::new(),
             fs_write: Vec::new(),
             net: HashSet::new(),
@@ -165,6 +210,8 @@ impl PermissionSet {
             random: true,
             process: true,
             env_all: true,
+            env_write_all: true,
+            sys: true,
             db_memory: true,
             ..Self::default()
         }
@@ -191,6 +238,16 @@ impl PermissionSet {
                     }
                 }
             }
+            Permission::EnvWriteAll => self.env_write_all = true,
+            Permission::EnvWrite(v) => {
+                for name in v.split(',') {
+                    let name = name.trim();
+                    if !name.is_empty() {
+                        self.env_write_vars.insert(name.to_string());
+                    }
+                }
+            }
+            Permission::Sys => self.sys = true,
             Permission::FsRead(p) => self.fs_read.push(canonicalize_loose(&p)),
             Permission::FsWrite(p) => self.fs_write.push(canonicalize_loose(&p)),
             Permission::Net(h) => {
@@ -241,6 +298,21 @@ impl PermissionSet {
                 for name in v.split(',') {
                     self.env_vars.remove(name.trim());
                 }
+            }
+            Permission::EnvWriteAll => {
+                self.allow_all = false;
+                self.env_write_all = false;
+                self.env_write_vars.clear();
+            }
+            Permission::EnvWrite(v) => {
+                self.allow_all = false;
+                for name in v.split(',') {
+                    self.env_write_vars.remove(name.trim());
+                }
+            }
+            Permission::Sys => {
+                self.allow_all = false;
+                self.sys = false;
             }
             Permission::FsRead(_) => {
                 self.allow_all = false;
@@ -310,6 +382,33 @@ impl PermissionSet {
         }
     }
 
+    /// Writing an environment variable is a separate grant from reading one.
+    ///
+    /// A read grant does not imply a write grant, and never should: a script
+    /// allowed to look at `PATH` is not thereby allowed to change what the
+    /// programs it starts will find on it.
+    pub fn check_env_write(&self, name: &str) -> Result<(), String> {
+        if self.allow_all || self.env_write_all || self.env_write_vars.contains(name) {
+            Ok(())
+        } else {
+            Err(format!(
+                "env write permission denied for `{}` — grant `--allow env:write={}` \
+                 (reading it with `--allow env` is a different permission)",
+                name, name
+            ))
+        }
+    }
+
+    pub fn check_sys(&self, what: &str) -> Result<(), String> {
+        if self.allow_all || self.sys {
+            Ok(())
+        } else {
+            Err(format!(
+                "sys permission denied for `@sys.{what}` — grant `--allow sys`"
+            ))
+        }
+    }
+
     pub fn check_fs_read(&self, path: &Path) -> Result<PathBuf, String> {
         if self.allow_all {
             return Ok(canonicalize_loose(path));
@@ -361,13 +460,13 @@ impl PermissionSet {
 ///
 /// Only **one** missing level used to be handled: the parent was canonicalized and
 /// the final component re-attached. When the parent was missing too — `a/b` with
-/// neither present, which is exactly `@fs.mkdir("a/b")` — canonicalizing it failed,
+/// neither present, as in `@fs.mkdir("a/b")`, canonicalizing it failed,
 /// the relative path was kept, and it then sat under no granted root. A grant of the
 /// working directory refused to create a directory inside the working directory.
 ///
 /// So walk up to the deepest ancestor that *does* exist, canonicalize that, and
 /// re-apply the missing tail. The tail cannot contain symlinks, because it does not
-/// exist, which is what makes it safe to resolve `..` in it lexically here — leaving
+/// exist, so resolving `..` in it lexically here is safe. Leaving
 /// it for `path_under`'s prefix test would let `granted/missing/../../etc` look like
 /// it starts with `granted`.
 pub(crate) fn canonicalize_loose(path: &Path) -> PathBuf {
@@ -410,4 +509,83 @@ fn path_under(path: &Path, root: &Path) -> bool {
         path.to_path_buf()
     };
     path.starts_with(&root)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Writing the environment is its own class. Reusing `env` for it would
+    /// have widened every grant that already exists.
+    #[test]
+    fn env_write_is_not_implied_by_env() {
+        let mut perms = PermissionSet::default_secure();
+        perms.grant(Permission::parse("env").expect("parses"));
+        assert!(perms.check_env("PATH").is_ok());
+        let refused = perms.check_env_write("PATH").expect_err("refused");
+        assert!(refused.contains("env:write=PATH"), "{refused}");
+        assert!(
+            refused.contains("different permission"),
+            "the message has to say why a read grant did not cover it: {refused}"
+        );
+
+        perms.grant(Permission::parse("env:write=PATH").expect("parses"));
+        assert!(perms.check_env_write("PATH").is_ok());
+        assert!(
+            perms.check_env_write("HOME").is_err(),
+            "scoped, not blanket"
+        );
+    }
+
+    /// `env:write=PORT` must not parse as a *read* grant for a variable called
+    /// `:write=PORT` — which is what happens if the bare `env` prefixes are
+    /// tried first.
+    #[test]
+    fn the_env_prefixes_are_tried_longest_first() {
+        assert_eq!(
+            Permission::parse("env:write=PORT"),
+            Ok(Permission::EnvWrite("PORT".into()))
+        );
+        assert_eq!(Permission::parse("env:write"), Ok(Permission::EnvWriteAll));
+        assert_eq!(Permission::parse("env:read"), Ok(Permission::EnvAll));
+        assert_eq!(
+            Permission::parse("env:read=HOME"),
+            Ok(Permission::Env("HOME".into()))
+        );
+        // Bare `env` stays what it has always been.
+        assert_eq!(Permission::parse("env"), Ok(Permission::EnvAll));
+        assert_eq!(
+            Permission::parse("env=HOME"),
+            Ok(Permission::Env("HOME".into()))
+        );
+    }
+
+    #[test]
+    fn a_write_grant_is_revocable_and_narrows_allow_all() {
+        let mut perms = PermissionSet::allow_all();
+        assert!(perms.check_env_write("ANY").is_ok());
+        perms.deny(Permission::parse("env:write").expect("parses"));
+        assert!(!perms.allow_all, "a denial always clears the blanket flag");
+        assert!(perms.check_env_write("ANY").is_err());
+    }
+
+    #[test]
+    fn sys_is_denied_by_default_and_grantable() {
+        let mut perms = PermissionSet::default_secure();
+        let refused = perms.check_sys("cwd").expect_err("denied by default");
+        assert!(refused.contains("--allow sys"), "{refused}");
+        assert!(refused.contains("@sys.cwd"), "{refused}");
+        perms.grant(Permission::parse("sys").expect("parses"));
+        assert!(perms.check_sys("cwd").is_ok());
+        perms.deny(Permission::parse("sys").expect("parses"));
+        assert!(perms.check_sys("cwd").is_err());
+    }
+
+    /// `--allow-all` has to cover the new classes, or it stops meaning "all".
+    #[test]
+    fn allow_all_covers_the_new_classes() {
+        let perms = PermissionSet::allow_all();
+        assert!(perms.check_env_write("ANY").is_ok());
+        assert!(perms.check_sys("cwd").is_ok());
+    }
 }

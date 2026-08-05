@@ -3,12 +3,11 @@
 A Cant program is one flow: a chain of stages, each receiving one value and
 emitting zero or more.
 
-```cant
+```cant run
 [1, 2, 3, 4, 5, 6] -> * -> ?{ $ % 2 = 0 } -> []
 ```
 
-That is the whole shape of the language. Everything below is what a stage can
-be.
+That is the shape of the language. Everything below is what a stage can be.
 
 ## Emissions
 
@@ -39,20 +38,20 @@ its elements.
 A stage is Rite expression text. The current emission goes into the first
 argument position, unless the stage contains an explicit `$`:
 
-```cant
+```cant run
 "cant" -> upper
 ```
 
 evaluates `upper("cant")`. With an explicit `$`, the emission goes exactly where
 you put it:
 
-```cant
+```cant run
 "-" -> join(["a", "b"], $)
 ```
 
 is `join(["a", "b"], "-")`. A projection reads as one:
 
-```cant
+```cant run
 << message: "hi" >> -> .message
 ```
 
@@ -65,7 +64,7 @@ Cant does not re-specify Rite's expression grammar. Whatever Rite accepts inside
 a stage, Cant accepts — including closures, whose braces are ordinary text to
 the Cant parser:
 
-```cant
+```cant run
 [ [1, -1], [-2, -3] ] -> * -> ?{ any($, { |n| n > 0 }) } -> []
 ```
 
@@ -82,7 +81,7 @@ topology the program executes, not a drawing of it.
 
 ![The flow graph for a scatter, ward and collect](graphs/flow.svg)
 
-```cant
+```cant run
 [ [1, 2], [3, 4], [5] ] -> * -> sum -> []    // [3, 7, 5]
 ```
 
@@ -99,7 +98,7 @@ glyph `⋇` is unambiguous, and is an error anywhere a stage is not expected.
 
 Consumes every emission reaching it and produces one list, in emission order.
 
-```cant
+```cant run
 [<< active: true >>, << active: false >>] -> * -> ?{ $.active } -> []
 ```
 
@@ -116,21 +115,21 @@ A filter. The predicate is evaluated with `$` bound to the incoming emission.
 
 - truthy → the input is emitted **unchanged**;
 - falsey → nothing is emitted;
-- an error → it propagates, rather than being read as false.
+- an error → it propagates, instead of being read as false.
 
-A ward never transforms; that is what the next stage is for. The predicate is one
-expression, not a flow — `?{ a -> b }` is rejected, with a message telling you to
-close the ward and continue after it.
+A ward never transforms; use the next stage for that. The predicate is one
+expression, not a flow, so `?{ a -> b }` is rejected with a message telling you
+to close the ward and continue after it.
 
-Effectful predicates are rejected. A filter that reads the world needs ordering
-rules Cant does not have.
+Effectful predicates are rejected: Cant has no ordering rules for effects inside
+a filter.
 
 ### Fork — `|{ a ; b ; c }` (`⫴⟦ a ; b ; c ⟧`)
 
 Ordered branches from the same input value. Each branch receives the identical
 immutable input; their emissions are concatenated in source order.
 
-```cant
+```cant run
 5 -> |{ $ + 1 ; $ * 2 ; $ * $ } -> []    // [6, 10, 25]
 ```
 
@@ -164,7 +163,7 @@ language.
 
 A runnable one, with the same shape:
 
-```cant
+```cant run
 [1, 2] -> * -> ~{ ?{ $ < 8 } -> $ * 2 } :by str :max 64 -> []
 ```
 
@@ -193,8 +192,8 @@ Rules:
 - Effects in the body are allowed, and run once per first-seen candidate.
 - The body runs sequentially.
 
-Reaching `:max` is a failure, not a truncated answer: a traversal that grew past
-what you expected says so rather than quietly returning half a result.
+Reaching `:max` is a failure, not a truncated answer. A traversal larger than
+expected fails rather than returning a partial result.
 
 Orbit is the only cyclic construct in the language. There are no feedback edges
 to named nodes.
@@ -203,7 +202,7 @@ to named nodes.
 
 Configure the structural form immediately to their left, with no arrow between:
 
-```cant
+```cant run
 [1, 2] -> * -> ~{ ?{ $ < 8 } -> $ * 2 } :by str :max 1024 -> []
 ```
 
@@ -231,9 +230,8 @@ or a typo in a qualified call is Rite's own diagnostic, mapped back onto the
 Cant source.
 
 Effect discipline crosses the boundary intact: a call to an effectful module
-function takes the marker like any host call — `!logger.shout($)` — and an
-unmarked call to one is rejected by Rite's analysis exactly as it would be in
-Rite.
+function takes the marker like any host call (`!logger.shout($)`), and an
+unmarked call is rejected by Rite's analysis as it would be in Rite.
 
 ## Effects
 
@@ -242,7 +240,7 @@ Cant keeps Rite's effect discipline exactly as it is.
 <!-- ignore: reads a file this document does not ship; the runnable version is
      examples/cant/06-capabilities. -->
 ```cant ignore
-"data.json" -> !@fs.read? -> @json.decode -> .name
+"data.json" -> !@fs.read? -> @json.decode? -> .name
 ```
 
 ![The flow graph for a program that reads a file](graphs/effects.svg)
@@ -260,23 +258,22 @@ need `!` for the same reason `@clock.now` does.
 
 ### Standard input
 
-`@stdin` is what makes a Cant one-liner a shell citizen — the program on `-e`,
-the data on the pipe:
+`@stdin` takes the data on the pipe, with the program on `-e`:
 
 ```bash
 cat access.log | cant run -e '!@stdin.lines -> * -> ?{ contains($, "500") } -> []'
 ```
 
 `!@stdin.lines` emits the input as a list of lines and `!@stdin.read` as one
-string. An empty pipe is an empty list, so the flow runs zero times rather
-than once over `""`. Reading stdin is an effect with its own permission,
-allowed by default and revocable with `--deny stdin`.
+string. An empty pipe is an empty list, so the flow runs zero times instead of
+once over `""`. Reading stdin is an effect with its own permission, allowed by
+default and revocable with `--deny stdin`.
 
 ## Failures
 
-A capability call answers a result — `ok(value)` or `err(record)` — and a flow
-has three postures toward the `err`, all of them Rite's own vocabulary rather
-than new syntax:
+A capability call answers a result, `ok(value)` or `err(record)`. A flow has
+three postures toward the `err`, all of them Rite's own vocabulary rather than
+new syntax:
 
 **Propagate and stop.** Postfix `?` unwraps the `ok` and ends the run on an
 `err`, with the failure mapped back onto the Cant source. The right posture
@@ -285,7 +282,7 @@ when a missing file means the program cannot mean anything:
 <!-- ignore: reads a file this document does not ship; the runnable form is
      examples/cant/06-capabilities. -->
 ```cant ignore
-"config.json" -> !@fs.read? -> @json.decode -> .name
+"config.json" -> !@fs.read? -> @json.decode? -> .name
 ```
 
 **Drop the failures.** Without `?`, the `err` flows as an ordinary value —
@@ -323,16 +320,16 @@ No parallelism, no nondeterminism:
 
 ## Comments and strings
 
-```cant
+```cant run
 // A line comment. -> ?{ and ⋇ in here are just text.
 /* Block comments too. */
 "a -> b" -> replace($, "->", "|{")
 ```
 
 Operator characters inside a string or a comment are never operators.
-`cant fmt` and `cant convert` work from the parse rather than from text, so
-neither reaches inside one — and neither mistakes the `[]` in `f([])` for a
-collect, or the `}` closing a Rite closure for the end of a Cant block.
+`cant fmt` and `cant convert` work from the parse rather than the text, so
+neither reaches inside one, and neither mistakes the `[]` in `f([])` for a
+collect or the `}` closing a Rite closure for the end of a Cant block.
 
 ## What Cant does not have
 
@@ -346,3 +343,10 @@ Each of these is deferred, not overlooked:
 - **Lazy or infinite streams.** Every emission set is finite.
 - **A second value model, permission system or host runtime.** All three are
   Rite's, unchanged.
+
+---
+
+This page is the reference. [Your first program](tutorial.md) is the
+introduction, [one-liners](one-liners.md) a set of recipes, and
+[past the one-liner](projects.md) covers files, modules and tests. Diagnostics
+are indexed in [when something goes wrong](diagnostics.md).

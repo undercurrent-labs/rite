@@ -668,6 +668,223 @@ fn the_repl_reports_an_error_and_keeps_going() {
     assert!(out.contains("[1, 2]"), "the session continued: {out}");
 }
 
+// ---- modules
+
+/// A directory with a module in it, and a program that needs it.
+fn module_fixture(name: &str) -> std::path::PathBuf {
+    let dir = std::env::temp_dir().join(format!("cant-cli-modules-{name}"));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).expect("temp dir");
+    std::fs::write(
+        dir.join("shout.rite"),
+        "pub def loud(s) [[ return s + \"!\" ]]\n",
+    )
+    .expect("write module");
+    dir
+}
+
+fn cant_in(dir: &std::path::Path, args: &[&str], env: &[(&str, &str)]) -> Output {
+    let mut command = Command::new(env!("CARGO_BIN_EXE_cant"));
+    command.args(args).current_dir(dir);
+    // A stray `cant.toml` above the temp directory would otherwise configure
+    // these runs; the fixtures that want one write their own.
+    command
+        .env_remove("CANT_USE")
+        .env_remove("CANT_MODULE_PATH");
+    for (k, v) in env {
+        command.env(k, v);
+    }
+    command.output().expect("cant binary")
+}
+
+/// All three layers make the same module available. A Cant program written on
+/// `-e` has no file to put a `use` line at the top of, which is the whole
+/// reason any of this exists.
+#[test]
+fn a_module_can_come_from_a_flag_an_environment_variable_or_a_config_file() {
+    let dir = module_fixture("layers");
+    let program = r#"["a"] -> * -> shout.loud($)"#;
+
+    let flag = cant_in(&dir, &["--use", "shout", "-e", program], &[]);
+    assert_eq!(code(&flag), 0, "{}", stderr(&flag));
+    assert_eq!(stdout(&flag).trim(), "a!");
+
+    let env = cant_in(&dir, &["-e", program], &[("CANT_USE", "shout")]);
+    assert_eq!(code(&env), 0, "{}", stderr(&env));
+    assert_eq!(stdout(&env).trim(), "a!");
+
+    std::fs::write(dir.join("cant.toml"), "use = [\"shout\"]\n").expect("write config");
+    let config = cant_in(&dir, &["-e", program], &[]);
+    assert_eq!(code(&config), 0, "{}", stderr(&config));
+    assert_eq!(stdout(&config).trim(), "a!");
+
+    // And the escape hatch turns the outer two off.
+    let off = cant_in(&dir, &["--no-default-use", "-e", program], &[]);
+    assert_ne!(code(&off), 0, "{}", stdout(&off));
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// A module that cannot be found names the layer that asked for it. Rite's
+/// `E026` would name the generated file and a search path, neither of which is
+/// the thing to change.
+#[test]
+fn an_unfindable_module_names_the_layer_that_asked_for_it() {
+    let dir = module_fixture("origins");
+
+    let flag = cant_in(&dir, &["--use", "absent", "-e", "1"], &[]);
+    assert_eq!(code(&flag), 2, "{}", stderr(&flag));
+    assert!(stderr(&flag).contains("`--use`"), "{}", stderr(&flag));
+
+    let env = cant_in(&dir, &["-e", "1"], &[("CANT_USE", "absent")]);
+    assert_eq!(code(&env), 2, "{}", stderr(&env));
+    assert!(stderr(&env).contains("`CANT_USE`"), "{}", stderr(&env));
+
+    std::fs::write(dir.join("cant.toml"), "use = [\"absent\"]\n").expect("write config");
+    let config = cant_in(&dir, &["-e", "1"], &[]);
+    assert_eq!(code(&config), 2, "{}", stderr(&config));
+    assert!(stderr(&config).contains("cant.toml"), "{}", stderr(&config));
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// `--module-root` has to reach the *run*, not only the check. The two used to
+/// search different paths, which is a program that checks and then cannot run.
+#[test]
+fn a_module_root_reaches_the_run_and_not_only_the_check() {
+    let dir = module_fixture("roots");
+    let elsewhere = std::env::temp_dir().join("cant-cli-modules-roots-caller");
+    let _ = std::fs::remove_dir_all(&elsewhere);
+    std::fs::create_dir_all(&elsewhere).expect("temp dir");
+
+    let root = dir.to_str().expect("utf-8 path");
+    let out = cant_in(
+        &elsewhere,
+        &[
+            "--use",
+            "shout",
+            "--module-root",
+            root,
+            "-e",
+            r#"["b"] -> * -> shout.loud($)"#,
+        ],
+        &[],
+    );
+    assert_eq!(code(&out), 0, "{}", stderr(&out));
+    assert_eq!(stdout(&out).trim(), "b!");
+
+    let _ = std::fs::remove_dir_all(&dir);
+    let _ = std::fs::remove_dir_all(&elsewhere);
+}
+
+/// A program that already says `use shout` and is also given `--use shout` must
+/// not get two `use` lines: two declarations of one name in a scope is a Rite
+/// duplicate-binding error, and it would point at generated code.
+#[test]
+fn a_module_named_twice_is_imported_once() {
+    let dir = module_fixture("duplicate");
+    let path = dir.join("p.cant");
+    std::fs::write(&path, "use shout\n[\"c\"] -> * -> shout.loud($)\n").expect("write program");
+    let out = cant_in(
+        &dir,
+        &["--use", "shout", "run", path.to_str().expect("utf-8 path")],
+        &[],
+    );
+    assert_eq!(code(&out), 0, "{}", stderr(&out));
+    assert_eq!(stdout(&out).trim(), "c!");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// The security property `modules.rs` exists to state: a file discovered by
+/// walking up from the working directory must not be able to widen what a
+/// program may do.
+#[test]
+fn a_config_file_cannot_grant_permissions() {
+    let dir = module_fixture("permissions");
+    std::fs::write(dir.join("cant.toml"), "allow = [\"fs:write=/\"]\n").expect("write config");
+    let out = cant_in(&dir, &["-e", "1"], &[]);
+    assert_eq!(code(&out), 2, "{}", stdout(&out));
+    assert!(
+        stderr(&out).contains("permissions cannot be set from a config file"),
+        "{}",
+        stderr(&out)
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// The budget bounds a line, not the session.
+///
+/// `ExecutionBudget` derives `Clone` over a shared step counter, so a REPL that
+/// cloned its session budget per line was really measuring the whole session:
+/// with `--max-steps 200` the third line failed and every line after it failed
+/// too, having spent nothing itself. The wall clock had the same shape and was
+/// worse — a session with the default 60s budget became unusable a minute after
+/// it opened, whether or not anything had been run.
+#[test]
+fn each_line_gets_the_whole_budget() {
+    let out = repl_session_with(
+        &["--max-steps", "400"],
+        "[1, 2, 3] -> * -> []
+[1, 2, 3] -> * -> []
+[1, 2, 3] -> * -> []
+[1, 2, 3] -> * -> []
+[1, 2, 3] -> * -> []
+",
+    );
+    assert_eq!(
+        out.matches("[1, 2, 3]").count(),
+        5,
+        "every line should get its own budget:\n{out}"
+    );
+    assert!(!out.contains("CANT-O001"), "{out}");
+}
+
+/// A REPL's input *is* the program, so a piped session must not be able to
+/// grant itself permissions — `cat untrusted | cant repl` would otherwise walk
+/// straight past the default-secure posture the invoker chose.
+#[test]
+fn a_piped_session_cannot_grant_itself_permissions() {
+    let out = repl_session(
+        ":allow fs:write=/
+:permissions
+",
+    );
+    assert!(out.contains("needs a terminal"), "{out}");
+    // `:permissions` still lists only the default-secure set — the grant did
+    // not land. Checked against the listing rather than the whole transcript,
+    // because the refusal names the spec it refused.
+    assert!(
+        !out.lines().any(|l| l.trim_start().starts_with("fs:write=")),
+        "the grant must not have landed:\n{out}"
+    );
+    assert!(
+        out.lines()
+            .any(|l| l.trim() == "console  stdin  clock  random"),
+        "{out}"
+    );
+    // And it says what to do instead.
+    assert!(out.contains("--allow fs:write=/"), "{out}");
+}
+
+#[test]
+fn the_session_reports_and_changes_its_own_budget() {
+    let out = repl_session(
+        ":timeout 30s
+:timeout off
+:steps 500
+:steps off
+",
+    );
+    for expected in [
+        "timeout: 30s per line",
+        "timeout: off",
+        "steps: 500 per line",
+        "steps: off",
+    ] {
+        assert!(out.contains(expected), "`{expected}` missing from:\n{out}");
+    }
+}
+
 #[test]
 fn an_unknown_meta_command_is_named_rather_than_parsed() {
     let out = repl_session(
@@ -682,8 +899,13 @@ fn an_unknown_meta_command_is_named_rather_than_parsed() {
 }
 
 fn repl_session(input: &str) -> String {
+    repl_session_with(&[], input)
+}
+
+fn repl_session_with(args: &[&str], input: &str) -> String {
     let mut child = Command::new(env!("CARGO_BIN_EXE_cant"))
         .arg("repl")
+        .args(args)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())

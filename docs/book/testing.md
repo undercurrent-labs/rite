@@ -138,7 +138,7 @@ rite test --json
 
 ## Tests run with full host access
 
-This is the one surprise worth knowing. `rite run` starts locked down and makes
+This is the one surprise. `rite run` starts locked down and makes
 you grant permissions; **`rite test` grants everything**. A test can read and
 write files, open sockets and start processes with no `--allow` flag — and there
 is no flag to restrict it.

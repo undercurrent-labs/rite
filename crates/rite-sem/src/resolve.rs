@@ -118,6 +118,17 @@ pub const HOST_EFFECTS: &[(&str, bool)] = &[
     ("env.get", true),
     ("env.require", true),
     ("env.all", true),
+    ("env.set", true),
+    // @sys — ambient facts about the process and the machine. All effectful:
+    // none of them is constant for the life of a run, and a pure function that
+    // answers differently on the second call is worse than an effectful one.
+    ("sys.cwd", true),
+    ("sys.home", true),
+    ("sys.temp_dir", true),
+    ("sys.os", true),
+    ("sys.arch", true),
+    ("sys.pid", true),
+    ("sys.hostname", true),
     // @process — subprocesses. `which` probes PATH and the filesystem.
     ("process.run", true),
     ("process.which", true),

@@ -7,7 +7,7 @@
 //! # Two input paths, one renderer
 //!
 //! Cant source goes through the parser and the adapter. Graph JSON skips both —
-//! it is read as `cant.graph` and adapted, which is what makes `cant graph … |
+//! it is read as `cant.graph` and adapted, so `cant graph … |
 //! cant sigil --graph -` work and what proves the adapter is a real boundary
 //! rather than a function call in disguise.
 //!
@@ -135,7 +135,7 @@ fn render(args: &SigilArgs) -> Result<Artifact, Failure> {
 
     // A contradictory pair, warned about rather than silently resolved. The two
     // axes are orthogonal by design (ADR 0007), so this combination is
-    // *meaningful* — draw the labels, embed nothing — but it is also what
+    // *meaningful* (draw the labels, embed nothing), but it is also what
     // someone picks when they have confused "hide it" with "do not embed it",
     // and the artifact they get has their source written across it.
     if metadata == MetadataMode::None && disclosure != DisclosureMode::Veiled {

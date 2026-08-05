@@ -1,0 +1,1 @@
+allow = ["env=RITE_CONFORMANCE_ONLY", "env:write=RITE_CONFORMANCE_ONLY"]

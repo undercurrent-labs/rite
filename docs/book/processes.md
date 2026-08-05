@@ -153,7 +153,7 @@ checking
 
 The status is any number from 0 to 255. Nothing after the call runs, no `^` catches
 it, and what the script already printed is still flushed. Exiting `0` is a perfectly
-ordinary early stop, not a failure. Out of range — `@process.exit(300)` — is an error
+ordinary early stop, not a failure. Out of range, as in `@process.exit(300)`, is an error
 at the call rather than a wrap-around to 44.
 
 This is the other call needing no permission: the status you end with is a message to

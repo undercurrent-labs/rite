@@ -43,6 +43,7 @@ impl ProcessCap {
         args: Vec<Value>,
         perms: &PermissionSet,
         ctx: &RuntimeContext,
+        env_overlay: &std::collections::BTreeMap<String, String>,
     ) -> Result<Value, EvalError> {
         // `args` is exempt from the `process` grant: spawning a subprocess and reading
         // the arguments you were handed are not the same privilege, and requiring
@@ -123,6 +124,15 @@ impl ProcessCap {
                     .args(&argv)
                     .stdout(Stdio::piped())
                     .stderr(Stdio::piped());
+
+                // Anything this run set with `@env.set` — see the module
+                // documentation in `env.rs` for why that is an overlay rather
+                // than the process environment. Applied *before* the caller's
+                // `env` record, so an explicit option on this call wins over a
+                // variable set earlier.
+                for (name, value) in env_overlay {
+                    command.env(name, value);
+                }
 
                 // The third argument was accepted and thrown away, so `⟨cwd: "…"⟩`
                 // looked like it worked and silently did nothing. Unknown keys are an

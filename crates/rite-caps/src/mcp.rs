@@ -345,7 +345,7 @@ impl McpOk {
 /// The single place that decides what actually goes on the wire.
 ///
 /// The legacy revision predates `resultType`, the cache hints, and the `_meta` server
-/// identity, so for it those fields are simply left off. That is the whole difference,
+/// identity, so for it those fields are left off. That is the difference,
 /// which is why one dispatcher can serve both.
 fn encode_result(res: McpOk, rev: McpRevision, state: &McpServerState) -> Json {
     let mut body = res.body;

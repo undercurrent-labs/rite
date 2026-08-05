@@ -15,7 +15,7 @@ precedence rule: which one won would be invisible in a script until it mattered.
 
 ### Quoting
 
-Cant's operators — `>`, `|`, `!`, `?`, `*` — are shell metacharacters, and the
+Cant's operators (`>`, `|`, `!`, `?`, `*`) are shell metacharacters, and the
 language is not deformed to avoid them. Quote the expression:
 
 ```bash
@@ -39,10 +39,10 @@ trade `awk`, `sed` and `jq` make.
 
 ```bash
 $ cant version
-cant 0.1.0
+cant 0.2.0
 cant_language_version: 0
 cant_graph_schema_version: 1
-rite: 0.8.1
+rite: 0.9.0
 ```
 
 Four numbers because they move independently: the tool, the language it
@@ -50,7 +50,7 @@ implements, the graph JSON schema a consumer may have stored, and the Rite that
 expansion targets. `--json` emits the same as an object.
 
 **Cant's version is not Rite's.** `cant` ships inside the Rite release archive,
-but it is a v0 language on its own number — the release tag you downloaded is
+but it is a v0 language on its own number; the release tag you downloaded is
 Rite's. Both are in the release's `version-manifest.json` if you need to know
 what an archive contains without unpacking it.
 
@@ -84,13 +84,12 @@ help: close it with `}`, or `⟧` if the block was opened with a glyph
 ```
 
 `--json-errors` writes the diagnostics to stdout as JSON instead, carrying the
-Cant code, severity, spans, notes and help — and, once expansion lands, the
+Cant code, severity, spans, notes and help, plus, once expansion lands, the
 underlying Rite code and generated span as related metadata.
 
 It checks **syntax and the flow graph**: an unknown modifier, a `:max` that is
 not a positive integer, an effectful ward predicate or orbit `:by`, a fork branch
-that does not rejoin, and any cycle an orbit does not own are all rejected here —
-before a capability is granted or a byte is read.
+that does not rejoin, and any cycle an orbit does not own are all rejected here, before a capability is granted or a byte is read.
 
 It also checks **names, arity and the effect discipline**, by compiling the
 program and handing the result to Rite. An undefined name, a host call without
@@ -133,7 +132,7 @@ $ cant parse --structure -e '[1, 2] → ⋇ → ⌁'
 
 ### `cant -e '<expression>'` and `cant run [source]`
 
-The canonical one-liner form. `cant -e '…'` is `cant run -e '…'` — the shorthand
+The canonical one-liner form. `cant -e '…'` is `cant run -e '…'`. The shorthand
 exists because a one-liner should be as short to type as `awk '…'`.
 
 ```bash
@@ -144,11 +143,11 @@ $ cant run pipeline.cant --allow fs:read=./data
 ```
 
 The program compiles to Rite and runs on Rite's runtime. `cant expand` prints
-exactly what runs — `cant run`, running the expansion with `rite`, and the
+exactly what runs: `cant run`, running the expansion with `rite`, and the
 compiled binary all produce the same value, output and exit status.
 
 The value is printed after whatever the program itself wrote, and only when it is
-not `none` — the same rule `rite run`
+not `none`, the same rule `rite run`
 follows. Arguments after `--` are readable with `! @process.args`.
 
 ### `cant build <file>`
@@ -202,7 +201,7 @@ from the opener, and puts the closing brace and any modifiers underneath it.
 | `--check` | Exit 1 if the source is not already formatted; write nothing. |
 | `--write` | Rewrite the file in place. |
 
-Two things it does not do. It does not reformat the inside of a stage —
+Two things it does not do. It does not reformat the inside of a stage:
 `f( 1,2 , 3 )` comes through exactly as written, because a stage is Rite
 expression text and Cant does not parse it. And it does not format a source with
 syntax errors, since the tree after a parse failure is a guess.
@@ -223,8 +222,7 @@ $ cant convert --to glyph -e '// a -> comment
 ```
 
 Three things in that output. The `->` inside the comment is still `->`. The `->`
-inside the string is still `->`. And the `[]` inside `f([])` is still `[]` — it
-is an argument, not a collect. Conversion works from the parse, so it only ever
+inside the string is still `->`. And the `[]` inside `f([])` is still `[]`: an argument, not a collect. Conversion works from the parse, so it only ever
 touches real operators.
 
 `--check` exits 1 if the source is not already in the target spelling. `--stdout`
@@ -251,12 +249,12 @@ the source. Generated names carry a prefix built from a hash of your source
 writes to a file. A program with errors is not expanded.
 
 The output is not minimal. An orbit becomes a worklist, a seen-set and a bounded
-loop, so a dense one-liner expands to a screenful — it is written to be read
+loop, so a dense one-liner expands to a screenful. It is written to be read
 rather than to be short.
 
 ### `cant graph [source] [--format json|dot]`
 
-Prints the flow graph — the normalized semantic form of the program, and what
+Prints the flow graph: the normalized semantic form of the program, and what
 lowering to Rite will read.
 
 ```bash
@@ -273,7 +271,7 @@ when the program has errors, with diagnostics on stderr, so
 
 ### `cant explain [source]`
 
-What the program does, in prose — a semantic reading, not a syntax-tree dump.
+What the program does, in prose: a semantic reading, not a syntax-tree dump.
 
 ```bash
 $ cant explain -e '[1, 2] -> * -> ~{ ?{ $ < 8 } -> $ * 2 } :by str :max 4096 -> []'
@@ -292,7 +290,7 @@ What this program does
 ```
 
 Below the steps it reports the capabilities the program needs, where it touches
-the world, anything worth knowing before running it, and the ordering guarantees.
+the world, anything to be aware of before running it, and the ordering guarantees.
 Those sections appear only when they have something to say.
 
 `--verbose` adds a pointer to the other two views of the same program,
@@ -303,16 +301,18 @@ program cannot drift apart.
 
 ### `cant repl`
 
-An interactive session. **Each line is a whole program, and nothing persists
-between them.**
+An interactive session. **Each line is a whole program.** The *language* has
+nothing for a line to leave behind; the *session* has a workbench of values.
 
 ```text
 $ cant repl
-cant — each line is a whole program, and nothing persists between them.
+cant — each line is a whole program. Values can persist; programs cannot.
   :help                what you can type
+  x <- <program>       run it, keep the answer as `x` (`it` is the last answer)
   :expand <program>    the Rite it becomes
   :graph <program>     its topology, as DOT
   :explain <program>   what it does, in prose
+  ~> <program>         run it, with per-node emission counts
   :quit                leave
 
 cant> [1, 2, 3] -> * -> ?{ $ > 1 } -> []
@@ -322,7 +322,7 @@ cant> :explain 5 -> |{ $ + 1 ; $ * 2 }
 ```
 
 A Cant program is one flow: no declarations, no bindings, no statements. The
-*language* has nothing for a line to leave behind — but the **session** has a
+*language* has nothing for a line to leave behind, but the **session** has a
 workbench:
 
 ```text
@@ -337,12 +337,12 @@ evens <- [ 2, 4 ]
 it <- 2
 ```
 
-The binding arrow is Rite's own — what `:bindings` prints back is exactly what
-you type — and it is sugar for `:let evens = …`, which also works. `←` is its
+The binding arrow is Rite's own, so what `:bindings` prints back is exactly what
+you type. It is sugar for `:let evens = …`, which also works. `←` is its
 glyph twin. To *compare* against a negative number rather than bind, space the
 operator: `x < -3`.
 
-`:let` (and its arrow) is a meta-command, not syntax — a `.cant` file containing it does not
+`:let` (and its arrow) is a meta-command, not syntax: a `.cant` file containing it does not
 parse. What persists is the **value**, not the program: re-using `evens`
 re-runs nothing and repeats no effects. Bindings reach the next line as a
 generated-Rite preamble (`:expand` says so when any are live), which is why a
@@ -351,7 +351,7 @@ a function has no literal to write, and the refusal says so. `it` is always
 the last successful answer.
 
 `~> <program>` (glyph `⟿`, longhand `:trace`) runs a line and prints per-node
-emission counts beside the value — the same counts `cant run --trace` reports:
+emission counts beside the value, the same counts `cant run --trace` reports:
 
 ```text
 cant> ~> evens -> * -> []
@@ -359,13 +359,47 @@ trace  n0:1  n1:2  n2:1
 [2, 4]
 ```
 
-The session also carries the permissions and budget it started with:
+The session also carries the permissions, modules and budget it started with:
 
 ```bash
-cant repl --allow fs:read=./data --timeout 5s
+cant repl --allow fs:read=./data --use helpers --timeout 5s
 ```
 
-Ctrl-D or `:quit` leaves; Ctrl-C abandons the line.
+#### The session's own settings
+
+`:permissions` shows what the session may reach; `:allow <spec>` and
+`:deny <spec>` change it without restarting, taking the same spellings as the
+command line. Both need a terminal: a REPL's input *is* the program, so in
+`cat untrusted | cant repl` a self-granting command would let a program widen its
+own permissions. The refusal says to pass `--allow` instead.
+
+`:use NAME` makes another module available from that line on, and `:uses` lists
+what is loaded and where it is searched for. `:fmt <program>` runs the formatter
+on one line.
+
+#### The budget bounds a line, not the session
+
+**A session has no wall clock unless `--timeout` asks for one.** When it is
+given it applies per line: the budget restarts before every evaluation, so time
+spent at the prompt is not charged to the next program. `:timeout <30s|off>` and
+`:steps <n|off>` change both without restarting.
+
+**Ctrl-C interrupts the running line** and leaves the session open, reporting
+`interrupted` rather than a budget failure. A program stuck inside a host call
+that cancellation cannot reach takes a second Ctrl-C, which exits with status
+130.
+
+Ctrl-D or `:quit` leaves; Ctrl-C at an empty prompt abandons the line. Line
+history is kept in `~/.cant_history`.
+
+#### Colour
+
+The prompt highlights as you type, using the same table
+(`grammar/palette.json`) the site and `rite render` use. It is driven by Cant's
+lexer, so a `->` inside a string stays a string. `--color auto|always|never`
+chooses; `NO_COLOR` and `CLICOLOR_FORCE` apply under `auto`, and a piped session
+gets plain text. The palette is built for a dark background, so use
+`--color never` on a light terminal.
 
 ### `cant test`
 
@@ -376,7 +410,7 @@ cant test -e '[1, 2] -> * -> $ * 2 -> []' --expect '[2, 4]'
 cant test pipeline.cant          # compares against pipeline.expect beside it
 ```
 
-The comparison is over the printed value — exactly the text `cant run` shows —
+The comparison is over the printed value, exactly the text `cant run` shows,
 with trailing whitespace trimmed on both sides, so a sidecar file ending in a
 newline compares equal. A match prints `ok` and exits 0. A mismatch shows both
 values and exits **7**, the code the contract reserves for test failures. A
@@ -389,7 +423,7 @@ file still says `--allow fs:read=.`.
 ### Tracing a run
 
 `cant run --trace` counts how many emissions left every node and reports a
-`cant.trace` document on stderr — `--trace-out PATH` writes it to a file
+`cant.trace` document on stderr. `--trace-out PATH` writes it to a file
 instead, and implies `--trace`:
 
 ```bash
@@ -408,18 +442,18 @@ cant sigil p.cant --weights p.trace.json
 
 Node ids are the graph's (`cant graph --format json` names the same ones), so
 the trace joins the sigil: `--weights` draws hot paths bright and thick and a
-branch that never ran faint. The program's *value* is untouched — it prints on
+branch that never ran faint. The program's *value* is untouched: it prints on
 stdout exactly as an untraced run would, so a traced run still pipes.
 
 Counts accumulate: an orbit body that ran five times over two candidates
 reports the sum. The instrumentation lives in the generated Rite (run
-`cant expand` on nothing — the traced variant differs only by `@store`
+`cant expand` on nothing; the traced variant differs only by `@store`
 counting), and a run that fails produces no trace: half a measurement of a
 crashed run would read as a measurement.
 
 ## Exit codes
 
-Cant uses Rite's contract rather than inventing one — a source rejected for a
+Cant uses Rite's contract rather than inventing one: a source rejected for a
 syntax error should exit 3 whichever language wrote it.
 
 | Code | Meaning | Cant categories |
@@ -431,15 +465,15 @@ syntax error should exit 3 whichever language wrote it.
 | 4 | parsed but did not resolve | `CANT-G`, `CANT-S`, `CANT-X` |
 | 5 | permission denied | from Rite |
 | 6 | compilation failed | from Rite |
-| 8 | budget exhausted | `CANT-O001` — Rite's step, time, collection or string budget |
+| 8 | budget exhausted | `CANT-O001`, Rite's step, time, collection or string budget |
 
 When several errors are reported the status comes from the **first** one, which
 is the earliest thing that went wrong. Anything raised by Rite after expansion
-keeps the code Rite gives it — including at run time, so that `cant run` and
+keeps the code Rite gives it, including at run time, so that `cant run` and
 `rite run <cant expand>` cannot disagree about the same execution.
 
 An orbit reaching its `:max` exits **1**, and is identified by its code,
-`CANT-O002`. Rite's own budgets — steps, time, collection and string size — exit
+`CANT-O002`. Rite's own budgets (steps, time, collection and string size) exit
 8 as `CANT-O001`.
 
 ## Diagnostic codes
@@ -456,8 +490,8 @@ An orbit reaching its `:max` exits **1**, and is identified by its code,
 | `CANT-Vxxx` | version |
 
 A diagnostic that originated in generated Rite still points its primary label at
-your `.cant` source. The Rite code and the generated span travel with it as
-related metadata — visible when you ask for them, never the headline.
+your `.cant` source. The Rite code and the generated span are attached as
+related metadata, shown when you ask for them.
 
 ## Permissions and budgets
 
@@ -481,3 +515,83 @@ A capability call inside an orbit body is gated exactly as one at the top level.
 
 Scoped permissions need their scope: `net` and `fs` alone are not permissions, so
 `--deny net` is an error rather than a silent no-op.
+
+### Reading and writing the environment
+
+`--allow env` is a **read** grant: it permits `@env.get`, `@env.require` and
+`@env.all`, scoped with `--allow env=NAME,NAME`. Changing a variable with
+`@env.set` is a separate class, `--allow env:write` (or `env:write=NAME`).
+Reusing the read grant would have widened every grant that already exists. `env:read` is the explicit spelling of the bare form.
+
+`@env.set` writes an overlay this run owns, not the operating-system
+environment: writing that races every C library reading it while other threads
+are running. `@env.get` and `@env.all` read the overlay first, and
+`@process.run` passes it to the command it starts. A program started any other
+way does not see it.
+
+`--allow sys` covers `@sys`: `cwd`, `home`, `temp_dir`, `os`, `arch`, `pid`,
+`hostname`. Denied by default like `fs` and `env`: small facts, but facts about
+the machine rather than about the program.
+
+### `--env-file`
+
+```bash
+printf 'API_KEY=secret\n' > .env
+cant --env-file .env -e '"API_KEY" -> !@env.get'
+```
+
+Loads `KEY=VALUE` pairs into the run's environment overlay, and grants reading
+**exactly the names the file defines**, so the line above needs no `--allow`.
+The argument is the one `@process.args` already makes: a file you named on this
+command line is your own input to the program, not ambient state it is asking
+you to expose. Nothing else becomes readable, writing is still a separate grant,
+and an explicit `--deny env` still takes it away.
+
+`#` starts a comment, a leading `export ` is accepted, and a value may be
+single- or double-quoted. **There is no interpolation**: `$FOO` is those four
+characters. Repeatable; later files win, and a file's value wins over an
+inherited variable of the same name.
+
+## Modules
+
+A Cant program's only import form is a leading `use NAME`, and `cant -e '…'` has
+no file to put one at the top of. Three layers supply them, in precedence order
+**flag > environment > config file**. They compose rather than replace, so
+`--use b` adds to what `CANT_USE=a` asked for:
+
+```bash
+cant --use helpers -e '["a"] -> * -> helpers.emphasize($) -> []'
+CANT_USE=helpers cant -e '…'
+printf 'use = ["helpers"]\n' > cant.toml && cant -e '…'
+```
+
+`--module-root DIR` (and `CANT_MODULE_PATH`, and `module-roots = [...]`) adds a
+place to look; the program's own directory is always searched first.
+`--no-default-use` ignores the environment and the config file, for a run that
+has to be reproducible.
+
+A `cant.toml` is found by walking up from the working directory, or from the
+program's own directory for `cant run file.cant`. It carries two keys and
+nothing else:
+
+```toml
+use = ["helpers", "math"]
+module-roots = ["./lib"]
+```
+
+Paths in it are relative to the file, not to wherever the command was run. An
+unknown key is an error: a typo in `module-roots` that was silently dropped would
+present as "module not found" pointing at generated Rite.
+
+**A config file cannot grant permissions.** It is discovered by walking up from
+the working directory, so an `allow = [...]` would let `cd` into a directory
+widen what a program may do, and cloning a repository would be enough to arrange
+that. Permissions come from the command line.
+
+A module named by `--use` that cannot be found is reported before anything runs,
+naming the layer that asked for it:
+
+```text
+cant: no module `helpers`, asked for by `use` in /work/cant.toml
+  searched: /work, /work/lib
+```

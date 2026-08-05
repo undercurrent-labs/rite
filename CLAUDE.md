@@ -101,6 +101,59 @@ The generated crate takes its `rite-*` deps from a local checkout when one is fo
 - **Exit codes are part of the contract:** 0 success, 1 runtime, 2 usage, 3 parse, 4 resolve, 5 permission, 6 compile, 7 test, 8 budget.
 - Commit messages follow conventional-commit prefixes with a plain-English subject (`fix(caps): …`, `perf(build): …`).
 
+## How to write comments and docs
+
+This repo keeps long rationale comments on purpose. Recording why a
+non-obvious decision was made, and what bug caused it, is worth the lines. That
+is not the problem and should not be cut.
+
+The problem is packaging. The prose had drifted into a mannered register:
+epigram endings, balanced antithesis, em-dashes doing the work of commas, and
+rationale for decisions that were never in doubt. **Keep the reason. Drop the
+performance.**
+
+Do not:
+
+- **End on a moral.** "…which is the point." "…is worse than an effectful one."
+  "…surprising to nobody." "…a workbench that lies." The information ended a
+  sentence earlier; the closer is decoration.
+- **Use antithesis for emphasis.** "not X — it is Y", "surprising to someone /
+  surprising to nobody", "it ran / it worked". Say the thing once.
+- **Justify the undisputed.** A `.env` parser not interpolating needs one
+  clause, not a paragraph. Length should track how surprising a decision is.
+- **Use an em-dash where a comma, colon or full stop works.** Roughly one per
+  paragraph is plenty; three in a sentence is a tell.
+- **Reach for an elevated word.** "honoured" → "applied". "reveals nothing" →
+  "does not expose". "does what its would have" → say what it does.
+- **Address the reader's character.** Docs explain the tool, not how to think.
+
+Do:
+
+- Lead with the fact, then the reason, then stop.
+- Name the bug when there was one. `git log` does not travel with a file, and a
+  comment that says a session died sixty seconds after opening is worth more
+  than one that says the budget is "critical".
+- Prefer the concrete number, path, or code over an adjective.
+
+The target, from `rite-runtime/src/budget.rs`:
+
+```rust
+/// Reset the wall clock and step counter for a new evaluation.
+///
+/// Critical for a REPL: `ExecutionBudget` derives Clone over `started` and
+/// shares its counter via an Arc, so a per-line clone measures the session.
+/// Without a restart, a session died 60s after opening, charging idle time to
+/// the next line.
+```
+
+The same rules apply to `docs/`, `CHANGELOG.md`, example READMEs, and site copy.
+There is no linter for this; it is a review matter.
+
+When editing an existing file, match its **density and depth** — that part of
+"write code that reads like the surrounding code" still holds. Do not match its
+mannerisms. Copying the surface tics of a mannered file makes the next file
+worse, which is how this happened.
+
 ## Adding things (see CONTRIBUTING.md for the full checklists)
 
 - **Syntax**: `grammar/rite.ebnf` + `aliases.json` → lexer/parser → `rite-sem` desugar/IR → `rite-runtime` eval → conformance fixture + parser test → `docs/book/` + regenerate the agent bundle.

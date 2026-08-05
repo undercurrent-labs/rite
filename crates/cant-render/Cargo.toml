@@ -1,0 +1,15 @@
+[package]
+name = "cant-render"
+# Cant's own version, not the workspace's. See ADR 0001, Amendment 2.
+version = "0.2.0"
+edition.workspace = true
+license.workspace = true
+description = "Classify Cant source for colouring"
+
+[dependencies]
+cant-syntax = { workspace = true }
+# The palette, the `Kind` vocabulary and the terminal escapes. One table, so a
+# picture of Cant, the site's stylesheet and the REPL cannot disagree about what
+# a string looks like. The edge is one-way (cant-* -> rite-*), which this obeys.
+rite-render = { workspace = true }
+rite-core = { workspace = true }

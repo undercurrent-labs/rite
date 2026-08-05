@@ -1,6 +1,132 @@
 # Changelog
 
-## [Unreleased]
+## [0.9.0] — 2026-08-04
+
+The REPL becomes usable for more than one line at a time, and both languages
+gain a way to reach the environment.
+
+A `cant repl` session used to stop working sixty seconds after it opened. That
+is fixed, along with the wall clock that caused it, and Ctrl-C now interrupts a
+line rather than the session. Both prompts highlight as you type. `@sys` answers
+where you are, `@env.set` and `--env-file` handle configuration, and `--use`
+with `cant.toml` gives a one-liner access to modules it has no file to import
+from.
+
+Minor rather than patch: three new capability surfaces and a new permission
+class, all additive. Cant's own number goes to 0.2.0 for its CLI and REPL
+changes; its language is unchanged.
+
+### Added
+
+- **`@sys` — where you are, and what you are running on.** `cwd`, `home`,
+  `temp_dir`, `os`, `arch`, `pid`, `hostname`. Nothing in the workspace exposed
+  the working directory before. All effectful, since none of these is constant
+  for the life of a run, and denied by default with `--allow sys`. In the
+  browser `os` and `arch` answer; the rest refuse with a message saying so.
+
+- **`@env.set`, and `env:write` as its own permission class.** Reusing
+  `--allow env` for writes would have widened every grant that already exists,
+  so writing is `--allow env:write` (or `env:write=NAME`), and `env:read` is the
+  explicit spelling of the bare read form. The write lands in an overlay the run
+  owns rather than the operating system's environment: `std::env::set_var`
+  races C libraries reading the environment while other threads are running.
+  `@env.get` and `@env.all` read the overlay first, and `@process.run` passes it
+  to the command it starts.
+
+- **`--env-file PATH`** on `rite run`, `rite repl` and `cant`. Loads
+  `KEY=VALUE` pairs and grants reading exactly the names the file defines, so
+  `cant --env-file .env -e '"API_KEY" -> !@env.get'` needs no `--allow`. Same
+  argument `@process.args` uses: a file named on the command line is the
+  invoker's own input. No interpolation; later files win.
+
+- **`--use`, `--module-root`, and `cant.toml`.** A Cant program's only import
+  form is a leading `use NAME`, and `cant -e '…'` has no file to put one at the
+  top of. Three layers now supply them: the flag, `CANT_USE` /
+  `CANT_MODULE_PATH`, and a `cant.toml` found by walking up. They compose rather
+  than replace, and `--no-default-use` turns the outer two off. A config file
+  cannot grant permissions: it is found by walking up from the working
+  directory, so an `allow` key would let `cd` widen what a program may do. A
+  module that cannot be found is reported before anything runs, naming the layer
+  that asked for it. `rite run` and `rite repl` gain `--module-root` and honour
+  `RITE_MODULE_PATH`; `rite repl` also takes `--use`.
+
+- **Syntax highlighting at both prompts.** The line colours as you type, driven
+  by each language's own lexer, so a `->` inside a string stays a string, and by
+  the one table in `grammar/palette.json` that the site and `rite render`
+  already share. New `cant-render` crate for Cant's classifier, and
+  `rite_render::term` for colour mode and ANSI. `--color auto|always|never`,
+  with `NO_COLOR` and `CLICOLOR_FORCE` honoured, and plain text when piped.
+  Completion for meta-commands, bound names and capabilities comes from the same
+  `Helper`. The Cant prompt now continues an unclosed block across lines, which
+  `cant fmt`'s own multi-line output needed to be pasteable.
+
+- **REPL session controls.** `cant repl` gains `:permissions`, `:allow`,
+  `:deny`, `:timeout`, `:steps`, `:use`, `:uses` and `:fmt`, and keeps history
+  in `~/.cant_history`. `rite repl` gains the `--allow` / `--deny` / `--timeout`
+  surface it never had, plus `:prelude`. `:allow` and `:deny` require a
+  terminal: a REPL's input is the program, so a piped session that could grant
+  itself permissions would be a program widening its own capability set.
+
+- **Three new Cant documents.** [Your first program](docs/cant/tutorial.md) is
+  the introduction the set never had; the docs went from a short pitch straight
+  to a full operator reference. [Past the one-liner](docs/cant/projects.md)
+  covers files, modules, configuration, tests, binaries and the REPL, which had
+  only been described as flags. [When something goes wrong](docs/cant/diagnostics.md)
+  indexes every diagnostic code with its cause and its fix.
+
+### Fixed
+
+- **Three documented recipes did not work.** `!@fs.read -> lines` parses,
+  resolves, and fails at run time, because a capability answers a result. The
+  docs gate only checked fences, so they passed for as long as they existed.
+  Every fence that can be executed is now marked `run` and executed, and a new
+  gate fails a fence that runs ungranted but was left merely checked.
+
+- **`examples/cant/06-capabilities` answered nothing.** One `?` short, so
+  `.name` projected a field out of an `ok(…)`, found nothing, and answered
+  `none`, while the README beside it said the value was `"cant"`. A program that
+  answers nothing still exits 0, so the gate never noticed. Every example now
+  carries a `main.expect` and the gate runs `cant test` rather than `cant run`;
+  a second gate requires the README to show that value. Both found further drift
+  immediately: `05-orbit` claimed `[1, 2, 4, 8, 16]` for a program that answers
+  `[1, 2, 4, 8]`.
+
+- **A `cant repl` session died sixty seconds after it opened.** The session
+  built one `ExecutionBudget` and cloned it per line. `ExecutionBudget` derives
+  `Clone` over a `started: Instant` and shares its step counter through an
+  `Arc`, so the budget measured the session: idle time at the prompt was charged
+  to the next program, and `--max-steps` accumulated across lines. `restart()`,
+  which exists for this and whose doc comment names the REPL, is now called
+  before every evaluation.
+
+- **Neither REPL had a useful wall clock.** Both now default to none. A timeout
+  bounds a program, and the thing waiting on an interactive line is the person
+  who typed it. `--timeout` still works and then bounds each line.
+
+- **Ctrl-C interrupts the running line** instead of killing the session, and
+  reports `interrupted` rather than a budget failure. It has to be a signal
+  handler rather than a `tokio::select!` arm: the interpreter does not yield, so
+  a select racing the evaluation against `tokio::signal::ctrl_c()` never polls
+  the signal branch. A second Ctrl-C exits, for a program stuck inside a host
+  call cancellation cannot reach.
+
+- **`run_file` discarded `ctx.module_roots`** unless the source had a path of
+  its own, so a host evaluating source it had built in memory, such as a REPL
+  line or generated code, silently lost its module search path. A `use` that
+  resolved at check time then failed at run time.
+
+- **The Rite REPL reported "compile error (1 diagnostics)"** instead of the
+  diagnostic. `EvalError::Compile`'s `Display` has no source map and cannot say
+  more; the session has one.
+
+- **`:format glyph` was a silent no-op** in the Rite REPL, setting a field
+  nothing read. It now chooses the dialect the new `:prelude` prints in, which
+  also puts the crate's declared-but-unused `rite-fmt` dependency to work.
+  `:capabilities` listed a hand-typed roster that had gone stale, missing
+  `stdin`, `regex`, `tcp` and `udp`; it now reads the generated manifest.
+
+- **The `cant repl` documentation quoted a banner the REPL stopped printing.**
+  The docs gate executes ` ```cant ` fences, and this was a ` ```text ` block.
 
 ## [0.8.1] — 2026-08-04
 
@@ -27,27 +153,27 @@ every addition is additive, and no existing program changes meaning.
   line costs one compile.
 
 - **List helpers.** `nth(xs, i)` (out of range is `none`, so `?? fallback`
-  composes), `sort_by` / `min_by` / `max_by` (a key function or a field name —
-  `sort` keeps its two-argument comparator), and `frequencies(xs)` —
+  composes), `sort_by` / `min_by` / `max_by` (a key function or a field name;
+  `sort` keeps its two-argument comparator), and `frequencies(xs)`:
   `[value, count]` pairs, most frequent first. `enumerate` existed but was
   unreachable: implemented, dispatched, and never named in the resolver's
   builtin table; it is now callable, with `with_index` as its alias.
 
-- **The REPL grew a workbench.** `x <- <program>` — Rite's own binding arrow,
-  and exactly the shape `:bindings` prints back — runs a program and keeps its
+- **The REPL grew a workbench.** `x <- <program>` (Rite's own binding arrow,
+  and the shape `:bindings` prints back) runs a program and keeps its
   *value*; `~> <program>` runs one and shows per-node emission counts beside
   the answer; `it` is always the last answer. Both arrows take their glyph
   twins (`←`, `⟿`), and `:let` / `:trace` remain as longhand; `:bindings` lists the workbench
   and `:trace <program>` shows per-node emission counts beside the result.
   Deliberately not language syntax: a `.cant` file containing `:let` does not
   parse, bindings hold values rather than programs (nothing re-runs, no effect
-  repeats), and they reach the next line as a generated-Rite preamble — which
+  repeats), and they reach the next line as a generated-Rite preamble, which
   `:expand` discloses. Only data values can be bound; the refusal names what
   cannot travel.
 
 - **The `[[` trap teaches itself.** A nested list written `[[1, 2], [3]]`
   used to fail with Rite's raw "expected RBracket"; the diagnostic now carries
-  the fix — put a space between the brackets — detected from the error's own
+  the fix (put a space between the brackets) detected from the error's own
   shape, so it never fires on an unrelated parse failure.
 
 ### Fixed
@@ -55,8 +181,8 @@ every addition is additive, and no existing program changes meaning.
 - **The Cant site's hero program can now actually run.** It used four
   undefined names (`roots`, `imports`, `resolve`, `canonical_path`) and failed
   `cant check` with the very language it advertised. The new hero walks a
-  module tree's `use` lines breadth-first with `@fs.read` and `@regex` — every
-  name real, verified against a directory of modules — and the orbit example
+  module tree's `use` lines breadth-first with `@fs.read` and `@regex`, every
+  name real and verified against a directory of modules. The orbit example
   in the language page follows suit. Every Studio example and both Rite site
   samples were audited and run.
 
@@ -65,36 +191,36 @@ every addition is additive, and no existing program changes meaning.
   lines, an empty pipe being an empty list. One read, cached, so `read` after
   `lines` sees the same bytes. Reading stdin is an effect with its own
   permission, allowed by default like `console` and revocable with
-  `--deny stdin`. This is what makes a Cant one-liner a shell citizen:
+  `--deny stdin`. This is what a Cant one-liner in a pipe needs:
   `cat access.log | cant -e '!@stdin.lines -> * -> ?{ contains($, "500") } -> []'`.
 
 - **Cant `use` of Rite modules.** Leading `use name` lines import a Rite
-  module — named functions, at last, without Cant learning to parse Rite:
+  module, so named functions arrive without Cant learning to parse Rite:
   the names are emitted verbatim into the generated Rite and Rite's module
   system does everything else, including reporting a typo in a qualified call
   against your Cant source. Both dialects, the formatter and the converter
   carry the lines; the graph records them as `uses` (additive, absent when
-  empty); effect discipline crosses intact — `!logger.shout($)` marks the
+  empty); effect discipline crosses intact, and `!logger.shout($)` marks the
   call, and an unmarked effectful call is rejected as it would be in Rite.
   Open question 1 closes.
 
 - **`cant test`.** Run a program and compare its printed value against
   `--expect` or the `<source>.expect` sidecar. A mismatch shows both values
-  and exits 7 — the code the contract reserves for test failures; a program
+  and exits 7, the code the contract reserves for test failures. A program
   that fails before answering keeps its own exit, because a parse error is
   not a wrong answer.
 
 - **`cant run --trace` — the run, measured.** Counts how many emissions left
   every node and reports a `cant.trace` document on stderr (`--trace-out
-  PATH` for a file). The instrumentation is generated Rite — `@store`
-  counting, visible with `cant expand` — and the program's value prints on
+  PATH` for a file). The instrumentation is generated Rite (`@store`
+  counting, visible with `cant expand`), and the program's value prints on
   stdout exactly as an untraced run would, so a traced run still pipes.
   Orbit iterations accumulate. A failed run produces no trace: half a
   measurement of a crash would read as a measurement.
 
 - **Weighted sigils: `cant sigil --weights trace.json`.** The two halves
   meet: feed a traced run to the renderer and every trace scales with how
-  many emissions left its source node — hot paths bright and thick, a branch
+  many emissions left its source node: hot paths bright and thick, a branch
   that never ran faint but present. Weights are presentation, not layout:
   nothing moves (ADR 0004), the counts join the graph and therefore the
   fingerprint, and an untraced render is byte-identical to before the field
@@ -102,45 +228,45 @@ every addition is additive, and no existing program changes meaning.
 
 - **Sigil diff: `cant sigil new.cant --diff old.cant --canonical`.** The
   review picture: the old program's semantic geometry ghosted beneath the
-  new render, anonymous and faint. Deterministic layout is what makes it
-  honest — the unchanged parts sit exactly under their ghosts — which is
+  new render, anonymous and faint. Deterministic layout is what makes the
+  comparison meaningful: the unchanged parts sit exactly under their ghosts, which is
   why `--canonical` is required. SVG, fingerprinted `format=svg-diff`.
 
 - **An error story, documented and pinned.** A failed capability call was
   already a value; now the three postures have names and fixtures:
   propagate with `?`, drop with `?{ is_ok($) }`, replace with
-  `unwrap_or($, fallback)` — `docs/cant/language.md` § Failures,
+  `unwrap_or($, fallback)`, in `docs/cant/language.md` § Failures,
   `conformance/cant/execution/error-dropped` and `error-replaced`.
 
 - **Three new executed examples** — `examples/cant/07-stdin`, `08-modules`,
-  `09-failures` — and a Pipes section in the one-liners page: counting from a
+  `09-failures`, plus a Pipes section in the one-liners page: counting from a
   log, summing a column, `jq`-style JSON plucking, word frequencies with
   decorate-sort-undecorate, CSV columns. Every recipe was run before it was
   written down, and the example files are executed by the documentation gate.
 
-- The Sigil site has a social card (`xtask sigil-og` — the ceremony render
+- The Sigil site has a social card (`xtask sigil-og`, the ceremony render
   is the artwork), gallery cards cycle traceries on hover, and the Cant
   site's nav links Sigil in its own violet.
 
 ## [0.8.0] — 2026-08-04
 
 Cant programs become artifacts. Sigil renders a program's semantic topology as
-a deterministic radial diagram — circular, symbolic, readable with every label
-removed — from the CLI (`cant sigil`), and in the browser at `sigil.rite.foo`,
+a deterministic radial diagram (circular, symbolic, readable with every label
+removed) from the CLI (`cant sigil`), and in the browser at `sigil.rite.foo`,
 where the source never leaves the tab. Three themes, three traceries, four
 ornament levels, three disclosure modes; SVG, PNG, interactive HTML and scene
 JSON. Beside it: Cant Studio, the `cant.graph` schema at version 1, and Cant
 versioning on its own number.
 
-The minor bump is the new renderer and its site. One in-repo API is renamed —
-`rite_render::Kind::Sigil` is `Kind::Glyph` — and nothing anyone types has
+The minor bump is the new renderer and its site. One in-repo API is renamed
+(`rite_render::Kind::Sigil` is now `Kind::Glyph`), and nothing anyone types has
 changed.
 
 ### Fixed
 
 - **Rite Studio did not run locally.** `pnpm site:dev` loaded the engine by
   importing `/wasm/rite_wasm.js`, and Vite's dev server refuses to serve anything
-  under `public/` as a module — it answered 500, and Studio reported "WASM not
+  under `public/` as a module: it answered 500, and Studio reported "WASM not
   loaded" on a machine where the file was right there. A built site was fine, so
   the only broken configuration was the one you develop in. Both Studios now
   fetch the glue and import it through a blob URL: one code path, identical in
@@ -149,8 +275,8 @@ changed.
 ### Changed
 
 - **A Rite token symbol is a *glyph*, not a *sigil*.** The word was in service
-  for two things at once — `◆` and, shortly, the visual artifact a whole program
-  renders to — and the collision is worst in exactly the documents that have to
+  for two things at once: `◆`, and shortly the visual artifact a whole program
+  renders to. The collision is worst in exactly the documents that have to
   explain both. `grammar/sigils.toml` is now `grammar/glyphs.toml`, the
   `"sigil"` palette kind is `"glyph"`, `rite_render::Kind::Sigil` is
   `Kind::Glyph`, and the Studio stylesheet's `.tok-sigil` is `.tok-glyph`.
@@ -161,7 +287,7 @@ changed.
 - **The Cant graph schema is version `1`.** Three additions, all so a consumer
   never has to recover meaning from a label: a `schema` field naming the format
   (`"cant.graph"`), a `producer` block saying what wrote the graph, and
-  per-node `capabilities` — each `{ name, family }`, so "does this node touch
+  per-node `capabilities`, each `{ name, family }`, so "does this node touch
   the filesystem or the network?" is a field rather than a re-scan of leaf text.
   `CantProgram::capabilities()` now reads those fields instead of re-scanning,
   and `capability_families()` joins it. Version `0` graphs are refused rather
@@ -179,7 +305,7 @@ changed.
   clockwise sectors, orbits as closed rings their bodies sit on, and capability
   invocations pulled to an outer host boundary. Same graph and options produce a
   byte-identical scene. The crate parses nothing, executes nothing, and opens
-  nothing — `crates/rite-sigil/tests/boundaries.rs` reads the manifest and the
+  nothing; `crates/rite-sigil/tests/boundaries.rs` reads the manifest and the
   sources to keep it that way. Six golden scene fixtures under `fixtures/sigil/`,
   generated from `examples/sigil/`, asserted structurally rather than merely
   written. See `docs/sigil/`.
@@ -190,55 +316,55 @@ changed.
 
   Marks come from a constrained grammar rather than noise: a fixed skeleton per
   node kind plus deterministic variation that only ever adds strokes outside the
-  skeleton it varies. Every kind differs from every other in *topology* — a
-  stroke count, a closed versus open form — because colour is not permitted to
+  skeleton it varies. Every kind differs from every other in *topology*: a
+  stroke count, a closed versus open form. Colour is not permitted to
   carry the distinction, and `void` is the theme where a mark that only works in
   colour fails.
 
   Ornament is generated from the level and the seed and nothing from the placed
-  scene, which is what makes "removable without relayout" true rather than
+  scene, which is what makes "removable without relayout" hold rather than
   careful: it cannot avoid a node because it cannot see one.
 
-  Veiled is the default and means the artifact draws no source text at all —
+  Veiled is the default and means the artifact draws no source text at all:
   enforced by never generating a text element, not by hiding one. `--metadata`
   is a separate axis governing what is *embedded*; `none` strips titles,
   descriptions, identifiers and snippets. The contradictory pairing warns rather
   than silently resolving.
 
   Standard SVG contains no script, no event handler, no external reference and
-  no unescaped user text — asserted over twelve hostile strings across
+  no unescaped user text, asserted over twelve hostile strings across
   thirty-six option combinations.
 
   **Three traceries.** How traces are drawn is its own axis, beside theme and
-  ornament: `--tracery flowing` (the default — cubics bowed with the
+  ornament: `--tracery flowing` (the default, cubics bowed with the
   composition), `concentric` (radial runs joined by arcs of circles centred on
   the composition, sharp at the joints, the way an astrolabe is), and `circuit`
   (orthogonal runs at right angles with a via dot at every bend, and one on a
-  straight run). A tracery changes every edge's shape and no mark's position —
-  asserted, not assumed — and the choice is recorded in the scene's metadata
+  straight run). A tracery changes every edge's shape and no mark's position,
+  asserted rather than assumed, and the choice is recorded in the scene's metadata
   and the render fingerprint. The web app offers all three from the control
   bar; the hostile-string suite runs against every tracery because their paths
   carry commands the default never emits.
 
   Traces route *around* marks. An edge's arc bows toward the centre, which is
   exactly where the source mark sits, so on real programs traces sagged through
-  marks they did not connect — a relationship the graph never asserted. Each
+  marks they did not connect, implying a relationship the graph never asserted. Each
   edge now tries its house curve first and, only when that would clip a mark,
-  deepens or slides the bow through a fixed candidate order until it clears —
+  deepens or slides the bow through a fixed candidate order until it clears:
   never flipping the bow's side, because a feedback arc that crossed to the
   inside would stop reading as feedback. Deterministic, bounded, and inert for
   any edge that was already clean.
-  `examples/sigil/ceremony.cant` joins the set as the densest example — two
-  readings, a decode, a warded fork carrying an effect and an orbit — and the
+  `examples/sigil/ceremony.cant` joins the set as the densest example: two
+  readings, a decode, a warded fork carrying an effect and an orbit. The
   seventh pair of goldens.
 
   Traces also avoid *each other* where they can (OD2): edges route in graph
   order, earlier traces are soft obstacles, and among mark-clearing candidates
-  the fewest crossings wins — deterministically, without moving a node. Traces
+  the fewest crossings wins, deterministically and without moving a node. Traces
   sharing an endpoint are exempt; they meet at a mark, which is a junction.
   And fork sectors renormalize recursively (OD3): a fork inside a branch now
   subdivides the sector its parent was allocated rather than opening a
-  top-level fan across its siblings — before this, a nested fork's branches
+  top-level fan across its siblings. Before this, a nested fork's branches
   were not sector-placed at all and fell to the leftover pass near the seal
   band.
 
@@ -247,7 +373,7 @@ changed.
   prove the wasm32 *build* draws the same bytes. Now
   `tests/browser_fixture.rs` pins a native render as a fixture and
   `scripts/check-sigil-wasm-parity.mjs` runs the built bundle in Node against
-  it byte-for-byte, inside `build-sigil-site.sh` — so CI and every release
+  it byte-for-byte, inside `build-sigil-site.sh`, so CI and every release
   exercise the artifact that actually ships. AR4/Q2 close.
 
   **The Sigil site deploys from the tag.** `release.yml`'s `sites` job builds
@@ -257,8 +383,8 @@ changed.
   `renderCantHtml`/`renderGraphHtml` build the same self-contained interactive
   page the CLI writes, in the tab, uploaded nowhere.
 
-  **The five unwritten docs pages exist.** `visual-language.md` — the page
-  that teaches reading a sigil, promoted out of `marks.rs` doc comments —
+  **The five unwritten docs pages exist.** `visual-language.md`, the page
+  that teaches reading a sigil, promoted out of `marks.rs` doc comments;
   plus `cli.md`, `themes.md`, `accessibility.md` and `internals.md`, each
   registered with the removability gate.
 
@@ -280,7 +406,7 @@ changed.
 
   The chrome follows the family rule the Cant site established: ground, panels,
   borders and type byte-identical to the Rite and Cant sites, with the accent
-  moved — `keyword` violet from `grammar/palette.json`, alongside Rite's
+  moved: `keyword` violet from `grammar/palette.json`, alongside Rite's
   capability cyan and Cant's glyph pink. The two typefaces are self-hosted
   rather than loaded from Google Fonts, because this app's CSP is
   `default-src 'self'` and the privacy claim covers fonts too. The canvas keeps
@@ -291,7 +417,7 @@ changed.
   The source panel highlights Cant: the Cant site's scanner, ported whole and
   driven by the same `grammar/cant/operators.toml` through a build-time define,
   layered under a transparent textarea that keeps the caret and every native
-  editing behaviour. No editor dependency — the app still ships no third-party
+  editing behaviour. No editor dependency; the app still ships no third-party
   code. A fresh render materialises with a brief brightening that settles,
   starting from partial opacity so live re-renders read as re-inscription
   rather than flicker, and `prefers-reduced-motion` truncates it to nothing.
@@ -309,7 +435,7 @@ changed.
 - **Cant versions on its own number, starting at `0.1.0`.** It shipped in Rite's
   `0.7.0` archive wearing Rite's version, which claimed seven minor cycles of
   stability for a v0 language whose operator vocabulary can still change. The
-  release is still Rite's tag and `cant` still rides in it — one archive, two
+  release is still Rite's tag and `cant` still rides in it: one archive, two
   numbers, both in `version-manifest.json`. `cant version` reports its own
   beside the Rite it lowers to, and `cant::RITE_VERSION` now reads
   `rite_core::VERSION` so the second number is Rite's rather than a relabelling
@@ -318,7 +444,7 @@ changed.
 - **`rite update` installs every binary in the release archive**, not just
   `rite` and `rite-lsp`. The rule is "whatever the archive contains and is
   executable" rather than a list of names, so a release that gains a binary needs
-  no edit — and nothing installed can be left frozen at an old version while
+  no edit, and nothing installed can be left frozen at an old version while
   `rite` moves on. This is how `cant` stays current: it has no updater of its
   own, and `cant update` says so and exits 2.
 
@@ -329,7 +455,7 @@ changed.
   program means. Nothing typed into it leaves the browser, and there is no
   server to send it to.
 
-  A capability the browser cannot serve — `@fs`, `@process`, `@db`, `@net` — is
+  A capability the browser cannot serve (`@fs`, `@process`, `@db`, `@net`) is
   refused by name *before* the program runs, with the expansion still shown, so
   the answer is "run this elsewhere" rather than a failure inside generated code.
 
@@ -350,8 +476,8 @@ changed.
 ## [0.7.0] — 2026-08-03
 
 A second language in the same archive. Cant is terminal-typeable and
-graph-oriented — a program is a flow of stages, and each one emits zero or more
-values — and it runs by generating canonical Rite, so everything Rite already
+graph-oriented: a program is a flow of stages, and each one emits zero or more
+values. It runs by generating canonical Rite, so everything Rite already
 enforces about effects, capabilities and budgets applies to it unchanged. Rite
 itself gains three extracted APIs and two fixes; its grammar, IR and gates are
 untouched.
@@ -372,7 +498,7 @@ The minor bump is the new executable. Nothing in Rite is breaking.
 
   It is **not a Rite dialect.** It has its own lexer, parser and flow graph, and
   it executes by generating canonical ASCII Rite and passing that through Rite's
-  ordinary front end — so it inherits Rite's values, effect discipline,
+  ordinary front end, so it inherits Rite's values, effect discipline,
   capabilities, budgets, interpreter and native compiler without reimplementing
   any of them. `cant expand` prints exactly what runs, and a differential harness
   checks that `cant run`, `rite run <cant expand>` and the compiled binary agree
@@ -396,7 +522,7 @@ The minor bump is the new executable. Nothing in Rite is breaking.
 ### Fixed
 
 - **A bad `--deny` was discarded silently.** A typo in a permission *revocation*
-  left the permission in place — the failure mode where you believe you locked
+  left the permission in place: the failure mode where you believe you locked
   something down and did not. It is now an error, as a bad `--allow` always was.
 - **LSP diagnostics linked to a domain this project does not own.** Every
   diagnostic offered a help link to `rite.dev`; it now points at the canonical
@@ -424,7 +550,7 @@ framing over `@console.read_line`, which nobody was going to do. The shape below
 ### Added
 
 - **`@mcp.serve`** starts an MCP server and blocks until shutdown, over stdio (the
-  default) or Streamable HTTP. The body is a declaration table — `tool`, `resource` and
+  default) or Streamable HTTP. The body is a declaration table (`tool`, `resource` and
   `prompt`, each with an ordinary Rite body:
 
   ```rite
@@ -442,7 +568,7 @@ framing over `@console.read_line`, which nobody was going to do. The shape below
   b: [string]|` publishes an object schema requiring an integer and an array of strings;
   an unannotated parameter publishes the empty schema and stays required. There is no
   second description to keep in step, and argument validation is the same contract check
-  a typed Rite call gets — so a client passing the wrong type receives the tool's own
+  a typed Rite call gets, so a client passing the wrong type receives the tool's own
   error, in band, with `isError: true` rather than as a dead connection.
 
 - **`@mcp.tool_schema(f)`** answers the schema a function would be published with. Pure,
@@ -453,8 +579,8 @@ framing over `@console.read_line`, which nobody was going to do. The shape below
   rather than reporting progress nobody could receive.
 
 - **`use @mcp.log`** writes one structured JSON line per request to stderr. Stderr and
-  not the protocol's own logging notifications, which the specification has deprecated —
-  logging to stderr is its own suggested migration, and under stdio it is the only thing
+  not the protocol's own logging notifications, which the specification has deprecated.
+  logging to stderr is its own suggested migration, and under stdio it is the only channel
   that works, because stdout is the wire.
 
   For that reason, everything a tool body prints goes to stderr while an stdio server is
@@ -463,8 +589,8 @@ framing over `@console.read_line`, which nobody was going to do. The shape below
 
 - **`docs/book/mcp.md`** and `examples/12-mcp/`.
 
-The 2026-07-28 revision is implemented natively — stateless, with `server/discover` as
-the one mandatory call and cache hints on the list results — and clients still speaking
+The 2026-07-28 revision is implemented natively: stateless, with `server/discover` as
+the one mandatory call and cache hints on the list results. Clients still speaking
 `2025-06-18` are answered by a compatibility layer that engages when they send
 `initialize`. Not implemented, deliberately: `subscriptions/listen` (a Rite server's
 tables cannot change while it runs, so the capability is not advertised rather than
@@ -488,7 +614,7 @@ An HTTP release. A Rite server could not return HTML: the media type was inferre
 from the runtime type of the response body, so a string was always `text/plain`
 and a browser rendered the markup as source text. A `headers` field on the
 response record was accepted and silently dropped. There was also no way to serve
-a file — the router required a pattern and a path to have the same number of
+a file, because the router required a pattern and a path to have the same number of
 segments, so `/assets/css/app.css` could not be routed at all.
 
 Together the changes below serve a static site or a built single-page app.
@@ -497,13 +623,13 @@ Together the changes below serve a static site or a built single-page app.
 
 - **Response headers.** Any response may carry a `headers` record, and an explicit
   `content-type` replaces the one inferred from the body. `@http.response` takes
-  them as a third argument — `@http.response(302, none, ⟨location: "/next"⟩)`. A
+  them as a third argument: `@http.response(302, none, ⟨location: "/next"⟩)`. A
   two-argument call builds the same two-field record it always did.
 
   A header whose value is a **list** is sent once per element. That is the only
   way to set more than one cookie, since a record holds one value per key.
 
-  Header names hold hyphens, so they need quoting as record keys —
+  Header names hold hyphens, so they need quoting as record keys:
   `⟨"content-type": "text/html; charset=utf-8"⟩`. Bare `content-type` lexes as a
   subtraction, and the failure is a server that does not start.
 
@@ -515,7 +641,7 @@ Together the changes below serve a static site or a built single-page app.
 
 - **`@http.file(root, subpath)`** reads a file and builds the response for it,
   with a content type from the extension. A subpath that escapes `root` is
-  refused — checked lexically and again after canonicalization, so a symlink
+  refused, checked lexically and again after canonicalization, so a symlink
   pointing out of the tree is caught as well. The `fs:read` grant still applies
   on top of that. A directory resolves to its `index.html`, so `/` needs no
   special case. Effectful; returns a result, so a missing file is a value you
@@ -552,7 +678,7 @@ them is a place the old behaviour produced an answer rather than a complaint:
   `(a + b) → str`. The other side costs you parentheses: `xs → count > 2` is a parse
   error, and `(xs → count) > 2` is the fix. `rite check` names every site.
 - **`?` requires a result.** `42?` was `42`. A function that can fail must now answer
-  `ok(…)` on success too — see the entry below, it is the subtlest change here.
+  `ok(…)` on success too; see the entry below, which is the subtlest change here.
 - **Incomparable values raise.** `"a" < 1` was `false`, and `"a" <= 1` and `"a" >= 1`
   were both **true**. `sort` on a mixed list handed the list back unsorted.
 - **The higher-order builtins check their arguments.** `keep(42, f)` was `[]`,
@@ -560,7 +686,7 @@ them is a place the old behaviour produced an answer rather than a complaint:
 - **A wrong-typed count raises.** `repeat(2, "ab")` was `[]`, `range("a", "b")` was
   an empty range.
 - **Effect tracking follows bindings**, so `g ← shout` then `each(xs, g)` needs the
-  marker — and a marker over an expression that calls nothing is now an error, which
+  marker, and a marker over an expression that calls nothing is now an error, which
   catches `println!("x")`.
 - **Type annotations are enforced.** They were parsed and dropped, while the
   generated reference said they were checked at runtime.
@@ -580,8 +706,8 @@ It now matches, and says out loud that the parser is the definition.
 
 `3 → dbl` for a `◆ dbl` you defined yourself failed at runtime with **unknown
 builtin `dbl`**, naming a category the function was never in. Only the builtin
-table was consulted for a bare name in stage position, so a pipeline — the most
-visible thing in the language — composed with the standard library and nothing
+table was consulted for a bare name in stage position, so a pipeline, the most
+visible construct in the language, composed with the standard library and nothing
 else. `3 → dbl()` worked, which is how it went unnoticed: every bundled example
 and every snippet in the book pipes into builtins.
 
@@ -595,8 +721,8 @@ count([1, 2, 3])      // 99
 [1, 2, 3] → count     // was 3
 ```
 
-A bare stage now resolves the way a call already did — local binding, then
-function, then builtin — so both lines answer 99, a closure in a binding works as
+A bare stage now resolves the way a call already did (local binding, then
+function, then builtin), so both lines answer 99, a closure in a binding works as
 a stage, and an unknown stage name is a resolve error naming it rather than a
 runtime complaint about builtins. **If a script defines a function whose name
 matches a builtin and pipes into it, the pipeline now calls the definition.** That
@@ -604,7 +730,7 @@ is the answer the same name gave in call position all along.
 
 ### Fixed — `rite fmt --ascii` changed the answer
 
-`x ← 7 ÷ 2` is `3`. Formatted to ASCII it became `x <- 7 idiv 2`, which is **`7`** —
+`x ← 7 ÷ 2` is `3`. Formatted to ASCII it became `x <- 7 idiv 2`, which is **`7`**:
 it parses as two statements, so the division is gone. `f ∘ g` became `f compose g`,
 which evaluates to `f`.
 
@@ -615,12 +741,12 @@ now says so by printing the call form in ASCII. That is the only rendering that
 means the same thing and round-trips.
 
 There is a test that runs both spellings and compares the *values* now, rather than
-asserting on the text — text is what let this through.
+asserting on the text, which is what let this through.
 
 ### Fixed — `rite fmt` keeps the sugar you wrote
 
 `1..=5` came back as `range_incl(1, 5)`, `f ∘ g` as `compose(f, g)`, `2 ** 8` as
-`pow(2, 8)`, and `keep ⟦ |n| … ⟧` as `keep(⟦ |n| … ⟧)` — in the **glyph** dialect
+`pow(2, 8)`, and `keep ⟦ |n| … ⟧` as `keep(⟦ |n| … ⟧)`, in the **glyph** dialect
 too. Formatting `examples/02-pipelines/main.rite`, the example the pipelines chapter
 is built on, rewrote it into a shape the book never uses; `examples/sugar/demo.rite`,
 whose entire purpose is to show the sugar, lost most of it.
@@ -631,14 +757,14 @@ the AST and the formatter's own arms for them were unreachable. They build their
 downstream sees a difference. A single trailing block argument is recorded on the
 call, so `keep ⟦ … ⟧` prints back as itself.
 
-The statement sugars — `say`, `unless`, `for … in`, `while` — are still expanded by
+The statement sugars (`say`, `unless`, `for … in`, `while`) are still expanded by
 the parser and still print expanded. That, and not the operators, is what keeps
 `rite fmt --check` from being a CI gate; `IMPLEMENTATION.md` says so.
 
 ### Fixed — the collection and string ceilings are enforced
 
 `max_collection_size` and `max_string_size` were declared on `ExecutionBudget`,
-given defaults of 1,000,000 and 10,000,000, copied through `child()` — and read
+given defaults of 1,000,000 and 10,000,000, copied through `child()`, and read
 **nowhere in the workspace**. An embedder setting them got nothing.
 
 That mattered more than a missing knob, because the step budget cannot see inside a
@@ -646,8 +772,8 @@ builtin: `range(0, 8000000)` is a handful of IR nodes and eight million elements
 it completed under a **60-step** budget. Pushed further it aborted the process on the
 allocation rather than raising, taking an embedder's host down with it.
 
-They are checked before the allocation wherever the size is knowable up front —
-`range`, `range_incl`, `repeat` and `concat` — and the failure is an ordinary budget
+They are checked before the allocation wherever the size is knowable up front
+(`range`, `range_incl`, `repeat` and `concat`), and the failure is an ordinary budget
 error, exit code 8. `repeat`'s own unrelated `1 << 26` constant is gone in favour of
 the configured ceiling.
 
@@ -663,7 +789,7 @@ eager one-context-per-element fork.
 ```
 
 The content argument defaulted to `""` when it was missing, and `std::fs::write`
-truncates, so leaving it off — or misspelling the variable holding it — destroyed
+truncates, so leaving it off, or misspelling the variable holding it, destroyed
 whatever was there and answered `ok`. It is required now. `@fs.append` had the same
 default, where it merely did nothing.
 
@@ -690,12 +816,12 @@ line above and simply not used.
 something that cannot, and the case that costs is a call which *used* to answer a
 result and stopped: the `?` goes on doing nothing, in silence. It now raises.
 
-`ok(none)` is a result and still unwraps to `none` — that is how `@fs.read_line`
-reports the end of a file — and `and_then` is unchanged as the combinator that
+`ok(none)` is a result and still unwraps to `none`, which is how `@fs.read_line`
+reports the end of a file, and `and_then` is unchanged as the combinator that
 accepts a bare value.
 
 **This has a consequence.** `?` returns `err` from the enclosing
-function, so a function containing one can answer a failure — and must therefore
+function, so a function containing one can answer a failure, and must therefore
 answer `ok(…)` on the way out too, or a caller cannot tell the two apart:
 
 ```
@@ -706,12 +832,12 @@ answer `ok(…)` on the way out too, or a caller cannot tell the two apart:
 ```
 
 Two places in this repo were writing a `?` over something that never answered a
-result — a tutorial and a conformance fixture. Both were doing nothing, and both
+result: a tutorial and a conformance fixture. Both were doing nothing, and both
 now say so.
 
 **The higher-order family validates its arguments.** `map` was the only one that
 did. `keep` and `group` answered an empty list for a non-list, `each`, `reduce` and
-`find` answered `none`, and `all(42)` was `true` — every one of them a value a
+`find` answered `none`, and `all(42)` was `true`: every one of them a value a
 correct call also produces. They are list-only, deliberately: `take("abcde", 2)`
 has an obvious answer of the same kind, and mapping a function over a string does
 not. The function argument is checked before the loop rather than at the first
@@ -719,7 +845,7 @@ element, so `keep([1, 2], 7)` names the mistake instead of failing inside it.
 
 **And the last of the coercing arguments.** `count(42)` was `0`, `contains(42, 1)`
 was `false`, `repeat(2, "ab")` was `[]`, `take("abcde", "2")` was `""`, and
-`range("a", "b")` was an empty range — each because a wrong type became a default.
+`range("a", "b")` was an empty range, each because a wrong type became a default.
 Absent still means the default, since several of these have a real one; present and
 wrong now says so. `1 ∈ 42` raises for the same reason `contains` does.
 
@@ -735,14 +861,14 @@ relational operators asserted things the equality operator denied:
 ```
 
 `sort` inherited it, and that was the expensive part: `sort([3, "b", 1, "a", 2])`
-handed back **the list unchanged** — not sorted, and not an error. The comparator
+handed back **the list unchanged**: not sorted, and not an error. The comparator
 was not transitive either, so what order it did produce was unspecified.
 
 Ordering is now defined for numbers, strings, `bool` (`false` first), bytes, and
 lists (lexicographically, element by element then by length). Everything else
 raises: two different kinds, two atoms, two records, and `NaN`. Atoms are symbols
 and a record's fields are in insertion order, so ordering either would report how
-the value was built rather than what it means. **Equality is untouched** — `"a" = 1`
+the value was built rather than what it means. **Equality is untouched**: `"a" = 1`
 is still `false`, not an error.
 
 **`sort(seq, comparator)` now calls the comparator.** Two tutorials document it,
@@ -753,7 +879,7 @@ original order looking sorted. The tutorial's own assertion is what caught it,
 after the stricter ordering turned a wrong answer into an error.
 
 Negative if the first argument comes first, positive if the second does, zero if
-neither — and a comparator answering something other than a number is told so. This
+neither, and a comparator answering something other than a number is told so. This
 is also what makes the stricter default affordable: a pair the language will not
 order for you is a pair you can order yourself.
 
@@ -761,8 +887,8 @@ order for you is a pair you can order yourself.
 
 `◆ f(x: int) → int` has been parsed, printed back by the formatter, and then
 dropped. The generated reference has carried a section headed "Runtime type
-contracts" — *"Optional annotations like `value: int` are checked at runtime on
-function entry/exit"* — the whole time, and nothing behind it was true:
+contracts": *"Optional annotations like `value: int` are checked at runtime on
+function entry/exit"* the whole time, and nothing behind it was true:
 
 ```
 ◆ typed(x: int) → int ⟦ ^ "not an int" ⟧
@@ -776,8 +902,8 @@ typed: parameter `x` expects int, got bool
 typed: declared to return int, but returned string
 ```
 
-The types are the value kinds — `int`, `float`, `number` (either), `string`,
-`bool`, `atom`, `list`, `record`, `bytes`, `function`, `none` — plus `any` and
+The types are the value kinds (`int`, `float`, `number` (either), `string`,
+`bool`, `atom`, `list`, `record`, `bytes`, `function`, `none`) plus `any` and
 three composites: `[T]`, `result<T>`, and `⟨field: T, …⟩`. Checking is structural,
 so an empty list satisfies `[int]` and a record may carry fields the annotation
 does not name. A container reports where it stopped matching rather than restating
@@ -798,7 +924,7 @@ binaries enforce the same contracts: `rite build` emits the check around the sam
 `ops` functions the interpreter calls, so the two paths cannot drift.
 
 Nothing that was unannotated changes, and nothing in the shipped corpus used an
-annotation — so this breaks only programs that were already claiming something
+annotation, so this breaks only programs that were already claiming something
 untrue about themselves.
 
 ### Changed — `?` on a pipeline stage is rejected, and one on a pipeline input parses
@@ -808,7 +934,7 @@ untrue about themselves.
 `xs`"; the compiler backend refused to lower it at all, so the two execution paths
 disagreed about a program that compiled. Nothing in the book, the examples or the
 fixtures used it. It is now `E016`, pointing at the `?` and naming the two places
-it can go — on the pipeline's result, or on its input.
+it can go: on the pipeline's result, or on its input.
 
 The second half was a parse bug of the same family as 0.5.0's `?`-before-`while`:
 
@@ -818,13 +944,13 @@ rows ← (! @json.read(path))? → keep ⟦ |r| r.active ⟧
 
 `?` and prefix `?` (if) are one token, so the parser looks ahead to tell them
 apart. The scan ran past `→ keep` and found the *stage's* trailing block, concluded
-the `?` opened a conditional, and failed with "unexpected token →" — pointing at
+the `?` opened a conditional, and failed with "unexpected token →", pointing at
 the pipeline rather than at the `?`. No condition can begin with `→`, which makes
 the fix unambiguous.
 
 Also documented rather than left to be discovered: a `Result` travels through a
-stage as an ordinary value and **does not** short-circuit — `and_then` is the
-opt-in — and pipelines are eager, with every stage materialising its result.
+stage as an ordinary value and **does not** short-circuit; `and_then` is the
+opt-in, and pipelines are eager, with every stage materialising its result.
 
 ### Changed — `→` is looser than the operators, and its result needs parentheses
 
@@ -835,7 +961,7 @@ which is not what it looks like and not what anyone writing it means. It is now
 The cost is on the other side, and it is not optional: an infix operator cannot be
 looser than `+` on its left and tighter than `+` on its right. Reaching the input
 side costs the result side, so an operator directly after a pipeline is now a parse
-error — `E015` — naming the form that works:
+error, `E015`, naming the form that works:
 
 ```
 xs → count > 2        // error[E015]: a pipeline's result cannot be an operand of `>`
@@ -847,11 +973,11 @@ one case by quietly getting the other wrong:
 
 | | `a + b → str` | `xs → count > 2` |
 |---|---|---|
-| Loose, stages as full expressions | `(a + b) → str` | `xs → (count > 2)` — died at runtime |
+| Loose, stages as full expressions | `(a + b) → str` | `xs → (count > 2)`, died at runtime |
 | Tight, stages at postfix | `a + (b → str)` — silently | `(xs → count) > 2` |
 | **Loose, stages at postfix** | `(a + b) → str` | **E015** |
 
-Stages are unchanged — a name, a call, or a trailing-block call, never a bare
+Stages are unchanged: a name, a call, or a trailing-block call, never a bare
 operator expression. `|>` in F#, Elixir and Elm makes the same trade; there the
 rejected case is a type error instead of a parse error.
 
@@ -864,7 +990,7 @@ operator. Across the 101 `.rite` files in this repo it was one line in
 
 `!` was checked in one direction only: leaving it out where an effect happens was
 an error, and putting it where nothing happens was silence. So `x ← ! 42` passed,
-and the marker could not be read as "something happens here" — the only reason to
+and the marker could not be read as "something happens here", the only reason to
 write it.
 
 The shape that made this expensive is the one anyone arriving from Rust writes
@@ -878,13 +1004,13 @@ println!("one")
 expression boundaries, so that line is **two** of them: a discarded reference to
 `println`, then `!` applied to `"one"`. Both halves were individually legal.
 
-A marker over an operand that calls nothing — no function, no capability, no
-pipeline stage — is now `E021`, with the help text naming the `println!` case.
+A marker over an operand that calls nothing (no function, no capability, no
+pipeline stage) is now `E021`, with the help text naming the `println!` case.
 The marker goes before the call: `! println("one")`.
 
 The test is whether anything is **called**, not whether the call is effectful.
 `! each(xs, f)` for a parameter `f` stays legal, because whether `f` performs an
-effect is exactly what Rite cannot always know — and rejecting the responsible
+effect is exactly what Rite cannot always know, and rejecting the responsible
 form would be the worse error. Nothing in the shipped corpus carried a stray
 marker, so no example or chapter changed.
 
@@ -897,7 +1023,7 @@ different name took it off the graph:
 ◆! shout(n) ⟦ ! @console.println(str(n)) ⟧
 ◆ run(xs) ⟦
   g ← shout        // a rename
-  each(xs, g)      // …and `each(xs, shout)` — the checked form — is gone
+  each(xs, g)      // …and `each(xs, shout)`, the checked form, is gone
 ⟧
 ```
 
@@ -931,7 +1057,7 @@ supplying it disabled the inference that the marker exists to drive:
 `rite check` said `ok`. The call that records the effect sat inside the branch
 that reports the missing marker, so taking the fix removed the record: `run` was
 never inferred effectful, never required to be `◆!`, and its own callers were
-never asked for anything. Complying with the discipline was what turned it off —
+never asked for anything. Complying with the discipline was what turned it off.
 the one path a reader following the diagnostics would take.
 
 It is recorded whether or not the marker is present now, matching the two checks
@@ -954,8 +1080,8 @@ cases where the old behaviour was a wrong answer delivered quietly:
 - **Builtins that answered the wrong type now raise.** `sum(["1", "2"])` was `0`,
   the same `0` a correct empty list gives. `keys("abc")` was `[]`. `lines(xs)` on
   a list was `[]`, which reads exactly like an empty file. Each of these now says
-  what is wrong at the call. If a script depended on one, it fails now — loudly,
-  which is the point, but it fails.
+  what is wrong at the call. If a script depended on one, it fails now, loudly and
+  which is intended, but it fails.
 - **`join` on a string joins its characters.** `join("abc", "-")` was `"abc"` and
   is now `"a-b-c"`.
 - **Exit codes 3 and 4 mean what the published table always said.** A resolve
@@ -963,7 +1089,7 @@ cases where the old behaviour was a wrong answer delivered quietly:
   **3** from `rite check` where it exited 4. Anything matching on those numbers
   needs a look.
 
-And one that is unlikely to bite but worth knowing: `{ || 42 }` is a function of
+And one that is unlikely to bite: `{ || 42 }` is a function of
 no arguments now, where it used to evaluate to `42`.
 
 ### Added — `and_then` calls its function
@@ -980,8 +1106,8 @@ functions that do not wrap.
 `@clock.add(t, duration)` and `@clock.diff(a, b)`. `add` reuses the duration
 vocabulary `@clock.duration` already speaks, so `"7d"` means the same everywhere,
 and a negative duration expresses "thirty days ago" without a second function.
-Both answer results — a string that is not a timestamp and a unit that does not
-exist are both things a caller gets wrong — and both are unmarked, since shifting
+Both answer results, since a string that is not a timestamp and a unit that does
+not exist are both things a caller gets wrong, and both are unmarked, since shifting
 a timestamp you already hold observes nothing outside the program. An
 out-of-range shift is an `err`, not a panic.
 
@@ -1002,7 +1128,7 @@ rasterises. `--frame` is `text`, `box` or `window`. Layout is computed per colum
 rather than measured, which is what lets the small format still line up in a
 viewer whose monospace font is not the one you have.
 
-The highlighting is the language's own lexer and one shared palette — a new
+The highlighting is the language's own lexer and one shared palette, in a new
 keyword or host function cannot leave the pictures behind, because there is no
 second list to update. Source that does not compile still renders, deliberately,
 so a page explaining a mistake can show it.
@@ -1010,11 +1136,11 @@ so a page explaining a mistake can show it.
 `grammar/palette.json` is now the one colour table, with gates holding the site's
 stylesheet to it: same colours, no colours of its own, an entry for every token
 kind and no entries for kinds nothing emits. A fourth gate turns the stylesheet's
-own comment into a checked property — every colour clears 4.5:1 against the panel
+own comment into a checked property: every colour clears 4.5:1 against the panel
 background, the worst being the comment grey at 6.32:1.
 
 Studio gains **Save PNG**, rendering through the same crate over WASM and taking
-the SVG to a canvas — so the browser needs no rasteriser, and there is no second
+the SVG to a canvas, so the browser needs no rasteriser, and there is no second
 layout implementation in TypeScript to drift from `rite render`.
 
 Two bugs found by looking at the output rather than at the tests, both of which
@@ -1026,7 +1152,7 @@ data URL, so every glyph drew as nothing. There is a test that counts pixels now
 
 And whitespace was *drawn* rather than counted, with `xml:space="preserve"` asked
 to hold it. Chrome collapses runs of spaces inside `<text>` whatever that
-attribute says, so `^ n * n` rendered as `^n  *n` — glyphs in the wrong columns,
+attribute says, so `^ n * n` rendered as `^n  *n`, putting glyphs in the wrong columns,
 which is the one thing a picture of code must not do. Every visible segment is
 placed at its own computed column now, and no drawn run contains a space. The
 golden file could not have caught it: it was generated from the same mistake.
@@ -1036,12 +1162,12 @@ golden file could not have caught it: it was generated from the same mistake.
 `RiteEngine::load(name, src)` runs a script and keeps it, so the functions it
 defined stay callable: `script.call("price", vec![order])`. Until now the engine
 ran a script and handed back its value, and the functions went when the context
-did — so passing data in meant writing it somewhere the guest could read and
+did, so passing data in meant writing it somewhere the guest could read and
 running the whole file again per item, a file and a path grant standing in for an
 argument. The embedding tutorial had to teach that workaround; it now teaches the
 call.
 
-The top level runs once, at `load` — that is what defines the functions, and for a
+The top level runs once, at `load`, which is what defines the functions. For a
 script with a `main` it runs `main` too. Holding the script holds that run, so a
 mutable top-level binding keeps its value between calls and anything the script
 opened stays open until it is dropped. Permissions and the budget apply to every
@@ -1052,7 +1178,7 @@ somewhere else later.
 **Atoms come back with their names.** An atom is an index into an interner and
 `Display` has none to ask, so `format!("{value}")` renders `#0`. Every run of one
 engine now shares an interner, and `engine.display(&value)` /
-`script.display(&value)` resolve it — which also makes the same atom from two runs
+`script.display(&value)` resolve it, which also makes the same atom from two runs
 the same value.
 
 ### Changed — exit codes 3 and 4 mean what the table always said
@@ -1081,14 +1207,14 @@ resolve failures started answering 4.
 
 `@tcp` kept its connections in a process-global map, so a socket outlived the run
 that opened it: `rite run` only cleaned up because the process exited, and inside
-`RiteEngine` — where the host keeps going — a guest that never called `@tcp.close`
+`RiteEngine`, where the host keeps going, a guest that never called `@tcp.close`
 leaked the connection for the lifetime of the host, with no way for the next run
 to reach it. They live on the run's context now, as `@fs` handles do.
 
 The original reasoning for the global was sound as far as it went: a `@tcp.listen`
 handler runs its block in a fresh context, so a table on the *capability* would be
 invisible to the block the handle is passed to. It does not follow that the table
-must be global — the handler's own context is reachable where the connection is
+must be global, since the handler's own context is reachable where the connection is
 registered, and is the right owner. A connection now closes when its handler
 returns, and a client connection when the run ends.
 
@@ -1096,7 +1222,7 @@ returns, and a client connection when the run ends.
 
 Every `@fs` read was whole-file: `read` and `lines` are `read_to_string`,
 `read_bytes` is `read`. Peak memory was the size of the file and nothing could be
-processed as it arrived — `@fs.lines` was line-by-line as an *interface* only,
+processed as it arrived: `@fs.lines` was line-by-line as an *interface* only,
 reading everything and then splitting, so at its peak it cost more than `read`.
 
 `@fs.open(path, mode)` answers a handle: `read_line`, `read_chunk`, `write_chunk`,
@@ -1105,8 +1231,8 @@ reading everything and then splitting, so at its peak it cost more than `read`.
 because an empty line is `""` and the two must not collide; `read_chunk` reports it
 with an empty result, and a short read is not the end.
 
-The convention is `@tcp`'s — open, opaque handle, close, and closing twice is
-fine — with one deliberate difference. A `@tcp` connection lives in a
+The convention is `@tcp`'s (open, opaque handle, close, and closing twice is
+fine) with one deliberate difference. A `@tcp` connection lives in a
 process-global; these live on the run's context, so **anything left open closes
 when the run ends**. Under `rite run` that is invisible, since the process exits.
 Inside an embedder it is the difference between a guest leaking a descriptor for
@@ -1116,9 +1242,9 @@ complaint arriving later from an unrelated call.
 
 **The mode decides the permission, at `open`.** `#read` needs `fs:read` for that
 path, `#write` and `#append` need `fs:write`, and nothing afterwards carries a path
-to check — so a refused open is refused before the file is created or truncated.
+to check, so a refused open is refused before the file is created or truncated.
 
-`@tcp`'s sockets had the same leak, fixed just after — see above.
+`@tcp`'s sockets had the same leak, fixed just after; see above.
 
 ### Fixed — `?` on the line before a loop
 
@@ -1126,7 +1252,7 @@ to check — so a refused open is refused before the file is created or truncate
 `?` and prefix `?` (if) are the same token, so the parser looks ahead to tell a
 try-unwrap from the start of a conditional; the lookahead scanned past `while` and
 found the *loop's own* `⟦`, concluded the `?` opened a conditional, and left it to
-begin the next statement — which then parsed as `? while …` and failed with
+begin the next statement, which then parsed as `? while …` and failed with
 "unexpected token While", pointing at the loop rather than at the line above it.
 `loop` and `for` had it too. None of these can be bound as a name, so none can
 open a condition, which makes the fix unambiguous.
@@ -1135,7 +1261,7 @@ open a condition, which makes the fix unambiguous.
 
 `RiteEngine::run_source` built a `RuntimeContext`, the guest's `@console` output
 buffered into it, and the context was dropped when the run returned. An embedded
-`! @console.println("…")` therefore printed nothing and said nothing about it —
+`! @console.println("…")` therefore printed nothing and said nothing about it.
 the host had no way to know the script had spoken at all.
 
 Guest output now goes to the host's own stdout and stderr by default, as under
@@ -1143,8 +1269,8 @@ Guest output now goes to the host's own stdout and stderr by default, as under
 buffer or a UI instead. The sink is called as the script writes, so a
 long-running guest streams rather than holding everything until it finishes.
 
-`with_default_builtins()` is deprecated: it has always been a no-op — builtins are
-installed unconditionally — and a builder method that selects nothing is a trap.
+`with_default_builtins()` is deprecated: it has always been a no-op, since builtins are
+installed unconditionally, and a builder method that selects nothing is a trap.
 It still compiles.
 
 ### Added — a tutorial for embedding
@@ -1155,8 +1281,8 @@ and a record coming back. Its rules script runs in CI against a fixture; the Rus
 half is compiled and run by hand, which the page says out loud.
 
 `docs/book/embedding.md` was rewritten against the actual crate. It had been
-hedging — "exact builder methods follow the crate API in your tree (`allow`,
-`deny`, capability install)" — and `deny` and "capability install" do not exist,
+hedging: "exact builder methods follow the crate API in your tree (`allow`,
+`deny`, capability install)". `deny` and "capability install" do not exist,
 while `run_path` was listed as "if exposed" when it has always been there. Every
 snippet in the chapter now compiles; they were compiled together, as one program,
 to check it.
@@ -1166,7 +1292,7 @@ to check it.
 `{ || 42 }` evaluated to `42`. `type_of` said `int`, and calling it failed with
 `cannot call value of type int`. The only record of the `|…|` was the parameters
 it named, and an empty list of them is indistinguishable from never having written
-one — so desugar read a thunk as a bare block and gave back its body. Named
+one, so desugar read a thunk as a bare block and gave back its body. Named
 `◆ f()` was unaffected, which is how it went unnoticed.
 
 The AST now records whether a parameter list was written, and a block with one
@@ -1188,7 +1314,7 @@ builtins silently answering the wrong type, not the two on record.
 
 `take`, `drop`, `first`, `last`, `rest`, `init`, `reverse`, `sort`, `unique`,
 `chunk` and `enumerate` now read lists, strings and bytes, and give back the kind
-they were handed — `take("abcde", 2)` is `"ab"`, `take(bytes, 2)` is bytes.
+they were handed: `take("abcde", 2)` is `"ab"`, `take(bytes, 2)` is bytes.
 Characters mean characters, so `take("héllo", 2)` is `"hé"`, agreeing with `slice`
 and `count`. A byte is an int, which is what `byte_at` already answered.
 `index_of` accepts lists and bytes, where it used to raise while `contains`
@@ -1199,7 +1325,7 @@ ordering `sort` uses, so `min("cba")` and `first(sort("cba"))` finally agree.
 **Where there is no sensible reading, they now say so instead of answering.**
 `zip` and `flatten` are about the structure of a list of lists, which a string does
 not have. `keys` and `values` want a record. `lines` and `words` want a string.
-`collect_results` wants a list — it answered `ok([])`, which claims every result
+`collect_results` wants a list. It answered `ok([])`, which claims every result
 succeeded, about a thing that was never a list of results. `sum` refuses
 non-numbers rather than skipping them: `sum(["1", "2"])` was `0`, the same `0` a
 correct empty list gives, which is the one wrong answer indistinguishable from a
@@ -1215,12 +1341,12 @@ that way.
   and nothing else could be said, which every CLI eventually needs. The status is
   any number from 0 to 255; nothing after the call runs; no `^` and no middleware
   can intercept it; buffered output is still flushed. It needs **no permission**,
-  for the reason `@process.args` needs none — the status you end with is a message
+  for the reason `@process.args` needs none: the status you end with is a message
   to whoever ran you, not authority over anything, and gating it behind the grant
   that also permits running arbitrary binaries would be backwards.
 
   The range is deliberately not restricted to the codes the runtime does not use.
-  Forwarding a child's status — `! @process.exit(r.status)` — is the most common
+  Forwarding a child's status, `! @process.exit(r.status)`, is the most common
   reason to call it, and a rule that rejected 3–8 would fail only on the runs where
   a subprocess happened to return one, long after the tests passed. So `1`–`8` now
   mean two things: the runtime's own table when the runtime stopped the run, and
@@ -1230,14 +1356,14 @@ that way.
 
   Inside an `@http` or `@tcp` handler it ends the *process*: the server stops
   accepting, the request in flight gets `503`, and `@http.listen` ends the script
-  with the status. `use @http.recover` does not intercept it — recover turns
+  with the status. `use @http.recover` does not intercept it; recover turns
   handler failures into described 500s, and an exit is not a failure.
 
 ### Fixed
 
 - **`@process.run` rejects arguments that are not a list.** Anything else was
-  silently treated as "no arguments", so `@process.run("sh", ⟦"-c", "…"⟧, ⟨⟩)` — a
-  block where a list belongs — ran a bare `sh`, which read stdin to EOF and
+  silently treated as "no arguments", so `@process.run("sh", ⟦"-c", "…"⟧, ⟨⟩)`, a
+  block where a list belongs, ran a bare `sh`, which read stdin to EOF and
   answered `ok(⟨status: 0⟩)`. A command that never did what was asked, reporting
   success. Same treatment the options record already had.
 
@@ -1253,7 +1379,7 @@ that way.
   failure at all, and the IR path was never consulted for a case expected to fail.
   The status now has to be the declared one, and the two paths have to agree on it.
   Fixtures can also now expect a *successful* early exit, and `expected.stdout` is
-  compared for a run that ended by failing — which is what tests the promise that
+  compared for a run that ended by failing, which is what tests the promise that
   output is flushed on every path.
 
 - **One definition of the exit-code table.** `EvalError::exit_code` is now the only
@@ -1264,7 +1390,7 @@ that way.
 ### Documentation
 
 - **The exit-code table exists.** `cli-tool.md` linked to "the full exit-code table"
-  in `effects.md`, which had no such table — and the codes as described elsewhere
+  in `effects.md`, which had no such table, and the codes as described elsewhere
   were not what the binary does. Every code in the new table was checked by running
   it: `3` and `4` turn out to distinguish *when* a source was rejected (`rite run`
   exits 3 whether a file failed to parse or to resolve; `rite check` exits 4 for
@@ -1276,39 +1402,39 @@ A correctness release. Five capability functions were shipped surface that did
 nothing while the generated reference advertised them as working; a compiled binary
 never ran `main`; and a path could leave a granted root through directories that do
 not exist. Every one of them was found by writing documentation and *running* the
-examples rather than reading the code — which is now enforced, with each tutorial's
+examples rather than reading the code, now enforced with each tutorial's
 final script executed and compared to the output printed beside it.
 
 **One upgrade note.** `@clock.format` and `@clock.duration` now answer **results**
 rather than plain values, because both can genuinely fail. They previously returned
 their input unchanged and were documented as placeholders not to build on, so this
-should affect nobody — but if you called them, add `?`.
+should affect nobody, but if you called them, add `?`.
 
 ### Added
 
 - **`@clock.format` formats.** It took a pattern and ignored it, returning the
-  timestamp unchanged. It now applies a strftime pattern — `%Y-%m-%d`,
-  `%A, %d %B %Y` — and answers a result, because both arguments can be wrong: an
+  timestamp unchanged. It now applies a strftime pattern (`%Y-%m-%d`,
+  `%A, %d %B %Y`) and answers a result, because both arguments can be wrong: an
   unparseable timestamp gives `err(⟨kind: "clock.parse", …⟩)` and an unknown
   specifier gives `err(⟨kind: "clock.pattern", …⟩)`. The pattern is validated
-  before use rather than handed straight to chrono, which panics on `%Q` — a
+  before use rather than handed straight to chrono, which panics on `%Q`, a
   script must not be able to abort its host by writing a bad format string.
 
 - **`@clock.duration` normalizes durations.** It returned the integer it was
-  given. It now reads a unit — `250ms`, `2s`, `5m`, `1h`, `1d`, and fractions like
-  `1.5s` — and answers whole milliseconds, so `@clock.sleep(@clock.duration("2s")?)`
+  given. It now reads a unit (`250ms`, `2s`, `5m`, `1h`, `1d`, and fractions like
+  `1.5s`) and answers whole milliseconds, so `@clock.sleep(@clock.duration("2s")?)`
   says what it means. A bare number is still milliseconds, so both forms agree.
 
 - **`@process.run` honours its third argument.** The options record was accepted
   and discarded, so `⟨cwd: "…"⟩` looked applied and did nothing. It now understands
   `cwd` and `env` (added to the inherited environment, since a child that loses
   `PATH` usually cannot start). An unrecognised key is an error rather than a
-  silent default — a typo should not be indistinguishable from the default.
+  silent default: a typo should not be indistinguishable from the default.
 
 ### Fixed — Studio
 
 - **Switching dialect rewrites the editor.** The selector changed only what the
-  *next* Format produced, so picking "ascii" left glyphs on screen — the one thing
+  *next* Format produced, so picking "ascii" left glyphs on screen, the one thing
   the control is named for was the one thing it did not do. Rite has one AST and two
   spellings, so converting is the honest reading of the choice. Source that cannot
   be parsed is left exactly as typed, with the reason in the diagnostics pane;
@@ -1328,7 +1454,7 @@ should affect nobody — but if you called them, add `?`.
   the entry point correctly, so the in-process parity gate agreed too; and
   `codegen_is_valid_rust` only asks whether the generated Rust *parses*. The
   disagreement lived solely in generated Rust, so only building and running could
-  see it — which is what the new `#[ignore]`d test does.
+  see it, which is what the new `#[ignore]`d test does.
 
   Dispatched through the function registry rather than calling `rite_fn_main`
   directly, so a `main` the backend could not lower still runs via the interpreter
@@ -1342,13 +1468,13 @@ should affect nobody — but if you called them, add `?`.
 
   `?` is both postfix try and prefix `if`, so the parser looks ahead to tell them
   apart. That scan begins inside whatever group the `?` sits in but starts its paren
-  depth at zero, and stepped down with `saturating_sub` — which saturates at
+  depth at zero, and stepped down with `saturating_sub`, which saturates at
   `i32::MIN`, not at zero. The closing `)` of the enclosing call took the depth to
   -1, the next statement's `(` brought it back to 0, and that statement's lambda `{`
   then looked like the body of a conditional. A closing delimiter at depth zero now
   ends the scan: it means the `?` has been left behind, so it was postfix try.
 
-  This was found by writing a tutorial and running it, which is the point of running
+  This was found by writing a tutorial and running it, which is the reason for running
   them.
 
 ### Security
@@ -1361,9 +1487,9 @@ should affect nobody — but if you called them, add `?`.
   a string while landing two levels above it, and was allowed.
 
   Resolution now walks up to the deepest directory that exists, canonicalizes that
-  — so symlinks in it are followed — and folds the remaining components on by hand,
+  (so symlinks in it are followed) and folds the remaining components on by hand,
   resolving `..` as it goes. The tail cannot contain symlinks, because it does not
-  exist, which is what makes resolving it lexically sound.
+  exist, which is why resolving it lexically is sound.
 
   The same fix removes a wrong denial: `@fs.mkdir("a/b")` where neither level exists
   was refused even with a grant covering the parent, because the unresolved relative
@@ -1375,8 +1501,8 @@ should affect nobody — but if you called them, add `?`.
 - **`@console.read_line` reads stdin.** A shim in the interpreter answered the
   empty string and shadowed the working implementation in `rite-caps`, so there was
   no way to prompt for input from a Rite script at all. The prompt is now printed by
-  the runtime — which owns the output sink, and so can respect `--deny console` and
-  keep ordering with buffered output — and the read is done by the capability. Line
+  the runtime, which owns the output sink and so can respect `--deny console` and
+  keep ordering with buffered output, and the read is done by the capability. Line
   terminators are stripped for both `\n` and `\r\n`; end of input answers `""`.
 
 - **`@game.say` can be called.** `say` is a keyword token, so `@game.say("…")`
@@ -1387,7 +1513,7 @@ should affect nobody — but if you called them, add `?`.
 
 - **`--allow env=PATH,HOME` grants two variables.** The list was stored as the
   single variable `"PATH,HOME"`, a name no environment can have, so the grant was
-  accepted and granted nothing — and then denied at the point of use. `--deny`
+  accepted and granted nothing, then denied at the point of use. `--deny`
   takes the same list form.
 
 - **`@env.all` answers a scoped grant instead of refusing it.** It demanded the
@@ -1398,7 +1524,7 @@ should affect nobody — but if you called them, add `?`.
 
 - **Conformance `expected.value.json` was unchecked for every non-numeric case.**
   The comparison ended in `expected.parse::<i64>().ok() != value.as_int()`, which
-  is `None != None` — false — whenever neither side was an integer, so a wrong
+  is `None != None`, which is false, whenever neither side was an integer, so a wrong
   string expectation reported nothing. Comparison is now by JSON value. The first
   thing this caught was a fixture asserting `"matched"` against `"#?0"`: atoms were
   being rendered with a fresh interner that could not name them, so
@@ -1416,14 +1542,14 @@ should affect nobody — but if you called them, add `?`.
   plainly that it is recursive on directories.
 
 - **A drift guard for the book's chapter list.** `DOC_CHAPTERS` and
-  `docs/book/README.md` have to agree, and previously nothing checked — they had
+  `docs/book/README.md` have to agree, and previously nothing checked. They had
   already drifted once into two different numberings on the same screen. The
   tutorial list got this guard when it was added; the book now has it too.
 
 ### Documentation
 
 - **The book now covers every host function.** An audit against the capability
-  registry found 34 of 102 never mentioned anywhere in the book or tutorials —
+  registry found 34 of 102 never mentioned anywhere in the book or tutorials.
   including five capabilities with no chapter at all. That is now zero, enforced
   by nothing but the audit, so it is worth re-running when a capability is added.
 
@@ -1434,24 +1560,24 @@ should affect nobody — but if you called them, add `?`.
 
 - **Tutorials are executed, not just parsed.** Each one now ends with a complete
   script, and CI runs it against fixtures and compares its output to what the page
-  prints — including a pinned modification time, so "which files are stale" has
+  prints, including a pinned modification time, so "which files are stale" has
   something to find. Tutorial fences are `native_only`, so `rite docs check` only
   ever proved their syntax was current; a tutorial could parse perfectly while
   describing behaviour that no longer existed. The markdown is the only copy of the
   script, so there is nothing to drift.
 
-- **Five new tutorials.** *Building a CLI* — `@process.args`, splitting flags from
+- **Five new tutorials.** *Building a CLI*, covering `@process.args`, splitting flags from
   positionals, and failing with a usage line on stderr and a non-zero status.
   *Testing what you built*, which leads with the thing that will bite someone:
   `rite test` grants **every** permission, so a test file is as trusted as the CLI
   itself. *An HTTP service with real routes*, whose client lives in the same file so
-  the script proves its own routes — and which documents that `@store` does not
+  the script proves its own routes, and which documents that `@store` does not
   persist across requests. *A DNS resolver over `@udp`*, the tutorial byte authoring
   exists for. And *Compiling to a binary*, on what happens to permissions when you
   ship one.
 
-  Three of those cannot run in a CI gate for reasons no flag fixes — a server
-  blocks, a cold `rite build` costs minutes, a DNS query needs the network — so they
+  Three of those cannot run in a CI gate for reasons no flag fixes (a server
+  blocks, a cold `rite build` costs minutes, a DNS query needs the network), so they
   carry an explicit `local-only` marker and run under
   `cargo test -p rite-cli --test tutorial_scripts -- --ignored`. The marker is not a
   silent skip: a test requires the page to *tell the reader* it is not CI-verified,
@@ -1473,7 +1599,7 @@ should affect nobody — but if you called them, add `?`.
   `flatten`, `type_of`, …).
 
 - **Corrected two wrong claims in the book.** It said `rest` was a match pattern
-  and not a pipeline stage — `xs → rest` works — and left `flatten` as "use
+  and not a pipeline stage, since `xs → rest` works, and left `flatten` as "use
   flatten/builtin if available", which it is.
 
 ## [0.4.0] — 2026-07-31
@@ -1481,23 +1607,23 @@ should affect nobody — but if you called them, add `?`.
 Rite learns to talk to the network and to handle the bytes that come back:
 `@crypto`, `@udp` and `@tcp` arrive, `parallel` starts actually running things
 together, and strings, numbers and bytes get the operations a scripting language
-is expected to have. Everything here is additive — 0.3.1 code keeps working.
+is expected to have. Everything here is additive; 0.3.1 code keeps working.
 
 ### Added
 
 - **`@fs.metadata` reports modification time and symlink-ness.** The record carried
   `len`, `is_file` and `is_dir` and nothing else, which made "which files changed
-  since Tuesday" — the most common reason to call it — inexpressible.
+  since Tuesday", the most common reason to call it, inexpressible.
 
   `mtime` is an RFC3339 UTC string, deliberately the same rendering `@clock.now`
   produces, so the two compare directly: `m.mtime > cutoff` is a real time
   comparison, because RFC3339 in UTC sorts lexicographically. `@clock.parse`
   accepts it unchanged. It is `none` where the filesystem records no such time.
-  Date *arithmetic* still does not exist — a cutoff has to be a timestamp you
+  Date *arithmetic* still does not exist: a cutoff has to be a timestamp you
   already hold, not "seven days ago".
 
   `is_symlink` describes the path itself, while every other field describes what
-  the path resolves to — `@fs.metadata` follows links, so a symlink to a file
+  the path resolves to. `@fs.metadata` follows links, so a symlink to a file
   reports `is_file: true` with the target's length, as `ls -l` does. A broken link
   still answers `err(⟨kind: "io.not_found", …⟩)`: following it fails before
   anything can report on it, so a dangling symlink cannot be detected.
@@ -1510,13 +1636,13 @@ is expected to have. Everything here is additive — 0.3.1 code keeps working.
 
   `peer_addr` is the far end and `local_addr` the near end, so a server can log the
   client it accepted and a client can read the source port it was given. Both are
-  captured when the connection opens rather than queried on demand — they cannot
+  captured when the connection opens rather than queried on demand, so they cannot
   change, and reading them is therefore never blocked by a `recv` that is still
-  waiting, which is exactly when a server wants to know who has gone quiet.
+  waiting, which is when a server most needs to know who has gone quiet.
 
   `recv(conn, max_bytes, timeout_ms)` distinguishes the two ways to get no bytes,
   because conflating them is how read loops go wrong: a peer that **closed cleanly**
-  answers `ok` with **zero bytes** (end of stream — reading again says the same),
+  answers `ok` with **zero bytes** (end of stream; reading again says the same),
   while **nothing arriving in time** answers `err(⟨kind: "tcp.timeout", …⟩)` and
   leaves the connection open. Neither is a raise. Transport failures are
   `kind: "tcp.error"`.
@@ -1524,13 +1650,13 @@ is expected to have. Everything here is additive — 0.3.1 code keeps working.
   The server is callback-shaped, like `@http.listen`, and there is deliberately no
   `accept`: the block runs once per accepted connection in its own task, receives the
   connection, and **the connection is closed when the block returns**. A connection
-  handed back to the script would need a lifetime the language cannot express — Rite
-  has no destructors and no scope-bound resources — so `@tcp` reuses the one shape it
+  handed back to the script would need a lifetime the language cannot express. Rite
+  has no destructors and no scope-bound resources, so `@tcp` reuses the one shape it
   already has instead of inventing rules for one it does not. `listen` blocks until
   Ctrl-C and prints the address it bound, so port `0` is usable.
 
   Payloads are the `bytes` type and the byte builtins (`from_hex`, `bytes`, `to_hex`,
-  `to_text`, `concat`, `slice`, `byte_at`) — `send` takes a string (sent as UTF-8) or
+  `to_text`, `concat`, `slice`, `byte_at`). `send` takes a string (sent as UTF-8) or
   bytes (verbatim), and `recv` answers bytes. No `@tcp`-local encoding.
 
   Permissions are the two `@http` already applies, through the same code: the
@@ -1542,11 +1668,11 @@ is expected to have. Everything here is additive — 0.3.1 code keeps working.
   Native only: the browser runtime has no socket layer and says so, as `@udp` does.
 
 - **Bytes can be authored, not only relayed.** `Value::Bytes` could be counted and
-  compared and nothing else, so a program could echo a datagram but not build one —
+  compared and nothing else, so a program could echo a datagram but not build one.
   the DNS query that motivated `@udp` was unwritable in Rite.
 
-  `from_hex` (a Result — any byte, not only text-safe ones), `bytes` (from a list of
-  `0`–`255` or a string's UTF-8), `to_hex`, `to_text` (a Result — bytes are not always
+  `from_hex` (a Result, any byte and not only text-safe ones), `bytes` (from a list of
+  `0`–`255` or a string's UTF-8), `to_hex`, `to_text` (a Result, since bytes are not always
   text), and `byte_at`. `concat`, `slice` and `count` understand bytes now too, so a
   packet can be assembled from a header and a body and read back field by field.
 
@@ -1554,7 +1680,7 @@ is expected to have. Everything here is additive — 0.3.1 code keeps working.
   exists to make. Out-of-range numbers are refused rather than truncated: a silently
   wrapped `0x1ff` is a packet that goes out wrong and gets debugged at the far end.
 
-  `@crypto.hex_decode` is deliberately not this — it answers a string and rejects
+  `@crypto.hex_decode` is deliberately not this: it answers a string and rejects
   anything that is not valid UTF-8, which is right for hex-encoded *text* and useless
   for a DNS header.
 
@@ -1568,12 +1694,12 @@ is expected to have. Everything here is additive — 0.3.1 code keeps working.
   program and answers the same on every run. That also makes the capability usable
   in Studio and anywhere else the pure evaluator runs. `random_bytes` reads the
   operating system's entropy pool, so it is marked and rides the existing `random`
-  grant — and it deliberately ignores `@random.seed`, so pinning a seed for
+  grant, and it deliberately ignores `@random.seed`, so pinning a seed for
   reproducible dice rolls does not pin your session tokens.
 
   The decoders answer a Result rather than failing the run, because their input is
-  normally untrusted, and `base64_decode` is strict RFC 4648 — padded, canonical,
-  standard alphabet — rather than guessing at malformed input.
+  normally untrusted, and `base64_decode` is strict RFC 4648 (padded, canonical,
+  standard alphabet) rather than guessing at malformed input.
 
   **No ciphers.** There is no `encrypt`, no AES, no RSA, and nothing that asks the
   caller to choose an IV or a mode; that shape is how ECB and reused nonces get
@@ -1588,32 +1714,32 @@ is expected to have. Everything here is additive — 0.3.1 code keeps working.
   whether it already did.
 
   `recv_from(sock, timeout_ms)` answers `ok(⟨from, data, text⟩)`, or
-  `err(⟨kind: "udp.timeout", …⟩)` when nothing arrives — **a timeout is a value, not a
+  `err(⟨kind: "udp.timeout", …⟩)` when nothing arrives. **A timeout is a value, not a
   raise**. Waiting for a datagram that never comes is ordinary, so the script decides
   what it means; `?` on that line would hand it to the caller instead.
 
-  Payloads are a string (sent as UTF-8) or a `bytes` value (sent verbatim) — the type
+  Payloads are a string (sent as UTF-8) or a `bytes` value (sent verbatim). The type
   `@fs.read_bytes` and `@http` response bodies already use. Received datagrams come back
   as `data` (bytes) plus `text` (lossy UTF-8). Binary packets can be built from source
-  as well as relayed — see the byte builtins below, which landed in this same release
+  as well as relayed; see the byte builtins below, which landed in this same release
   and closed the gap `@udp` shipped with.
 
   Permissions are the two `@http` already applies, reached through the same code: the
   **bind address** allows loopback by default and needs `--allow net=<host>` for anything
   else, and the **destination** of every `send_to` is checked per host like an outbound
-  `@http.get` — including loopback. Talking to yourself needs `--allow net=127.0.0.1`.
+  `@http.get`, including loopback. Talking to yourself needs `--allow net=127.0.0.1`.
 
   Native only: the browser runtime has no socket layer and says so, as `@process` does.
 
 - **Strings and numbers can be worked on.** Rite is pitched at tools and pipelines,
-  where handling text is most of the job, and it had `lines`, `words` and `join` —
+  where handling text is most of the job, and it had `lines`, `words` and `join`,
   nothing to split, trim, case, pad or slice with.
 
   Strings: `split`, `trim` / `trim_start` / `trim_end`, `replace`, `starts_with`,
   `ends_with`, `upper`, `lower`, `pad_start` / `pad_end`, `slice`, `index_of`.
   Numbers: `round`, `floor`, `ceil`, `sqrt`, `parse_int`, `parse_float`.
 
-  Everything is character-indexed, matching `count` — `count("δ")` was already 1, and
+  Everything is character-indexed, matching `count`. `count("δ")` was already 1, and
   an API counting characters in one place and bytes in another only goes wrong on
   non-ASCII input. Indices may be negative, and out-of-range values clamp rather than
   fail so `slice` is safe on input you did not choose. `index_of` answers `none`
@@ -1624,13 +1750,13 @@ is expected to have. Everything here is additive — 0.3.1 code keeps working.
 ### Changed
 
 - **`parallel` actually runs things together.** It dispatched straight to `map`,
-  running every branch in sequence while the name promised otherwise — a comment in
+  running every branch in sequence while the name promised otherwise. A comment in
   the source called it a "sequential fallback". Branches now overlap wherever they
   wait: eight 100 ms sleeps finish in about 100 ms rather than 800.
 
   It answers as if it had not. Results come back in input order however the branches
   finish, output is spliced in input order, and when several branches fail the one
-  reported is the first in input order — so the same program prints the same thing
+  reported is the first in input order, so the same program prints the same thing
   twice running. Branches share the host, so a `@store` or `@db` write in one is
   visible to the others and to the parent.
 
@@ -1642,7 +1768,7 @@ is expected to have. Everything here is additive — 0.3.1 code keeps working.
 - **The docs site stopped offering Run on examples it cannot run.** Twenty-seven
   blocks across the book had a Run button that answered `capability `@json.encode`
   not registered`. The site decided the button from the fence annotation alone, but
-  `rite docs check` runs *natively* — where the capabilities are compiled in — so a
+  `rite docs check` runs *natively*, where the capabilities are compiled in, so a
   block could pass CI and still fail in the browser. The code now gets the final say
   over the annotation, and a block using a capability the browser lacks offers
   **Open in Studio** instead.
@@ -1667,7 +1793,7 @@ system, and seven ordinary names stop silently evaluating to nothing.
 
 - **Seven reserved words bound nothing as parameters.** `item`, `room`, `world`, `test`,
   `ok`, `err` and `some` could be *bound* but not *read*: `◆ f(item) ⟦ ^ item ⟧` returned
-  `none`, and `map { |item| item * 2 }` returned a constant regardless of input — wrong
+  `none`, and `map { |item| item * 2 }` returned a constant regardless of input: wrong
   answers, no diagnostic, `rite check` clean. Of the 31 reserved words these were the only
   silent ones. They now parse as expressions wherever they can be bound, and the
   declaration forms that need them (`◆ item :key ⟦ … ⟧`, `◆ test "…" ⟦ … ⟧`) are unchanged.
@@ -1680,13 +1806,13 @@ system, and seven ordinary names stop silently evaluating to nothing.
 - **`compose` was never an ASCII spelling of `∘`.** The alias table advertised it, but no
   such keyword exists: `f compose g` evaluated to `f` and returned a wrong number instead
   of failing. The working form is the builtin call `compose(f, g)`, which is what the table
-  now records — including in the agent skill bundle, which had been teaching the broken one.
+  now records, including in the agent skill bundle, which had been teaching the broken one.
 
 ### Changed
 
 - **Every import binds a qualifier.** `use math` now gives `math.square` as well as
   `square`; an alias still keeps the module behind its own name. Two modules exporting the
-  same name no longer make either unusable — the clash is reported only if you call the
+  same name no longer make either unusable; the clash is reported only if you call the
   bare name, and it names both modules. Qualified calls are checked when you compile:
   `m.squre(9)` used to pass `rite check` and fail at runtime as `undefined name m__squre`,
   leaking the internal mangling at the reader.
@@ -1694,9 +1820,9 @@ system, and seven ordinary names stop silently evaluating to nothing.
 - **Effects now travel with the call graph.** `!` marked only the place a host call was
   written, so wrapping one in a function made it disappear: `◆ greet(n) ⟦ ! @console.println(n) ⟧`
   was callable as `greet("x")` with no marker and `rite check` accepted it. The guarantee
-  stopped at the first function boundary, which is exactly where code goes as it grows.
+  stopped at the first function boundary, which is where code goes as it grows.
 
-  A function that reaches the host now declares it — `◆! greet(name)` (ASCII `def! …`) —
+  A function that reaches the host now declares it with `◆! greet(name)` (ASCII `def! …`),
   and callers mark the call. The compiler infers effect-ness from the body and closes it
   over the call graph, so a function calling an effectful function is effectful too,
   through any depth and through recursion. The declaration is the contract a caller sees;
@@ -1706,7 +1832,7 @@ system, and seven ordinary names stop silently evaluating to nothing.
   Passing an effectful function to another one (`each(shout)`) marks the call, since
   nothing on that line would otherwise say I/O happens. A lambda written inline already
   shows its own `!`, so it needs no second marker. A closure stored in a binding and
-  passed later is not tracked — that needs types Rite does not have.
+  passed later is not tracked; that needs types Rite does not have.
 
   Migration is one marker per effectful function and one per call. Two examples in the
   book needed it; nothing in `examples/` or `conformance/` did.
@@ -1716,7 +1842,7 @@ system, and seven ordinary names stop silently evaluating to nothing.
   anyone who used the short name.
 
 - **No Windows binary is published.** CI stopped testing Windows on every change in 0.3.0,
-  and shipping a binary nothing exercises is worse than shipping none — every Windows
+  and shipping a binary nothing exercises invites silent breakage. Every Windows
   failure so far was an unportable *test*, but a real regression would now reach a user
   with nothing in its way. Rite still builds and runs there: use WSL, or
   `cargo install --path crates/rite-cli`. `rite update`, the installer, the release notes
@@ -1732,7 +1858,7 @@ which put wrong bytes on disk.
 
 - **`rite build` is a real backend.** It used to base64-encode the IR into the generated
   crate and call `run_ir`, so a compiled binary was the interpreter carrying its program as
-  a payload — exactly as fast as `rite run`, after a multi-minute build. Statements and
+  a payload, exactly as fast as `rite run`, after a multi-minute build. Statements and
   function bodies now lower to Rust: control flow becomes Rust control flow, operators
   become direct calls into `rite_runtime::ops`, and a call to a compiled function is a
   direct Rust call.
@@ -1741,10 +1867,10 @@ which put wrong bytes on disk.
 
   | program | interpreted | compiled | |
   |---------|------------|----------|---|
-  | `fib(24)` — calls and arithmetic | 771 ms | 150 ms | **5.1×** |
+  | `fib(24)`, calls and arithmetic | 771 ms | 150 ms | **5.1×** |
   | pipelines over `map`/`keep`/`each` | 71 ms | 39 ms | **1.8×** |
 
-  Pipelines were 1.0× — no improvement whatsoever — until closures compiled too. The
+  Pipelines were 1.0×, no improvement whatsoever, until closures compiled too. The
   remaining gap is that iteration still runs through `builtin_map` and `call_value` per
   element even when the closure body is compiled; only the body got faster.
 
@@ -1752,8 +1878,8 @@ which put wrong bytes on disk.
   fell back, so this is visible without benchmarking.
 
   Worth recording how the first number was reached, too: the initial version compiled only
-  top-level statements and measured **778 ms against 778 ms** — nothing, because `fib` is a
-  *function* and function bodies were still interpreted. Compiling the bodies is the whole
+  top-level statements and measured **778 ms against 778 ms**: nothing, because `fib` is a
+  *function* and function bodies were still interpreted. Compiling the bodies is the
   difference.
 
   Locals stay in `ctx.env` rather than becoming Rust `let` bindings: a Rite closure
@@ -1762,14 +1888,14 @@ which put wrong bytes on disk.
 
 - **Closures and pipelines compile.** A closure body is now a Rust function reached
   through a new `Value::NativeClosure`, capturing its environment by sharing exactly as an
-  interpreted closure does — so `total := total + n` inside a compiled `each` body still
+  interpreted closure does, so `total := total + n` inside a compiled `each` body still
   assigns through to the scope that declared `total`. `:=` lowers too; without it an `each`
   loop driven by a mutable counter fell back and took everything inside it along.
 
 - **`rite build` skips DuckDB when the program never uses `@db`.** It is a `bundled`
   dependency, so including it compiles the whole database from source. Cold builds of a
   one-line script, measured with an empty target directory: **425 s → 265 s** and 12 GB →
-  9.4 GB. Still slow — the rest is compiling the Rite runtime itself, which a prebuilt
+  9.4 GB. Still slow; the rest is compiling the Rite runtime itself, which a prebuilt
   support crate would address and this does not.
 
 ### Fixed
@@ -1778,25 +1904,25 @@ which put wrong bytes on disk.
   tested for `Value::Function` specifically while `type_name` reported both kinds as
   `function`, so the message named the same type twice. Callability is now one predicate,
   `Value::is_callable`, rather than a match arm per site. Caught by checking the compiled
-  program's *output*, not its timing — it had "won" the benchmark by failing in 5 ms.
+  program's *output*, not its timing. It had "won" the benchmark by failing in 5 ms.
 - **An atom written through a capability lost its name.** `@fs.write(p, #ok)` put the bytes
-  `#0` on disk — the interner index — and `@fs.append`, `@console` and `@game.say` did the
+  `#0` on disk (the interner index), and `@fs.append`, `@console` and `@game.say` did the
   same. The builtins were fixed in 0.2.0; the capabilities had their own copies of the
   identical mistake, and writing wrong content to a user's file is the worst place for it.
 - **Nothing in CI compiled the generated Rust.** Every test that builds a generated crate
   is `#[ignore]`d because it takes minutes, and the backend's own tests assert on emitted
-  *text* — `code.contains("Box::pin")` passes on source that does not compile. A code
+  *text*: `code.contains("Box::pin")` passes on source that does not compile. A code
   generator therefore landed with its output never once compiled by the suite. The
   generated file is now parsed with `syn` on every run, which catches a stray brace or a
   malformed literal in milliseconds, and the end-to-end builds run in the release workflow
   where minutes are affordable. Verified by planting a dropped brace: the new gate fails,
   the fifteen text-based tests all pass.
 - **A compiled binary dropped its result once it had printed.** `! @console.println("hi")`
-  followed by `1 + 2` printed `hi` and swallowed the `3`, where `rite run` prints both — a
+  followed by `1 + 2` printed `hi` and swallowed the `3`, where `rite run` prints both: a
   standing parity break between the two commands, not a new one.
 - **`rite build` failed outright under `RUSTFLAGS=-Dwarnings`.** Skipping DuckDB left
-  `rite-caps` with unused imports in that configuration — which is now the default for any
-  program without `@db` — and the generated crate imported a name it does not always use.
+  `rite-caps` with unused imports in that configuration, now the default for any
+  program without `@db`, and the generated crate imported a name it does not always use.
   Both configurations are warning-clean, and generated crates suppress lints the author of
   a Rite script cannot act on anyway. Found by running the end-to-end build tests before
   tagging rather than after.
@@ -1835,11 +1961,11 @@ explicitly with `@random.seed(n)`.
 - **Effect markers are enforced consistently.** `@db.*`, `@csv.*` and every `@fs` read
   needed no `!`; one canonical effect table now drives `E021`, with a parity test against
   the capability descriptors. A bare capability mention (`n ← @clock.now`) also needs the
-  marker — it calls the function.
+  marker, because it calls the function.
 
 ### Added
 
-- **Outbound HTTP**: `@http.get`, `@http.post`, `@http.request`, gated per host by `net` —
+- **Outbound HTTP**: `@http.get`, `@http.post`, `@http.request`, gated per host by `net`.
   which previously granted nothing at all. The response has the same shape a handler
   receives.
 - **`@process.args`** — a script's own arguments, replacing a `RITE_ARGV` environment
@@ -1851,7 +1977,7 @@ explicitly with `@random.seed(n)`.
   interpreter.
 - **`rite docs serve` / `docs open` / `describe diagnostic`** do real work; they used to
   print success and do nothing. `--trace` is implemented.
-- Documentation for string interpolation, escapes and raw strings — previously undocumented
+- Documentation for string interpolation, escapes and raw strings, previously undocumented
   despite being used throughout the examples.
 - **`rite doc <path>` documents your own scripts.** The path argument was accepted and
   thrown away, so it produced the generic language reference either way; meanwhile
@@ -1860,8 +1986,8 @@ explicitly with `@random.seed(n)`.
   now reach `scripts.md`, the JSON index, the search index and the HTML site, with
   `@param` / `@returns` / `@effects` / `@permission` tags and fenced examples.
   `rite docs build --scripts <path>` does the same from the maintained command family.
-- Documentation for **doc comments** — a language feature since the lexer, and undocumented
-  until now — plus the `@random` seeding contract, the REPL session model, and two rules the
+- Documentation for **doc comments**, a language feature since the lexer and undocumented
+  until now, plus the `@random` seeding contract, the REPL session model, and two rules the
   book never stated: match arms are newline-separated (a comma is a syntax error), and
   result patterns are juxtaposed (`ok data`, not `ok(data)`).
 - **`rite_runtime::ops`** — operator semantics as public free functions, so an ahead-of-time
@@ -1871,7 +1997,7 @@ explicitly with `@random.seed(n)`.
 ### Changed
 
 - **`@random` is random.** The default generator was seeded with a constant, so every
-  `rite run` on every machine drew the identical sequence forever — `@random.int(1, 6)` was
+  `rite run` on every machine drew the identical sequence forever. `@random.int(1, 6)` was
   effectively a constant and a dice roller always rolled the same numbers. It is now seeded
   from the operating system. `@random.seed(n)` still pins a sequence when you want one, and
   now covers `uuid` too: that path called the system generator directly, so a run that
@@ -1885,12 +2011,12 @@ explicitly with `@random.seed(n)`.
   later input, so `data ← ! @fs.read(f)` re-read the file each time and
   `r ← ! @http.post("/orders", …)` re-submitted the order. The session now stores the
   result rather than the expression. A `↢` declaration is remembered; a later `:=` is not,
-  so mutations reset — documented in the book.
+  so mutations reset; documented in the book.
 - **`→` binds tighter than the operators.** `xs → count > 2` now means
   `(xs → count) > 2`; it used to parse as `xs → (count > 2)` and fail at runtime with
   "cannot call value of type bool". Every binary operator after a stage was affected.
   The trade: a bare binary expression as pipeline input groups to the right, so
-  `a + b → f` is `a + (b → f)` — parenthesise to pipe the sum.
+  `a + b → f` is `a + (b → f)`; parenthesise to pipe the sum.
 - **Raw strings no longer interpolate.** `r"{x}"` is literal, as raw implies.
 - **`rite fmt` preserves comments and layout.** It deleted every comment, including `//!`
   and `///`, and the LSP ran it on save. It also keeps multi-line records, lists and
@@ -1898,25 +2024,25 @@ explicitly with `@random.seed(n)`.
   lists or rewrites `use @http.log` into an internal symbol. A fail-safe refuses to write
   if output would gain diagnostics.
 - **`rite fmt` needs an explicit path** (or `--all`); it used to default to the whole tree.
-- The LSP no longer advertises semantic tokens or `execute_command` — declaring the former
+- The LSP no longer advertises semantic tokens or `execute_command`. Declaring the former
   while returning nothing made editors drop their TextMate grammar.
 - CI: clippy is a hard gate (it had `continue-on-error` and a command cargo rejected),
   `deploy` requires the Rust job, and every test binary runs before a failure is reported
-  (`--no-fail-fast`) — without it a platform-specific break surfaced one failure per run.
+  (`--no-fail-fast`); without it a platform-specific break surfaced one failure per run.
   Linux and macOS run on push and PR; Windows is opt-in via **Run workflow**, since it
   takes ~36 minutes and its every failure so far was an unportable test rather than a
   broken Rite. The fixes that made it pass are all still in place.
 
 ### Fixed
 
-- **Diagnostic columns counted bytes, not characters.** On any line containing a glyph —
-  which in idiomatic Rite is most of them — every caret sat several columns right of what it
+- **Diagnostic columns counted bytes, not characters.** On any line containing a glyph,
+  which in idiomatic Rite is most of them, every caret sat several columns right of what it
   pointed at, and the reported `file:line:col` was unusable for jumping. The same program
   written in ASCII reported the correct column, which is why it survived: the tests were
   ASCII. Carets now pad by display width, so a CJK string literal lines up too.
 - **An atom reaching a string rendered as a number.** `str(#ok)` gave `"#0"`, and so did
   `"{status}"` and `[#a, #b] → join(", ")` and `panic(#boom)`. `@console.println` was correct
-  the whole time, which is what hid it — the same atom printed two ways depending on which
+  the whole time, which is what hid it: the same atom printed two ways depending on which
   path it took to the screen.
 - **Editor positions disagreed with each other.** `rite-analysis` carried three position
   implementations and two conventions: references used UTF-16 code units (what LSP means),

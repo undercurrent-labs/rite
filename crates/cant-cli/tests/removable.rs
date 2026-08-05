@@ -402,10 +402,11 @@ fn every_shared_file_still_exists_and_is_documented() {
 /// The workspace member list is the one place removal *must* touch, so it is
 /// worth checking the Cant entries are all there and together.
 ///
-/// Six now, not four: `cant-wasm` and `cant-sigil-wasm` joined the original
-/// four. The second is Sigil's browser binding, which parses Cant source and
-/// therefore cannot outlive Cant — see its manifest for why it is named
-/// `cant-` rather than `rite-`.
+/// Seven now, not four: `cant-wasm`, `cant-sigil-wasm` and `cant-render`
+/// joined the original four. `cant-sigil-wasm` is Sigil's browser binding,
+/// which parses Cant source and therefore cannot outlive Cant — see its
+/// manifest for why it is named `cant-` rather than `rite-`. `cant-render`
+/// classifies Cant source for colouring, and is the same shape of thing.
 #[test]
 fn the_workspace_entries_are_contiguous() {
     let manifest = std::fs::read_to_string(repo_root().join("Cargo.toml")).expect("Cargo.toml");
@@ -416,7 +417,7 @@ fn the_workspace_entries_are_contiguous() {
         .filter(|(_, l)| l.trim_start().starts_with("\"crates/cant"))
         .map(|(i, _)| i)
         .collect();
-    assert_eq!(cant_members.len(), 6, "expected six Cant members");
+    assert_eq!(cant_members.len(), 7, "expected seven Cant members");
     let first = cant_members[0];
     assert!(
         cant_members

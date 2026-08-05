@@ -21,6 +21,12 @@ export const CANT_DOCS: CantDoc[] = [
     blurb: "What Cant is, the operators, and how to read a program.",
   },
   {
+    slug: "tutorial",
+    title: "Your first program",
+    file: "tutorial.md",
+    blurb: "The one idea in Cant, built up from a single value.",
+  },
+  {
     slug: "language",
     title: "The language",
     file: "language.md",
@@ -33,10 +39,22 @@ export const CANT_DOCS: CantDoc[] = [
     blurb: "Recipes short enough to type into a shell, and what surprises people.",
   },
   {
+    slug: "projects",
+    title: "Past the one-liner",
+    file: "projects.md",
+    blurb: "Files, modules, configuration, tests, binaries, and the REPL.",
+  },
+  {
     slug: "cli",
     title: "Command line",
     file: "cli.md",
     blurb: "Running programs, quoting, exit codes, diagnostics, permissions.",
+  },
+  {
+    slug: "diagnostics",
+    title: "When something goes wrong",
+    file: "diagnostics.md",
+    blurb: "Every diagnostic code, what it means, and what to do about it.",
   },
   {
     slug: "graph-schema",
@@ -56,7 +74,7 @@ export const CANT_DOCS: CantDoc[] = [
  * `crates/cant-cli/tests/docs.rs` checks.
  */
 const docModules = import.meta.glob(
-  "../../../../docs/cant/{README,language,one-liners,cli,graph-schema}.md",
+  "../../../../docs/cant/{README,tutorial,language,one-liners,projects,cli,diagnostics,graph-schema}.md",
   {
     query: "?raw",
     import: "default",

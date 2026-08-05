@@ -463,7 +463,7 @@ async fn serve_conn(
     crate::install_defaults(&mut ctx, perms);
     crate::http::install_module_scope(&mut ctx, &module_env, &functions);
     // Registered on the *handler's* context, so the connection is reachable from
-    // the block it is passed to and is dropped — closing the socket — when that
+    // the block it is passed to and is dropped, closing the socket, when that
     // block's context goes, which is what the explicit `unregister` below used to
     // do by hand.
     let id = match register(stream, &ctx) {
@@ -500,8 +500,8 @@ async fn serve_conn(
             e => crate::http::emit_process_stderr(&format!("rite: tcp handler error: {e}\n")),
         }
     }
-    // The connection's lifetime is the block's. Closing here is what lets the shape
-    // exist at all without connection-lifetime rules the language cannot express.
+    // The connection's lifetime is the block's. Closing here is what allows the
+    // shape without connection-lifetime rules the language cannot express.
     //
     // Dropping `ctx` would close it anyway now that the table lives there, but say
     // so explicitly: the socket should go when the handler returns, not whenever
@@ -510,7 +510,7 @@ async fn serve_conn(
 }
 
 /// A payload is text or bytes. Anything else is rejected rather than stringified:
-/// silently sending `<bytes len=3>` down the wire is worse than a message.
+/// silently sending `<bytes len=3>` down the wire is the wrong failure.
 #[cfg(not(target_arch = "wasm32"))]
 fn payload_bytes(v: Option<&Value>) -> Result<Vec<u8>, EvalError> {
     match v {

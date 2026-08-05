@@ -113,7 +113,7 @@ fn no_rite_source_file_imports_a_cant_crate() {
 fn every_cant_crate_is_a_workspace_member() {
     let root = repo_root().join("Cargo.toml");
     let text = std::fs::read_to_string(&root).expect("workspace Cargo.toml");
-    for name in ["cant-syntax", "cant-sem", "cant", "cant-cli"] {
+    for name in ["cant-syntax", "cant-sem", "cant-render", "cant", "cant-cli"] {
         assert!(
             text.contains(&format!("\"crates/{name}\"")),
             "crates/{name} is not a workspace member"

@@ -20,6 +20,8 @@
 //! claim unquoted one-liners are portable.
 
 use cant_syntax::{CantDiagnostics, Dialect, FormatOptions, ParseResult};
+mod highlight;
+mod modules;
 mod repl;
 mod sigil;
 
@@ -49,7 +51,7 @@ struct Cli {
     /// rather than a subcommand: `cant -e '…'` should be as short as `awk '…'`.
     // No `conflicts_with`: clap cannot name a subcommand there, and the two
     // spellings are not in conflict anyway — `cant run -e '…'` and `cant -e '…'`
-    // are the same command, which is the point of the shorthand.
+    // are the same command, which is what the shorthand means.
     #[arg(
         long,
         short = 'e',
@@ -85,6 +87,43 @@ struct Cli {
     #[arg(long = "max-string-size", global = true)]
     max_string_size: Option<usize>,
 
+    /// Load `KEY=VALUE` pairs from a file into this run's environment
+    ///
+    /// Repeatable; later files win. Reading exactly the names it defines is
+    /// granted implicitly — a file you named on this command line is your own
+    /// input to the program, the same argument `@process.args` makes — so
+    /// `cant --env-file .env -e '"API_KEY" -> !@env.get'` needs no `--allow`.
+    /// The process's own environment is not modified.
+    #[arg(long = "env-file", value_name = "PATH", global = true)]
+    env_file: Vec<PathBuf>,
+
+    /// Make a module available without the program saying `use`
+    ///
+    /// Repeatable. For `-e` and the REPL above all, which have no file to put a
+    /// `use` line at the top of. Also settable with `CANT_USE=a,b` and with
+    /// `use = [...]` in a `cant.toml` found by walking up from here; a flag
+    /// adds to those rather than replacing them, and `--no-default-use` turns
+    /// them off.
+    #[arg(long = "use", value_name = "MODULE", global = true)]
+    use_modules: Vec<String>,
+    /// Also search this directory for modules
+    ///
+    /// Repeatable. Also settable with `CANT_MODULE_PATH`, and with
+    /// `module-roots = [...]` in a `cant.toml`.
+    #[arg(long = "module-root", value_name = "DIR", global = true)]
+    module_root: Vec<PathBuf>,
+    /// Ignore `CANT_USE`, `CANT_MODULE_PATH` and any `cant.toml`
+    #[arg(long = "no-default-use", global = true)]
+    no_default_use: bool,
+
+    /// When to colour output: `auto` (a terminal that has not said otherwise),
+    /// `always`, or `never`
+    ///
+    /// `NO_COLOR` and `CLICOLOR_FORCE` are honoured under `auto`. The palette is
+    /// built for a dark background — on a light terminal, `never`.
+    #[arg(long, value_name = "WHEN", default_value = "auto", global = true)]
+    color: String,
+
     #[command(subcommand)]
     command: Option<Commands>,
 }
@@ -103,6 +142,7 @@ fn runtime_options(cli: &Cli) -> rite::RuntimeOptions {
         max_call_depth: cli.max_call_depth,
         max_collection_size: cli.max_collection_size,
         max_string_size: cli.max_string_size,
+        env_files: cli.env_file.clone(),
     }
 }
 
@@ -469,6 +509,8 @@ enum Commands {
 async fn main() -> ExitCode {
     let cli = Cli::parse();
     let options = runtime_options(&cli);
+    // Taken before the subcommand match moves `cli` apart.
+    let module_flags = ModuleFlags::of(&cli);
 
     // `cant -e '…'` with no subcommand is `cant run -e '…'`. Kept explicit
     // rather than rewritten in argv the way `rite` does it: Cant has no
@@ -476,7 +518,10 @@ async fn main() -> ExitCode {
     let Some(command) = cli.command else {
         return match cli.expr {
             Some(expr) => match load_source(None, Some(&expr)) {
-                Ok(input) => run_program(input, options, false, Vec::new()).await,
+                Ok(input) => match resolve_modules(&module_flags, None) {
+                    Ok(env) => run_program(input, options, false, Vec::new(), env).await,
+                    Err(e) => usage_error(&e),
+                },
                 Err(usage) => usage_error(&usage),
             },
             None => {
@@ -511,7 +556,12 @@ async fn main() -> ExitCode {
             expr,
             json_errors,
         } => match load_source(source.as_deref(), expr.as_deref()) {
-            Ok(input) => check(input, json_errors),
+            Ok(input) => {
+                match resolve_modules(&module_flags, script_dir_of(source.as_deref()).as_deref()) {
+                    Ok(env) => check(input, json_errors, &env),
+                    Err(e) => usage_error(&e),
+                }
+            }
             Err(usage) => usage_error(&usage),
         },
         Commands::Parse {
@@ -537,12 +587,26 @@ async fn main() -> ExitCode {
             let expr = expr.or(cli.expr);
             match load_source(source.as_deref(), expr.as_deref()) {
                 Ok(input) => {
-                    let dir = source
-                        .as_deref()
-                        .filter(|p| p.as_os_str() != "-")
-                        .and_then(|p| p.parent())
-                        .map(|p| p.to_path_buf());
-                    run_program_in(input, dir, options, json_errors, args, trace, trace_out).await
+                    let dir = script_dir_of(source.as_deref());
+                    match resolve_modules(&module_flags, dir.as_deref()) {
+                        Ok(env) => {
+                            let modules = ModuleContext {
+                                script_dir: dir,
+                                env,
+                            };
+                            run_program_in(
+                                input,
+                                modules,
+                                options,
+                                json_errors,
+                                args,
+                                trace,
+                                trace_out,
+                            )
+                            .await
+                        }
+                        Err(e) => usage_error(&e),
+                    }
                 }
                 Err(usage) => usage_error(&usage),
             }
@@ -559,7 +623,12 @@ async fn main() -> ExitCode {
             source_map,
             output,
         } => match load_source(source.as_deref(), expr.as_deref()) {
-            Ok(input) => run_expand(input, source_map, output.as_deref()),
+            Ok(input) => {
+                match resolve_modules(&module_flags, script_dir_of(source.as_deref()).as_deref()) {
+                    Ok(env) => run_expand(input, source_map, output.as_deref(), &env),
+                    Err(e) => usage_error(&e),
+                }
+            }
             Err(usage) => usage_error(&usage),
         },
         Commands::Explain {
@@ -580,11 +649,32 @@ async fn main() -> ExitCode {
                 Ok(perms) => perms,
                 Err(e) => return usage_error(&e),
             };
-            let budget = match options.budget() {
+            let mut budget = match options.budget() {
                 Ok(budget) => budget,
                 Err(e) => return usage_error(&e),
             };
-            repl::run(permissions, budget).await
+            // An interactive session gets no wall clock unless one was asked
+            // for. The default 60s bounds a *program*, and a session is not
+            // one: the thing waiting on an interactive line is the person who
+            // typed it, and they have Ctrl-C. Asking for `--timeout` still
+            // works and then bounds each line, because the REPL restarts the
+            // budget before every evaluation.
+            if cli.timeout.is_none() {
+                budget.timeout = None;
+            }
+            let color = match rite_render::term::ColorMode::parse(&cli.color) {
+                Ok(mode) => rite_render::term::enabled(mode),
+                Err(e) => return usage_error(&e),
+            };
+            let environment = match resolve_modules(&module_flags, None) {
+                Ok(env) => env,
+                Err(e) => return usage_error(&e),
+            };
+            let env_values = match options.env_file() {
+                Ok(values) => values,
+                Err(e) => return usage_error(&e),
+            };
+            repl::run(permissions, budget, color, environment, env_values).await
         }
         Commands::Graph {
             source,
@@ -654,7 +744,10 @@ async fn main() -> ExitCode {
                     .as_deref()
                     .filter(|p| p.as_os_str() != "-")
                     .map(|p| p.with_extension("expect"));
-                run_test(input, dir, options, expect, sidecar).await
+                match resolve_modules(&module_flags, dir.as_deref()) {
+                    Ok(env) => run_test(input, dir, env, options, expect, sidecar).await,
+                    Err(e) => usage_error(&e),
+                }
             }
             Err(usage) => usage_error(&usage),
         },
@@ -875,12 +968,87 @@ fn parse_input(input: &Input) -> (ParseResult, SourceMap) {
     cant::parse_source(&input.name, &input.text)
 }
 
-fn check(input: Input, json_errors: bool) -> ExitCode {
+/// The module flags, taken off `Cli` before the subcommand match consumes it.
+struct ModuleFlags {
+    uses: Vec<String>,
+    roots: Vec<PathBuf>,
+    no_defaults: bool,
+}
+
+impl ModuleFlags {
+    fn of(cli: &Cli) -> Self {
+        Self {
+            uses: cli.use_modules.clone(),
+            roots: cli.module_root.clone(),
+            no_defaults: cli.no_default_use,
+        }
+    }
+}
+
+/// The directory a source lives in, for module resolution. `None` for `-e` and
+/// for standard input, which have no directory of their own.
+fn script_dir_of(source: Option<&std::path::Path>) -> Option<PathBuf> {
+    source
+        .filter(|p| p.as_os_str() != "-")
+        .and_then(|p| p.parent())
+        .map(|p| p.to_path_buf())
+}
+
+/// Resolve this invocation's modules, and check that every one named exists.
+///
+/// Checked here rather than left to Rite, because Rite's `E026` names the
+/// generated file and a search path — this can name the flag, the environment
+/// variable or the config file that asked for it, which is the thing that needs
+/// changing.
+fn resolve_modules(
+    flags: &ModuleFlags,
+    script_dir: Option<&std::path::Path>,
+) -> Result<cant::Environment, String> {
+    let from = script_dir
+        .map(std::path::Path::to_path_buf)
+        .or_else(|| std::env::current_dir().ok())
+        .unwrap_or_else(|| PathBuf::from("."));
+    let (found, config) = modules::resolve(&flags.uses, &flags.roots, flags.no_defaults, &from)?;
+
+    // The order the run will search in: the program's own directory, then
+    // whatever was configured.
+    let mut roots: Vec<PathBuf> = Vec::new();
+    if let Some(dir) = script_dir {
+        roots.push(dir.to_path_buf());
+    }
+    roots.extend(found.roots.iter().cloned());
+
+    for name in &found.uses {
+        let segments: Vec<String> = name.split('.').map(str::to_string).collect();
+        if rite::sem::resolve_module_path(&segments, &from, &roots).is_none() {
+            let origin = found
+                .origin_of(name)
+                .map(|o| o.describe(config.as_deref()))
+                .unwrap_or_else(|| "the command line".to_string());
+            let searched: Vec<String> = std::iter::once(from.clone())
+                .chain(roots.iter().cloned())
+                .map(|p| p.display().to_string())
+                .collect();
+            return Err(format!(
+                "no module `{name}`, asked for by {origin}\n  searched: {}",
+                searched.join(", ")
+            ));
+        }
+    }
+
+    Ok(cant::Environment {
+        preamble: Vec::new(),
+        uses: found.uses,
+        module_roots: found.roots,
+    })
+}
+
+fn check(input: Input, json_errors: bool, env: &cant::Environment) -> ExitCode {
     // Three layers: syntax, the flow graph, and what Rite makes of the generated
     // code. The third is how a name that does not resolve or a host call missing
     // its `!` is caught — Cant does not answer those questions, and asking Rite
     // means handing it the program.
-    let result = cant::check(&input.name, &input.text);
+    let result = cant::check_with(&input.name, &input.text, env);
     report(&result.diagnostics, &result.analysis.sources, json_errors);
     if result.has_errors() {
         return ExitCode::from(result.exit_code());
@@ -891,30 +1059,50 @@ fn check(input: Input, json_errors: bool) -> ExitCode {
     ExitCode::SUCCESS
 }
 
+/// Where a program's modules come from: its own directory, plus whatever
+/// `--use` / `CANT_USE` / `cant.toml` resolved to.
+///
+/// One parameter rather than two, because they are never useful apart — the
+/// directory is the first entry of the search path the environment describes.
+struct ModuleContext {
+    script_dir: Option<PathBuf>,
+    env: cant::Environment,
+}
+
 async fn run_program(
     input: Input,
     options: rite::RuntimeOptions,
     json_errors: bool,
     args: Vec<String>,
+    env: cant::Environment,
 ) -> ExitCode {
-    run_program_in(input, None, options, json_errors, args, false, None).await
+    let modules = ModuleContext {
+        script_dir: None,
+        env,
+    };
+    run_program_in(input, modules, options, json_errors, args, false, None).await
 }
 
 async fn run_program_in(
     input: Input,
-    script_dir: Option<PathBuf>,
+    modules: ModuleContext,
     options: rite::RuntimeOptions,
     json_errors: bool,
     args: Vec<String>,
     trace: bool,
     trace_out: Option<PathBuf>,
 ) -> ExitCode {
+    let ModuleContext { script_dir, env } = modules;
     let permissions = match options.permissions() {
         Ok(perms) => perms,
         Err(e) => return usage_error(&e),
     };
     let budget = match options.budget() {
         Ok(budget) => budget,
+        Err(e) => return usage_error(&e),
+    };
+    let env_values = match options.env_file() {
+        Ok(values) => values,
         Err(e) => return usage_error(&e),
     };
 
@@ -930,6 +1118,9 @@ async fn run_program_in(
             output: None,
             trace: tracing,
             preamble: Vec::new(),
+            uses: env.uses,
+            module_roots: env.module_roots,
+            env_values,
         },
     )
     .await;
@@ -981,6 +1172,7 @@ async fn run_program_in(
 async fn run_test(
     input: Input,
     script_dir: Option<PathBuf>,
+    env: cant::Environment,
     options: rite::RuntimeOptions,
     expect: Option<String>,
     sidecar: Option<PathBuf>,
@@ -1025,6 +1217,12 @@ async fn run_test(
             output: None,
             trace: false,
             preamble: Vec::new(),
+            uses: env.uses,
+            module_roots: env.module_roots,
+            env_values: match options.env_file() {
+                Ok(values) => values,
+                Err(e) => return usage_error(&e),
+            },
         },
     )
     .await;
@@ -1081,8 +1279,13 @@ fn build_program(
     ExitCode::from(result.exit_code)
 }
 
-fn run_expand(input: Input, source_map: bool, output: Option<&std::path::Path>) -> ExitCode {
-    let (expansion, analysis) = cant::expand(&input.name, &input.text);
+fn run_expand(
+    input: Input,
+    source_map: bool,
+    output: Option<&std::path::Path>,
+    env: &cant::Environment,
+) -> ExitCode {
+    let (expansion, analysis) = cant::expand_with(&input.name, &input.text, env);
     if !analysis.diagnostics.is_empty() {
         eprintln!("{}", analysis.render());
     }

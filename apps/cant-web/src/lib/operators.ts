@@ -3,7 +3,7 @@
  * `grammar/cant/operators.toml` — the same file `cant-syntax` reads.
  *
  * There is no hand-written copy of this table on the site. A docs table that
- * disagrees with the parser is worse than no table, and twelve operators across
+ * disagrees with the parser is worse than none, and twelve operators across
  * a manifest, an EBNF and a web page is three chances to drift.
  */
 export type OperatorSpec = {

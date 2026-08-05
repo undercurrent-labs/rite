@@ -2,7 +2,7 @@
 name = "cant-cli"
 # Cant's own version, not the workspace's: it is a separate language with its own
 # vocabulary and its own compatibility story. See ADR 0001, Amendment 2.
-version = "0.1.0"
+version = "0.2.0"
 edition.workspace = true
 license.workspace = true
 description = "Cant command-line interface"
@@ -23,7 +23,16 @@ cant-sem = { workspace = true }
 # picture looks like lives in `rite-sigil`, so the CLI and the browser cannot
 # disagree (ADR 0005).
 rite-sigil = { workspace = true, features = ["png"] }
+# The prompt's colour. `cant-render` classifies Cant, `rite-render` owns the one
+# palette and the terminal escapes — so the REPL, the site and a generated image
+# cannot disagree about what a string looks like.
+cant-render = { workspace = true }
+rite-render = { workspace = true }
 rustyline = { workspace = true }
+# The REPL's Ctrl-C. A signal handler rather than a `tokio::select!` arm: the
+# interpreter does not yield, so a select racing the evaluation against
+# `tokio::signal::ctrl_c()` never polls the signal branch. See `repl.rs`.
+ctrlc = { workspace = true }
 tokio = { workspace = true }
 clap = { workspace = true }
 serde_json = { workspace = true }

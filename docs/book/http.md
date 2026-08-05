@@ -84,7 +84,7 @@ handy when the status is computed rather than written literally:
 ⟨status: 404, body: none⟩
 ```
 
-It is not marked — it builds a record and touches nothing — and both the body and
+It is not marked, because it builds a record and touches nothing. Both the body and
 the headers are optional, the body defaulting to `none`.
 
 ### Content types and headers
@@ -196,7 +196,7 @@ remainder, including slashes and including nothing at all:
 A bare `*` matches the same way without binding anything.
 
 **Specific routes always win**, whatever the declaration order — a catch-all is only
-tried once every literal and `:param` route has failed to match. That is what lets a
+tried once every literal and `:param` route has failed to match. That is why a
 site-wide `GET "/*path"` sit at the top of the block with its API routes below it.
 
 ### Serving files
@@ -351,7 +351,7 @@ reached only after every specific route has declined.
 
 Note the interaction: once a catch-all is in place, *every* path matches it, so a
 request with a method it does not cover answers `405`, not `404`. That is the honest
-answer — a `GET "/*path"` really does serve that path — but it means a site with a
+answer — a `GET "/*path"` really does serve that path, but it means a site with a
 catch-all stops producing `404` for anything except methods no route declares.
 
 ## Permissions

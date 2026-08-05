@@ -5,7 +5,7 @@
 ```
 
 One of these files exists. Without a `?`, a failed capability call flows as an
-ordinary `err` value — so the ward *filters* the failures, `unwrap_or` opens
+ordinary `err` value, so the ward *filters* the failures, `unwrap_or` opens
 the survivors, and the program answers `[present]`.
 
 The three postures toward a failure, all Rite vocabulary rather than new

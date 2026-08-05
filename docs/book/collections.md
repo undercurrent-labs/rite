@@ -207,8 +207,7 @@ xs ← [3, 1, 2, 3, 4]
 
 `unique` keeps the **first** occurrence of each value and preserves order — it is not
 a sort. `chunk` splits into fixed-size pieces and the final piece is short rather
-than padded, which is what makes it right for batching a list of work into requests
-of at most *n*.
+than padded, so it suits batching a list of work into requests of at most *n*.
 
 ### Pairing things up
 
@@ -238,7 +237,7 @@ from zero; `with_index` is another name for it. `zip` stops at the shorter input
 6
 ```
 
-The order is `reduce(list, function, initial)` — **function second, seed last** — and
+The order is `reduce(list, function, initial)`: **function second, seed last**. It
 the callback receives `(accumulator, element)` in that order. Both are easy to get
 backwards, and getting them backwards usually produces a confusing "cannot call
 value" error rather than a wrong number.
@@ -400,10 +399,10 @@ prints the same thing twice running.
 ! parallel([1, 2, 3], step)
 ```
 
-Three things worth knowing:
+Three consequences:
 
 - **It is concurrency, not parallelism.** Branches interleave whenever one waits.
-  Work that never waits — arithmetic, string building — gains nothing and should
+  Work that never waits, such as arithmetic or string building, gains nothing and should
   use `map`, which does not pay for the extra machinery.
 - **Branches share the host.** A write to `@store` or `@db` in one branch is
   visible to the others and to the parent, because they share one host, not a

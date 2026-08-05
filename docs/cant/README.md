@@ -13,9 +13,14 @@ more values, and scatter, collect, ward, fork and orbit change how many are in
 flight. It is a separate language that compiles to Rite and runs on Rite's
 runtime, capabilities, budgets and compiler.
 
+- [Your first program](tutorial.md) — start here; the language from one value up
 - [The language](language.md) — emissions, stages, and every operator
 - [One-liners](one-liners.md) — recipes short enough to type into a shell
+- [Past the one-liner](projects.md) — files, modules, configuration, tests,
+  binaries, and the REPL
 - [Command line](cli.md) — running, formatting, converting, inspecting
+- [When something goes wrong](diagnostics.md) — every diagnostic code, and what
+  to do about it
 - [Graph schema](graph-schema.md) — the JSON `cant graph` emits
 
 Or run it without installing anything: <https://cant.rite.foo/studio> is the same
@@ -28,7 +33,7 @@ change between versions.
 ## The vocabulary
 
 Ten operators, all typeable, each with at most one glyph you never have to
-enter.
+type.
 
 | Concept | ASCII | Glyph | Meaning |
 |---|---:|---:|---|
@@ -63,13 +68,12 @@ Two ASCII spellings do double duty, and position decides which you meant:
 ```
 
 Start from `main` and walk breadth-first: read each unseen module, pull its
-`use` lines out with a regex, and follow them. `:by str` means a module
-reached twice is visited once; stop when the worklist empties, or after 4096
-unique modules. Collect every module found.
+`use` lines out with a regex, and follow them. `:by str` means a module reached
+twice is visited once; it stops when the worklist empties, or after 4096 unique
+modules. Collect every module found.
 
-There are three ways to look at that before running it: `cant graph` shows the
-topology, `cant expand` the ordinary Rite it becomes, and `cant explain` the same
-thing in prose.
+Three commands show that before running it: `cant graph` gives the topology,
+`cant expand` the Rite it becomes, and `cant explain` the same thing in prose.
 
 ## Determinism
 
@@ -85,14 +89,13 @@ underneath it.
 ## Shell quoting
 
 `>`, `|`, `!`, `?` and `*` are shell metacharacters. Quote the expression, as
-you would for `awk`, `sed` or `jq`:
+for `awk`, `sed` or `jq`:
 
 ```bash
 cant check -e '["a.txt"] -> * -> !@fs.read -> lines -> * -> ?{ $ != "" } -> []'
 ```
 
-The language is not bent out of shape to make unquoted use safe. Files and `-`
-for standard input work too:
+Files and `-` for standard input work too:
 
 ```bash
 cant run program.cant

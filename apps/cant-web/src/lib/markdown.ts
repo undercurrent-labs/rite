@@ -9,7 +9,7 @@ const BLOB = `${REPO}/blob/main`;
 /**
  * The generated graph pictures, resolved to bundled URLs.
  *
- * The documents reference them relatively — `graphs/orbit.svg` — so the same
+ * The documents reference them relatively, as `graphs/orbit.svg`, so the same
  * markdown renders on GitHub. Vite hashes and serves them from here, which means
  * there is one copy of each file rather than a build step that keeps two in
  * step.
@@ -39,13 +39,16 @@ function rewriteImages(html: string): string {
  * Only the documents the site publishes. A file that is in the repository but
  * not here falls through to the GitHub branch below, which is what should
  * happen — a route to a page that does not exist renders as "no document named
- * …", and that is worse than a link that leaves.
+ * …", which is less useful than a link that leaves.
  */
 const DOC_ROUTES: Record<string, string> = {
   "README.md": "/docs/overview",
+  "tutorial.md": "/docs/tutorial",
   "language.md": "/docs/language",
   "one-liners.md": "/docs/one-liners",
+  "projects.md": "/docs/projects",
   "cli.md": "/docs/cli",
+  "diagnostics.md": "/docs/diagnostics",
   "graph-schema.md": "/docs/graph-schema",
 };
 

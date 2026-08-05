@@ -322,8 +322,8 @@ pub fn expr(e: &ExprIr, compiled: &Compiled) -> Lowered {
 
         ExprIr::Call { callee, args, .. } => {
             // A call to a function this backend also compiled becomes a direct Rust call.
-            // Everything else goes through the interpreter's dispatch, which is what makes
-            // a closure value, a builtin used as a value, and a fallback function all work.
+            // Everything else goes through the interpreter's dispatch, which is how a
+            // closure value, a builtin used as a value, and a fallback function all work.
             if let ExprIr::Global(name) = callee.as_ref() {
                 if compiled.contains(name) {
                     let argv = args_vec(args, compiled)?;
@@ -383,8 +383,8 @@ pub fn expr(e: &ExprIr, compiled: &Compiled) -> Lowered {
         // so a compiled binary does serve MCP, and does it through the normative path.
         ExprIr::McpServe { .. } => return Err(Unsupported("McpServe")),
         // `n := v` arrives from the desugarer as Assign{ value: Seq[Global(name), value] }.
-        // Assigning through `env.assign` is what makes the write reach the frame that
-        // declared the name, including a frame a closure captured.
+        // Assigning through `env.assign` is what reaches the frame that declared the
+        // name, including a frame a closure captured.
         ExprIr::Assign { value, .. } => {
             let ExprIr::Seq(parts, _) = value.as_ref() else {
                 return Err(Unsupported("Assign"));
@@ -539,7 +539,7 @@ pub fn block(b: &BlockIr, compiled: &Compiled) -> Lowered {
 
 /// A whole function as real Rust, or the reason it cannot be.
 ///
-/// Returns a boxed future rather than being a plain `async fn`, because a Rite function
+/// Returns a boxed future instead of a plain `async fn`, because a Rite function
 /// may recurse and a directly-recursive `async fn` has an infinitely-sized future. This
 /// is the same reason `Evaluator::eval_expr` boxes — but once per *call* instead of once
 /// per node, which is the difference the backend is here to make.

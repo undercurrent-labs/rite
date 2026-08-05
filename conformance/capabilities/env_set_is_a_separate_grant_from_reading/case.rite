@@ -1,0 +1,5 @@
+// Reading the environment and changing it are different privileges. `--allow env`
+// is "you may look at my environment"; reusing it to mean "and change it" would
+// widen every grant that already exists in the world. `env:write` is its own
+// class, and scopes the same way.
+! @env.set("RITE_CONFORMANCE_ONLY", "1")

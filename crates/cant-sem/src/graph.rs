@@ -422,7 +422,7 @@ impl CantProgram {
 /// The capabilities one leaf names, deduplicated, in source order.
 ///
 /// Called once per node during lowering. Everything downstream reads the stored
-/// [`Node::capabilities`] instead of re-running this, which is the whole point:
+/// [`Node::capabilities`] instead of re-running this:
 /// one scan, one answer, and no consumer deciding for itself what a leaf means.
 pub(crate) fn capability_refs(text: &str) -> Vec<CapabilityRef> {
     let mut out: Vec<CapabilityRef> = Vec::new();

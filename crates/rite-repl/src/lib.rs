@@ -1,11 +1,26 @@
 //! Interactive Rite REPL.
+//!
+//! # The budget is per input, and by default has no wall clock
+//!
+//! [`rite_runtime::ExecutionBudget`] measures from the moment it was built, so
+//! a long-lived host has to restart it or idle time at the prompt is charged to
+//! the next evaluation. [`ReplSession::eval`] does that before every input.
+//!
+//! What it no longer does is impose a wall clock of its own. A timeout bounds a
+//! *program*; the thing waiting on an interactive input is the person who typed
+//! it, and Ctrl-C is the answer they already know. `:timeout <secs>` puts a
+//! limit back, and then it bounds each input rather than the session.
+
+mod helper;
+pub use helper::{RiteHelper, META_COMMANDS};
 
 use rite_caps::{install_defaults, Permission, PermissionSet};
 use rite_core::SourceFile;
-use rite_runtime::{run_file, RuntimeContext, Value};
+use rite_runtime::{run_file, EvalError, ExecutionBudget, RuntimeContext, Value};
 use rustyline::error::ReadlineError;
-use rustyline::DefaultEditor;
+use std::io::IsTerminal;
 use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 /// Result of evaluating one complete REPL input (for tests and UI hosts).
@@ -20,20 +35,42 @@ pub struct ReplEval {
 pub struct ReplSession {
     pub ctx: RuntimeContext,
     pub perms: PermissionSet,
+    /// Which dialect [`ReplSession::prelude_in_dialect`] prints in. Set by
+    /// `:format`.
     pub glyph: bool,
     pub last_load: Option<PathBuf>,
     /// Definitions replayed before each input, in order, with the newest definition of
     /// a name replacing the older one.
     entries: Vec<PreludeEntry>,
-    /// Optional per-eval wall-clock limit; default 5 minutes (not 60s from session start).
-    pub eval_timeout: Duration,
+    /// Per-input wall-clock limit. `None` — the default — means none at all;
+    /// see the module documentation.
+    pub eval_timeout: Option<Duration>,
+    /// The budget of the input currently running, for the interrupt handler.
+    interrupt: Interrupt,
+    /// Whether a person is at the prompt. `:allow` needs to know: a REPL's
+    /// input *is* the program, so a piped session that could grant itself
+    /// permissions would be a program widening its own capability set.
+    pub interactive: bool,
+    /// Directories `use` searches, before Rite's working-directory fallback.
+    ///
+    /// A REPL has no script to resolve modules relative to, so without these
+    /// `use ./lib` worked only when the process happened to be started in the
+    /// right directory — the cwd fallback in `rite_sem::modules`, doing a job
+    /// it was never meant to do alone.
+    pub module_roots: Vec<PathBuf>,
+    /// Variables from `--env-file`. Reinstalled on every eval, because eval
+    /// rebuilds the context and with it the capability host that holds them.
+    pub env_values: Vec<(String, String)>,
 }
+
+/// The budget of the input currently running, shared with the Ctrl-C handler.
+type Interrupt = Arc<Mutex<Option<ExecutionBudget>>>;
 
 impl ReplSession {
     pub fn new(perms: PermissionSet) -> Self {
         let mut ctx = RuntimeContext::new();
         // REPL sessions are long-lived: do not inherit a clock started at open.
-        ctx.budget.timeout = Some(Duration::from_secs(300));
+        ctx.budget.timeout = None;
         ctx.budget.restart();
         install_defaults(&mut ctx, perms.clone());
         Self {
@@ -42,7 +79,28 @@ impl ReplSession {
             glyph: true,
             last_load: None,
             entries: Vec::new(),
-            eval_timeout: Duration::from_secs(300),
+            eval_timeout: None,
+            interrupt: Arc::new(Mutex::new(None)),
+            interactive: std::io::stdin().is_terminal(),
+            module_roots: Vec::new(),
+            env_values: Vec::new(),
+        }
+    }
+
+    /// The session's replayed definitions, in the dialect `:format` chose.
+    ///
+    /// Falls back to the source as stored when it will not reparse — a prelude
+    /// that cannot be converted is still worth showing.
+    pub fn prelude_in_dialect(&self) -> String {
+        let source = self.prelude();
+        let dialect = if self.glyph {
+            rite_fmt::Dialect::Glyph
+        } else {
+            rite_fmt::Dialect::Ascii
+        };
+        match rite_fmt::convert_source(&source, dialect) {
+            Ok(result) => result.text,
+            Err(_) => source,
         }
     }
 
@@ -52,15 +110,20 @@ impl ReplSession {
     /// session prelude so later inputs can refer to them. Pure expressions and
     /// effect statements are executed against the prelude but not stored.
     pub async fn eval(&mut self, source: &str) -> ReplEval {
-        self.ctx.budget.timeout = Some(self.eval_timeout);
+        self.ctx.budget.timeout = self.eval_timeout;
         self.ctx.budget.restart();
         // Fresh env each eval; re-apply prelude + input so definitions resolve.
         // Capabilities stay installed via install_defaults after rebuild.
         let perms = self.perms.clone();
         self.ctx = RuntimeContext::new();
-        self.ctx.budget.timeout = Some(self.eval_timeout);
+        self.ctx.budget.timeout = self.eval_timeout;
         self.ctx.budget.restart();
-        install_defaults(&mut self.ctx, perms);
+        self.ctx.module_roots = self.module_roots.clone();
+        rite_caps::install_defaults_with_env(&mut self.ctx, perms, self.env_values.clone());
+        // Arm Ctrl-C for the length of this input. The clone shares the counter
+        // the restart just installed, so cancelling reaches this evaluation and
+        // no later one.
+        arm(&self.interrupt, Some(self.ctx.budget.clone()));
 
         // A redefinition is spliced into the position of the definition it replaces,
         // rather than appended. Two declarations of one name in a single scope is a
@@ -76,7 +139,19 @@ impl ReplSession {
         });
         let combined = self.replay_with(replacing, source);
         let sf = SourceFile::new(rite_core::FileId(0), "<repl>".to_string(), &combined);
-        match run_file(&sf, &mut self.ctx).await {
+        let outcome = run_file(&sf, &mut self.ctx).await;
+        arm(&self.interrupt, None);
+        // Cancelling raises `BudgetError::Cancelled`, which would print as
+        // "budget exhausted" — true, and the wrong thing to say. Someone who
+        // pressed Ctrl-C did not run out of budget.
+        if self.ctx.budget.is_cancelled() {
+            return ReplEval {
+                ok: false,
+                display: None,
+                error: Some("interrupted".into()),
+            };
+        }
+        match outcome {
             Ok(Value::None) => {
                 self.remember(source, &Value::None);
                 ReplEval {
@@ -92,6 +167,20 @@ impl ReplSession {
                     ok: true,
                     display: Some(display),
                     error: None,
+                }
+            }
+            // `EvalError::Compile`'s own `Display` is "compile error (1
+            // diagnostics)" — it has no source map to render against, so it
+            // cannot say more. The session does have one, and a REPL that
+            // reports the *count* of what went wrong instead of what went wrong
+            // is telling you the least useful true thing it knows.
+            Err(EvalError::Compile(diagnostics)) => {
+                let mut sources = rite_core::SourceMap::new();
+                sources.add_file("<repl>", &combined);
+                ReplEval {
+                    ok: false,
+                    display: None,
+                    error: Some(diagnostics.render_all(&sources).trim_end().to_string()),
                 }
             }
             Err(e) => ReplEval {
@@ -214,9 +303,14 @@ impl ReplSession {
         let timeout = self.eval_timeout;
         self.entries.clear();
         self.ctx = RuntimeContext::new();
-        self.ctx.budget.timeout = Some(timeout);
+        self.ctx.budget.timeout = timeout;
         self.ctx.budget.restart();
-        install_defaults(&mut self.ctx, self.perms.clone());
+        self.ctx.module_roots = self.module_roots.clone();
+        rite_caps::install_defaults_with_env(
+            &mut self.ctx,
+            self.perms.clone(),
+            self.env_values.clone(),
+        );
     }
 }
 
@@ -338,17 +432,70 @@ fn is_definitional(source: &str) -> bool {
     })
 }
 
-pub async fn run_repl(perms: PermissionSet) -> anyhow::Result<()> {
+/// How to open a session.
+///
+/// A struct rather than a widening argument list: the REPL has grown
+/// permissions, colour and a budget, and Phase-by-phase positional parameters
+/// are how a caller ends up passing `true, false` and meaning the opposite.
+pub struct ReplOptions {
+    pub perms: PermissionSet,
+    /// Whether to colour the prompt and its output. Resolved by the caller from
+    /// `--color` and the environment; see `rite_render::term`.
+    pub color: bool,
+    /// Per-input wall-clock limit. `None` is the default and means none.
+    pub eval_timeout: Option<Duration>,
+    /// Modules to `use` before the first prompt, from `--use`.
+    ///
+    /// Seeded into the prelude as ordinary `use NAME` inputs rather than
+    /// handled specially: `use` is real Rite syntax, so a module made available
+    /// this way is in scope exactly as one the user typed would be, and
+    /// `:prelude` shows it.
+    pub uses: Vec<String>,
+    /// Directories `use` searches, from `--module-root` and `RITE_MODULE_PATH`.
+    pub module_roots: Vec<PathBuf>,
+    /// Variables from `--env-file`, seeded into the run's environment overlay.
+    pub env_values: Vec<(String, String)>,
+}
+
+impl Default for ReplOptions {
+    fn default() -> Self {
+        Self {
+            perms: PermissionSet::default_secure(),
+            color: false,
+            eval_timeout: None,
+            uses: Vec::new(),
+            module_roots: Vec::new(),
+            env_values: Vec::new(),
+        }
+    }
+}
+
+pub async fn run_repl(options: ReplOptions) -> anyhow::Result<()> {
+    let color = options.color;
     println!(
         "Rite {} — type :help for commands",
         env!("CARGO_PKG_VERSION")
     );
     let history_path = dirs_history_path();
-    let mut rl = DefaultEditor::new()?;
+    let mut rl: rustyline::Editor<RiteHelper, rustyline::history::FileHistory> =
+        rustyline::Editor::new()?;
+    rl.set_helper(Some(RiteHelper::new(color)));
     if let Some(ref p) = history_path {
         let _ = rl.load_history(p);
     }
-    let mut session = ReplSession::new(perms);
+    let mut session = ReplSession::new(options.perms);
+    session.eval_timeout = options.eval_timeout;
+    session.module_roots = options.module_roots;
+    session.env_values = options.env_values;
+    for module in &options.uses {
+        let result = session.eval(&format!("use {module}\n")).await;
+        if let Some(err) = result.error {
+            eprintln!("rite: --use {module}: {err}");
+        }
+    }
+    if !install_interrupt_handler(Arc::clone(&session.interrupt)) {
+        eprintln!("rite: Ctrl-C will end the session — no interrupt handler is available");
+    }
     let mut buffer = String::new();
 
     loop {
@@ -395,15 +542,73 @@ pub async fn run_repl(perms: PermissionSet) -> anyhow::Result<()> {
         let _ = rl.add_history_entry(src.trim());
         let result = session.eval(&src).await;
         if let Some(err) = result.error {
-            eprintln!("error: {}", err);
+            // A rendered diagnostic already says `error[E026]:`; prefixing it
+            // again gives "error: error[E026]:".
+            if err.starts_with("error[") || err.starts_with("warning[") {
+                eprintln!("{err}");
+            } else {
+                eprintln!("error: {err}");
+            }
         } else if let Some(d) = result.display {
-            println!("{}", d);
+            // A displayed value is Rite-literal shaped, so Rite's own
+            // classifier colours it. Diagnostics stay plain: the palette has no
+            // severity colour, and inventing one here would be a second colour
+            // table — the drift `grammar/palette.json` exists to prevent.
+            println!(
+                "{}",
+                rite_render::term::paint(&rite_render::runs(&d), color)
+            );
+        }
+        // Completion offers what the session holds, which this input may have
+        // added to.
+        if let Some(helper) = rl.helper_mut() {
+            helper.set_names(
+                session
+                    .ctx
+                    .env
+                    .bindings_snapshot()
+                    .into_iter()
+                    .map(|(name, _)| name)
+                    .collect(),
+            );
         }
     }
     if let Some(ref p) = history_path {
         let _ = rl.save_history(p);
     }
     Ok(())
+}
+
+fn arm(slot: &Interrupt, budget: Option<ExecutionBudget>) {
+    *slot.lock().unwrap_or_else(|e| e.into_inner()) = budget;
+}
+
+/// Make Ctrl-C interrupt the running input instead of killing the session.
+///
+/// This has to be a signal handler rather than a `tokio::select!` arm: the
+/// interpreter is `async` but does not yield, so evaluating an input is one
+/// long poll and a `select!` racing it against `tokio::signal::ctrl_c()` never
+/// gets to poll the signal branch. `ctrlc` runs the closure on its own thread,
+/// and [`ExecutionBudget::cancel`] is an atomic store the evaluation checks
+/// between steps.
+fn install_interrupt_handler(slot: Interrupt) -> bool {
+    ctrlc::set_handler(move || {
+        let guard = slot.lock().unwrap_or_else(|e| e.into_inner());
+        let Some(budget) = guard.as_ref() else {
+            return;
+        };
+        if budget.is_cancelled() {
+            // Asked once already and it has not stopped, so the evaluation is
+            // inside a host call that cooperative cancellation cannot reach.
+            eprintln!("\ninterrupted — leaving");
+            std::process::exit(130);
+        }
+        budget.cancel();
+        // Only one Ctrl-C handler in a process can win, and `@http.listen`
+        // installs one for its own shutdown. Ours does what its would have.
+        rite_caps::request_stop();
+    })
+    .is_ok()
 }
 
 fn dirs_history_path() -> Option<PathBuf> {
@@ -424,14 +629,16 @@ async fn handle_meta(cmd: &str, session: &mut ReplSession) -> anyhow::Result<boo
 :bindings          Show bindings
 :modules           Show modules
 :capabilities      List capabilities
-:allow perm        Grant permission (e.g. fs:read=./data)
+:allow perm        Grant permission (e.g. fs:read=./data) — needs a terminal
 :deny perm         Deny permission
-:format glyph|ascii
-:timeout secs      Per-eval wall-clock limit (default 300)
+:prelude           Show the definitions this session replays
+:format glyph|ascii   Which dialect :prelude prints in
+:timeout secs|off  Per-input wall-clock limit (default off)
 :reset             Reset environment
 :quit / :q         Exit
 
-Tip: each line restarts the step/time budget; idle time does not count."#
+Tip: each input restarts the step/time budget; idle time does not count,
+and Ctrl-C interrupts a running input rather than ending the session."#
             );
         }
         ":quit" | ":q" => return Ok(true),
@@ -441,28 +648,40 @@ Tip: each line restarts the step/time budget; idle time does not count."#
             }
         }
         ":capabilities" => {
-            println!("console fs json csv crypto clock env process random http mcp game store db");
+            // From the generated manifest, not a list typed here: the one that
+            // was typed here had gone stale, omitting `stdin`, `regex`, `tcp`
+            // and `udp`.
+            println!("{}", rite_render::capability_names().join(" "));
         }
-        ":allow" => {
-            if let Some(spec) = parts.get(1) {
-                if let Ok(p) = Permission::parse(spec) {
-                    session.perms.grant(p);
-                    install_defaults(&mut session.ctx, session.perms.clone());
-                    println!("allowed {}", spec);
-                } else {
-                    println!("could not parse permission: {}", spec);
-                }
-            } else {
-                println!("usage: :allow fs:read=./data");
+        ":allow" | ":deny" => {
+            let grant = parts[0] == ":allow";
+            let verb = parts[0];
+            let Some(spec) = parts.get(1) else {
+                println!("usage: {verb} fs:read=./data");
+                return Ok(false);
+            };
+            // See `ReplSession::interactive`: the input of a piped session is a
+            // program, and a program that can grant itself permissions is not
+            // constrained by any of them.
+            if !session.interactive {
+                println!(
+                    "{verb} needs a terminal — this session's input is a program, \
+                     and a program must not widen its own permissions"
+                );
+                println!("  pass `--allow {spec}` on the command line instead");
+                return Ok(false);
             }
-        }
-        ":deny" => {
-            if let Some(spec) = parts.get(1) {
-                if let Ok(p) = Permission::parse(spec) {
-                    session.perms.deny(p);
+            match Permission::parse(spec) {
+                Ok(p) => {
+                    if grant {
+                        session.perms.grant(p);
+                    } else {
+                        session.perms.deny(p);
+                    }
                     install_defaults(&mut session.ctx, session.perms.clone());
-                    println!("denied {}", spec);
+                    println!("{} {}", if grant { "allowed" } else { "denied" }, spec);
                 }
+                Err(why) => println!("could not parse permission: {why}"),
             }
         }
         ":format" => {
@@ -473,17 +692,31 @@ Tip: each line restarts the step/time budget; idle time does not count."#
             }
             println!("format: {}", if session.glyph { "glyph" } else { "ascii" });
         }
-        ":timeout" => {
-            if let Some(s) = parts.get(1).and_then(|x| x.parse::<u64>().ok()) {
-                session.eval_timeout = Duration::from_secs(s.max(1));
-                println!("eval timeout: {}s", session.eval_timeout.as_secs());
+        ":prelude" => {
+            let prelude = session.prelude_in_dialect();
+            if prelude.trim().is_empty() {
+                println!("(nothing defined yet)");
             } else {
-                println!(
-                    "usage: :timeout <seconds>  (current {}s)",
-                    session.eval_timeout.as_secs()
-                );
+                print!("{prelude}");
             }
         }
+        ":timeout" => match parts.get(1).copied() {
+            Some("off") | Some("none") => {
+                session.eval_timeout = None;
+                println!("eval timeout: off");
+            }
+            Some(spec) => match spec.parse::<u64>() {
+                Ok(s) => {
+                    session.eval_timeout = Some(Duration::from_secs(s.max(1)));
+                    println!("eval timeout: {s}s per input");
+                }
+                Err(_) => println!("usage: :timeout <seconds|off>"),
+            },
+            None => match session.eval_timeout {
+                Some(d) => println!("eval timeout: {}s per input", d.as_secs()),
+                None => println!("eval timeout: off"),
+            },
+        },
         ":reset" => {
             session.reset();
             println!("reset");
@@ -729,10 +962,35 @@ mod tests {
         assert_eq!(r2.display.as_deref(), Some("4"));
     }
 
+    /// A session has no wall clock unless one is asked for. The old 300s
+    /// default bounded a *session* as much as an input — nothing restarts
+    /// between a person thinking and a person typing — and the thing waiting on
+    /// an interactive input is the person who wrote it.
+    #[tokio::test]
+    async fn a_session_has_no_wall_clock_by_default() {
+        let s = ReplSession::new(PermissionSet::allow_all());
+        assert_eq!(s.eval_timeout, None);
+        assert_eq!(s.ctx.budget.timeout, None);
+    }
+
+    /// `:format` used to set a field nothing read, so `:format ascii` was a
+    /// silent no-op. It now chooses the dialect `:prelude` prints in.
+    #[tokio::test]
+    async fn format_chooses_the_dialect_the_prelude_prints_in() {
+        let mut s = ReplSession::new(PermissionSet::allow_all());
+        s.eval("def double(n) [[ return n * 2 ]]").await;
+        s.glyph = true;
+        assert!(s.prelude_in_dialect().contains('◆'), "{}", s.prelude());
+        s.glyph = false;
+        let ascii = s.prelude_in_dialect();
+        assert!(ascii.contains("def "), "{ascii}");
+        assert!(!ascii.contains('◆'), "{ascii}");
+    }
+
     #[tokio::test]
     async fn long_session_many_evals() {
         let mut s = ReplSession::new(PermissionSet::allow_all());
-        s.eval_timeout = Duration::from_secs(5);
+        s.eval_timeout = Some(Duration::from_secs(5));
         let start = Instant::now();
         for i in 0..30 {
             let r = s.eval(&format!("{} + 1", i)).await;

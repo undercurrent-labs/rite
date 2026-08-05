@@ -1,10 +1,10 @@
 # The Cant graph, version 1
 
 The serialized form of a Cant program: what `cant graph --format json` emits, and
-what a renderer — Sigil — consumes.
+what a renderer (Sigil) consumes.
 
 **Stability: experimental.** This page is the contract, and a change to the shape
-bumps `version` and appears in the changelog — but a single-digit version means it
+bumps `version` and appears in the changelog, but a single-digit version means it
 can still change. Treat a stored graph as readable only by the tool version that
 wrote it.
 
@@ -49,20 +49,20 @@ Version 0 graphs are refused, not upgraded.
 
 ## The contract
 
-**A consumer never has to parse Cant source.** Everything a renderer needs —
-structure, order, spans, effects, orbit policy, labels — is in the JSON. Nothing
+**A consumer never has to parse Cant source.** Everything a renderer needs
+is in the JSON: structure, order, spans, effects, orbit policy and labels. Nothing
 requires the `.cant` file except showing the user their own text, and the spans
 are there to make even that possible.
 
 Here is a program with every construct in it, and its graph:
 
-```cant
+```cant run
 4 -> |{ ?{ $ > 2 } -> $ * 10 ; ~{ ?{ $ < 8 } -> $ + 2 } :max 8 } -> []
 ```
 
 ![The flow graph for a fork containing a ward and an orbit](graphs/nested.svg)
 
-Clusters are subgraphs — a fork branch or an orbit body. Dashed edges enter and
+Clusters are subgraphs: a fork branch or an orbit body. Dashed edges enter and
 rejoin them; the bold pink edge is an orbit's feedback. Everything in that
 picture comes from the JSON below.
 
@@ -73,7 +73,7 @@ picture comes from the JSON below.
   "schema": "cant.graph",
   "version": "1",
   "language_version": "0",
-  "producer": { "name": "cant", "version": "0.1.0" },
+  "producer": { "name": "cant", "version": "0.2.0" },
   "entry": 0,
   "exit": 4,
   "nodes": [ … ],
@@ -87,7 +87,7 @@ picture comes from the JSON below.
 flow. `source.length` is in bytes, so a consumer can tell whether a span it holds
 is still in range for the text it has.
 
-`producer.version` is Cant's own number, not Rite's — the two version separately
+`producer.version` is Cant's own number, not Rite's; the two version separately
 (ADR 0001, Amendment 2). It is there to make a bug report legible and for nothing
 else: a consumer that mixed it into a cache key or a fingerprint would invalidate
 every stored artifact on a release that changed no graph.
@@ -128,7 +128,7 @@ Whether the names in it resolve is Rite's question, not the graph's.
 
 `subgraph` is absent for a node in the top-level flow.
 
-`label` and `layout` are absent unless something put them there — see below.
+`label` and `layout` are absent unless something put them there; see below.
 
 ### Node capabilities
 
@@ -148,7 +148,7 @@ Every host capability the node's leaf names, deduplicated, in source order.
 
 - `name` is the full spelling including the `@`.
 - `family` is the namespace before the first dot. This is the field a renderer
-  groups by — it decides which invocation mark a capability gets — so it is
+  groups by, and decides which invocation mark a capability gets, so it is
   stored rather than left for every reader to re-split, each of whom would have
   to agree independently about what `@fs` with no dot means.
 
@@ -174,7 +174,7 @@ A renderer placing invocation marks on an outer boundary wants both.
 
 Ports are explicit and numbered:
 
-- **out port 0** is the continuation — the value leaving along the main flow.
+- **out port 0** is the continuation: the value leaving along the main flow.
 - **a fork's out port *n+1*** enters branch *n*; **an orbit's out port 1** enters
   its body.
 - **in port 0** is the incoming value; **in port 1** is the join a branch or an
@@ -187,7 +187,7 @@ Ports are explicit and numbered:
 | `flow` | one stage to the next |
 | `enter` | a fork or orbit into its branch or body |
 | `join` | a fork branch returning its emissions to the fork |
-| `orbit_feedback` | an orbit body returning candidates to the worklist — **the only cycle** |
+| `orbit_feedback` | an orbit body returning candidates to the worklist; **the only cycle** |
 
 **Branch order lives in `ordinal`, not in the array order.** A consumer that
 sorts or reorders the edge list must still read branch order correctly, and one
@@ -195,7 +195,7 @@ that relies on array position will be wrong the first time anything reorders.
 
 The orbit feedback edge is a real edge rather than something implied by the node,
 so that "every cycle must belong to an orbit" is a question a validator can
-actually ask. Expect exactly one cycle per orbit, and draw it distinctly —
+actually ask. Expect exactly one cycle per orbit, and draw it distinctly:
 `cant graph --format dot` draws it bold, pink and `constraint=false`.
 
 ### Subgraphs
@@ -222,14 +222,14 @@ grouping. Nothing is nested, so nothing needs recursive traversal to enumerate.
 
 `label` and `layout` exist for an editor to write into. **Nothing in compilation,
 validation or execution reads either.** A graph with every one of them stripped
-behaves identically — geometry stays out of the language. Both survive a JSON
+behaves identically; geometry stays out of the language. Both survive a JSON
 round trip, so a renderer's work is not lost by a tool that reads and rewrites
 the graph.
 
 ## Identifiers are stable, not unique
 
 Identifiers are assigned by a depth-first walk in source order, so the same source
-and tool version always produce the same numbers — a diff of two graphs reads as
+and tool version always produce the same numbers, so a diff of two graphs reads as
 a diff of the program.
 
 They are **not** globally unique. Two graphs from different sources both start at
@@ -243,7 +243,7 @@ checks that matter to a consumer:
 - dangling edges, and ports a node does not have;
 - duplicate identifiers;
 - a branch that does not rejoin the fork that opened it;
-- **any cycle that is not orbit feedback** — relabelling one as
+- **any cycle that is not orbit feedback**, since relabelling one as
   `orbit_feedback` does not launder it.
 
 Do not assume a graph you did not produce is valid. Run it through
@@ -276,5 +276,5 @@ Things version 0 does not settle, so a consumer knows where the edges are:
 - **Parallel fork** would need an ordering or concurrency field on the fork node.
   Today sequential-left-to-right is implied by the branch ordinals alone.
 - **Error-routing edges** would add a role and a second out-port convention.
-- **Multi-output nodes** are representable — that is why ports are numbered
-  rather than anonymous — but nothing produces one yet.
+- **Multi-output nodes** are representable, which is why ports are numbered
+  rather than anonymous, but nothing produces one yet.
