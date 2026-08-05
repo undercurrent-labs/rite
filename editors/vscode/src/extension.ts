@@ -3,6 +3,9 @@ import * as path from "path";
 import * as os from "os";
 import { LanguageClient, LanguageClientOptions, ServerOptions, TransportKind } from "vscode-languageclient/node";
 import { spawn } from "child_process";
+import { cantLenses, capabilitiesNamed } from "./lenses";
+import * as sigil from "./sigil";
+import { toDiagnostics } from "./diagnostics";
 
 let client: LanguageClient | undefined;
 let glyphPresentation = false;
@@ -32,6 +35,61 @@ function runRite(args: string[], cwd?: string): Promise<string> {
       else reject(new Error(err || out || `exit ${code}`));
     });
   });
+}
+
+function runCant(args: string[], cwd?: string): Promise<string> {
+  const bin = findBinary("cantBinaryPath", ["cant"]);
+  return new Promise((resolve, reject) => {
+    const child = spawn(bin, args, { cwd, shell: false });
+    let out = "";
+    let err = "";
+    child.stdout.on("data", (d: Buffer) => (out += d.toString()));
+    child.stderr.on("data", (d: Buffer) => (err += d.toString()));
+    child.on("error", reject);
+    // `cant check` prints "ok" on stdout; a failure puts the diagnostic on
+    // stderr and exits non-zero. Both are worth showing, so the rejection
+    // carries whichever stream has text.
+    child.on("close", (code: number | null) => {
+      if (code === 0) resolve(out);
+      else reject(new Error(err || out || `exit ${code}`));
+    });
+  });
+}
+
+/**
+ * Whether a lens-driven run grants everything.
+ *
+ * Off by default. A lens is one click, and a program you opened to *read*
+ * should not get the filesystem because you clicked Run on it. The tooltip
+ * names the capabilities the source mentions so the exit-5 is not a surprise.
+ */
+function lensPermissions(text: string): string[] {
+  const allowAll = vscode.workspace.getConfiguration("rite").get<boolean>("codeLens.allowAll");
+  if (allowAll) return ["--allow-all"];
+  void capabilitiesNamed(text);
+  return [];
+}
+
+const output = (name: string) => {
+  const ch = vscode.window.createOutputChannel(name);
+  return (text: string) => {
+    ch.appendLine(text);
+    ch.show(true);
+  };
+};
+
+async function withActiveFile(
+  languageId: string,
+  what: string,
+  cb: (doc: vscode.TextDocument) => Promise<void>,
+) {
+  const doc = vscode.window.activeTextEditor?.document;
+  if (!doc || doc.languageId !== languageId) {
+    vscode.window.showErrorMessage(`Open a ${what} file first`);
+    return;
+  }
+  await doc.save();
+  await cb(doc);
 }
 
 async function withActiveRiteFile(cb: (doc: vscode.TextDocument) => Promise<void>) {
@@ -149,6 +207,130 @@ export async function activate(context: vscode.ExtensionContext) {
     }],
   ];
 
+  // ---- Cant
+  //
+  // Cant has no language server, so its lenses come from the extension. Rite's
+  // come from `rite-lsp`, which resolves the program properly — see
+  // `code_lens` there.
+  const cantOut = output("Cant");
+
+  const cantCmds: [string, () => Promise<void>][] = [
+    ["cant.runFile", async () =>
+      withActiveFile("cant", "Cant", async (doc) => {
+        const perms = lensPermissions(doc.getText());
+        cantOut(await runCant(["run", doc.fileName, ...perms], path.dirname(doc.fileName)));
+      })],
+    ["cant.checkFile", async () =>
+      withActiveFile("cant", "Cant", async (doc) => {
+        const out = await runCant(["check", doc.fileName], path.dirname(doc.fileName));
+        vscode.window.showInformationMessage(out.trim() || "ok");
+      })],
+    ["cant.explainFile", async () =>
+      withActiveFile("cant", "Cant", async (doc) => {
+        cantOut(await runCant(["explain", doc.fileName], path.dirname(doc.fileName)));
+      })],
+    ["cant.expandFile", async () =>
+      withActiveFile("cant", "Cant", async (doc) => {
+        const out = await runCant(["expand", doc.fileName], path.dirname(doc.fileName));
+        const shown = await vscode.workspace.openTextDocument({ language: "rite", content: out });
+        await vscode.window.showTextDocument(shown, vscode.ViewColumn.Beside);
+      })],
+    ["cant.graphFile", async () =>
+      withActiveFile("cant", "Cant", async (doc) => {
+        const out = await runCant(["graph", doc.fileName, "--format", "dot"], path.dirname(doc.fileName));
+        const shown = await vscode.workspace.openTextDocument({ language: "dot", content: out });
+        await vscode.window.showTextDocument(shown, vscode.ViewColumn.Beside);
+      })],
+    ["cant.showSigil", async () =>
+      withActiveFile("cant", "Cant", async (doc) => {
+        await sigil.show(context, renderSigil, doc.fileName);
+      })],
+    ["cant.openSigilPreview", async () =>
+      withActiveFile("cant", "Cant", async (doc) => {
+        await sigil.openPreview(context, renderSigil, doc.fileName);
+      })],
+    ["cant.openRepl", async () => {
+      const term = vscode.window.createTerminal("Cant REPL");
+      term.sendText(`${findBinary("cantBinaryPath", ["cant"])} repl`);
+      term.show();
+    }],
+    ["rite.runAt", async () => {
+      // Invoked by an LSP lens, which passes the line it sits on. Running from
+      // a point is not a thing the CLI does, so this runs the file — the lens
+      // exists to be one click, not to slice the program.
+      await vscode.commands.executeCommand("rite.runFile");
+    }],
+  ];
+
+  for (const [id, fn] of cantCmds) {
+    context.subscriptions.push(
+      vscode.commands.registerCommand(id, () => fn().catch((e) => vscode.window.showErrorMessage(String(e))))
+    );
+  }
+
+  // Inline errors for Cant. See `diagnostics.ts` for why this is a CLI call
+  // rather than a language server.
+  const cantDiagnostics = vscode.languages.createDiagnosticCollection("cant");
+  context.subscriptions.push(cantDiagnostics);
+
+  const checkCant = async (doc: vscode.TextDocument) => {
+    if (doc.languageId !== "cant" || doc.uri.scheme !== "file") return;
+    let json = "";
+    try {
+      json = await runCant(["check", doc.fileName, "--json-errors"], path.dirname(doc.fileName));
+      // Exit 0 with no diagnostics: clear whatever was there.
+      cantDiagnostics.set(doc.uri, []);
+      if (!json.trim()) return;
+    } catch (e) {
+      // `cant check` exits non-zero *because* there are diagnostics, and puts
+      // them on stdout as JSON. The rejection carries that text.
+      json = String((e as Error).message ?? e);
+    }
+    const found = toDiagnostics(json, doc.getText());
+    cantDiagnostics.set(
+      doc.uri,
+      found.map((d) => {
+        const diag = new vscode.Diagnostic(
+          new vscode.Range(d.range.start.line, d.range.start.character, d.range.end.line, d.range.end.character),
+          d.message,
+          d.severity === "warning" ? vscode.DiagnosticSeverity.Warning : vscode.DiagnosticSeverity.Error,
+        );
+        diag.code = d.code;
+        diag.source = "cant";
+        return diag;
+      }),
+    );
+  };
+
+  context.subscriptions.push(
+    vscode.workspace.onDidOpenTextDocument((d) => void checkCant(d)),
+    vscode.workspace.onDidSaveTextDocument((d) => void checkCant(d)),
+    vscode.workspace.onDidCloseTextDocument((d) => cantDiagnostics.delete(d.uri)),
+  );
+  for (const doc of vscode.workspace.textDocuments) void checkCant(doc);
+
+  context.subscriptions.push(
+    vscode.languages.registerCodeLensProvider({ scheme: "file", language: "cant" }, {
+      provideCodeLenses(doc) {
+        if (!vscode.workspace.getConfiguration("rite").get<boolean>("codeLens.enabled")) return [];
+        const text = doc.getText();
+        const caps = capabilitiesNamed(text);
+        const allowAll = vscode.workspace.getConfiguration("rite").get<boolean>("codeLens.allowAll");
+        return cantLenses(text).map((l) => {
+          const needsGrant = l.command === "cant.runFile" && caps.length > 0 && !allowAll;
+          return new vscode.CodeLens(new vscode.Range(l.line, 0, l.line, 0), {
+            title: needsGrant ? `${l.title} (ungranted)` : l.title,
+            command: l.command,
+            tooltip: needsGrant
+              ? `${l.tooltip}\n\nThis program names ${caps.map((c) => "@" + c).join(", ")}. ` +
+                `Lenses run without permissions; set rite.codeLens.allowAll to change that.`
+              : l.tooltip,
+          });
+        });
+      },
+    })
+  );
+
   for (const [id, fn] of cmds) {
     context.subscriptions.push(vscode.commands.registerCommand(id, () => fn().catch((e) => vscode.window.showErrorMessage(String(e)))));
   }
@@ -158,6 +340,11 @@ export async function activate(context: vscode.ExtensionContext) {
     vscode.workspace.onDidChangeTextDocument(() => applyGlyphDecorations())
   );
   applyGlyphDecorations();
+}
+
+/** `cant sigil --format svg -o -` for one file. */
+async function renderSigil(file: string): Promise<string> {
+  return runCant(["sigil", file, "--format", "svg", "-o", "-"], path.dirname(file));
 }
 
 const ALIASES: [RegExp, string][] = [

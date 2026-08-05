@@ -54,6 +54,18 @@ impl LanguageServer for Backend {
                 // so declaring it made Rite source *less* highlighted, not more.
                 // TextMate stays the highlighter until this is really implemented.
                 semantic_tokens_provider: None,
+                // Run / Check above each function and at the top of the file.
+                // Server-side rather than in the extension because the spans
+                // come from the analysis that already ran: a lens is only
+                // offered where the resolver found a real symbol, so it cannot
+                // appear over a `def` inside a string or a comment.
+                //
+                // The commands are the *client's*. A different editor binding
+                // these to something else is expected; the server only says
+                // where a lens belongs and what to call.
+                code_lens_provider: Some(CodeLensOptions {
+                    resolve_provider: Some(false),
+                }),
                 folding_range_provider: Some(FoldingRangeProviderCapability::Simple(true)),
                 inlay_hint_provider: Some(OneOf::Left(true)),
                 // Not advertised: these three commands were listed but the handler
@@ -252,6 +264,62 @@ impl LanguageServer for Backend {
             })
             .collect();
         Ok(Some(out))
+    }
+
+    /// Run / Check lenses.
+    ///
+    /// One row at the top of the file, and one above every function the
+    /// analysis found. `main` is called out because `rite run` invokes it, so
+    /// "Run" on that line means what it looks like it means.
+    async fn code_lens(&self, params: CodeLensParams) -> Result<Option<Vec<CodeLens>>> {
+        let uri = params.text_document.uri;
+        let text = self.docs.get(&uri).map(|e| e.1.clone()).unwrap_or_default();
+        if text.trim().is_empty() {
+            return Ok(None);
+        }
+        let mut engine = self.engine.lock().await;
+        let snap = engine.analyze(uri.as_str(), &text);
+
+        let lens = |line: u32, title: &str, command: &str| CodeLens {
+            range: Range {
+                start: Position { line, character: 0 },
+                end: Position { line, character: 0 },
+            },
+            command: Some(Command {
+                title: title.to_string(),
+                command: command.to_string(),
+                arguments: None,
+            }),
+            data: None,
+        };
+
+        // The file row goes on the first line that carries something, so it does
+        // not float above a licence header.
+        let first = text
+            .lines()
+            .position(|l| {
+                let t = l.trim();
+                !t.is_empty() && !t.starts_with("//") && !t.starts_with('#')
+            })
+            .unwrap_or(0) as u32;
+
+        let mut lenses = vec![
+            lens(first, "▶ Run", "rite.runFile"),
+            lens(first, "Check", "rite.checkFile"),
+        ];
+
+        for symbol in snap.symbols.iter().filter(|s| s.kind == "function") {
+            let line = symbol.line.saturating_sub(1);
+            // The file row is already there; a second pair on the same line is
+            // noise rather than information.
+            if line == first {
+                continue;
+            }
+            if symbol.name == "main" {
+                lenses.push(lens(line, "▶ Run", "rite.runFile"));
+            }
+        }
+        Ok(Some(lenses))
     }
 
     async fn document_symbol(

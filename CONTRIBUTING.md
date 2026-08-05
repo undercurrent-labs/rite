@@ -89,8 +89,8 @@ rite docs build && rite docs agent
 
 ```bash
 # on main, green CI
-git tag v0.9.0
-git push origin v0.9.0
+git tag v0.9.1
+git push origin v0.9.1
 # → GitHub Actions "Release" builds assets + publishes the Release
 ```
 

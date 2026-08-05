@@ -1,0 +1,37 @@
+{
+  "scatter map collect": {
+    "prefix": "smc",
+    "body": ["[${1:1, 2, 3}] -> * -> ${2:\\$ * 2} -> []"],
+    "description": "Scatter a list, transform each element, collect"
+  },
+  "ward": {
+    "prefix": "ward",
+    "body": ["-> ?{ ${1:\\$ > 0} }"],
+    "description": "Keep only the emissions the predicate accepts"
+  },
+  "fork": {
+    "prefix": "fork",
+    "body": ["-> |{ ${1:\\$ + 1} ; ${2:\\$ * 2} }"],
+    "description": "Ordered branches from the same input"
+  },
+  "orbit": {
+    "prefix": "orbit",
+    "body": ["-> ~{ ${1:body} } :by str :max ${2:1024}"],
+    "description": "Bounded breadth-first fixed point"
+  },
+  "read a file": {
+    "prefix": "read",
+    "body": ["\"${1:path}\" -> !@fs.read? -> lines -> * -> ?{ \\$ != \"\" } -> []"],
+    "description": "Read a file into non-empty lines"
+  },
+  "stdin pipeline": {
+    "prefix": "stdin",
+    "body": ["!@stdin.lines -> * -> ${1:?{ contains(\\$, \"error\") }} -> [] -> count"],
+    "description": "Read stdin as lines and count matches"
+  },
+  "use a module": {
+    "prefix": "use",
+    "body": ["use ${1:helpers}", "${2:[\"a\"]} -> * -> ${1:helpers}.${3:fn}(\\$) -> []"],
+    "description": "Import a Rite module and call it from a stage"
+  }
+}

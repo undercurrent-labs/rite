@@ -1,67 +1,252 @@
 {
   "name": "rite",
   "displayName": "Rite",
-  "description": "Rite language support — syntax, LSP, run/check/compile, dialect conversion",
-  "version": "1.0.0",
+  "description": "Rite and Cant language support \u2014 syntax, LSP, run lenses, sigils, dialect conversion",
+  "version": "1.1.0",
   "publisher": "undercurrent-labs",
   "repository": {
     "type": "git",
     "url": "https://github.com/undercurrent-labs/rite.git"
   },
-  "engines": { "vscode": "^1.85.0" },
-  "categories": ["Programming Languages"],
-  "activationEvents": ["onLanguage:rite"],
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Themes"
+  ],
+  "activationEvents": [
+    "onLanguage:rite",
+    "onLanguage:cant"
+  ],
   "main": "./out/extension.js",
   "contributes": {
-    "languages": [{
-      "id": "rite",
-      "aliases": ["Rite", "rite"],
-      "extensions": [".rite"],
-      "configuration": "./language-configuration.json",
-      "icon": { "light": "./icons/rite.svg", "dark": "./icons/rite.svg" }
-    }],
-    "grammars": [{
-      "language": "rite",
-      "scopeName": "source.rite",
-      "path": "./syntaxes/rite.tmLanguage.json"
-    }],
-    "snippets": [{
-      "language": "rite",
-      "path": "./snippets/rite.json"
-    }],
+    "languages": [
+      {
+        "id": "rite",
+        "aliases": [
+          "Rite",
+          "rite"
+        ],
+        "extensions": [
+          ".rite"
+        ],
+        "configuration": "./language-configuration.json",
+        "icon": {
+          "light": "./icons/rite.svg",
+          "dark": "./icons/rite.svg"
+        }
+      },
+      {
+        "id": "cant",
+        "aliases": [
+          "Cant",
+          "cant"
+        ],
+        "extensions": [
+          ".cant"
+        ],
+        "configuration": "./language-configuration-cant.json",
+        "icon": {
+          "light": "./icons/rite.svg",
+          "dark": "./icons/rite.svg"
+        }
+      }
+    ],
+    "grammars": [
+      {
+        "language": "rite",
+        "scopeName": "source.rite",
+        "path": "./syntaxes/rite.tmLanguage.json"
+      },
+      {
+        "language": "cant",
+        "scopeName": "source.cant",
+        "path": "./syntaxes/cant.tmLanguage.json"
+      }
+    ],
+    "snippets": [
+      {
+        "language": "rite",
+        "path": "./snippets/rite.json"
+      },
+      {
+        "language": "cant",
+        "path": "./snippets/cant.json"
+      }
+    ],
+    "themes": [
+      {
+        "label": "Rite Noir",
+        "uiTheme": "vs-dark",
+        "path": "./themes/rite-noir-color-theme.json"
+      }
+    ],
     "commands": [
-      { "command": "rite.runFile", "title": "Rite: Run File" },
-      { "command": "rite.runSelection", "title": "Rite: Run Selection" },
-      { "command": "rite.checkFile", "title": "Rite: Check File" },
-      { "command": "rite.compileFile", "title": "Rite: Compile File" },
-      { "command": "rite.formatDocument", "title": "Rite: Format Document" },
-      { "command": "rite.convertGlyph", "title": "Rite: Convert to Glyph Syntax" },
-      { "command": "rite.convertAscii", "title": "Rite: Convert to ASCII Syntax" },
-      { "command": "rite.toggleGlyphPresentation", "title": "Rite: Toggle Glyph Presentation" },
-      { "command": "rite.openRepl", "title": "Rite: Open REPL" },
-      { "command": "rite.openStudio", "title": "Rite: Open Studio" },
-      { "command": "rite.showGeneratedRust", "title": "Rite: Show Generated Rust" },
-      { "command": "rite.showSyntaxTree", "title": "Rite: Show Syntax Tree" },
-      { "command": "rite.showSemanticIr", "title": "Rite: Show Semantic IR" },
-      { "command": "rite.openDocumentation", "title": "Rite: Open Documentation" },
-      { "command": "rite.restartLsp", "title": "Rite: Restart Language Server" },
-      { "command": "rite.showLspLogs", "title": "Rite: Show Language Server Logs" }
+      {
+        "command": "rite.runFile",
+        "title": "Rite: Run File"
+      },
+      {
+        "command": "rite.runSelection",
+        "title": "Rite: Run Selection"
+      },
+      {
+        "command": "rite.checkFile",
+        "title": "Rite: Check File"
+      },
+      {
+        "command": "rite.compileFile",
+        "title": "Rite: Compile File"
+      },
+      {
+        "command": "rite.formatDocument",
+        "title": "Rite: Format Document"
+      },
+      {
+        "command": "rite.convertGlyph",
+        "title": "Rite: Convert to Glyph Syntax"
+      },
+      {
+        "command": "rite.convertAscii",
+        "title": "Rite: Convert to ASCII Syntax"
+      },
+      {
+        "command": "rite.toggleGlyphPresentation",
+        "title": "Rite: Toggle Glyph Presentation"
+      },
+      {
+        "command": "rite.openRepl",
+        "title": "Rite: Open REPL"
+      },
+      {
+        "command": "rite.openStudio",
+        "title": "Rite: Open Studio"
+      },
+      {
+        "command": "rite.showGeneratedRust",
+        "title": "Rite: Show Generated Rust"
+      },
+      {
+        "command": "rite.showSyntaxTree",
+        "title": "Rite: Show Syntax Tree"
+      },
+      {
+        "command": "rite.showSemanticIr",
+        "title": "Rite: Show Semantic IR"
+      },
+      {
+        "command": "rite.openDocumentation",
+        "title": "Rite: Open Documentation"
+      },
+      {
+        "command": "rite.restartLsp",
+        "title": "Rite: Restart Language Server"
+      },
+      {
+        "command": "rite.showLspLogs",
+        "title": "Rite: Show Language Server Logs"
+      },
+      {
+        "command": "rite.runAt",
+        "title": "Rite: Run From Here"
+      },
+      {
+        "command": "cant.runFile",
+        "title": "Cant: Run File"
+      },
+      {
+        "command": "cant.checkFile",
+        "title": "Cant: Check File"
+      },
+      {
+        "command": "cant.explainFile",
+        "title": "Cant: Explain File"
+      },
+      {
+        "command": "cant.expandFile",
+        "title": "Cant: Show Generated Rite"
+      },
+      {
+        "command": "cant.graphFile",
+        "title": "Cant: Show Graph (DOT)"
+      },
+      {
+        "command": "cant.showSigil",
+        "title": "Cant: Show Sigil"
+      },
+      {
+        "command": "cant.openSigilPreview",
+        "title": "Cant: Open Sigil Preview"
+      },
+      {
+        "command": "cant.openRepl",
+        "title": "Cant: Open REPL"
+      }
     ],
     "configuration": {
       "title": "Rite",
       "properties": {
-        "rite.binaryPath": { "type": "string", "default": "", "description": "Path to rite CLI" },
-        "rite.lspPath": { "type": "string", "default": "", "description": "Path to rite-lsp" },
-        "rite.renderOnlyGlyph": { "type": "boolean", "default": false },
-        "rite.trace.server": { "type": "string", "enum": ["off", "messages", "verbose"], "default": "off" },
-        "rite.studioUrl": { "type": "string", "default": "http://127.0.0.1:4041" }
+        "rite.binaryPath": {
+          "type": "string",
+          "default": "",
+          "description": "Path to rite CLI"
+        },
+        "rite.lspPath": {
+          "type": "string",
+          "default": "",
+          "description": "Path to rite-lsp"
+        },
+        "rite.renderOnlyGlyph": {
+          "type": "boolean",
+          "default": false
+        },
+        "rite.trace.server": {
+          "type": "string",
+          "enum": [
+            "off",
+            "messages",
+            "verbose"
+          ],
+          "default": "off"
+        },
+        "rite.studioUrl": {
+          "type": "string",
+          "default": "http://127.0.0.1:4041"
+        },
+        "rite.cantBinaryPath": {
+          "type": "string",
+          "default": "",
+          "description": "Path to the cant CLI. Empty resolves `cant` on PATH."
+        },
+        "rite.codeLens.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show Run / Check lenses above runnable code."
+        },
+        "rite.codeLens.allowAll": {
+          "type": "boolean",
+          "default": false,
+          "description": "Run lenses grant every permission (--allow-all). Off by default: a lens is one click, and a program you are reading should not get the filesystem because you clicked it."
+        },
+        "cant.sigil.preview.refresh": {
+          "type": "string",
+          "enum": [
+            "onSave",
+            "onType",
+            "manual"
+          ],
+          "default": "onSave",
+          "description": "When the Sigil preview re-renders."
+        }
       }
     }
   },
   "scripts": {
     "compile": "tsc -p .",
     "package": "vsce package --no-dependencies",
-    "vscode:prepublish": "npm run compile"
+    "vscode:prepublish": "npm run compile",
+    "test": "npm run compile && node --test test/"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",

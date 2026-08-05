@@ -24,7 +24,7 @@ This will:
 ### Pin a version
 
 ```bash
-curl -fsSL https://rite.foo/install | RITE_VERSION=v0.9.0 bash
+curl -fsSL https://rite.foo/install | RITE_VERSION=v0.9.1 bash
 ```
 
 Use the latest tag from [Releases](https://github.com/undercurrent-labs/rite/releases) (omit `RITE_VERSION` to install whatever is current).
@@ -33,7 +33,7 @@ Use the latest tag from [Releases](https://github.com/undercurrent-labs/rite/rel
 
 | Variable | Default | Meaning |
 |----------|---------|---------|
-| `RITE_VERSION` | latest release | Tag such as `v0.9.0` |
+| `RITE_VERSION` | latest release | Tag such as `v0.9.1` |
 | `RITE_INSTALL_DIR` | `$HOME/.local/bin` | Where binaries go |
 | `INSTALL_LSP` | `1` | Set `0` to skip `rite-lsp` |
 | `RITE_REPO` | `undercurrent-labs/rite` | GitHub repo for assets |
@@ -67,6 +67,20 @@ rite vscode install               # download .vsix + install via code/cursor
 ```
 
 Details: [Agents & skill](agents.md) · [https://rite.foo/agents](https://rite.foo/agents)
+
+Opening a `.rite` file gives you highlighting, inline errors from `rite-lsp`,
+and a **Run** lens above the program and above `main` — one click, no terminal.
+The lens spans come from the analysis the server already ran, so one never
+appears over a `def` inside a string.
+
+> **Lenses run without permissions.** Clicking Run on a program you are reading
+> should not hand it your filesystem, so a lens grants nothing. A program that
+> names capabilities reads `▶ Run (ungranted)` and the tooltip says which ones;
+> set `rite.codeLens.allowAll` if you would rather they ran with `--allow-all`.
+
+The **Rite Noir** theme ships with it — the syntax palette on a near-black base,
+the same twelve colours the site and `rite render` use. Pick it with
+<kbd>Ctrl/Cmd</kbd>+<kbd>K</kbd> <kbd>Ctrl/Cmd</kbd>+<kbd>T</kbd>.
 
 ### Security notes
 

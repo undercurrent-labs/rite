@@ -68,6 +68,14 @@ const CANT_PATHS: &[&str] = &[
     "scripts/build-cant-graphs.sh",
     "scripts/build-cant-wasm.sh",
     "scripts/build-cant-logo.py",
+    // Cant's half of the VS Code extension. The extension itself is shared —
+    // see SHARED_FILES — but these four files have no Rite content at all.
+    "editors/vscode/syntaxes/cant.tmLanguage.json",
+    "editors/vscode/language-configuration-cant.json",
+    "editors/vscode/snippets/cant.json",
+    "editors/vscode/src/sigil.ts",
+    "editors/vscode/src/diagnostics.ts",
+    "editors/vscode/test/diagnostics.test.js",
 ];
 
 /// Files Rite owns that legitimately name Cant, and what the removal does to
@@ -85,6 +93,24 @@ const SHARED_FILES: &[(&str, &str)] = &[
          does not un-ship it",
     ),
     (".gitignore", "two ignore lines"),
+    (
+        "editors/vscode/package.json",
+        "the `cant` language, grammar and snippet contributions, the nine `cant.*` \
+         commands, and the `rite.cantBinaryPath` / `cant.sigil.*` settings",
+    ),
+    (
+        "editors/vscode/src/extension.ts",
+        "the `runCant` helper, the `cantCmds` block, the Cant CodeLens provider \
+         and `renderSigil`; the Rite half is untouched",
+    ),
+    (
+        "editors/vscode/src/lenses.ts",
+        "the whole file — Rite's lenses come from `rite-lsp`, not from here",
+    ),
+    (
+        "editors/vscode/test/lenses.test.js",
+        "the whole file, with `src/lenses.ts`",
+    ),
     (
         ".github/workflows/ci.yml",
         "the cant-site job and the graphviz step",

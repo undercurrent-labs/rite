@@ -42,7 +42,7 @@ $ cant version
 cant 0.2.0
 cant_language_version: 0
 cant_graph_schema_version: 1
-rite: 0.9.0
+rite: 0.9.1
 ```
 
 Four numbers because they move independently: the tool, the language it
@@ -450,6 +450,27 @@ reports the sum. The instrumentation lives in the generated Rite (run
 `cant expand` on nothing; the traced variant differs only by `@store`
 counting), and a run that fails produces no trace: half a measurement of a
 crashed run would read as a measurement.
+
+## In an editor
+
+The VS Code extension covers Cant as well as Rite: highlighting, inline errors
+from `cant check`, and a lens row above the flow.
+
+```text
+▶ Run   Check   Explain   Rite   Sigil
+[1, 2, 3] -> * -> ?{ $ > 1 } -> []
+```
+
+**Run grants nothing.** A lens is one click, so a program you opened to read
+does not get the filesystem because you clicked it. A program naming
+capabilities reads `▶ Run (ungranted)`, with the tooltip listing them, and
+running it fails with exit 5 exactly as it would in a shell. Set
+`rite.codeLens.allowAll` to change that.
+
+**Sigil** renders the program's topology beside the editor and keeps it current
+on save — `Cant: Open Sigil Preview`, or the lens.
+
+Install it with `rite vscode install`.
 
 ## Exit codes
 

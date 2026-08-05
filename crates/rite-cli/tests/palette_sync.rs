@@ -194,3 +194,169 @@ fn every_colour_is_readable_on_the_background() {
         );
     }
 }
+
+// ---- the VS Code theme
+
+/// The shipped theme's syntax colours are `grammar/palette.json` verbatim.
+///
+/// The theme moved out of `.internal/styles/` and into the extension, which
+/// makes it a published artifact — and the note that accompanied it said the
+/// colours would then be something CI ought to check. This is that check.
+///
+/// Only the twelve syntax colours are policed. The surface ramp, the ANSI
+/// sixteen and the UI chrome are the theme's own and deliberately not in the
+/// palette: `grammar/palette.json` describes how *Rite source* is coloured,
+/// not what an editor window looks like.
+#[test]
+fn the_vscode_theme_uses_the_palette_colours() {
+    let p = palette();
+    let path = repo_root().join("editors/vscode/themes/rite-noir-color-theme.json");
+    let theme: serde_json::Value = serde_json::from_str(
+        &std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("read {}: {e}", path.display())),
+    )
+    .expect("the theme is valid JSON");
+
+    let foregrounds: BTreeSet<String> = theme["tokenColors"]
+        .as_array()
+        .expect("tokenColors is an array")
+        .iter()
+        .filter_map(|rule| rule["settings"]["foreground"].as_str())
+        .map(|c| c.to_lowercase())
+        .collect();
+
+    let mut missing = Vec::new();
+    for kind in kinds(&p) {
+        let want = p["kinds"][&kind]["color"]
+            .as_str()
+            .expect("every kind has a colour")
+            .to_lowercase();
+        if !foregrounds.contains(&want) {
+            missing.push(format!("{kind} ({want})"));
+        }
+    }
+    assert!(
+        missing.is_empty(),
+        "the VS Code theme no longer carries {} palette colour(s): {}\n\
+         Adjust grammar/palette.json and copy the value down, not the other way round.",
+        missing.len(),
+        missing.join(", ")
+    );
+}
+
+/// The extension declares the theme it ships, and ships the theme it declares.
+#[test]
+fn the_extension_declares_the_theme_file_it_ships() {
+    let root = repo_root();
+    let manifest: serde_json::Value = serde_json::from_str(
+        &std::fs::read_to_string(root.join("editors/vscode/package.json")).expect("package.json"),
+    )
+    .expect("package.json is valid JSON");
+
+    let themes = manifest["contributes"]["themes"]
+        .as_array()
+        .expect("contributes.themes — the extension ships a theme");
+    assert!(!themes.is_empty(), "contributes.themes is empty");
+
+    for theme in themes {
+        let rel = theme["path"].as_str().expect("every theme has a path");
+        let path = root
+            .join("editors/vscode")
+            .join(rel.trim_start_matches("./"));
+        assert!(
+            path.is_file(),
+            "package.json declares {rel}, which does not exist"
+        );
+    }
+}
+
+// ---- the extension's command surface
+
+/// Every command the extension advertises is registered.
+///
+/// A `contributes.commands` entry with no `registerCommand` shows up in the
+/// palette and fails when invoked, which is the editor version of advertising a
+/// CLI subcommand that does not exist — the thing `cli_honesty.rs` exists to
+/// stop. Adding ten commands by hand is exactly when this drifts.
+#[test]
+fn every_declared_extension_command_is_registered() {
+    let root = repo_root();
+    let manifest: serde_json::Value = serde_json::from_str(
+        &std::fs::read_to_string(root.join("editors/vscode/package.json")).expect("package.json"),
+    )
+    .expect("package.json is valid JSON");
+    let source = std::fs::read_to_string(root.join("editors/vscode/src/extension.ts"))
+        .expect("extension.ts");
+
+    let declared: Vec<String> = manifest["contributes"]["commands"]
+        .as_array()
+        .expect("contributes.commands")
+        .iter()
+        .filter_map(|c| c["command"].as_str())
+        .map(str::to_string)
+        .collect();
+    assert!(
+        declared.len() >= 10,
+        "only {} commands declared",
+        declared.len()
+    );
+
+    // The handler tables are `["id", async () => …]`, so the id appears quoted
+    // in the source. A command registered some other way would need this
+    // widened, which is a change worth noticing.
+    let mut unregistered = Vec::new();
+    for id in &declared {
+        if !source.contains(&format!("\"{id}\"")) {
+            unregistered.push(id.clone());
+        }
+    }
+    assert!(
+        unregistered.is_empty(),
+        "{} command(s) declared in package.json with no handler in extension.ts: {}",
+        unregistered.len(),
+        unregistered.join(", ")
+    );
+}
+
+/// Every language the extension claims comes with a grammar that exists.
+///
+/// Deliberately says nothing about *which* languages. A Rite test may not name
+/// the sibling language, and removing it has to leave this passing with one
+/// grammar where there were two. The other half is asserted on that side, where
+/// naming it is allowed.
+#[test]
+fn every_declared_language_has_its_grammar() {
+    let root = repo_root();
+    let manifest: serde_json::Value = serde_json::from_str(
+        &std::fs::read_to_string(root.join("editors/vscode/package.json")).expect("package.json"),
+    )
+    .expect("package.json is valid JSON");
+
+    let languages: Vec<&str> = manifest["contributes"]["languages"]
+        .as_array()
+        .expect("contributes.languages")
+        .iter()
+        .filter_map(|l| l["id"].as_str())
+        .collect();
+    assert!(
+        languages.contains(&"rite"),
+        "the extension no longer declares the `rite` language: {languages:?}"
+    );
+
+    for grammar in manifest["contributes"]["grammars"]
+        .as_array()
+        .expect("contributes.grammars")
+    {
+        let language = grammar["language"].as_str().expect("a language");
+        assert!(
+            languages.contains(&language),
+            "a grammar for `{language}`, which is not a declared language"
+        );
+        let rel = grammar["path"].as_str().expect("a path");
+        assert!(
+            root.join("editors/vscode")
+                .join(rel.trim_start_matches("./"))
+                .is_file(),
+            "grammar {rel} does not exist"
+        );
+    }
+}

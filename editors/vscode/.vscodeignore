@@ -1,10 +1,13 @@
 .vscode/**
 .vscode-test/**
 src/**
+test/**
 .gitignore
 tsconfig.json
-**/*.map
 node_modules/**
 package-lock.json
 **/*.ts
-!out/**
+# Source maps point at `src/`, which is not shipped, so they resolve to nothing
+# in an installed extension. Listed after the `!out/**` re-include below would
+# be too late — order matters, and `out/**` must not blanket-include them.
+out/**/*.map

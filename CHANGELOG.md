@@ -1,6 +1,63 @@
 # Changelog
 
-## [Unreleased]
+## [0.9.1] — 2026-08-04
+
+Editor support catches up with the languages: the VS Code extension now covers
+Cant as well as Rite, both get inline errors and a one-click Run, and the
+Rite Noir theme ships with them.
+
+Patch rather than minor: nothing in either language changed. `rite-lsp` gained
+a `codeLensProvider` capability, which is additive.
+
+### Added
+
+- **The VS Code extension supports Cant.** A `.cant` language, a TextMate
+  grammar generated from `grammar/cant/operators.toml`, snippets, and nine
+  `cant.*` commands. `crates/cant-cli/tests/editor_grammar_sync.rs` holds the
+  grammar to the manifest in both directions, and checks that comments and
+  strings are matched before operators — the ordering that keeps `"a -> b"`
+  from colouring an arrow.
+
+- **Inline errors for Cant.** `cant check --json-errors` on open and save,
+  published as editor diagnostics with the code, the primary label and the help
+  text. Cant reports byte offsets and editors count UTF-16 units, so the
+  conversion is tested against glyph source: a squiggle on `~{` after six
+  multi-byte glyphs lands on the `~{`.
+
+- **Run lenses.** Rite's come from `rite-lsp`, which now advertises
+  `codeLensProvider` and places them from the analysis that already ran, so a
+  lens cannot appear over a `def` inside a string. Cant's come from the
+  extension, which has no server to ask. Lenses run **ungranted** by default: a
+  lens is one click, and a program opened to be read should not get the
+  filesystem because it was clicked. A program that names capabilities reads
+  `▶ Run (ungranted)` and says which in the tooltip; `rite.codeLens.allowAll`
+  opts in.
+
+- **Sigil in the editor.** `Cant: Show Sigil` renders once, `Cant: Open Sigil
+  Preview` re-renders on save or on type (debounced), and a `Sigil` lens sits
+  with the others. The webview sets `enableScripts: false` and a CSP with no
+  `script-src`: `rite-sigil` escapes user text and has a hostile-input suite,
+  but a scripting webview would turn any gap there into code execution in the
+  editor.
+
+- **Rite Noir ships with the extension.** The theme moved out of `.internal/`
+  into `editors/vscode/themes/` and travels in the VSIX, so installing language
+  support installs the theme. `palette_sync.rs` checks it still carries all
+  twelve palette colours, which is the condition the theme's own notes attached
+  to publishing it.
+
+### Fixed
+
+- **`rite.showSigil` was removed rather than shipped.** It advertised a
+  capability that does not exist — Sigil renders a Cant flow graph and there is
+  no Rite-to-graph path — and a command that explains why it cannot work is the
+  editor version of a CLI subcommand that fails when invoked. Two new gates in
+  `palette_sync.rs` check that every declared command has a handler and every
+  declared language has a grammar file.
+
+- **The VSIX shipped source maps and the test directory.** `!out/**` in
+  `.vscodeignore` re-included the `.map` files that `**/*.map` had excluded.
+  22 KB and 12 files now, none of them stray.
 
 ## [0.9.0] — 2026-08-04
 
