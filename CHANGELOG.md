@@ -1,5 +1,7 @@
 # Changelog
 
+## [Unreleased]
+
 ## [0.9.1] — 2026-08-04
 
 Editor support catches up with the languages: the VS Code extension now covers
