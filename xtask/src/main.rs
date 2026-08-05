@@ -70,6 +70,13 @@ fn main() {
                     "wasm32-unknown-unknown",
                 ]));
             }
+            // The browser capability host, run rather than only compiled.
+            //
+            // `cargo check` for wasm32 proves it builds; it cannot prove
+            // `@json.encode` answers or that `@fs.read` is refused by name.
+            // Without `native`, `rite-wasm` builds for the host too, so the
+            // same code the browser runs is testable here in seconds.
+            run(Command::new("cargo").args(["test", "-p", "rite-wasm", "--no-default-features"]));
         }
         "sigil-og" => {
             if let Err(e) = sigil_og() {

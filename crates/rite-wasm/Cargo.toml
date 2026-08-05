@@ -21,9 +21,14 @@ rite-analysis = { workspace = true }
 rite-runtime = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-# Native full stack (caps + HTTP + process)
+# Capability host. Path rather than `workspace = true`, and deliberately: cargo
+# ignores `default-features = false` on a workspace dependency whose table does
+# not specify it, so the workspace form would pull axum, hyper and tokio into a
+# wasm32 build and fail inside `mio`. Without `native` this is the pure half —
+# @json, @csv, @crypto, @regex, @store, @random, @game.
+rite-caps = { path = "../rite-caps", default-features = false }
+# Native full stack (HTTP + process + codegen)
 rite-compiler = { workspace = true, optional = true }
-rite-caps = { workspace = true, optional = true }
 tokio = { workspace = true, optional = true }
 # WASM glue
 wasm-bindgen = { version = "0.2", optional = true }
@@ -33,7 +38,7 @@ getrandom = { version = "0.2", optional = true, features = ["js"] }
 
 [features]
 default = ["native"]
-native = ["rite-compiler", "rite-caps", "tokio"]
+native = ["rite-compiler", "rite-caps/native", "rite-caps/duckdb", "tokio"]
 wasm = ["wasm-bindgen", "serde-wasm-bindgen", "console_error_panic_hook", "getrandom"]
 
 [dev-dependencies]

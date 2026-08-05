@@ -201,6 +201,7 @@ fn doc_files() -> Vec<PathBuf> {
     out.push(root.join("examples/cant/README.md"));
     out.push(root.join("docs/adr/0001-cant-sibling-frontend.md"));
     out.push(root.join("docs/adr/0002-cant-lowers-through-rite.md"));
+    out.push(root.join("docs/adr/0010-error-routing-is-a-rescue-stage.md"));
     out.sort();
     out
 }
@@ -287,6 +288,10 @@ fn the_documented_graph_pictures_are_current() {
         (
             "effects",
             r#""data.json" -> !@fs.read? -> @json.decode? -> .name"#,
+        ),
+        (
+            "rescue",
+            r#"["a.txt"] -> * -> !@fs.read($) -> !{ $.message } -> []"#,
         ),
     ];
 

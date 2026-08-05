@@ -131,6 +131,53 @@ fn an_effectful_ward_predicate_is_rejected() {
     assert!(codes("rows -> ?{ $ > 0 }").is_empty());
 }
 
+/// Both directions of "does this modifier take a value", which is the whole
+/// reason the parser stopped deciding it.
+#[test]
+fn a_modifiers_value_must_match_what_its_name_takes() {
+    assert!(codes("r -> ~{ d } :max").contains(&"CANT-G022".to_string()));
+    assert!(codes("r -> ~{ d } :by").contains(&"CANT-G022".to_string()));
+    assert!(codes("5 -> |{ $ ; $ }:par true").contains(&"CANT-G023".to_string()));
+    // And the pair that is written correctly says nothing.
+    assert!(codes("r -> ~{ d } :max 4").is_empty());
+    assert!(codes("5 -> |{ $ ; $ }:par").is_empty());
+}
+
+/// `:par` alongside nothing. A warning: the program still means what it says
+/// and produces what it would have, unlike a `?` before a rescue.
+#[test]
+fn par_on_a_single_branch_fork_is_a_warning_not_an_error() {
+    let found = analysis("5 -> |{ $ + 1 }:par");
+    assert!(!found.has_errors(), "{:?}", codes("5 -> |{ $ + 1 }:par"));
+    let warning = found
+        .diagnostics
+        .iter()
+        .find(|d| d.code.to_string() == "CANT-G024")
+        .expect("CANT-G024");
+    assert_eq!(warning.severity, rite_core::Severity::Warning);
+    assert!(codes("5 -> |{ $ + 1 ; $ * 2 }:par").is_empty());
+}
+
+/// A fork takes `:par` and an orbit does not, and each help line names the form
+/// it is actually attached to.
+#[test]
+fn par_belongs_to_a_fork_and_nothing_else() {
+    for source in ["r -> ~{ d }:par", "r -> ?{ $ }:par", "r -> !{ $.kind }:par"] {
+        assert!(
+            codes(source).contains(&"CANT-G010".to_string()),
+            "for {source:?}"
+        );
+    }
+    let found = analysis("r -> ~{ d }:par");
+    let diagnostic = found
+        .diagnostics
+        .iter()
+        .find(|d| d.code.to_string() == "CANT-G010")
+        .expect("unknown modifier");
+    let help = diagnostic.help.as_deref().unwrap_or("");
+    assert!(help.contains("an orbit takes `:by` and `:max`"), "{help}");
+}
+
 #[test]
 fn a_modifier_the_form_does_not_take_is_rejected() {
     assert!(codes("r -> ~{ d } :nonsense 1").contains(&"CANT-G010".to_string()));
@@ -453,4 +500,81 @@ fn a_forks_branch_order_survives_sorting_the_edges() {
     // The ordinal is the authority, not the position in the list.
     let ordinals: Vec<_> = enters.iter().map(|e| e.ordinal).collect();
     assert_eq!(ordinals, vec![0, 1, 2]);
+}
+
+// ---- definitions
+
+#[test]
+fn a_definition_used_once_is_accepted() {
+    assert!(codes("clean:{ trim -> upper }\n[\"a\"] -> * -> clean -> []").is_empty());
+}
+
+/// Order does not matter, so a definition may name one written below it. What
+/// is refused is a cycle, whichever direction it runs in.
+#[test]
+fn a_definition_may_name_one_written_below_it() {
+    assert!(codes("outer:{ inner -> upper }\ninner:{ trim }\n[\"a\"] -> outer").is_empty());
+}
+
+#[test]
+fn a_definition_used_inside_a_fork_or_an_orbit_counts_as_used() {
+    assert!(codes("clean:{ trim }\n[\"a\"] -> |{ clean ; upper }").is_empty());
+    assert!(codes("step:{ $ * 2 }\n[1] -> ~{ ?{ $ < 8 } -> step } :max 8").is_empty());
+}
+
+/// Reachability is transitive: a definition used only by a definition nothing
+/// uses is dead too, and both are reported.
+#[test]
+fn an_unused_definition_reached_only_by_another_is_reported() {
+    let codes = codes("a:{ b -> trim }\nb:{ upper }\n[\"x\"] -> lower");
+    assert_eq!(codes, ["CANT-G021", "CANT-G021"]);
+}
+
+#[test]
+fn a_recursive_definition_is_refused_however_long_the_route() {
+    assert_eq!(
+        codes("a:{ b }\nb:{ c }\nc:{ a }\n[\"x\"] -> a")
+            .first()
+            .map(String::as_str),
+        Some("CANT-G020")
+    );
+    // Reported once for the cycle, not once per definition on it.
+    assert_eq!(
+        codes("a:{ b }\nb:{ c }\nc:{ a }\n[\"x\"] -> a")
+            .iter()
+            .filter(|c| *c == "CANT-G020")
+            .count(),
+        1
+    );
+}
+
+/// A name is a use only when it is the whole stage. Anything else is Rite
+/// expression text, and Rite is the one that reports it.
+#[test]
+fn a_definition_named_inside_a_larger_leaf_is_not_a_use() {
+    assert_eq!(
+        codes("clean:{ trim }\n[\"a\"] -> clean($)")
+            .first()
+            .map(String::as_str),
+        Some("CANT-G021")
+    );
+}
+
+#[test]
+fn a_definition_may_not_shadow_an_imported_module() {
+    assert_eq!(
+        codes("use m\nm:{ trim }\n[\"a\"] -> m")
+            .first()
+            .map(String::as_str),
+        Some("CANT-G019")
+    );
+}
+
+/// The splice is what runs, so an effectful definition is effectful at every
+/// place it was named rather than once.
+#[test]
+fn an_effectful_definition_is_effectful_at_every_splice() {
+    let g = graph("read:{ !@fs.read($) }\n[\"a\"] -> * -> read -> read -> []");
+    assert_eq!(g.effectful_nodes().len(), 2);
+    assert_eq!(g.capabilities(), vec!["@fs.read"]);
 }

@@ -4,6 +4,7 @@ use crate::ir::*;
 use rite_core::{
     simple_error, Diagnostics, SourceFile, Span, E020_UNDEFINED_NAME, E021_EFFECT_REQUIRED,
     E022_DUPLICATE_BINDING, E023_IMMUTABLE_ASSIGN, E029_NON_EXHAUSTIVE_MATCH,
+    E042_UNKNOWN_CAPABILITY,
 };
 use rite_syntax::{
     Block, EventDecl, Expr, FunctionDecl, Item, LitKind, Pattern, Program, ResultPatKind, Stmt,
@@ -164,6 +165,17 @@ pub const HOST_EFFECTS: &[(&str, bool)] = &[
     ("mcp.progress", true),
     ("mcp.log", false),
     ("mcp.tool_schema", false),
+    // The client half. `connect` starts a subprocess or reaches a host; every call
+    // that takes its handle asks another program a question and reads the answer,
+    // which is an observation of state outside this one.
+    ("mcp.connect", true),
+    ("mcp.tools", true),
+    ("mcp.call_tool", true),
+    ("mcp.resources", true),
+    ("mcp.read_resource", true),
+    ("mcp.prompts", true),
+    ("mcp.get_prompt", true),
+    ("mcp.close", true),
     // @udp — datagram sockets. Every one of these touches the socket: `bind` claims
     // a port, `local_addr` asks the OS which one it got, and the two transfers move
     // bytes on and off the wire.
@@ -261,6 +273,11 @@ pub const BUILTIN_NAMES: &[&str] = &[
     "unique",
     "zip",
     "chunk",
+    "window",
+    "flat_map",
+    "partition",
+    "take_while",
+    "drop_while",
     "nth",
     "frequencies",
     "parallel",
@@ -282,6 +299,11 @@ pub const BUILTIN_NAMES: &[&str] = &[
     "range_incl",
     "keys",
     "values",
+    "get",
+    "has",
+    "entries",
+    "merge",
+    "update",
     "abs",
     "clamp",
     "pow",
@@ -331,6 +353,15 @@ pub struct ResolvedProgram {
     pub ast: Program,
     pub functions: HashMap<String, FunctionMeta>,
     pub warnings: Vec<String>,
+    /// Names the entry's own imports bind (`use math as m` → `m`). Valid
+    /// qualifiers anywhere in the file.
+    pub import_qualifiers: HashSet<String>,
+    /// Qualifiers the merged modules' imports bind — valid only inside
+    /// `injected_functions` (see [`resolve_with_qualifiers`]). Desugar reads
+    /// these instead of re-scanning the item list, which misses them.
+    pub merged_qualifiers: HashSet<String>,
+    /// Names of the function copies `merge_exports_into_entry` injected.
+    pub injected_functions: HashSet<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -356,6 +387,14 @@ pub struct Resolver {
     /// A member access through one of these is a call into a module, and can be
     /// checked here rather than failing at runtime.
     import_qualifiers: HashSet<String>,
+    /// Qualifiers bound by the *merged modules'* imports. Valid only inside
+    /// `injected_functions`: the copies rely on them, but the entry never
+    /// imported them, so entry code using one is still an undefined name.
+    merged_qualifiers: HashSet<String>,
+    /// Names of the function copies `merge_exports_into_entry` injected.
+    injected_functions: HashSet<String>,
+    /// Walking the body of an injected copy (or a function nested in one).
+    in_injected_fn: bool,
     /// The function whose body is being walked; `None` at top level.
     current_fn: Option<String>,
     /// The file diagnostics are attributed to, kept for checks that run after the
@@ -399,6 +438,23 @@ struct BindingInfo {
 }
 
 pub fn resolve(program: &Program, file: &SourceFile) -> (ResolvedProgram, Diagnostics) {
+    resolve_with_qualifiers(program, file, HashSet::new(), HashSet::new())
+}
+
+/// [`resolve`], with the qualifiers of merged module imports in scope.
+///
+/// The merged entry contains copies of every module's public functions, but not
+/// the modules' own `use` items — so a body copied out of `outer.rite` referred
+/// to a qualifier (`i.double`, `@i.double`) the entry never imported and failed
+/// as an undefined name. `merge_exports_into_entry` returns those qualifiers
+/// and the names of the copies; the qualifiers apply only inside those copies,
+/// which is what keeps a module's imports out of the entry's own namespace.
+pub fn resolve_with_qualifiers(
+    program: &Program,
+    file: &SourceFile,
+    merged_qualifiers: HashSet<String>,
+    injected_functions: HashSet<String>,
+) -> (ResolvedProgram, Diagnostics) {
     // Diagnostics are attributed to `program.file`, which the parser stamped from
     // the same `SourceFile` the caller passes here. Catch a mismatched pair in
     // debug builds rather than reporting spans against the wrong file.
@@ -407,12 +463,17 @@ pub fn resolve(program: &Program, file: &SourceFile) -> (ResolvedProgram, Diagno
         "resolve() called with a SourceFile that did not produce this Program"
     );
     let mut r = Resolver::new();
+    r.merged_qualifiers = merged_qualifiers;
+    r.injected_functions = injected_functions;
     r.resolve_program(program);
     r.infer_effects();
     let resolved = ResolvedProgram {
         ast: program.clone(),
         functions: r.functions.clone(),
         warnings: vec![],
+        import_qualifiers: r.import_qualifiers.clone(),
+        merged_qualifiers: r.merged_qualifiers.clone(),
+        injected_functions: r.injected_functions.clone(),
     };
     (resolved, r.diagnostics)
 }
@@ -431,6 +492,9 @@ impl Resolver {
             diagnostics: Diagnostics::new(),
             functions: HashMap::new(),
             import_qualifiers: HashSet::new(),
+            merged_qualifiers: HashSet::new(),
+            injected_functions: HashSet::new(),
+            in_injected_fn: false,
             current_fn: None,
             file_for_effects: rite_core::FileId(0),
             direct_effects: HashSet::new(),
@@ -492,17 +556,43 @@ impl Resolver {
             // binds `m`: qualifying is how two modules exporting the same name stay
             // usable, and requiring an alias for that would be busywork.
             if let Item::Import(imp) = item {
-                match &imp.alias {
-                    Some(alias) => {
-                        self.define(&alias.name, false, alias.span, program.file);
-                        self.import_qualifiers.insert(alias.name.clone());
+                let bound = match &imp.alias {
+                    Some(alias) => Some((alias.name.clone(), alias.span)),
+                    None => imp
+                        .path
+                        .segments
+                        .last()
+                        .map(|seg| (seg.name.clone(), seg.span)),
+                };
+                if let Some((name, span)) = bound {
+                    // A qualifier that names a capability namespace would make
+                    // `@fs.read` mean the module or the host depending on an import
+                    // line, so those names are reserved for the host.
+                    if capability_namespaces().contains(name.as_str()) {
+                        let help = if imp.alias.is_some() {
+                            format!(
+                                "pick an alias that is not a capability name: use … as {}2",
+                                name
+                            )
+                        } else {
+                            format!("alias the import: use {} as …", name)
+                        };
+                        self.diagnostics.push(
+                            simple_error(
+                                E022_DUPLICATE_BINDING,
+                                format!(
+                                    "importing a module as `{}` collides with the capability namespace `@{}`",
+                                    name, name
+                                ),
+                                program.file,
+                                span,
+                                "this name belongs to a host capability",
+                            )
+                            .with_help(help),
+                        );
                     }
-                    None => {
-                        if let Some(seg) = imp.path.segments.last() {
-                            self.define(&seg.name, false, seg.span, program.file);
-                            self.import_qualifiers.insert(seg.name.clone());
-                        }
-                    }
+                    self.define(&name, false, span, program.file);
+                    self.import_qualifiers.insert(name);
                 }
             }
         }
@@ -543,12 +633,17 @@ impl Resolver {
         // Remember which body we are inside, so host calls and calls to other
         // functions can be attributed to it and closed over afterwards.
         let outer = self.current_fn.replace(f.name.name.clone());
+        // Sticky: a `def` nested inside an injected copy came from the module
+        // too, so the module's qualifiers keep holding inside it.
+        let was_injected = self.in_injected_fn;
+        self.in_injected_fn = was_injected || self.injected_functions.contains(&f.name.name);
         self.push_scope();
         for p in &f.params {
             self.define(&p.name.name, false, p.span, file);
         }
         self.resolve_block(&f.body, file);
         self.pop_scope();
+        self.in_injected_fn = was_injected;
         self.current_fn = outer;
     }
 
@@ -663,6 +758,9 @@ impl Resolver {
 
     fn resolve_stmt(&mut self, stmt: &Stmt, file: rite_core::FileId) {
         match stmt {
+            // The sugar's `lowered` form is the semantic truth; the source
+            // spelling exists for the formatter alone.
+            Stmt::Sugared(s) => self.resolve_stmt(&s.lowered, file),
             Stmt::Binding(b) => {
                 // Snapshot around the walk: for a lambda, the difference says whether
                 // its *body* performs a host effect, which is the only way to know for
@@ -774,6 +872,17 @@ impl Resolver {
             // Pure capabilities are unaffected, which is what keeps `use @http.log` and
             // `⊏ @http.recover` (middleware markers, `effectful: false`) working.
             Expr::Capability(c) => {
+                // `@cool.square` — module access through the sigil. Validated like
+                // `cool.square` and evaluating it yields the function, so it needs
+                // no marker: a *capability* ref is invoked, a module ref is not.
+                if self.at_module_qualifier(&c.path) {
+                    let (q, f) = (c.path[0].clone(), c.path[1].clone());
+                    self.check_module_export(&q, &f, c.span, file);
+                    return;
+                }
+                if self.unknown_capability(&c.path, c.span, file) {
+                    return;
+                }
                 self.call_sites_seen += 1;
                 let path = c.path.join(".");
                 if is_effectful(&path) {
@@ -833,24 +942,55 @@ impl Resolver {
                     }
                 }
                 if let Expr::Capability(cap) = strip_effect(c.callee.as_ref()) {
-                    let path = cap.path.join(".");
-                    if is_effectful(&path) {
-                        self.note_effect();
-                    }
-                    if is_effectful(&path) && !effect {
-                        self.diagnostics.push(
-                            simple_error(
-                                E021_EFFECT_REQUIRED,
-                                "effectful capability call requires `!`",
-                                file,
-                                c.span,
-                                "this operation performs an external effect",
-                            )
-                            .with_help(format!(
-                                "mark the operation as an explicit effect: ! @{}",
-                                path
-                            )),
-                        );
+                    if self.at_module_qualifier(&cap.path) {
+                        // `@cool.square(…)` — a call into a module. Checked like the
+                        // named call above: the mangled global's declaration is the
+                        // contract, so an effectful export needs its marker here too.
+                        let (q, f) = (cap.path[0].clone(), cap.path[1].clone());
+                        if self.check_module_export(&q, &f, cap.span, file) {
+                            let mangled = format!("{}__{}", q, f);
+                            self.note_call(&mangled);
+                            let declared = self
+                                .functions
+                                .get(&mangled)
+                                .map(|m| m.declares_effect)
+                                .unwrap_or(false);
+                            if declared {
+                                self.note_effect();
+                            }
+                            if declared && !effect {
+                                self.diagnostics.push(
+                                    simple_error(
+                                        E021_EFFECT_REQUIRED,
+                                        format!("calling `@{}.{}` requires `!`", q, f),
+                                        file,
+                                        c.span,
+                                        "this function performs an external effect",
+                                    )
+                                    .with_help(format!("mark the call: ! @{}.{}(…)", q, f)),
+                                );
+                            }
+                        }
+                    } else if !self.unknown_capability(&cap.path, cap.span, file) {
+                        let path = cap.path.join(".");
+                        if is_effectful(&path) {
+                            self.note_effect();
+                        }
+                        if is_effectful(&path) && !effect {
+                            self.diagnostics.push(
+                                simple_error(
+                                    E021_EFFECT_REQUIRED,
+                                    "effectful capability call requires `!`",
+                                    file,
+                                    c.span,
+                                    "this operation performs an external effect",
+                                )
+                                .with_help(format!(
+                                    "mark the operation as an explicit effect: ! @{}",
+                                    path
+                                )),
+                            );
+                        }
                     }
                 }
                 // A capability callee needs no further resolution (its path is just
@@ -979,7 +1119,13 @@ impl Resolver {
                 self.resolve_expr(&m.scrutinee, file, false);
                 for arm in &m.arms {
                     self.push_scope();
+                    if let Pattern::Or(o) = &arm.pattern {
+                        self.check_or_pattern_bindings(o, file);
+                    }
                     self.define_pattern(&arm.pattern, false, file);
+                    if let Some(guard) = &arm.guard {
+                        self.resolve_expr(guard, file, false);
+                    }
                     self.resolve_expr(&arm.body, file, false);
                     self.pop_scope();
                 }
@@ -1016,34 +1162,8 @@ impl Resolver {
                 // message. Check it here, and say it in the source's own terms.
                 if let Expr::Ident(obj) = m.object.as_ref() {
                     if self.is_module_qualifier(&obj.name) {
-                        let mangled = format!("{}__{}", obj.name, m.field.name);
-                        if !self.functions.contains_key(&mangled) {
-                            let mut exports: Vec<&str> = self
-                                .functions
-                                .keys()
-                                .filter_map(|k| k.strip_prefix(&format!("{}__", obj.name)))
-                                .collect();
-                            exports.sort_unstable();
-                            let help = if exports.is_empty() {
-                                format!("`{}` exports nothing public", obj.name)
-                            } else {
-                                format!("`{}` exports: {}", obj.name, exports.join(", "))
-                            };
-                            self.diagnostics.push(
-                                rite_core::Diagnostic::error(
-                                    E020_UNDEFINED_NAME,
-                                    format!(
-                                        "module `{}` has no public `{}`",
-                                        obj.name, m.field.name
-                                    ),
-                                )
-                                .with_primary(
-                                    rite_core::SourceSpan::new(file, m.span),
-                                    "not exported by that module",
-                                )
-                                .with_help(help),
-                            );
-                        }
+                        let obj_name = obj.name.clone();
+                        self.check_module_export(&obj_name, &m.field.name, m.span, file);
                         return;
                     }
                 }
@@ -1137,7 +1257,77 @@ impl Resolver {
                     self.define_pattern(b, mutable, file);
                 }
             }
+            // Alternatives bind the same names (checked before this is called),
+            // so defining from the first covers whichever alternative matches.
+            Pattern::Or(o) => {
+                if let Some(first) = o.alternatives.first() {
+                    self.define_pattern(first, mutable, file);
+                }
+            }
             Pattern::Atom(_) | Pattern::Literal(_) | Pattern::Wildcard(_) => {}
+        }
+    }
+
+    /// Every alternative of `1 | ok x | …` must bind the same names: the arm
+    /// body reads them whichever alternative matched, so a name bound by only
+    /// one alternative would be `none` on the others with no warning.
+    fn check_or_pattern_bindings(&mut self, o: &rite_syntax::OrPattern, file: rite_core::FileId) {
+        fn names(p: &Pattern, out: &mut Vec<String>) {
+            match p {
+                Pattern::Ident(i) => out.push(i.name.clone()),
+                Pattern::List(l) => {
+                    l.elements.iter().for_each(|e| names(e, out));
+                    if let Some(r) = &l.rest {
+                        names(r, out);
+                    }
+                }
+                Pattern::Record(r) => {
+                    for f in &r.fields {
+                        match &f.pattern {
+                            Some(p) => names(p, out),
+                            None => out.push(f.name.name.clone()),
+                        }
+                    }
+                }
+                Pattern::Result(r) => {
+                    if let Some(b) = &r.binding {
+                        names(b, out);
+                    }
+                }
+                Pattern::Or(o) => {
+                    if let Some(first) = o.alternatives.first() {
+                        names(first, out);
+                    }
+                }
+                Pattern::Atom(_) | Pattern::Literal(_) | Pattern::Wildcard(_) => {}
+            }
+        }
+        let mut expected: Vec<String> = Vec::new();
+        if let Some(first) = o.alternatives.first() {
+            names(first, &mut expected);
+        }
+        expected.sort();
+        for alt in o.alternatives.iter().skip(1) {
+            let mut got = Vec::new();
+            names(alt, &mut got);
+            got.sort();
+            if got != expected {
+                self.diagnostics.push(
+                    simple_error(
+                        E020_UNDEFINED_NAME,
+                        "or-pattern alternatives bind different names",
+                        file,
+                        o.span,
+                        format!(
+                            "this alternative binds [{}], the first binds [{}]",
+                            got.join(", "),
+                            expected.join(", ")
+                        ),
+                    )
+                    .with_help("every `|` alternative must bind the same names, since the arm body runs whichever one matched"),
+                );
+                return;
+            }
         }
     }
 
@@ -1213,7 +1403,7 @@ impl Resolver {
     /// name in any inner scope shadows it — `◆ f(math) ⟦ ^ math.x ⟧` reads a field
     /// of the parameter, whatever `use math` did at the top of the file.
     fn is_module_qualifier(&self, name: &str) -> bool {
-        if !self.import_qualifiers.contains(name) {
+        if !self.qualifier_in_scope(name) {
             return false;
         }
         !self
@@ -1221,6 +1411,96 @@ impl Resolver {
             .iter()
             .skip(1)
             .any(|scope| scope.bindings.contains_key(name))
+    }
+
+    /// Entry qualifiers hold everywhere; a merged module's qualifiers hold only
+    /// inside the function copies that were merged in with them.
+    fn qualifier_in_scope(&self, name: &str) -> bool {
+        self.import_qualifiers.contains(name)
+            || (self.in_injected_fn && self.merged_qualifiers.contains(name))
+    }
+
+    /// True when `@path[0].path[1]` is module access through the sigil.
+    ///
+    /// Unlike bare `cool.square`, which an inner binding named `cool` shadows
+    /// (see [`Self::is_module_qualifier`]), `@cool` always means the module —
+    /// the sigil exists to be unambiguous. Import qualifiers cannot collide
+    /// with capability namespaces (checked at the import), so there is no
+    /// precedence question here.
+    fn at_module_qualifier(&self, path: &[String]) -> bool {
+        path.len() == 2 && self.qualifier_in_scope(path[0].as_str())
+    }
+
+    /// `true` when module `qualifier` exports `field`; otherwise pushes the
+    /// E020 "module has no public …" diagnostic naming the real exports.
+    fn check_module_export(
+        &mut self,
+        qualifier: &str,
+        field: &str,
+        span: Span,
+        file: rite_core::FileId,
+    ) -> bool {
+        let mangled = format!("{}__{}", qualifier, field);
+        if self.functions.contains_key(&mangled) {
+            return true;
+        }
+        let mut exports: Vec<&str> = self
+            .functions
+            .keys()
+            .filter_map(|k| k.strip_prefix(&format!("{}__", qualifier)))
+            .collect();
+        exports.sort_unstable();
+        let help = if exports.is_empty() {
+            format!("`{}` exports nothing public", qualifier)
+        } else {
+            format!("`{}` exports: {}", qualifier, exports.join(", "))
+        };
+        self.diagnostics.push(
+            rite_core::Diagnostic::error(
+                E020_UNDEFINED_NAME,
+                format!("module `{}` has no public `{}`", qualifier, field),
+            )
+            .with_primary(
+                rite_core::SourceSpan::new(file, span),
+                "not exported by that module",
+            )
+            .with_help(help),
+        );
+        false
+    }
+
+    /// E042 when `@path` starts with neither a capability namespace nor an
+    /// imported module. Returns `true` when the diagnostic was pushed.
+    ///
+    /// This used to be a runtime-only failure: the registry's fallthrough
+    /// raised "unknown capability" with no code and no span, so a typo'd
+    /// namespace passed `rite check` clean.
+    fn unknown_capability(&mut self, path: &[String], span: Span, file: rite_core::FileId) -> bool {
+        let Some(ns) = path.first() else {
+            return false;
+        };
+        if capability_namespaces().contains(ns.as_str()) {
+            return false;
+        }
+        let help = if self.qualifier_in_scope(ns.as_str()) {
+            format!(
+                "`{}` is an imported module; access an export: @{}.<name>",
+                ns, ns
+            )
+        } else {
+            format!("if `{}` is a module, import it first: use {}", ns, ns)
+        };
+        self.diagnostics.push(
+            simple_error(
+                E042_UNKNOWN_CAPABILITY,
+                format!("unknown capability `@{}`", ns),
+                file,
+                span,
+                "not a capability namespace or an imported module",
+            )
+            .with_help(help),
+        );
+        true
     }
 
     fn lookup(&self, name: &str) -> Option<&BindingInfo> {
@@ -1244,15 +1524,29 @@ impl Resolver {
 /// Does calling the host function at `path` (e.g. `"fs.read"`) require `!`?
 ///
 /// Looks the path up in [`HOST_EFFECTS`], the single source of truth. Paths
-/// that are not in the table — a typo, or a capability an embedder registered
-/// at runtime — are not diagnosed here; an unknown capability is reported as
-/// `E042` when it is called.
+/// that are not in the table answer "not effectful"; a path whose *namespace*
+/// is unknown is rejected with `E042` in `resolve_expr` before it gets here.
 pub fn is_effectful(path: &str) -> bool {
     HOST_EFFECTS
         .iter()
         .find(|(name, _)| *name == path)
         .map(|(_, effectful)| *effectful)
         .unwrap_or(false)
+}
+
+/// Every capability namespace (`fs`, `http`, …), derived from [`HOST_EFFECTS`].
+///
+/// Used for two checks: an import may not bind one of these as its qualifier,
+/// and an `@name` whose first segment is neither a namespace here nor an
+/// imported qualifier is `E042` at check time rather than a runtime failure.
+pub fn capability_namespaces() -> &'static HashSet<&'static str> {
+    static SET: std::sync::OnceLock<HashSet<&'static str>> = std::sync::OnceLock::new();
+    SET.get_or_init(|| {
+        HOST_EFFECTS
+            .iter()
+            .filter_map(|(path, _)| path.split('.').next())
+            .collect()
+    })
 }
 
 /// Can this arm set match every possible scrutinee?
@@ -1262,45 +1556,63 @@ pub fn is_effectful(path: &str) -> bool {
 /// the finite value domains. Anything else can fall through to
 /// `match failure: no arm matched` at runtime, which is what E029 warns about.
 fn covers_all_inputs(arms: &[rite_syntax::MatchArm]) -> bool {
-    if arms.iter().any(|a| is_irrefutable(&a.pattern)) {
+    // A guarded arm covers nothing: the guard can refuse any value.
+    if arms
+        .iter()
+        .any(|a| a.guard.is_none() && is_irrefutable(&a.pattern))
+    {
         return true;
     }
-    // `true` / `false` — the whole boolean domain.
-    let mut saw_true = false;
-    let mut saw_false = false;
-    // `ok` / `err` and `some` / `none` — the whole result and option domains.
-    let mut saw_ok = false;
-    let mut saw_err = false;
-    let mut saw_some = false;
-    let mut saw_none = false;
-    let mut saw_lit_none = false;
-    for arm in arms {
-        match &arm.pattern {
+    // Domains a finite arm set can saturate: booleans, `ok`/`err`,
+    // `some`/`none`. An or-pattern's alternatives count as if they were
+    // separate arms, so `true | false → …` saturates the boolean domain.
+    #[derive(Default)]
+    struct Saw {
+        t: bool,
+        f: bool,
+        ok: bool,
+        err: bool,
+        some: bool,
+        none: bool,
+        lit_none: bool,
+    }
+    fn note(pat: &Pattern, s: &mut Saw) {
+        match pat {
             Pattern::Literal(l) => match l.kind {
-                LitKind::Bool(true) => saw_true = true,
-                LitKind::Bool(false) => saw_false = true,
-                LitKind::None => saw_lit_none = true,
+                LitKind::Bool(true) => s.t = true,
+                LitKind::Bool(false) => s.f = true,
+                LitKind::None => s.lit_none = true,
                 _ => {}
             },
             Pattern::Result(r) => match r.kind {
-                ResultPatKind::Ok => saw_ok = true,
-                ResultPatKind::Err => saw_err = true,
-                ResultPatKind::Some => saw_some = true,
-                ResultPatKind::None => saw_none = true,
+                ResultPatKind::Ok => s.ok = true,
+                ResultPatKind::Err => s.err = true,
+                ResultPatKind::Some => s.some = true,
+                ResultPatKind::None => s.none = true,
             },
+            Pattern::Or(o) => o.alternatives.iter().for_each(|p| note(p, s)),
             _ => {}
         }
     }
-    (saw_true && saw_false) || (saw_ok && saw_err) || (saw_some && (saw_none || saw_lit_none))
+    let mut s = Saw::default();
+    for arm in arms.iter().filter(|a| a.guard.is_none()) {
+        note(&arm.pattern, &mut s);
+    }
+    (s.t && s.f) || (s.ok && s.err) || (s.some && (s.none || s.lit_none))
 }
 
 /// A pattern that matches any value, binding nothing (`_`) or everything (`x`).
 ///
 /// Every other pattern is refutable: literals and atoms compare, lists check
 /// length, records check fields, `ok`/`err` check the result tag, and a typed
-/// pattern checks the type.
+/// pattern checks the type. An or-pattern is irrefutable when any alternative
+/// is.
 fn is_irrefutable(pat: &Pattern) -> bool {
-    matches!(pat, Pattern::Wildcard(_) | Pattern::Ident(_))
+    match pat {
+        Pattern::Wildcard(_) | Pattern::Ident(_) => true,
+        Pattern::Or(o) => o.alternatives.iter().any(is_irrefutable),
+        _ => false,
+    }
 }
 
 fn strip_effect(expr: &Expr) -> &Expr {

@@ -239,12 +239,22 @@ impl Parser {
     }
 
     pub(super) fn parse_match_arm(&mut self) -> MatchArm {
-        let pattern = self.parse_pattern();
+        let pattern = self.parse_or_pattern();
+        // `1 ? n > 0 → …` / `1 if n > 0 → …`. The guard is parsed below
+        // pipeline precedence so the arrow after it stays the arm's own; a
+        // pipeline in a guard needs parentheses.
+        let guard = if self.check(TokenKind::If) {
+            self.advance();
+            Some(self.parse_coalesce())
+        } else {
+            None
+        };
         self.expect(TokenKind::Arrow);
         let body = self.parse_expression();
         let span = pattern_span(&pattern).merge(body.span());
         MatchArm {
             pattern,
+            guard,
             body,
             span,
         }

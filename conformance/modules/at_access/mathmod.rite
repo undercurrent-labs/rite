@@ -1,0 +1,7 @@
+pub def square(x) [[
+  return x * x
+]]
+
+pub def cube(x) [[
+  return x * x * x
+]]

@@ -78,6 +78,9 @@ pub fn to_dot(program: &CantProgram) -> String {
             EdgeRole::Flow => ("", String::new()),
             EdgeRole::Enter => (" style=dashed", format!(" label=\"{}\"", edge.ordinal)),
             EdgeRole::Join => (" style=dashed", String::new()),
+            // The failure path, labelled rather than left to be guessed at from
+            // the node it leaves.
+            EdgeRole::Rescue => (" style=dashed", " label=\"err\"".to_string()),
             // The one cycle: drawn distinctly, because "where does this loop"
             // is the first question anyone asks of an orbit.
             EdgeRole::OrbitFeedback => (
@@ -104,7 +107,11 @@ fn node_line(program: &CantProgram, id: crate::NodeId) -> String {
         CAPABILITY
     } else if matches!(
         node.kind,
-        NodeKind::Scatter | NodeKind::Collect | NodeKind::Fork { .. } | NodeKind::Orbit { .. }
+        NodeKind::Scatter
+            | NodeKind::Collect
+            | NodeKind::Fork { .. }
+            | NodeKind::Orbit { .. }
+            | NodeKind::Rescue { .. }
     ) {
         ACCENT
     } else {
@@ -140,8 +147,9 @@ fn node_label(program: &CantProgram, id: crate::NodeId) -> Vec<String> {
         NodeKind::Ward { predicate } => {
             vec![format!("{id}  ?{{ {} }}", truncate(&predicate.text))]
         }
-        NodeKind::Fork { branches } => {
-            vec![format!("{id}  |{{ {} branches }}", branches.len())]
+        NodeKind::Fork { branches, parallel } => {
+            let how = if *parallel { ", parallel" } else { "" };
+            vec![format!("{id}  |{{ {} branches{how} }}", branches.len())]
         }
         NodeKind::Orbit {
             identity,
@@ -155,6 +163,7 @@ fn node_label(program: &CantProgram, id: crate::NodeId) -> Vec<String> {
             lines.push(format!(":max {max_items}"));
             lines
         }
+        NodeKind::Rescue { .. } => vec![format!("{id}  !{{ rescue }}")],
     }
 }
 

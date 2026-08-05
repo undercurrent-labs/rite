@@ -102,8 +102,9 @@ const views = [
             <p class="text-sm leading-relaxed text-slate-400">
               Every branch sees the same input, and their emissions are concatenated in
               order: <code class="font-mono text-cant-green">[6, 10, 25]</code>.
-              Branches run left to right, one after another. Cant has no parallelism
-              and no nondeterminism.
+              Branches run left to right, one after another — or concurrently, with
+              <code class="font-mono text-cant-accent">:par</code>, which joins their
+              results in the same order and so produces the same list.
             </p>
           </div>
         </div>

@@ -1,0 +1,1 @@
+["data.txt", "missing.txt"] -> * -> !@fs.read($) -> !{ "failed: " + str($.kind) } -> trim -> []

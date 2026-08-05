@@ -19,6 +19,7 @@ next stage runs once per value:
 | a source expression | one value |
 | an ordinary stage | its one returned value |
 | a ward | the unchanged input, or nothing |
+| a rescue | the input unwrapped, or its handler's emissions |
 | `*` | one emission per element of a list |
 | `[]` | one list holding every emission that reached it |
 | a fork | its branches' emissions, concatenated in order |
@@ -138,12 +139,46 @@ immutable input; their emissions are concatenated in source order.
 Each branch is a cluster. The dashed edges into them carry the branch number;
 the dashed edges back are where the emissions are concatenated.
 
-Fork is sequential, and so is anything effectful inside it. Parallel branches
-would need concurrency in the runtime and ordering and cancellation rules in
-Cant; neither exists yet, and adding the keyword first would fix the wrong
-meaning in place.
-
 Forks nest.
+
+#### `:par` — branches at the same time
+
+`:par` runs the branches concurrently instead of one after another:
+
+```cant run
+5 -> |{ $ + 1 ; $ * 2 ; $ * $ } :par -> []    // [6, 10, 25]
+```
+
+The value is the same as without it. Results are joined in **branch order**
+whatever order the branches finish in, so a `:par` fork emits exactly what the
+sequential one would.
+
+What changes is *when the effects happen*. Two branches reading files or calling
+a host do so at the same time, in no fixed order, and that is the point: it is
+worth writing where a fork waits on the world rather than on arithmetic.
+
+<!-- ignore: reads a file this page does not ship and calls a host that is not
+     there; the executed forms are conformance/cant/execution/parallel-effectful
+     and parallel-with-rescue. -->
+```cant ignore
+"config.json" -> |{ !@fs.read($)? -> @json.decode? ; !@http.get("https://…")? } :par -> []
+```
+
+Four rules:
+
+- **Every branch settles before the fork emits.** If one fails, the fork fails,
+  after the others have finished rather than the moment the first one does.
+- **At most 16 branches run at once.** More than that queues, keeping order.
+- **Effects still need their grants**, and an unmarked one is still refused. A
+  parallel branch is an ordinary branch to Rite's effect analysis.
+- **`:par` on a single-branch fork is a warning** (`CANT-G024`): there is nothing
+  to run it alongside.
+
+Rescues, orbits and wards all work inside a parallel branch, because a branch is
+an ordinary chain.
+
+There is no cancellation: a failing branch does not stop the others, it waits for
+them. The reasoning is in `docs/adr/0012-parallel-fork-is-a-modifier.md`.
 
 ### Orbit — `~{ body }` (`⟲⟦ body ⟧`)
 
@@ -198,6 +233,56 @@ expected fails rather than returning a partial result.
 Orbit is the only cyclic construct in the language. There are no feedback edges
 to named nodes.
 
+### Rescue — `!{ handler }` (`↯⟦ handler ⟧`)
+
+Where failures go. A capability call answers `ok(value)` or `err(record)`, and a
+rescue splits the two:
+
+- `ok(v)` → `v` continues along the flow, unwrapped;
+- `err(e)` → the handler runs with `$` bound to `e`, and whatever it emits
+  rejoins the flow in place;
+- anything else → passes through unchanged.
+
+```cant run
+[ok(1), err("nope"), 3] -> * -> !{ "recovered from " + $ } -> []
+// [1, recovered from nope, 3]
+```
+
+The handler is a stage like any other, so the emission it applies to — the
+failure — has to appear in it, as `$` or as the first argument. There is no way
+to write a stage that ignores its input, which is why a bare `!{ "" }` is a call
+of a string rather than a constant. Substituting a constant with no handler at
+all is `unwrap_or($, "")`.
+
+![The flow graph for a rescue, showing the failure edge into its handler](graphs/rescue.svg)
+
+The handler is a cluster, like a fork branch. The dashed edge into it is labelled
+`err` and is the only way in.
+
+It is also a flow rather than one expression, so it can report as well as
+replace:
+
+<!-- ignore: reads a file this page does not ship; the executed form is
+     conformance/cant/execution/rescue-handles. -->
+```cant ignore
+["a.txt", "b.txt"] -> * -> !@fs.read($) -> !{ $.message -> "failed: " + $ } -> []
+```
+
+A handler that emits nothing drops the failure; one that emits several fans out.
+Effects inside it are allowed, and are permission-gated like any other.
+
+What a rescue catches is an `err` **arriving at it**. A `panic` — scatter applied
+to a non-list, an orbit reaching its `:max` — ends the run and is not routable.
+Neither is a failure a `?` has already unwrapped away, which is rejected rather
+than left looking like error handling:
+
+```text
+error[CANT-G017]: this `?` removes the failure the rescue would route
+```
+
+A rescue takes no modifiers, and cannot be a program's first stage: nothing has
+been emitted yet, so nothing can have failed.
+
 ### Modifiers — `:name value`
 
 Configure the structural form immediately to their left, with no arrow between:
@@ -208,6 +293,65 @@ Configure the structural form immediately to their left, with no arrow between:
 
 The colon must touch the name. That is what keeps `:` usable as Rite's atom
 prefix, so `?{ $.level = :error }` reads as the comparison it looks like.
+
+Some take a value and some do not. An orbit's `:by` and `:max` each need one;
+a fork's `:par` is the whole modifier, and writing `:par true` is an error
+(`CANT-G023`) rather than a second way to spell it. There are three in the
+language:
+
+| Modifier | On | Value |
+|---|---|---|
+| `:by` | an orbit | a pure function computing a candidate's identity |
+| `:max` | an orbit | a positive integer, default 1024 |
+| `:par` | a fork | none |
+
+## Named flows — `name:{ … }` (`name≔⟦ … ⟧`)
+
+A definition names a flow so a program can use it more than once. Definitions
+come before the main flow, which is the last thing in the file:
+
+```cant run
+clean:{ trim -> ?{ count($) > 0 } }
+["  a  ", "", " b "] -> * -> clean -> []
+```
+
+A definition is a **chain**, not a function. It is spliced in wherever its name
+appears as a stage, so the program above is the one you would have written out:
+
+```cant run
+["  a  ", "", " b "] -> * -> trim -> ?{ count($) > 0 } -> []
+```
+
+That is what makes `[]` inside a definition mean what it says — it collects
+everything that reached it, across the whole flow — and what makes an effect
+inside one need its grant at every place the name is used.
+
+A stage that is **nothing but the name** is a use. Anything else is Rite
+expression text, so `clean` is the flow and `clean($)` is a Rite call of a name
+nothing defines. A definition is not a value and cannot be passed anywhere.
+
+Definitions may appear in any order and may name each other, and the braces end
+them, so a whole program still fits on one line:
+
+```cant run
+loud:{ upper -> $ + "!" }
+shout:{ trim -> loud }
+["  a  "] -> * -> shout -> []
+```
+
+Four things are refused:
+
+- **a name defined twice**, since the second one would never run (`CANT-G018`);
+- **a name Rite already binds** — a builtin, or a module the program imports —
+  because `count` as a stage and `count($)` inside a leaf would mean different
+  things (`CANT-G019`);
+- **a definition that reaches itself**, directly or through others: a splice has
+  no end, and an orbit is the only construct that repeats (`CANT-G020`);
+- **a definition nothing uses**, which is usually a typo at the use site that
+  became an ordinary Rite name (`CANT-G021`).
+
+`cant graph` and `cant explain` describe the spliced program, because that is
+what runs. A definition used twice appears twice in both.
 
 ## Modules — `use`
 
@@ -272,12 +416,12 @@ default and revocable with `--deny stdin`.
 ## Failures
 
 A capability call answers a result, `ok(value)` or `err(record)`. A flow has
-three postures toward the `err`, all of them Rite's own vocabulary rather than
-new syntax:
+four postures toward the `err`. Three are Rite's own vocabulary rather than new
+syntax; the fourth is the rescue.
 
-**Propagate and stop.** Postfix `?` unwraps the `ok` and ends the run on an
-`err`, with the failure mapped back onto the Cant source. The right posture
-when a missing file means the program cannot mean anything:
+**Unwrap, or fail the run.** Postfix `?` unwraps the `ok`. An `err` ends the
+whole run with `CANT-R004`, naming the stage and carrying the failure record —
+a `?` says the flow only makes sense when this call worked:
 
 <!-- ignore: reads a file this document does not ship; the runnable form is
      examples/cant/06-capabilities. -->
@@ -303,20 +447,42 @@ reads becoming the default:
 ["a.txt", "b.txt"] -> * -> !@fs.read($) -> unwrap_or($, "") -> []
 ```
 
-Both idioms are pinned by `conformance/cant/execution/error-dropped` and
-`error-replaced`, interpreted and compiled alike.
+**Route them.** A rescue sends the `err` into a handler flow and unwraps the
+`ok`. It is the only posture that hands the failure record to something that can
+report on it:
+
+<!-- ignore: reads files this document does not ship; the executed form is
+     conformance/cant/execution/rescue-handles. -->
+```cant ignore
+["a.txt", "b.txt"] -> * -> !@fs.read($) -> !{ "failed: " + $.message } -> []
+```
+
+All four are pinned by `conformance/cant/execution/error-dropped`,
+`error-replaced`, `error-try-fails-the-run` and `rescue-handles`, interpreted
+and compiled alike.
 
 ## Determinism
 
-No parallelism, no nondeterminism:
+**A Cant program's value is deterministic.** Run it twice on the same input and
+it produces the same thing, always:
 
 - stages execute in source order;
-- fork branches execute left to right;
+- fork branches join in branch order, `:par` or not;
 - scatter preserves list order;
 - collect preserves emission order;
 - orbit uses breadth-first worklist order;
-- duplicate detection keeps the first occurrence;
-- effects execute sequentially in exactly that order.
+- duplicate detection keeps the first occurrence.
+
+**The order effects happen in is deterministic too, with one exception.** Without
+a `:par` fork, effects execute sequentially in exactly the order above. Inside
+one, the branches run at the same time, and Cant does not say which of two
+branches writes its file or sends its request first. That is the only place in
+the language where two effects have no order between them, and it is what `:par`
+is asking for.
+
+Console output is the exception to the exception: each branch's output is
+buffered and spliced back in branch order, so two branches printing do not
+interleave, and a `:par` program prints the same thing every run.
 
 ## Comments and strings
 
@@ -335,10 +501,14 @@ collect or the `}` closing a Rite closure for the end of a Cant block.
 
 Each of these is deferred, not overlooked:
 
-- **Function definitions.** A `.cant` file is an expression, not a module. Use
-  Rite's builtins, a closure inside a stage, or `use` a Rite module and call its
-  functions by qualified name.
-- **Parallel fork**, **cancellation** and **error-routing edges**. See Fork.
+- **Functions.** A definition names a flow, not a function: it takes no
+  arguments, is not a value, and cannot be exported or imported, because a
+  `.cant` file is still an expression rather than a module. For anything that
+  needs a parameter or a second file, use Rite's builtins, a closure inside a
+  stage, or `use` a Rite module and call its functions by qualified name.
+- **Cancellation** and **retries**. A `:par` fork waits for every branch even
+  when one has already failed, and a rescue routes a failure but never re-runs
+  the stage that produced it.
 - **Named anchors and arbitrary feedback edges.** Orbit is the only cycle.
 - **Lazy or infinite streams.** Every emission set is finite.
 - **A second value model, permission system or host runtime.** All three are

@@ -90,7 +90,7 @@ Legend for phases: **P0** audit/ADRs ✓ · **P1** skeleton, manifest, parser �
 | Strings and comments containing `->`, `\|{`, `~{`, `?{`, `[]` or glyphs are never altered | P1 (lexer) / P2 (formatter) | [x] |
 | Generated Rite always parses | P4 | [x] |
 | Source mappings are monotonic and in bounds | P4 | [x] |
-| Orbit never exceeds its accepted-item limit | P4 | [ ] |
+| Orbit never exceeds its accepted-item limit | P4 | [x] |
 | Invalid input never panics | P1 | [x] |
 | Fuzzed graph deserialization cannot create unvalidated cycles | P3 | [x] |
 

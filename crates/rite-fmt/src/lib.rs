@@ -557,6 +557,10 @@ struct Formatter<'a> {
     line_starts: &'a [usize],
     /// Source line of the last construct emitted at a statement boundary.
     last_line: Option<usize>,
+    /// Names the file's imports bind (`use math` → `math`, `use math as m` → `m`).
+    /// `@m.square` is module access, and a module is not the host, so it prints
+    /// with `@` in both dialects; only real capabilities print as `host.` in ASCII.
+    import_qualifiers: std::collections::HashSet<String>,
 }
 
 impl<'a> Formatter<'a> {
@@ -569,10 +573,23 @@ impl<'a> Formatter<'a> {
             next_trivia: 0,
             line_starts,
             last_line: None,
+            import_qualifiers: std::collections::HashSet::new(),
         }
     }
 
     fn program(&mut self, program: &Program) {
+        for item in &program.items {
+            if let Item::Import(imp) = item {
+                let bound = imp
+                    .alias
+                    .as_ref()
+                    .map(|a| a.name.clone())
+                    .or_else(|| imp.path.segments.last().map(|s| s.name.clone()));
+                if let Some(name) = bound {
+                    self.import_qualifiers.insert(name);
+                }
+            }
+        }
         for item in &program.items {
             self.boundary_item(item);
         }
@@ -769,7 +786,9 @@ impl<'a> Formatter<'a> {
                     self.out.push_str(&s.name);
                 }
                 if let Some(a) = &imp.alias {
-                    self.out.push_str(" as ");
+                    // `use math as m` in ASCII, `⊏ math → m` in glyph; `->` parses
+                    // in either dialect and normalises here.
+                    self.out.push_str(&self.glyph(" → ", " as "));
                     self.out.push_str(&a.name);
                 }
             }
@@ -818,6 +837,54 @@ impl<'a> Formatter<'a> {
 
     fn stmt(&mut self, stmt: &Stmt) {
         match stmt {
+            // Print the sugar the author wrote, not its lowering. This is what
+            // lets `rite fmt` keep `say` / `unless` / `for` / `while` / `loop`
+            // instead of rewriting the file into their expansions.
+            Stmt::Sugared(s) => match &s.form {
+                rite_syntax::SugarForm::Say { value } => {
+                    self.out.push_str(&self.glyph("¶", "say"));
+                    self.out.push(' ');
+                    self.expr(value);
+                }
+                rite_syntax::SugarForm::Unless {
+                    condition,
+                    then_branch,
+                    else_branch,
+                } => {
+                    self.out.push_str(&self.glyph("¿", "unless"));
+                    self.out.push(' ');
+                    self.expr(condition);
+                    self.out.push(' ');
+                    self.block(then_branch);
+                    if let Some(e) = else_branch {
+                        self.out.push_str(&self.glyph(" : ", " else "));
+                        self.block(e);
+                    }
+                }
+                rite_syntax::SugarForm::ForIn { var, iter, body } => {
+                    self.out.push_str(&self.glyph("∀", "for"));
+                    self.out.push(' ');
+                    self.out.push_str(&var.name);
+                    self.out.push(' ');
+                    self.out.push_str(&self.glyph("∈", "in"));
+                    self.out.push(' ');
+                    self.expr(iter);
+                    self.out.push(' ');
+                    self.block(body);
+                }
+                rite_syntax::SugarForm::While { condition, body } => {
+                    self.out.push_str("while ");
+                    self.expr(condition);
+                    self.out.push(' ');
+                    self.block(body);
+                }
+                rite_syntax::SugarForm::Loop { count, body } => {
+                    self.out.push_str("loop ");
+                    self.expr(count);
+                    self.out.push(' ');
+                    self.block(body);
+                }
+            },
             Stmt::Binding(b) => {
                 self.pattern(&b.pattern);
                 self.out.push(' ');
@@ -1207,6 +1274,12 @@ impl<'a> Formatter<'a> {
                     self.gap_before(self.line_at(start));
                     self.pad();
                     self.pattern(&arm.pattern);
+                    if let Some(guard) = &arm.guard {
+                        self.out.push(' ');
+                        self.out.push_str(&self.glyph("?", "if"));
+                        self.out.push(' ');
+                        self.expr(guard);
+                    }
                     self.out.push(' ');
                     self.out.push_str(&self.glyph("→", "->"));
                     self.out.push(' ');
@@ -1222,7 +1295,15 @@ impl<'a> Formatter<'a> {
             }
             Expr::Block(b) => self.block(b),
             Expr::Capability(c) => {
-                self.out.push_str(&self.glyph("@", "host."));
+                let is_module = c
+                    .path
+                    .first()
+                    .is_some_and(|s| self.import_qualifiers.contains(s));
+                if is_module {
+                    self.out.push('@');
+                } else {
+                    self.out.push_str(&self.glyph("@", "host."));
+                }
                 self.out.push_str(&c.path.join("."));
             }
             Expr::Placeholder(_) => self.out.push('$'),
@@ -1347,6 +1428,14 @@ impl<'a> Formatter<'a> {
                     self.pattern(b);
                 }
             }
+            Pattern::Or(o) => {
+                for (i, alt) in o.alternatives.iter().enumerate() {
+                    if i > 0 {
+                        self.out.push_str(" | ");
+                    }
+                    self.pattern(alt);
+                }
+            }
         }
     }
 
@@ -1437,6 +1526,7 @@ fn stmt_span(stmt: &Stmt) -> Span {
         Stmt::Assign(a) => a.span,
         Stmt::Return(r) => r.span,
         Stmt::Expr(e) => e.span(),
+        Stmt::Sugared(s) => s.span,
     }
 }
 

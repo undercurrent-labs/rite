@@ -37,6 +37,9 @@ Tracks implementation status for the Rite language and V1 tooling. Detailed desi
 | A module could not `use` another module — the graph was one level deep | Modules import modules; their imports stay private to them |
 | `use math` gave no qualifier, so two modules exporting one name could not both be used | Every import binds a qualifier: `math.square` as well as `square` |
 | A typo in a qualified call passed `rite check` and failed at runtime naming `m__squre` | Checked when compiling, reported as `module \`m\` has no public \`squre\`` |
+| A module's *qualified* use of its own import (`use ./inner as i` then `i.double`) failed at the entry as `undefined name \`i\`` — only flat cross-module calls worked | The merge returns its modules' qualifiers, scoped to the injected copies; entry code using them is still undefined |
+| An unknown `@namespace` passed `rite check` and died at runtime with an uncoded message | `E042` at resolve, with a span and the `use` to add |
+| `@` was only the host's sigil | `@m.square` is module access: never shadowed by locals, capability namespaces reserved as qualifiers (`use fs` is E022), aliasable as `use math as m` / `use math -> m` / `⊏ math → m` |
 | Colliding exports reported a duplicate at the call site, naming neither module | Named, with the qualified forms offered as the fix |
 | `item`, `room`, `world`, `test`, `ok`, `err`, `some` as parameter names bound nothing and read back as `none` | They parse as expressions wherever they can be bound |
 | `!` marked only the site of a host call, so a function wrapping one was callable unmarked | Effects propagate: `◆!` declares them, inference checks the body and closes over the call graph, callers mark the call |
@@ -44,13 +47,28 @@ Tracks implementation status for the Rite language and V1 tooling. Detailed desi
 
 ### Remaining gaps (after this pass)
 
-1. **WASM host I/O** — browser run evaluates pure scripts + `@console`; FS, HTTP listen,
-   outbound HTTP, `@db`, `@udp`, `@tcp` and `@process` need the native host. The wasm
-   build installs no capability host at all (`rite-caps` is behind the `native`
-   feature), so the capabilities that *are* pure value transforms — `@json`, `@csv`,
-   and all of `@crypto` except `random_bytes` — are unreachable there too, despite
-   needing nothing the browser lacks. Closing that is a packaging change in
-   `rite-wasm`, not a change to those capabilities.
+1. **WASM host I/O** — FS, HTTP listen, outbound HTTP, `@db`, `@env`, `@clock`,
+   `@stdin`, `@sys`, `@udp`, `@tcp`, `@process` and `@mcp` need the native host,
+   and a browser run refuses them by name: "capability @fs is native-only and
+   unavailable in the browser runtime".
+
+   **Closed:** the capabilities that need nothing a browser lacks now work there.
+   `rite-caps` has its own `native` feature (on by default) gating the host half; a
+   wasm32 build takes the crate without it and gets `@json`, `@csv`, `@crypto`
+   (`random_bytes` included — `getrandom`'s `js` backend supplies the entropy),
+   `@regex`, `@store`, `@random` and `@game`, from the same implementations and the
+   same descriptors `rite run` uses. Before this the wasm build installed no host at
+   all and `@json.encode` answered "capability `@json` not registered".
+
+   **Also closed:** `RunOptions::files` resolves `use`. The module loader takes
+   an in-memory overlay (dotted module names; `lib/helpers.rite` file keys
+   normalise to `lib.helpers`), consulted before the filesystem, so a Studio
+   run executes multi-file programs — including overlay modules that `use`
+   each other. `browser_surface.rs` holds the contract.
+
+   `cargo run -p xtask -- wasm-check` builds both browser crates for wasm32 *and*
+   runs `cargo test -p rite-wasm --no-default-features`, which is the browser host
+   on the host target — `crates/rite-wasm/tests/browser_capabilities.rs`.
 
 2. **Virtual HTTP request replay in hosted mode** — UI panel exists; full handler re-entry is native-local.
 3. **Scope-aware multi-file rename** — rename is now token-accurate within a document
@@ -98,24 +116,39 @@ Tracks implementation status for the Rite language and V1 tooling. Detailed desi
    statements and is 7. `crates/rite-test/tests/dialect_value_parity.rs` runs both
    spellings and compares the values, which the text assertions did not.
 
-   Still lowered: the statement sugars — `say`, `unless`, `for … in`, `while` — which
-   `items.rs` rewrites into their expanded forms before the AST exists, so `rite fmt`
-   prints the expansion. `examples/sugar/demo.rite` is the file that shows it.
+   The statement sugars — `say`, `unless`, `for … in`, `while`, `loop` — now
+   survive too. The parser still rewrites them (that keeps resolve, desugar and
+   the effect analysis on one path), but wraps the rewrite in `Stmt::Sugared`,
+   which carries the source shape; the formatter prints the shape, everything
+   downstream walks the lowering. `statement_sugar_survives_formatting` in
+   `crates/rite-fmt/tests/dialects.rs` pins it in both dialects.
 
-   Because of those, `rite fmt --check` is **not yet a CI gate**: it would demand
-   rewriting the corpus into shapes the book does not teach. Retaining the statement
-   sugars unblocks it.
+   `rite fmt --check` is **still not a CI gate**, but the blocker moved: the
+   remaining corpus diffs are dialect canonicalisation, not sugar loss. A run
+   over `examples/` touches ten files, all the same two shapes — `keep { … }`
+   braces canonicalised to `⟦ … ⟧` in glyph files, and dialect-neutral `use` /
+   `..=` spellings replaced by `⊏` / `‥` in files the book deliberately writes
+   mixed. Gating needs a decision about whether those spellings are canonical
+   per-file or per-construct, not more formatter fidelity.
 9. **Incremental relexing / CST** — no rowan green tree; recovery is best-effort parse.  
-12. **Resource limits are partial** — `max_collection_size` and `max_string_size` are
-    enforced where a collection's size is knowable before it is built (`range`,
-    `range_incl`, `repeat`, `concat`), where the runaway cases were. Not yet
-    bounded: `@fs.read`/`read_bytes`/`lines` and `@fs.read_chunk`'s caller-supplied
-    length, `@http.file` (whole-file read, same class as `@fs.read_bytes`),
-    `@http` response bodies, `@process.run` output capture, and `@db.query`
-    result sets. Each can still buffer an unbounded amount from outside the program.
-    `@http.listen` (1 MiB), `@tcp.recv` (16 MiB) and `@udp.recv_from` (65535) are the
-    ones already capped, and are the model. `parallel` still forks one deep-cloned
-    context per element eagerly, with no concurrency ceiling.
+12. **Resource limits cover external input.** `max_collection_size` and
+    `max_string_size` bound what a script builds (`range`, `repeat`, `concat`)
+    *and* what it takes in: `@fs.read`/`read_bytes`/`lines` check the file's
+    size from metadata before the read, `@fs.read_chunk` checks the caller's
+    requested length before allocating it, `@http.file` checks like
+    `@fs.read_bytes`, `@process.run` drains both pipes concurrently and stops
+    at the ceiling (killing the child; `.output()` used to buffer everything
+    first), and `@db.query`/`query_prepared` stop collecting at
+    `max_collection_size`. Outbound `@http` bodies are read streaming to
+    `min(max_string_size, 64 MiB)` — remote input gets a hard default like
+    `@tcp.recv`'s 16 MiB, and an over-size body is a catchable `err` since the
+    remote's size is not the script's bug; the local ceilings are budget
+    errors. `crates/rite-caps/tests/input_limits.rs` holds each path to its
+    knob. `parallel` now runs at most 16 branches in flight, forking each
+    window's contexts as it starts and absorbing them as it ends, so peak
+    memory follows the ceiling instead of the list length. Still open:
+    `rite run` exposes no `--max-string-size`/`--max-collection-size` flags
+    (embedders set the budget directly; `cant` exposes them).
 
 13. **Performance benchmarks** — `cargo bench -p rite-runtime` (criterion). Front end
     and interpreter are measured separately, so a parser regression and an eval
@@ -144,9 +177,22 @@ Tracks implementation status for the Rite language and V1 tooling. Detailed desi
     number a bytecode VM would move.
 13. **VS Code VSIX in CI** — package.json ready; not produced by a release job.  
 14. **Example 07/08 HTTP** — blocks until shutdown (correct for servers); e2e ladder skips them.
-15. **`@mcp` is server-only, and partial by choice.** No client: a Rite script cannot
-    call *other* MCP servers, which is the obvious next piece. Of the protocol itself,
-    three things are deliberately absent. `subscriptions/listen` and the `*ListChanged`
+15. **`@mcp` is partial by choice.**
+
+    **Closed:** the client half. `@mcp.connect` opens a handle over stdio (a spawned
+    subprocess, needing `--allow process`) or Streamable HTTP (needing
+    `--allow net=<host>`, matched by the same `host_of` an outbound `@http.get` uses),
+    and `tools` / `call_tool` / `resources` / `read_resource` / `prompts` /
+    `get_prompt` / `close` take it. The grant is checked at `connect` and nowhere else.
+    It negotiates the same two revisions the server answers, probing `server/discover`
+    and falling back to `initialize` when the server has never heard of it. Absent on
+    the client side: subscriptions, and the sampling and elicitation callbacks, which
+    are a server asking the client to run a model or prompt a person and have no
+    counterpart in a Rite script. A connected server's progress notifications are read
+    off the wire and dropped, since `call_tool` answers one value.
+
+    Of the protocol itself, three things are deliberately absent.
+    `subscriptions/listen` and the `*ListChanged`
     notifications are not advertised, because a server's tool, resource and prompt
     tables are fixed when `@mcp.serve` starts and cannot change while it runs — the
     capability would be a claim a client could act on and never see honoured.

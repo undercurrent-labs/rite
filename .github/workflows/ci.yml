@@ -140,6 +140,13 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: build wasm
         run: bash scripts/build-wasm.sh
+      # The browser capability host, run rather than only compiled. `rite-wasm`
+      # without `native` builds for the host too, so the same `rite-caps` half a
+      # tab gets — @json, @csv, @crypto, @regex, @store — is testable here, as is
+      # `@fs` being refused by name. The workspace job cannot cover it: it builds
+      # every feature.
+      - name: test browser capability host
+        run: cargo test -p rite-wasm --no-default-features
       - name: upload wasm
         uses: actions/upload-artifact@v5
         with:

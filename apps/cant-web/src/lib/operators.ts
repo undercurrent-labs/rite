@@ -41,6 +41,8 @@ const DISPLAY_NAMES: Record<string, string> = {
   ward_open: "Ward",
   fork_open: "Fork",
   orbit_open: "Orbit",
+  rescue_open: "Rescue",
+  define_open: "Definition",
   block_close: "Block close",
   branch_separator: "Branch separator",
   current_value: "Current value",
@@ -73,6 +75,8 @@ const USAGE: Record<string, { ascii: string; glyph: string }> = {
   ward_open: { ascii: "?{ p }", glyph: "⊣⟦ p ⟧" },
   fork_open: { ascii: "|{ a ; b }", glyph: "⫴⟦ a ; b ⟧" },
   orbit_open: { ascii: "~{ body }", glyph: "⟲⟦ body ⟧" },
+  rescue_open: { ascii: "!{ handler }", glyph: "↯⟦ handler ⟧" },
+  define_open: { ascii: "name:{ flow }", glyph: "name≔⟦ flow ⟧" },
   modifier: { ascii: ":name value", glyph: ":name value" },
 };
 

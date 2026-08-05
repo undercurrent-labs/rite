@@ -1,0 +1,8 @@
+use ./mathmod -> m
+
+f <- @m.square
+^ <<
+  called: @m.square(5),
+  bound_then_called: f(6),
+  bare_qualified_still_works: m.cube(2)
+>>

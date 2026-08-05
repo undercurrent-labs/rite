@@ -1,0 +1,10 @@
+xs ← [1, 2, 3, 4, 1]
+^ ⟨
+  flat_map_splices: flat_map(xs, ⟦ |x| [x, x * 10] ⟧),
+  flat_map_keeps_scalars: flat_map(xs, ⟦ |x| x * 2 ⟧),
+  partition_both_halves: partition(xs, ⟦ |x| x % 2 = 1 ⟧),
+  take_while_stops: take_while(xs, ⟦ |x| x < 3 ⟧),
+  drop_while_keeps_rest: drop_while(xs, ⟦ |x| x < 3 ⟧),
+  window_slides: window(xs, 3),
+  window_short_is_empty: window([1], 3)
+⟩

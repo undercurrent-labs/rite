@@ -32,14 +32,16 @@ pub mod validate;
 
 pub use dot::to_dot;
 pub use expand::{expand, remap_diagnostic, ExpandOptions, Expansion, Mapping, SourceMap};
-pub use explain::{explain, Explanation, Step};
+pub use explain::{explain, explain_with, Explanation, Step};
 pub use graph::{
     CantProgram, CapabilityRef, Edge, EdgeRole, LayoutHint, LeafExpr, Node, NodeKind, Producer,
     SourceInfo, Subgraph, SubgraphId,
 };
 pub use lower::lower;
 pub use sigil::{to_sigil_graph, AdaptOptions};
-pub use validate::{analyze, validate, validate_deserialized, validate_modifiers, Analysis};
+pub use validate::{
+    analyze, validate, validate_definitions, validate_deserialized, validate_modifiers, Analysis,
+};
 
 use serde::{Deserialize, Serialize};
 
@@ -57,10 +59,20 @@ pub const GRAPH_SCHEMA_NAME: &str = "cant.graph";
 /// Independent of both the crate version and the language version: a tooling
 /// release that does not touch the graph must not invalidate a stored one.
 ///
+/// **3** — added `parallel` to the `fork` node kind: whether its branches run
+/// concurrently. A consumer that draws or reasons about effect order needs the
+/// answer, and no other key implies it. See
+/// `docs/adr/0012-parallel-fork-is-a-modifier.md`.
+///
+/// **2** — added the `rescue` node kind, its `handler` subgraph, and the
+/// `rescue` edge role: the failure path is now in the graph rather than hidden
+/// in a stage that called `unwrap_or`. See
+/// `docs/adr/0010-error-routing-is-a-rescue-stage.md`.
+///
 /// **1** — added `schema`, `producer`, and per-node `capabilities`, so a
 /// renderer can tell which host family a node touches without pattern-matching
 /// its leaf text. See `docs/cant/graph-schema.md`.
-pub const GRAPH_SCHEMA_VERSION: &str = "1";
+pub const GRAPH_SCHEMA_VERSION: &str = "3";
 
 /// Re-exported so a consumer needs one crate to know which language and which
 /// graph shape it is looking at.
@@ -83,10 +95,11 @@ impl std::fmt::Display for NodeId {
 
 /// Which side of a node an edge attaches to.
 ///
-/// Cant v0 nodes have one input and one output, but the graph records the port
-/// anyway: fork branches, error routing and multi-output nodes are all in the
-/// deferred design space, and an edge model that assumes a single anonymous
-/// port would have to be re-serialized to admit any of them.
+/// Most Cant nodes have one input and one output, but the graph records the port
+/// anyway. Fork branches and rescue handlers already need more than one, and
+/// multi-output nodes remain in the deferred design space; an edge model that
+/// assumed a single anonymous port would have had to be re-serialized to admit
+/// any of them.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PortKind {
@@ -123,7 +136,7 @@ mod tests {
 
     #[test]
     fn the_graph_schema_and_the_language_are_versioned_separately() {
-        assert_eq!(GRAPH_SCHEMA_VERSION, "1");
-        assert_eq!(CANT_LANGUAGE_VERSION, "0");
+        assert_eq!(GRAPH_SCHEMA_VERSION, "3");
+        assert_eq!(CANT_LANGUAGE_VERSION, "1");
     }
 }

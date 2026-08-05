@@ -4231,7 +4231,7 @@
   ],
   "metadata": {
     "renderer_version": "0.1.0",
-    "graph_fingerprint": "6396115235aae2f53ec6374cee5d56cb",
+    "graph_fingerprint": "542d19fd258aaa7ec40b6da8ee5d1973",
     "seed": 0,
     "tracery": "flowing",
     "node_count": 7,
@@ -4244,6 +4244,6 @@
       "source": 1,
       "stage": 3
     },
-    "source_schema": "cant.graph@1"
+    "source_schema": "cant.graph@3"
   }
 }

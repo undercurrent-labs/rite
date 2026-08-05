@@ -227,6 +227,9 @@ pub enum StageKind {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MatchArmIr {
     pub pattern: PatternIr,
+    /// Defaulted so ProgramIr embedded by older compiled binaries deserialises.
+    #[serde(default)]
+    pub guard: Option<ExprIr>,
     pub body: ExprIr,
     pub span: Span,
 }
@@ -247,6 +250,9 @@ pub enum PatternIr {
     Result {
         kind: ResultPatKindIr,
         binding: Option<Box<PatternIr>>,
+    },
+    Or {
+        alternatives: Vec<PatternIr>,
     },
 }
 

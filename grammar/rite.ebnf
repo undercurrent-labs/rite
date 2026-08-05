@@ -27,7 +27,8 @@ event_decl       = def_kw ( "item" | "room" | "world" ) atom block ;
 
 test_decl        = def_kw "test" string_literal block ;
 
-import_decl      = "use" module_path [ "as" identifier ] ;
+import_decl      = "use" module_path [ ( "as" | "->" ) identifier ] ;
+                   (* ASCII prints `as`, glyph prints `→`; both parse in either dialect *)
 
 statement        = binding
                  | expression
@@ -58,7 +59,11 @@ coalesce         = logic_or { "??" logic_or } ;
 
 match_expr       = match_kw expression block ;
 
-match_arm        = pattern pipe_op expression ;
+match_arm        = or_pattern [ if_kw guard_expr ] pipe_op expression ;
+(* The guard sits below pipeline precedence: the arrow after it is the arm's
+   own. A pipeline inside a guard needs parentheses. *)
+guard_expr       = coalesce ;
+or_pattern       = pattern { "|" pattern } ;
 
 logic_or         = logic_xor { "or" logic_xor } ;
 logic_xor        = logic_and { xor_op logic_and } ;

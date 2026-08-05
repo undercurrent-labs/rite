@@ -2,9 +2,9 @@
 #
 # This list is checked against the lexer's own `keyword_or_ident` by
 # `cargo test -p rite-cli --test editor_grammar_sync`. It previously listed
-# `expect`, `expect_error`, `expect_match` and `fail` — those are builtin
-# functions, not reserved words — while omitting the sugar pack, which is
-# reserved.
+# `expect`, `expect_error`, `expect_match` and `fail` — `expect` and `fail`
+# are builtin functions and the other two never existed — while omitting the
+# sugar pack, which is reserved.
 
 keywords = [
   "def",

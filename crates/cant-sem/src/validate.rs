@@ -26,6 +26,15 @@ use crate::{NodeId, PortKind};
 /// is where an unknown one is caught — with a better message than a parser could
 /// give, because here we know whether it was attached to a ward or an orbit.
 const ORBIT_MODIFIERS: &[&str] = &["by", "max"];
+const FORK_MODIFIERS: &[&str] = &["par"];
+
+/// Modifiers that configure a form by being present, with nothing after them.
+///
+/// The parser records `:name` and `:name value` alike and asks no questions, so
+/// this is the only place that knows `:par` takes nothing and `:max` takes a
+/// count. Both directions are checked: a value on `:par` and a missing one on
+/// `:max` are each a mistake with a message of its own.
+const VALUELESS_MODIFIERS: &[&str] = &["par"];
 
 pub fn validate(program: &CantProgram, file: rite_core::FileId) -> CantDiagnostics {
     let mut v = Validator {
@@ -37,6 +46,7 @@ pub fn validate(program: &CantProgram, file: rite_core::FileId) -> CantDiagnosti
     v.placement();
     v.orbits();
     v.wards();
+    v.rescues();
     v.cycles();
     v.reachability();
     v.diagnostics
@@ -194,19 +204,21 @@ impl Validator<'_> {
                 let span = node.span;
                 let what = match node.kind {
                     NodeKind::Fork { .. } => "fork branch",
+                    NodeKind::Rescue { .. } => "rescue handler",
                     _ => "orbit body",
                 };
+                let label = format!("an empty {what} emits nothing and cannot be lowered");
                 self.error(
                     CANT_G015_EMPTY_SUBGRAPH,
                     format!("this {what} has no stages"),
                     span,
-                    "an empty branch emits nothing and cannot be lowered",
+                    &label,
                 );
                 continue;
             };
 
             let expected_role = match node.kind {
-                NodeKind::Fork { .. } => EdgeRole::Join,
+                NodeKind::Fork { .. } | NodeKind::Rescue { .. } => EdgeRole::Join,
                 _ => EdgeRole::OrbitFeedback,
             };
             let rejoins = self.program.edges.iter().any(|e| {
@@ -229,8 +241,8 @@ impl Validator<'_> {
 
     // ---- placement
 
-    /// Scatter and collect both consume emissions, so neither can be the first
-    /// thing a program does — there are none yet.
+    /// Scatter, collect and rescue all consume emissions, so none of them can be
+    /// the first thing a program does — there are none yet.
     fn placement(&mut self) {
         let Some(entry) = self.program.node(self.program.entry) else {
             return;
@@ -256,6 +268,12 @@ impl Validator<'_> {
                     ),
                 );
             }
+            NodeKind::Rescue { .. } => self.error(
+                CANT_G016_RESCUE_HAS_NO_INPUT,
+                "a program cannot begin with a rescue",
+                entry.span,
+                "nothing has been emitted yet, so nothing can have failed",
+            ),
             _ => {}
         }
     }
@@ -329,20 +347,68 @@ impl Validator<'_> {
         }
     }
 
+    // ---- rescues
+
+    /// A `?` on the stage feeding a rescue removes the failure the rescue exists
+    /// to route.
+    ///
+    /// `?` unwraps the `ok` and returns from the loop body Cant generates for a
+    /// stage, so the failed emission is dropped before the rescue sees anything
+    /// and the handler can never run. The program works, silently does no error
+    /// handling, and looks like it does — which is why this is an error and not a
+    /// warning.
+    fn rescues(&mut self) {
+        let rescues: Vec<NodeId> = self
+            .program
+            .nodes
+            .iter()
+            .filter(|n| matches!(n.kind, NodeKind::Rescue { .. }))
+            .map(|n| n.id)
+            .collect();
+
+        for rescue in rescues {
+            let sources: Vec<NodeId> = self
+                .program
+                .edges_to(rescue)
+                .filter(|e| e.role == EdgeRole::Flow)
+                .map(|e| e.from.node)
+                .collect();
+            for source in sources {
+                let Some(leaf) = self.program.node(source).and_then(|n| n.kind.leaf()) else {
+                    continue;
+                };
+                let text = leaf.text.trim_end();
+                if !text.ends_with('?') || text.ends_with("??") {
+                    continue;
+                }
+                let (leaf_span, rescue_span) = (leaf.span, self.node_span(rescue));
+                self.diagnostics.push(
+                    CantDiagnostic::error(
+                        CANT_G017_RESCUE_AFTER_TRY,
+                        "this `?` removes the failure the rescue would route",
+                    )
+                    .with_primary(self.span(leaf_span), "`?` fails the whole run here")
+                    .with_secondary(self.span(rescue_span), "so this handler never runs")
+                    .with_help("drop the `?` and let the rescue take the `err`"),
+                );
+            }
+        }
+    }
+
     // ---- cycles
 
     /// The one structural rule v0 has: **every cycle is orbit-owned.**
     ///
-    /// Only [`EdgeRole::Flow`] and [`EdgeRole::Enter`] carry control forward, so
-    /// only they can form a loop that runs twice. The other two are excluded for
-    /// different reasons:
+    /// [`EdgeRole::Flow`], [`EdgeRole::Enter`] and [`EdgeRole::Rescue`] carry
+    /// control forward, so only they can form a loop that runs twice. The other
+    /// two are excluded for different reasons:
     ///
     /// * [`EdgeRole::OrbitFeedback`] is the sanctioned loop — the whole point of
     ///   an orbit, and bounded by its `:max`.
     /// * [`EdgeRole::Join`] returns a branch's emissions to the fork that opened
-    ///   it. It always pairs with an `Enter`, so counting it made **every fork**
-    ///   look like an illegal cycle. A branch runs once; the join is a
-    ///   concatenation point, not a re-entry.
+    ///   it, or a handler's to its rescue. It always pairs with an `Enter` or a
+    ///   `Rescue`, so counting it made **every fork** look like an illegal cycle.
+    ///   A branch runs once; the join is a concatenation point, not a re-entry.
     ///
     /// Nothing lowering produces can build a cycle in the remaining subgraph,
     /// which is why this has to run on *deserialized* graphs: JSON is the
@@ -351,7 +417,10 @@ impl Validator<'_> {
     fn cycles(&mut self) {
         let mut successors: HashMap<NodeId, Vec<NodeId>> = HashMap::new();
         for edge in &self.program.edges {
-            if !matches!(edge.role, EdgeRole::Flow | EdgeRole::Enter) {
+            if !matches!(
+                edge.role,
+                EdgeRole::Flow | EdgeRole::Enter | EdgeRole::Rescue
+            ) {
                 continue;
             }
             successors
@@ -475,7 +544,8 @@ fn check_flow(flow: &cant_syntax::Flow, file: rite_core::FileId, out: &mut CantD
         let (allowed, form) = match &stage.kind {
             cant_syntax::StageKind::Orbit { .. } => (ORBIT_MODIFIERS, "an orbit"),
             cant_syntax::StageKind::Ward { .. } => (&[][..], "a ward"),
-            cant_syntax::StageKind::Fork { .. } => (&[][..], "a fork"),
+            cant_syntax::StageKind::Fork { .. } => (FORK_MODIFIERS, "a fork"),
+            cant_syntax::StageKind::Rescue { .. } => (&[][..], "a rescue"),
             _ => (&[][..], "a stage"),
         };
 
@@ -490,17 +560,11 @@ fn check_flow(flow: &cant_syntax::Flow, file: rite_core::FileId, out: &mut CantD
                 .with_primary(at, "unknown modifier");
                 diagnostic = if allowed.is_empty() {
                     diagnostic.with_help(format!(
-                        "no modifier applies to {form}; only an orbit takes `:by` and `:max`"
+                        "no modifier applies to {form}; an orbit takes `:by` and `:max`, \
+                         and a fork takes `:par`"
                     ))
                 } else {
-                    diagnostic.with_help(format!(
-                        "an orbit takes {}",
-                        allowed
-                            .iter()
-                            .map(|m| format!("`:{m}`"))
-                            .collect::<Vec<_>>()
-                            .join(" and ")
-                    ))
+                    diagnostic.with_help(format!("{form} takes {}", spelled(allowed)))
                 };
                 out.push(diagnostic);
             } else if seen.contains(&modifier.name.as_str()) {
@@ -518,14 +582,41 @@ fn check_flow(flow: &cant_syntax::Flow, file: rite_core::FileId, out: &mut CantD
                 );
             } else {
                 seen.push(&modifier.name);
+                check_modifier_value(modifier, file, out);
+            }
+        }
+
+        // `:par` on a fork with one branch runs that branch concurrently with
+        // nothing. A warning rather than an error: unlike a `?` before a rescue,
+        // it neither changes what the program emits nor makes a stage silently
+        // unreachable, and a fork is a thing people edit branches out of.
+        if let cant_syntax::StageKind::Fork { branches } = &stage.kind {
+            if branches.len() < 2 {
+                if let Some(par) = crate::lower::modifier(&stage.modifiers, "par") {
+                    out.push(
+                        CantDiagnostic::warning(
+                            CANT_G024_PARALLEL_SINGLE_BRANCH,
+                            "`:par` on a fork with one branch",
+                        )
+                        .with_primary(
+                            SourceSpan::new(file, par.name_span),
+                            "there is nothing to run it alongside",
+                        )
+                        .with_help("add a branch, or drop the `:par`"),
+                    );
+                }
             }
         }
 
         // `:max` has to be a positive integer, and the *text* is the only place
         // that survives — the graph stores the default when parsing failed.
         if let cant_syntax::StageKind::Orbit { .. } = &stage.kind {
-            if let Some(max) = crate::lower::modifier(&stage.modifiers, "max") {
-                let text = max.value.text.trim();
+            // A `:max` with no value at all is reported by `check_modifier_value`
+            // above; this is about the ones that carry something unusable.
+            if let Some(value) =
+                crate::lower::modifier(&stage.modifiers, "max").and_then(|m| m.value.as_ref())
+            {
+                let text = value.text.trim();
                 let ok = text.parse::<u64>().map(|n| n > 0).unwrap_or(false);
                 if !ok {
                     out.push(
@@ -533,7 +624,7 @@ fn check_flow(flow: &cant_syntax::Flow, file: rite_core::FileId, out: &mut CantD
                             CANT_G007_ORBIT_LIMIT,
                             format!("`:max {text}` is not a positive integer"),
                         )
-                        .with_primary(SourceSpan::new(file, max.value.span), "expected a count")
+                        .with_primary(SourceSpan::new(file, value.span), "expected a count")
                         .with_note(format!(
                             "an orbit accepts at most this many candidates before failing; \
                              the default is {}",
@@ -551,6 +642,251 @@ fn check_flow(flow: &cant_syntax::Flow, file: rite_core::FileId, out: &mut CantD
                 }
             }
             cant_syntax::StageKind::Orbit { body } => check_flow(body, file, out),
+            cant_syntax::StageKind::Rescue { handler } => check_flow(handler, file, out),
+            _ => {}
+        }
+    }
+}
+
+/// `` `:by` and `:max` `` — a list of modifier names for a help line.
+fn spelled(names: &[&str]) -> String {
+    let quoted: Vec<String> = names.iter().map(|m| format!("`:{m}`")).collect();
+    match quoted.split_last() {
+        Some((last, [])) => last.clone(),
+        Some((last, rest)) => format!("{} and {last}", rest.join(", ")),
+        None => String::new(),
+    }
+}
+
+/// A modifier carries a value exactly when its name takes one.
+///
+/// Called only for names that are allowed on the form, so both messages can name
+/// the modifier and say what it wants.
+fn check_modifier_value(
+    modifier: &cant_syntax::Modifier,
+    file: rite_core::FileId,
+    out: &mut CantDiagnostics,
+) {
+    let valueless = VALUELESS_MODIFIERS.contains(&modifier.name.as_str());
+    match (&modifier.value, valueless) {
+        (None, false) => out.push(
+            CantDiagnostic::error(
+                CANT_G022_MODIFIER_NEEDS_VALUE,
+                format!("`:{}` needs a value", modifier.name),
+            )
+            .with_primary(
+                SourceSpan::new(file, modifier.name_span),
+                "expected a value after the modifier name",
+            ),
+        ),
+        (Some(value), true) => out.push(
+            CantDiagnostic::error(
+                CANT_G023_MODIFIER_TAKES_NO_VALUE,
+                format!("`:{}` takes no value", modifier.name),
+            )
+            .with_primary(SourceSpan::new(file, value.span), "nothing goes here")
+            .with_help(format!(
+                "write it on its own: `:{}` configures the form by being present",
+                modifier.name
+            )),
+        ),
+        _ => {}
+    }
+}
+
+/// Named flows, checked against the AST rather than the graph.
+///
+/// It has to be the AST for the same reason modifier validation is: lowering
+/// *splices* a definition into the flow that used it, so by the time there is a
+/// graph there is no definition left to point at, and no name either.
+///
+/// Four rules, in the order a program hits them (ADR 0011).
+pub fn validate_definitions(
+    ast: &cant_syntax::CantProgramAst,
+    file: rite_core::FileId,
+) -> CantDiagnostics {
+    let mut out = CantDiagnostics::new();
+    if ast.defs.is_empty() {
+        return out;
+    }
+    let defined: Vec<&str> = ast.defs.iter().map(|d| d.name.as_str()).collect();
+
+    // Two definitions with one name: the first wins when lowering splices, so
+    // the second is dead and the program says two things.
+    for (index, def) in ast.defs.iter().enumerate() {
+        let Some(first) = ast.defs[..index].iter().find(|d| d.name == def.name) else {
+            continue;
+        };
+        out.push(
+            CantDiagnostic::error(
+                CANT_G018_DUPLICATE_DEFINITION,
+                format!("`{}` is defined twice", def.name),
+            )
+            .with_primary(SourceSpan::new(file, def.name_span), "defined again here")
+            .with_secondary(SourceSpan::new(file, first.name_span), "first defined here")
+            .with_help("give one of them another name, or delete it"),
+        );
+    }
+
+    // A name Rite already binds means one thing as a stage and another inside a
+    // leaf, in the same program.
+    for def in &ast.defs {
+        let clash = if rite_sem::resolve::BUILTIN_NAMES.contains(&def.name.as_str())
+            || rite_sem::resolve::EFFECTFUL_BUILTINS.contains(&def.name.as_str())
+        {
+            Some("a Rite builtin")
+        } else if ast.uses.iter().any(|u| u.name == def.name) {
+            Some("a module this program imports")
+        } else {
+            None
+        };
+        let Some(what) = clash else { continue };
+        out.push(
+            CantDiagnostic::error(
+                CANT_G019_DEFINITION_SHADOWS,
+                format!("`{}` is already {what}", def.name),
+            )
+            .with_primary(
+                SourceSpan::new(file, def.name_span),
+                "defined here as a flow",
+            )
+            .with_note(format!(
+                "`{0}` as a whole stage would be this flow, and `{0}` inside a leaf would \
+                 stay {what}",
+                def.name
+            ))
+            .with_help("name the flow something the program does not already use"),
+        );
+    }
+
+    // Every cycle in Cant is orbit-owned, and splicing a definition that reaches
+    // itself would not terminate.
+    let mut reported: Vec<&str> = Vec::new();
+    for def in &ast.defs {
+        if reported.contains(&def.name.as_str()) {
+            continue;
+        }
+        let Some(cycle) = cycle_from(&def.name, &ast.defs, &defined) else {
+            continue;
+        };
+        reported.extend(cycle.iter().copied());
+        let route = cycle.join("` -> `");
+        let title = if cycle.len() == 1 {
+            format!("the definition `{}` uses itself", def.name)
+        } else {
+            format!("the definition `{}` reaches itself", def.name)
+        };
+        out.push(
+            CantDiagnostic::error(CANT_G020_RECURSIVE_DEFINITION, title)
+                .with_primary(
+                    SourceSpan::new(file, def.name_span),
+                    format!("`{route}` -> `{}`", def.name),
+                )
+                .with_note(
+                    "a definition is spliced in where it is named, so a recursive one has \
+                     no end; an orbit is the only construct that repeats",
+                )
+                .with_help("write the repetition as an orbit: `~{ … } :max n`"),
+        );
+    }
+
+    // A definition nothing names is dead, and the usual reason is a typo at the
+    // use site, which became an ordinary Rite name and was reported as one.
+    let mut live: Vec<&str> = Vec::new();
+    referenced(&ast.flow, &defined, &mut live);
+    let mut index = 0;
+    while index < live.len() {
+        let name = live[index];
+        index += 1;
+        if let Some(def) = ast.defs.iter().find(|d| d.name == name) {
+            referenced(&def.flow, &defined, &mut live);
+        }
+    }
+    for def in &ast.defs {
+        if live.contains(&def.name.as_str()) {
+            continue;
+        }
+        out.push(
+            CantDiagnostic::error(
+                CANT_G021_UNUSED_DEFINITION,
+                format!("`{}` is defined and never used", def.name),
+            )
+            .with_primary(SourceSpan::new(file, def.name_span), "nothing names this")
+            .with_note(
+                "a definition is used by naming it as a whole stage; `clean($)` is Rite \
+                 expression text, not a use",
+            )
+            .with_help("use it in the flow, or delete it"),
+        );
+    }
+
+    out
+}
+
+/// The route from `start` back to itself through other definitions, if there is
+/// one.
+///
+/// Depth-first over a graph with one node per definition, which is small enough
+/// that plain recursion is bounded by the number of definitions in the file.
+fn cycle_from<'a>(
+    start: &'a str,
+    defs: &'a [cant_syntax::FlowDef],
+    defined: &[&'a str],
+) -> Option<Vec<&'a str>> {
+    fn walk<'a>(
+        start: &'a str,
+        current: &'a str,
+        defs: &'a [cant_syntax::FlowDef],
+        defined: &[&'a str],
+        seen: &mut Vec<&'a str>,
+        route: &mut Vec<&'a str>,
+    ) -> bool {
+        let Some(def) = defs.iter().find(|d| d.name == current) else {
+            return false;
+        };
+        let mut names = Vec::new();
+        referenced(&def.flow, defined, &mut names);
+        for name in names {
+            if name == start {
+                return true;
+            }
+            if seen.contains(&name) {
+                continue;
+            }
+            seen.push(name);
+            route.push(name);
+            if walk(start, name, defs, defined, seen, route) {
+                return true;
+            }
+            route.pop();
+        }
+        false
+    }
+
+    let mut seen = vec![start];
+    let mut route = vec![start];
+    walk(start, start, defs, defined, &mut seen, &mut route).then_some(route)
+}
+
+/// Every definition name this flow uses as a whole stage, deduplicated, in
+/// source order and including the ones inside forks, orbits and rescues.
+fn referenced<'a>(flow: &'a cant_syntax::Flow, defined: &[&'a str], out: &mut Vec<&'a str>) {
+    for stage in &flow.stages {
+        if let Some(name) = crate::lower::definition_use(stage) {
+            if let Some(found) = defined.iter().find(|d| **d == name) {
+                if !out.contains(found) {
+                    out.push(*found);
+                }
+            }
+        }
+        match &stage.kind {
+            cant_syntax::StageKind::Fork { branches } => {
+                for branch in branches {
+                    referenced(branch, defined, out);
+                }
+            }
+            cant_syntax::StageKind::Orbit { body } => referenced(body, defined, out),
+            cant_syntax::StageKind::Rescue { handler } => referenced(handler, defined, out),
             _ => {}
         }
     }
@@ -579,7 +915,11 @@ pub fn analyze(
     source_len: usize,
 ) -> Analysis {
     let graph = crate::lower::lower(ast, source_name, source_len);
-    let mut diagnostics = validate_modifiers(ast, file);
+    // Definitions first: lowering leaves a recursive one as a leaf so that it
+    // terminates, and the graph that results is not worth describing until the
+    // recursion is reported.
+    let mut diagnostics = validate_definitions(ast, file);
+    diagnostics.extend(validate_modifiers(ast, file));
     diagnostics.extend(validate(&graph, file));
     Analysis { graph, diagnostics }
 }

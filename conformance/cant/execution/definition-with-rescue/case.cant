@@ -1,0 +1,2 @@
+recover:{ !{ "recovered from " + $ } -> upper }
+[ok("a"), err("nope")] -> * -> recover -> []

@@ -8,7 +8,7 @@ pub mod resolve;
 pub use desugar::desugar_program;
 pub use ir::*;
 pub use modules::{resolve_module_path, LoadedModule, ModuleGraph, ModuleLoader};
-pub use resolve::{resolve, ResolvedProgram, Resolver};
+pub use resolve::{resolve, resolve_with_qualifiers, ResolvedProgram, Resolver};
 
 use rite_core::{Diagnostics, SourceFile, SourceMap};
 use rite_syntax::parse_file;
@@ -24,11 +24,32 @@ pub fn compile_to_ir_with_roots(
     entry_path: Option<&Path>,
     roots: &[PathBuf],
 ) -> (Option<ProgramIr>, Diagnostics) {
+    compile_to_ir_full(file, entry_path, roots, Default::default())
+}
+
+/// [`compile_to_ir`], with modules supplied in memory instead of from disk.
+///
+/// Keys are dotted module names (`coolio`, `lib.helpers`), matched before the
+/// filesystem is consulted — which is what lets the browser runtime's
+/// `RunOptions::files` resolve `use` with no filesystem at all.
+pub fn compile_to_ir_with_files(
+    file: &SourceFile,
+    files: std::collections::HashMap<String, String>,
+) -> (Option<ProgramIr>, Diagnostics) {
+    compile_to_ir_full(file, None, &[], files)
+}
+
+fn compile_to_ir_full(
+    file: &SourceFile,
+    entry_path: Option<&Path>,
+    roots: &[PathBuf],
+    files: std::collections::HashMap<String, String>,
+) -> (Option<ProgramIr>, Diagnostics) {
     let mut sources = SourceMap::new();
     // Keep entry text available for diagnostics in loader
     let _ = sources.add_file(&file.name, file.as_str());
 
-    let mut loader = ModuleLoader::new(&mut sources, roots.to_vec());
+    let mut loader = ModuleLoader::new(&mut sources, roots.to_vec()).with_virtual_files(files);
     let mut ast = match loader.load_entry(file, entry_path) {
         Some(a) => a,
         None => {
@@ -39,9 +60,10 @@ pub fn compile_to_ir_with_roots(
         }
     };
     let (graph, mut load_diags) = loader.into_graph();
-    modules::merge_exports_into_entry(&mut ast, &graph, &mut load_diags);
+    let merged = modules::merge_exports_into_entry(&mut ast, &graph, &mut load_diags);
 
-    let (resolved, rdiags) = resolve(&ast, file);
+    let (resolved, rdiags) =
+        resolve::resolve_with_qualifiers(&ast, file, merged.qualifiers, merged.injected_functions);
     load_diags.extend(rdiags.into_vec());
     if load_diags.has_errors() {
         return (None, load_diags);

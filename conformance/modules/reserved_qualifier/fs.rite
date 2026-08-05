@@ -1,0 +1,3 @@
+pub def read(p) [[
+  return p
+]]

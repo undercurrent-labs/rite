@@ -6,39 +6,34 @@ use rite_core::Span;
 use rite_syntax::{
     BinOp, Block, Expr, Item, LitKind, Pattern, RecordKey, ResultPatKind, Stmt, UnaryOp,
 };
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 struct Desugar {
     next_local: u32,
     functions: Vec<FunctionIr>,
     func_map: HashMap<String, FuncId>,
-    /// Import aliases: `use math as m` → `"m"` so `m.square` → `m__square`.
-    import_aliases: HashMap<String, String>,
+    /// Names the entry's imports bind, so `m.square` / `@m.square` rewrite to
+    /// `m__square`. From the resolver rather than a scan of the item list.
+    import_aliases: HashSet<String>,
+    /// Qualifiers of the merged modules' imports — a body copied out of
+    /// `outer.rite` uses imports the entry item list does not have. Consulted
+    /// only while `in_injected_fn`, mirroring the resolver's scoping.
+    merged_aliases: HashSet<String>,
+    /// Names of the function copies `merge_exports_into_entry` injected.
+    injected: HashSet<String>,
+    /// Lowering the body of an injected copy (or a function nested in one).
+    in_injected_fn: bool,
 }
 
 pub fn desugar_program(resolved: &ResolvedProgram) -> ProgramIr {
-    let mut import_aliases = HashMap::new();
-    for item in &resolved.ast.items {
-        if let Item::Import(i) = item {
-            // Aliased or not, an import binds a name that can qualify its exports:
-            // `use math` gives `math.square`, `use math as m` gives `m.square`.
-            // Qualifying is the way to keep two modules that export the same name
-            // apart, so it must not require an alias.
-            let bound = match &i.alias {
-                Some(alias) => alias.name.clone(),
-                None => match i.path.segments.last() {
-                    Some(seg) => seg.name.clone(),
-                    None => continue,
-                },
-            };
-            import_aliases.insert(bound.clone(), bound);
-        }
-    }
     let mut d = Desugar {
         next_local: 0,
         functions: Vec::new(),
         func_map: HashMap::new(),
-        import_aliases,
+        import_aliases: resolved.import_qualifiers.clone(),
+        merged_aliases: resolved.merged_qualifiers.clone(),
+        injected: resolved.injected_functions.clone(),
+        in_injected_fn: false,
     };
     // Pre-register functions
     for item in &resolved.ast.items {
@@ -70,6 +65,7 @@ pub fn desugar_program(resolved: &ResolvedProgram) -> ProgramIr {
         match item {
             Item::Function(f) => {
                 let id = d.func_map[&f.name.name];
+                d.in_injected_fn = d.injected.contains(&f.name.name);
                 d.push_scope_params();
                 let mut params = Vec::new();
                 let mut param_names = Vec::new();
@@ -79,6 +75,7 @@ pub fn desugar_program(resolved: &ResolvedProgram) -> ProgramIr {
                     param_names.push(p.name.name.clone());
                 }
                 let body = d.desugar_block(&f.body);
+                d.in_injected_fn = false;
                 if let Some(func) = d.functions.iter_mut().find(|x| x.id == id) {
                     func.params = params;
                     func.param_names = param_names;
@@ -205,6 +202,26 @@ fn key_ir(key: &RecordKey) -> KeyIr {
 }
 
 impl Desugar {
+    /// `@cool.square` → `cool__square` when `cool` is an import qualifier and
+    /// the mangled global exists. Unlike the `Member` rewrite below, no shadow
+    /// check: `@cool` always means the module. Resolve has already rejected
+    /// qualifiers that collide with capability namespaces, so a `None` here
+    /// falls through to an ordinary capability call.
+    /// Entry qualifiers hold everywhere; a merged module's only inside the
+    /// copies that came with it. Mirrors `Resolver::qualifier_in_scope`.
+    fn is_qualifier(&self, name: &str) -> bool {
+        self.import_aliases.contains(name)
+            || (self.in_injected_fn && self.merged_aliases.contains(name))
+    }
+
+    fn module_global(&self, path: &[String]) -> Option<String> {
+        if path.len() != 2 || !self.is_qualifier(&path[0]) {
+            return None;
+        }
+        let mangled = format!("{}__{}", path[0], path[1]);
+        self.func_map.contains_key(&mangled).then_some(mangled)
+    }
+
     fn fresh_local(&mut self) -> LocalId {
         let id = LocalId(self.next_local);
         self.next_local += 1;
@@ -313,6 +330,9 @@ impl Desugar {
 
     fn desugar_stmt(&mut self, stmt: &Stmt) -> ExprIr {
         match stmt {
+            // The sugar's `lowered` form is the semantic truth; the source
+            // spelling exists for the formatter alone.
+            Stmt::Sugared(s) => self.desugar_stmt(&s.lowered),
             Stmt::Binding(b) => {
                 let value = self.desugar_expr(&b.value);
                 match &b.pattern {
@@ -344,6 +364,7 @@ impl Desugar {
                                     value: Box::new(ExprIr::Local(lid)),
                                     arms: vec![MatchArmIr {
                                         pattern: pat,
+                                        guard: None,
                                         body: ExprIr::Local(lid),
                                         span: b.span,
                                     }],
@@ -518,6 +539,23 @@ impl Desugar {
                     match u.expr.as_ref() {
                         Expr::Call(c) => {
                             if let Expr::Capability(cap) = c.callee.as_ref() {
+                                // `! @cool.square(…)` routes to the module before the
+                                // host: same shape `! cool.square(…)` lowers to.
+                                if let Some(global) = self.module_global(&cap.path) {
+                                    return ExprIr::Unary {
+                                        op: UnaryOpIr::Effect,
+                                        expr: Box::new(ExprIr::Call {
+                                            callee: Box::new(ExprIr::Global(global)),
+                                            args: c
+                                                .args
+                                                .iter()
+                                                .map(|a| self.desugar_expr(a))
+                                                .collect(),
+                                            span: c.span,
+                                        }),
+                                        span: u.span,
+                                    };
+                                }
                                 return ExprIr::CapabilityCall {
                                     path: cap.path.clone(),
                                     args: c.args.iter().map(|a| self.desugar_expr(a)).collect(),
@@ -532,6 +570,13 @@ impl Desugar {
                             };
                         }
                         Expr::Capability(cap) => {
+                            if let Some(global) = self.module_global(&cap.path) {
+                                return ExprIr::Unary {
+                                    op: UnaryOpIr::Effect,
+                                    expr: Box::new(ExprIr::Global(global)),
+                                    span: u.span,
+                                };
+                            }
                             // ! @cap.fn is incomplete without call — leave as capability ref
                             return ExprIr::CapabilityCall {
                                 path: cap.path.clone(),
@@ -557,6 +602,15 @@ impl Desugar {
             Expr::Call(c) => {
                 // capability call pure
                 if let Expr::Capability(cap) = c.callee.as_ref() {
+                    // `@cool.square(…)` routes to the module before the host: same
+                    // Call-of-Global shape `cool.square(…)` lowers to.
+                    if let Some(global) = self.module_global(&cap.path) {
+                        return ExprIr::Call {
+                            callee: Box::new(ExprIr::Global(global)),
+                            args: c.args.iter().map(|a| self.desugar_expr(a)).collect(),
+                            span: c.span,
+                        };
+                    }
                     return ExprIr::CapabilityCall {
                         path: cap.path.clone(),
                         args: c.args.iter().map(|a| self.desugar_expr(a)).collect(),
@@ -589,7 +643,7 @@ impl Desugar {
                 // `math__x`, which failed at runtime. Functions are all registered
                 // before any body is lowered, so this map is complete here.
                 if let Expr::Ident(obj) = m.object.as_ref() {
-                    if self.import_aliases.contains_key(&obj.name) {
+                    if self.is_qualifier(&obj.name) {
                         let mangled = format!("{}__{}", obj.name, m.field.name);
                         if self.func_map.contains_key(&mangled) {
                             return ExprIr::Global(mangled);
@@ -633,6 +687,7 @@ impl Desugar {
                     .iter()
                     .map(|a| MatchArmIr {
                         pattern: self.desugar_pattern(&a.pattern),
+                        guard: a.guard.as_ref().map(|g| self.desugar_expr(g)),
                         body: self.desugar_expr(&a.body),
                         span: a.span,
                     })
@@ -664,12 +719,19 @@ impl Desugar {
                     ExprIr::Block(self.desugar_block(b))
                 }
             }
-            Expr::Capability(c) => ExprIr::CapabilityCall {
-                path: c.path.clone(),
-                args: vec![],
-                effect: EffectKind::Pure,
-                span: c.span,
-            },
+            Expr::Capability(c) => {
+                // Bare `@cool.square` is the function value, exactly as bare
+                // `cool.square` is — not invoked, unlike a bare capability ref.
+                if let Some(global) = self.module_global(&c.path) {
+                    return ExprIr::Global(global);
+                }
+                ExprIr::CapabilityCall {
+                    path: c.path.clone(),
+                    args: vec![],
+                    effect: EffectKind::Pure,
+                    span: c.span,
+                }
+            }
             Expr::Placeholder(p) => ExprIr::Placeholder(p.span),
             Expr::Try(t) => ExprIr::Try {
                 expr: Box::new(self.desugar_expr(&t.expr)),
@@ -966,6 +1028,13 @@ impl Desugar {
                 PatternIr::Literal(lit)
             }
             Pattern::Wildcard(_) => PatternIr::Wildcard,
+            Pattern::Or(o) => PatternIr::Or {
+                alternatives: o
+                    .alternatives
+                    .iter()
+                    .map(|p| self.desugar_pattern(p))
+                    .collect(),
+            },
             Pattern::List(l) => PatternIr::List {
                 elements: l.elements.iter().map(|e| self.desugar_pattern(e)).collect(),
                 rest: l.rest.as_ref().map(|r| Box::new(self.desugar_pattern(r))),

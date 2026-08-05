@@ -1,0 +1,11 @@
+{
+  "get_present": 1,
+  "get_absent_is_none": "absent",
+  "get_with_fallback": 0,
+  "has_present": true,
+  "has_absent": false,
+  "entries_pairs": [["b", 2], ["a", 1]],
+  "merge_later_wins": {"b": 2, "a": 9, "c": 3},
+  "update_existing": {"b": 2, "a": 101},
+  "update_absent_sees_none": {"b": 2, "a": 1, "new": "made"}
+}

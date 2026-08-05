@@ -125,6 +125,8 @@ fn strip_stmt(s: &Stmt) -> serde_json::Value {
             "kind": "return",
             "value": r.value.as_ref().map(strip_expr),
         }),
+        // The syntax tree view shows what the sugar means, not its spelling.
+        Stmt::Sugared(s) => strip_stmt(&s.lowered),
     }
 }
 

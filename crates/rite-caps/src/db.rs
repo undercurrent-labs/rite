@@ -147,10 +147,11 @@ impl DbCap {
         method: &str,
         args: Vec<Value>,
         perms: &PermissionSet,
+        limits: rite_runtime::Limits,
     ) -> Result<Value, EvalError> {
         #[cfg(not(all(feature = "duckdb", not(target_arch = "wasm32"))))]
         {
-            let _ = (method, args, perms);
+            let _ = (method, args, perms, limits);
             return Err(EvalError::Capability(
                 "@db requires the native DuckDB host (not available in WASM / this build)".into(),
             ));
@@ -158,7 +159,7 @@ impl DbCap {
 
         #[cfg(all(feature = "duckdb", not(target_arch = "wasm32")))]
         {
-            self.call_native(method, args, perms)
+            self.call_native(method, args, perms, limits)
         }
     }
 
@@ -168,14 +169,15 @@ impl DbCap {
         method: &str,
         args: Vec<Value>,
         perms: &PermissionSet,
+        limits: rite_runtime::Limits,
     ) -> Result<Value, EvalError> {
         match method {
             "open" => self.open(args, perms),
             "close" => self.close_conn(args),
             "exec" => self.exec(args),
-            "query" => self.query(args),
+            "query" => self.query(args, limits),
             "prepare" => self.prepare(args),
-            "query_prepared" => self.query_prepared(args),
+            "query_prepared" => self.query_prepared(args, limits),
             "exec_prepared" => self.exec_prepared(args),
             "close_stmt" => self.close_stmt(args),
             "begin" => self.tx(args, "BEGIN"),
@@ -267,7 +269,7 @@ impl DbCap {
     }
 
     #[cfg(all(feature = "duckdb", not(target_arch = "wasm32")))]
-    fn query(&self, args: Vec<Value>) -> Result<Value, EvalError> {
+    fn query(&self, args: Vec<Value>, limits: rite_runtime::Limits) -> Result<Value, EvalError> {
         let id = handle_id(args.first(), "db.conn")?;
         let sql = args
             .get(1)
@@ -279,10 +281,10 @@ impl DbCap {
             .conns
             .get(&id)
             .ok_or_else(|| EvalError::Message("db connection closed or invalid".into()))?;
-        match query_rows(conn, sql, &params) {
-            Ok(rows) => Ok(Value::ok(Value::list(rows))),
-            Err(e) => Ok(Value::err(Value::string(e))),
-        }
+        collected(
+            query_rows(conn, sql, &params, limits.max_collection_size),
+            "db.query",
+        )
     }
 
     #[cfg(all(feature = "duckdb", not(target_arch = "wasm32")))]
@@ -312,7 +314,11 @@ impl DbCap {
     }
 
     #[cfg(all(feature = "duckdb", not(target_arch = "wasm32")))]
-    fn query_prepared(&self, args: Vec<Value>) -> Result<Value, EvalError> {
+    fn query_prepared(
+        &self,
+        args: Vec<Value>,
+        limits: rite_runtime::Limits,
+    ) -> Result<Value, EvalError> {
         let sid = handle_id(args.first(), "db.stmt")?;
         let params = value_params(args.get(1));
         let inner = self.inner.lock();
@@ -325,10 +331,10 @@ impl DbCap {
             .conns
             .get(&cid)
             .ok_or_else(|| EvalError::Message("db connection closed or invalid".into()))?;
-        match query_rows(conn, &sql, &params) {
-            Ok(rows) => Ok(Value::ok(Value::list(rows))),
-            Err(e) => Ok(Value::err(Value::string(e))),
-        }
+        collected(
+            query_rows(conn, &sql, &params, limits.max_collection_size),
+            "db.query_prepared",
+        )
     }
 
     #[cfg(all(feature = "duckdb", not(target_arch = "wasm32")))]
@@ -513,19 +519,55 @@ fn value_params(v: Option<&Value>) -> Vec<DuckValue> {
 }
 
 #[cfg(all(feature = "duckdb", not(target_arch = "wasm32")))]
-fn query_rows(conn: &Connection, sql: &str, params: &[DuckValue]) -> Result<Vec<Value>, String> {
+/// How a query can fail: the database saying no is a value the script can
+/// branch on; a result set blowing the run's collection ceiling is a budget
+/// error, exactly as `range` over the same ceiling is.
+#[cfg(all(feature = "duckdb", not(target_arch = "wasm32")))]
+enum QueryError {
+    Db(String),
+    OverLimit(usize),
+}
+
+/// Fold a query outcome into the value/error shape `db.query` answers.
+#[cfg(all(feature = "duckdb", not(target_arch = "wasm32")))]
+fn collected(rows: Result<Vec<Value>, QueryError>, who: &str) -> Result<Value, EvalError> {
+    match rows {
+        Ok(rows) => Ok(Value::ok(Value::list(rows))),
+        Err(QueryError::Db(e)) => Ok(Value::err(Value::string(e))),
+        Err(QueryError::OverLimit(max)) => Err(EvalError::Budget(
+            rite_runtime::budget::BudgetError::CollectionTooLarge {
+                who: who.to_string(),
+                len: max.saturating_add(1),
+                max,
+            },
+        )),
+    }
+}
+
+#[cfg(all(feature = "duckdb", not(target_arch = "wasm32")))]
+fn query_rows(
+    conn: &Connection,
+    sql: &str,
+    params: &[DuckValue],
+    max_rows: usize,
+) -> Result<Vec<Value>, QueryError> {
     // DuckDB panics on column_count/column_name until the statement is stepped.
     // Prefer DESCRIBE for unbound SQL; otherwise infer width from the first row.
     let names = resolve_column_names(conn, sql, params.len());
 
-    let mut stmt = conn.prepare(sql).map_err(|e| e.to_string())?;
+    let mut stmt = conn
+        .prepare(sql)
+        .map_err(|e| QueryError::Db(e.to_string()))?;
     let mut rows = stmt
         .query(params_from_iter(params.iter()))
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| QueryError::Db(e.to_string()))?;
 
     let mut out = Vec::new();
     let mut width: Option<usize> = (!names.is_empty()).then_some(names.len());
-    while let Some(row) = rows.next().map_err(|e| e.to_string())? {
+    while let Some(row) = rows.next().map_err(|e| QueryError::Db(e.to_string()))? {
+        if out.len() >= max_rows {
+            return Err(QueryError::OverLimit(max_rows));
+        }
         let n = match width {
             Some(n) => n,
             None => {

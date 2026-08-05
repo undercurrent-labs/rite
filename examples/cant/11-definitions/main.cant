@@ -1,0 +1,3 @@
+clean:{ trim -> ?{ count($) > 0 } }
+loud:{ upper -> $ + "!" }
+["  hello  ", "", " cant "] -> * -> clean -> loud -> []

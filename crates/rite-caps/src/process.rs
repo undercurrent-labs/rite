@@ -191,22 +191,68 @@ impl ProcessCap {
                     }
                 }
 
-                let output = command
-                    .output()
+                let mut child = command
+                    .spawn()
+                    .map_err(|e| EvalError::Capability(e.to_string()))?;
+                // Both pipes drain concurrently — a child blocked on a full
+                // stderr pipe deadlocks a sequential reader — and each drain
+                // stops at the configured `max_string_size`. The capture is a
+                // buffer the script will hold, so the ceiling applies while it
+                // is being filled, not after; `.output()` buffered everything
+                // the child cared to write first.
+                let cap = ctx.budget.limits().max_string_size;
+                async fn drain(
+                    stream: Option<impl tokio::io::AsyncRead + Unpin>,
+                    cap: usize,
+                ) -> Result<Vec<u8>, ()> {
+                    use tokio::io::AsyncReadExt;
+                    let Some(mut s) = stream else {
+                        return Ok(Vec::new());
+                    };
+                    let mut out = Vec::new();
+                    let mut buf = [0u8; 8192];
+                    loop {
+                        match s.read(&mut buf).await {
+                            Ok(0) => return Ok(out),
+                            Ok(n) => {
+                                if out.len().saturating_add(n) > cap {
+                                    return Err(());
+                                }
+                                out.extend_from_slice(&buf[..n]);
+                            }
+                            Err(_) => return Ok(out),
+                        }
+                    }
+                }
+                let stdout = child.stdout.take();
+                let stderr = child.stderr.take();
+                let (out, err) = tokio::join!(drain(stdout, cap), drain(stderr, cap));
+                let (Ok(stdout), Ok(stderr)) = (out, err) else {
+                    let _ = child.kill().await;
+                    return Err(EvalError::Budget(
+                        rite_runtime::budget::BudgetError::StringTooLarge {
+                            who: "process.run output capture".into(),
+                            len: cap.saturating_add(1),
+                            max: cap,
+                        },
+                    ));
+                };
+                let status = child
+                    .wait()
                     .await
                     .map_err(|e| EvalError::Capability(e.to_string()))?;
                 Ok(Value::ok(Value::record(vec![
                     (
                         Key::String("status".into()),
-                        Value::Int(output.status.code().unwrap_or(-1) as i64),
+                        Value::Int(status.code().unwrap_or(-1) as i64),
                     ),
                     (
                         Key::String("stdout".into()),
-                        Value::string(String::from_utf8_lossy(&output.stdout).to_string()),
+                        Value::string(String::from_utf8_lossy(&stdout).to_string()),
                     ),
                     (
                         Key::String("stderr".into()),
-                        Value::string(String::from_utf8_lossy(&output.stderr).to_string()),
+                        Value::string(String::from_utf8_lossy(&stderr).to_string()),
                     ),
                 ])))
             }

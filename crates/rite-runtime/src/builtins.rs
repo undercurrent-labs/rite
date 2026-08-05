@@ -52,6 +52,11 @@ pub fn call_builtin(
         "chunk" => builtin_chunk(args),
         "keys" => builtin_keys(args),
         "values" => builtin_values(args),
+        "get" => builtin_get(args, atoms),
+        "has" => builtin_has(args, atoms),
+        "entries" => builtin_entries(args),
+        "merge" => builtin_merge(args),
+        "window" => builtin_window(args),
         "abs" => builtin_abs(args),
         "clamp" => builtin_clamp(args),
         "pow" => builtin_pow(args),
@@ -108,7 +113,8 @@ pub fn call_builtin(
         // to fall through to "unknown builtin", which was simply wrong.
         "map" | "keep" | "reject" | "reduce" | "each" | "find" | "any" | "all" | "group"
         | "parallel" | "while_loop" | "compose" | "print" | "println" | "and_then" | "sort"
-        | "sort_by" | "min_by" | "max_by" => Err(EvalError::Message(format!(
+        | "sort_by" | "min_by" | "max_by" | "flat_map" | "partition" | "take_while"
+        | "drop_while" | "update" => Err(EvalError::Message(format!(
             "builtin `{}` requires evaluator dispatch",
             name
         ))),
@@ -517,6 +523,115 @@ fn record_arg(v: Option<Value>, who: &str) -> Result<IndexMap<Key, Value>, EvalE
                 .unwrap_or_else(|| "none".into())
         ))),
     }
+}
+
+/// The key candidates a record lookup tries, in order.
+///
+/// A string tries its atom twin and an atom its string twin, because `keys()`
+/// answers plain strings for both — a key read out of `keys()` must be able to
+/// find the entry it came from. Exact type wins when both exist.
+pub(crate) fn key_candidates(v: &Value, atoms: &AtomInterner) -> Result<Vec<Key>, EvalError> {
+    match v {
+        Value::String(s) => Ok(vec![Key::String(s.to_string()), Key::Atom(s.to_string())]),
+        Value::Atom(id) => {
+            let name = atoms.name(*id);
+            Ok(vec![Key::Atom(name.clone()), Key::String(name)])
+        }
+        Value::Int(i) => Ok(vec![Key::Int(*i)]),
+        other => Err(EvalError::Message(format!(
+            "record keys are strings, atoms or ints, got {}",
+            other.type_name()
+        ))),
+    }
+}
+
+fn builtin_get(args: Vec<Value>, atoms: &AtomInterner) -> Result<Value, EvalError> {
+    let mut it = args.into_iter();
+    let r = record_arg(it.next(), "get")?;
+    let key = it.next().unwrap_or(Value::None);
+    let fallback = it.next().unwrap_or(Value::None);
+    for k in key_candidates(&key, atoms)? {
+        if let Some(v) = r.get(&k) {
+            return Ok(v.clone());
+        }
+    }
+    Ok(fallback)
+}
+
+fn builtin_has(args: Vec<Value>, atoms: &AtomInterner) -> Result<Value, EvalError> {
+    let mut it = args.into_iter();
+    let r = record_arg(it.next(), "has")?;
+    let key = it.next().unwrap_or(Value::None);
+    let found = key_candidates(&key, atoms)?
+        .iter()
+        .any(|k| r.contains_key(k));
+    Ok(Value::Bool(found))
+}
+
+fn builtin_entries(args: Vec<Value>) -> Result<Value, EvalError> {
+    let r = record_arg(args.into_iter().next(), "entries")?;
+    Ok(Value::list(
+        r.iter()
+            .map(|(k, v)| Value::list(vec![Value::string(k.as_str()), v.clone()]))
+            .collect::<Vec<_>>(),
+    ))
+}
+
+fn builtin_merge(args: Vec<Value>) -> Result<Value, EvalError> {
+    // `merge(a, b, …)` — later records win, same as record spread `⟨..a, ..b⟩`.
+    let mut out: IndexMap<Key, Value> = IndexMap::new();
+    for (i, arg) in args.into_iter().enumerate() {
+        match arg {
+            Value::Record(r) => {
+                for (k, v) in r {
+                    out.insert(k, v);
+                }
+            }
+            other => {
+                return Err(EvalError::Message(format!(
+                    "merge expects records, argument {} is {}",
+                    i + 1,
+                    other.type_name()
+                )))
+            }
+        }
+    }
+    Ok(Value::Record(out))
+}
+
+fn builtin_window(args: Vec<Value>) -> Result<Value, EvalError> {
+    let mut it = args.into_iter();
+    let xs = match it.next() {
+        Some(Value::List(xs)) => xs,
+        other => {
+            return Err(EvalError::Message(format!(
+                "window expects a list, got {}",
+                other
+                    .map(|v| v.type_name().to_string())
+                    .unwrap_or_else(|| "none".into())
+            )))
+        }
+    };
+    let n = match it.next() {
+        Some(Value::Int(n)) if n > 0 => n as usize,
+        other => {
+            return Err(EvalError::Message(format!(
+                "window expects a positive int size, got {}",
+                other
+                    .map(|v| v.type_name().to_string())
+                    .unwrap_or_else(|| "none".into())
+            )))
+        }
+    };
+    // Overlapping windows, step 1; `chunk` is the non-overlapping cousin.
+    let items: Vec<Value> = xs.into_iter().collect();
+    let mut out: Vec<Value> = Vec::new();
+    if items.len() >= n {
+        for w in items.windows(n) {
+            out.push(Value::list(w.to_vec()));
+        }
+    }
+    Ok(Value::list(out))
 }
 
 fn builtin_keys(args: Vec<Value>) -> Result<Value, EvalError> {

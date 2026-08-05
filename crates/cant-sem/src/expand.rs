@@ -221,8 +221,9 @@ impl Writer<'_> {
                     continue;
                 }
                 let subgraphs: Vec<SubgraphId> = match &node.kind {
-                    NodeKind::Fork { branches } => branches.clone(),
+                    NodeKind::Fork { branches, .. } => branches.clone(),
                     NodeKind::Orbit { body, .. } => vec![*body],
+                    NodeKind::Rescue { handler } => vec![*handler],
                     _ => continue,
                 };
                 let inner = subgraphs.iter().any(|id| {
@@ -395,18 +396,36 @@ impl Writer<'_> {
             NodeKind::Scatter => w.scatter_node(id, span),
             NodeKind::Collect => w.collect_node(id),
             NodeKind::Ward { predicate } => w.ward_node(id, predicate),
-            NodeKind::Fork { branches } => w.fork_node(id, branches),
+            NodeKind::Fork { branches, parallel } => w.fork_node(id, branches, *parallel),
             NodeKind::Orbit {
                 body,
                 identity,
                 max_items,
             } => w.orbit_node(id, *body, identity.as_ref(), *max_items, span),
+            NodeKind::Rescue { handler } => w.rescue_node(id, *handler),
         });
     }
 
     /// The first stage: it ignores its input and emits one value.
     fn source_node(&mut self, id: NodeId, expr: &LeafExpr) {
         let (kw, name) = (self.def_kw(self.node_is_effectful(id)), self.node_fn(id));
+        if let Some(inner) = split_trailing_try(expr) {
+            let where_ = self.location(expr.span);
+            self.push(&format!(
+                "// {}: the source; `?` fails the run on an err\n\
+                 {kw} {name}(__in) [[\n  __ignored <- __in\n  __r <- ",
+                id
+            ));
+            self.push_mapped(&inner.text, expr.span, id, true);
+            self.push(&format!(
+                "\n  if is_err(__r) [[\n    \
+                 ^ panic(\"CANT-R004: `?` at {where_} on a failed stage: \" + str(__r))\n  ]]\n  \
+                 if not is_ok(__r) [[\n    \
+                 ^ panic(\"CANT-R004: `?` at {where_} expects a result, got \" + type_of(__r))\n  ]]\n  \
+                 ^ [ unwrap_or(__r, none) ]\n]]\n"
+            ));
+            return;
+        }
         self.push(&format!(
             "// {}: the source\n{kw} {name}(__in) [[\n  __ignored <- __in\n  ^ [ ",
             id
@@ -417,6 +436,30 @@ impl Writer<'_> {
 
     fn stage_node(&mut self, id: NodeId, expr: &LeafExpr) {
         let (kw, name) = (self.def_kw(self.node_is_effectful(id)), self.node_fn(id));
+        // A trailing `?` cannot stay inside the loop: `for` lowers to `each`
+        // with a closure, so the early return the `?` performs left the
+        // *closure*, and the failed emission was silently dropped while the
+        // docs promised the run would end. The stage strips it and checks the
+        // result itself, with the error in hand for the message.
+        if let Some(inner) = split_trailing_try(expr) {
+            let applied = apply_to(&inner, "__e");
+            let where_ = self.location(expr.span);
+            self.push(&format!(
+                "// {}: a stage, once per emission; `?` fails the run on an err\n\
+                 {kw} {name}(__in) [[\n  \
+                 __out <~ []\n  for __e in __in [[\n    __r <- ",
+                id
+            ));
+            self.push_mapped(&applied, expr.span, id, true);
+            self.push(&format!(
+                "\n    if is_err(__r) [[\n      \
+                 ^ panic(\"CANT-R004: `?` at {where_} on a failed stage: \" + str(__r))\n    ]]\n    \
+                 if not is_ok(__r) [[\n      \
+                 ^ panic(\"CANT-R004: `?` at {where_} expects a result, got \" + type_of(__r))\n    ]]\n    \
+                 __out := concat(__out, [ unwrap_or(__r, none) ])\n  ]]\n  ^ __out\n]]\n"
+            ));
+            return;
+        }
         let applied = apply_to(expr, "__e");
         self.push(&format!(
             "// {}: a stage, once per emission\n{kw} {name}(__in) [[\n  \
@@ -464,7 +507,10 @@ impl Writer<'_> {
         self.push(") [[\n      __out := concat(__out, [ __e ])\n    ]]\n  ]]\n  ^ __out\n]]\n");
     }
 
-    fn fork_node(&mut self, id: NodeId, branches: &[SubgraphId]) {
+    fn fork_node(&mut self, id: NodeId, branches: &[SubgraphId], parallel: bool) {
+        if parallel {
+            return self.parallel_fork_node(id, branches);
+        }
         let effectful = self.node_is_effectful(id);
         let (kw, name) = (self.def_kw(effectful), self.node_fn(id));
         self.push(&format!(
@@ -479,6 +525,64 @@ impl Writer<'_> {
             ));
         }
         self.push("  ]]\n  ^ __out\n]]\n");
+    }
+
+    /// A parallel fork: `parallel` over one item per branch, plus a named
+    /// dispatcher that calls the right branch chain.
+    ///
+    /// The dispatcher is what makes this legal rather than a hole in the effect
+    /// discipline. Rite's analysis cannot see through a function *value*, but it
+    /// does track a **named** function passed as an argument — the `each(shout)`
+    /// case in `rite-sem/src/resolve.rs` — so passing a `def!` dispatcher makes
+    /// `parallel` itself require a `!`, and every host call still sits in a named
+    /// function body with its marker. A closure here would have hidden all of it:
+    /// `cant check` would have passed and the program would have read files with
+    /// no grant.
+    ///
+    /// Two properties of `parallel` are load-bearing and neither is an accident
+    /// of scheduling (`rite-runtime/src/eval/hof.rs`): results come back in
+    /// **input order**, which is what keeps the joined value in branch order; and
+    /// at most 16 branches are in flight at once, each window settling before the
+    /// next starts, so a fork of the sizes anyone writes runs as one window and
+    /// every branch finishes before a failure in one of them is reported.
+    fn parallel_fork_node(&mut self, id: NodeId, branches: &[SubgraphId]) {
+        let effectful = self.node_is_effectful(id);
+        let (kw, name) = (self.def_kw(effectful), self.node_fn(id));
+        let dispatcher = format!("{name}_par");
+        let marker = self.call_marker(effectful);
+
+        let items = (0..branches.len())
+            .map(|i| format!("<< branch: {i}, value: __e >>"))
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        self.push(&format!(
+            "// {id}: parallel fork — every branch sees the same input, run\n\
+             // concurrently, results concatenated in branch order\n\
+             {kw} {name}(__in) [[\n  \
+             __out <~ []\n  \
+             for __e in __in [[\n    \
+             __r <- {marker}parallel([ {items} ], {dispatcher})\n    \
+             for __b in __r [[\n      \
+             __out := concat(__out, __b)\n    \
+             ]]\n  \
+             ]]\n  ^ __out\n]]\n"
+        ));
+
+        self.push(&format!(
+            "\n// {id}: the dispatcher — `parallel` runs one call of this per branch\n\
+             {kw} {dispatcher}(__p) [[\n"
+        ));
+        for (index, branch) in branches.iter().enumerate() {
+            let chain = self.chain_fn(*branch);
+            let call = self.call_marker(self.subgraph_is_effectful(*branch));
+            self.push(&format!(
+                "  if (__p.branch = {index}) [[ ^ {call}{chain}([ __p.value ]) ]]\n"
+            ));
+        }
+        // Unreachable: the indices come from the same list this matches on. A
+        // Rite function still has to return something on every path.
+        self.push("  ^ []\n]]\n");
     }
 
     fn orbit_node(
@@ -528,6 +632,30 @@ impl Writer<'_> {
         ));
     }
 
+    /// A rescue: an `err` goes to the handler's chain, an `ok` continues
+    /// unwrapped, anything else passes through.
+    ///
+    /// The `match` is an expression producing the emissions this input becomes,
+    /// so the handler call sits in this function's own body — which is what lets
+    /// Rite's resolver see an effect inside a handler and demand its `!`.
+    fn rescue_node(&mut self, id: NodeId, handler: SubgraphId) {
+        let effectful = self.node_is_effectful(id);
+        let (kw, name) = (self.def_kw(effectful), self.node_fn(id));
+        let chain = self.chain_fn(handler);
+        let marker = self.call_marker(self.subgraph_is_effectful(handler));
+        self.push(&format!(
+            "// {id}: rescue — an err routes to the handler, an ok continues unwrapped\n\
+             {kw} {name}(__in) [[\n  \
+             __out <~ []\n  \
+             for __e in __in [[\n    \
+             __out := concat(__out, match __e [[\n      \
+             ok __v -> [ __v ]\n      \
+             err __r -> {marker}{chain}([ __r ])\n      \
+             _ -> [ __e ]\n    \
+             ]])\n  ]]\n  ^ __out\n]]\n"
+        ));
+    }
+
     /// A subgraph's chain: its nodes applied in order.
     fn chain(&mut self, id: SubgraphId) {
         let Some(subgraph) = self.graph.subgraph(id).cloned() else {
@@ -536,8 +664,12 @@ impl Writer<'_> {
         let effectful = self.subgraph_is_effectful(id);
         let (kw, name) = (self.def_kw(effectful), self.chain_fn(id));
         let owner = subgraph.owner;
+        let what = match self.graph.node(owner).map(|n| &n.kind) {
+            Some(NodeKind::Rescue { .. }) => "the handler for",
+            _ => "the flow inside",
+        };
         self.push(&format!(
-            "// {id}: the flow inside {owner}\n{kw} {name}(__in) [[\n  __v <~ __in\n"
+            "// {id}: {what} {owner}\n{kw} {name}(__in) [[\n  __v <~ __in\n"
         ));
         for node in &subgraph.nodes {
             let call = self.node_fn(*node);
@@ -709,6 +841,32 @@ struct CapabilityInsert {
 /// Without this the leaf fell through to the pipeline path and did not parse,
 /// because an effect marker cannot appear inside a pipeline stage.
 const TRAILING_OPS: &[&str] = &["?"];
+
+/// The leaf without its outermost trailing `?`, when it has one.
+///
+/// Decided by lexing, not string suffixes: a `?` inside a string or a ward
+/// brace is not a try. The `?` itself is generated *outside* the leaf (see
+/// `stage_node`), so the returned leaf is the expression the try applied to.
+fn split_trailing_try(leaf: &LeafExpr) -> Option<LeafExpr> {
+    let file = SourceFile::new(FileId(0), "leaf.cant", &leaf.text);
+    let (tokens, _) = lex(&file);
+    let significant: Vec<_> = tokens
+        .iter()
+        .filter(|t| !t.kind.is_trivia() && t.kind != K::Eof)
+        .collect();
+    let last = significant.last()?;
+    if last.kind != K::Op || last.text != "?" || significant.len() < 2 {
+        return None;
+    }
+    let inner = leaf.text[..last.span.start.as_usize()].trim_end();
+    if inner.is_empty() {
+        return None;
+    }
+    Some(LeafExpr {
+        text: inner.to_string(),
+        ..leaf.clone()
+    })
+}
 
 /// Is this leaf `[!] @path.to.fn [ ( args ) ]`, and where does the receiver go?
 ///
@@ -1010,6 +1168,78 @@ mod tests {
             apply_to(&leaf("replace(\"hay\", \"x\")"), "__e"),
             "__e -> replace(\"hay\", \"x\")"
         );
+    }
+
+    fn expand_source(source: &str) -> String {
+        let (parsed, _) = cant_syntax::parse_source("t.cant", source);
+        let program =
+            crate::lower::lower(&parsed.program.expect("program"), "t.cant", source.len());
+        expand(&program, source, &ExpandOptions::default()).rite
+    }
+
+    /// The invariant this lowering exists to satisfy: every host call stays
+    /// inside a named `def!`, and the `parallel` that reaches them is marked.
+    ///
+    /// Rite's analysis tracks a *named* function passed as an argument, so a
+    /// `def!` dispatcher forces the `!` on `parallel` and propagates effect-ness
+    /// outward. A closure would have hidden all of it, and `cant check` would
+    /// have passed a program that reads files with no grant.
+    #[test]
+    fn an_effectful_parallel_branch_keeps_its_marker_and_its_def() {
+        let rite = expand_source(r#"["a"] -> * -> |{ count($) ; !@fs.read($) }:par -> []"#);
+        assert!(rite.contains("def! cant_"), "no effectful function: {rite}");
+        assert!(rite.contains("_par(__p) [["), "no dispatcher: {rite}");
+        // The dispatcher is effectful, so the call that runs it is marked.
+        assert!(
+            rite.contains("! parallel(["),
+            "the parallel call is unmarked: {rite}"
+        );
+        // And the host call is in a function body of its own, not in a closure.
+        assert!(rite.contains("!@fs.read(__e)"), "{rite}");
+        assert!(!rite.contains("{ |"), "no closure may appear: {rite}");
+    }
+
+    /// A pure parallel fork claims no effect. Over-claiming one would be a lie
+    /// Rite's resolver rejects, the same way `node_is_effectful` refuses to
+    /// promote an honest `def` under tracing.
+    #[test]
+    fn a_pure_parallel_fork_is_not_marked_effectful() {
+        let rite = expand_source("5 -> |{ $ + 1 ; $ * 2 }:par -> []");
+        assert!(!rite.contains("def!"), "{rite}");
+        assert!(!rite.contains("! parallel"), "{rite}");
+        assert!(rite.contains("parallel(["), "{rite}");
+    }
+
+    /// One item per branch, in branch order, because `parallel` answers in input
+    /// order — that is what keeps the joined value deterministic.
+    #[test]
+    fn the_dispatcher_matches_one_arm_per_branch_in_order() {
+        let rite = expand_source("5 -> |{ $ + 1 ; $ * 2 ; $ * $ }:par");
+        let arms: Vec<&str> = rite
+            .lines()
+            .filter(|l| l.contains("__p.branch = "))
+            .collect();
+        assert_eq!(arms.len(), 3, "{rite}");
+        for (index, arm) in arms.iter().enumerate() {
+            assert!(arm.contains(&format!("__p.branch = {index}")), "{arm}");
+            assert!(arm.contains(&format!("_s{index}([ __p.value ])")), "{arm}");
+        }
+        let items = rite
+            .lines()
+            .find(|l| l.contains("parallel(["))
+            .expect("the parallel call");
+        assert!(
+            items.contains("<< branch: 0, value: __e >>, << branch: 1, value: __e >>, << branch: 2, value: __e >>"),
+            "{items}"
+        );
+    }
+
+    /// A sequential fork is untouched by any of this.
+    #[test]
+    fn a_sequential_fork_still_calls_its_branches_in_line() {
+        let rite = expand_source("5 -> |{ $ + 1 ; $ * 2 }");
+        assert!(!rite.contains("parallel"), "{rite}");
+        assert!(rite.contains("__out := concat(__out, cant_"), "{rite}");
     }
 
     #[test]

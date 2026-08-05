@@ -1,4 +1,4 @@
-//! The graph JSON schema is frozen at version 1.
+//! The graph JSON schema is frozen at version 3.
 //!
 //! Frozen meaning: `docs/cant/graph-schema.md` is the contract, and a change to
 //! the shape must bump `version` and be a deliberate act. These tests are what
@@ -30,12 +30,17 @@ fn repo_root() -> PathBuf {
 /// A program using every construct, so the golden covers every node kind, every
 /// edge role, and both port conventions.
 const EVERYTHING: &str =
-    "[1, 2] -> * -> |{ ?{ $ > 1 } ; ~{ ?{ $ < 8 } -> $ * 2 } :by str :max 64 } -> []";
+    "[1, 2] -> * -> |{ ?{ $ > 1 } ; ~{ ?{ $ < 8 } -> $ * 2 } :by str :max 64 } \
+     -> !{ 0 } -> []";
 
 /// `EVERYTHING` names no capability, so on its own it would leave the `capabilities`
 /// key untested — and a key that is `skip_serializing_if` empty is exactly the kind
 /// that vanishes from a freeze test without anyone noticing.
 const EFFECTFUL: &str = r#"["a.txt"] -> * -> ! @fs.read($) -> []"#;
+
+/// A parallel fork, so the `parallel` key is exercised in both states rather
+/// than only the `false` one `EVERYTHING` produces.
+const PARALLEL: &str = "5 -> |{ $ + 1 ; $ * 2 }:par -> []";
 
 fn json_for(source: &str) -> serde_json::Value {
     let (parsed, sources) = parse_source("schema.cant", source);
@@ -59,10 +64,10 @@ fn graph_json() -> serde_json::Value {
 #[test]
 fn the_schema_is_named_and_versioned() {
     assert_eq!(cant_sem::GRAPH_SCHEMA_NAME, "cant.graph");
-    assert_eq!(cant_sem::GRAPH_SCHEMA_VERSION, "1");
+    assert_eq!(cant_sem::GRAPH_SCHEMA_VERSION, "3");
     let json = graph_json();
     assert_eq!(json["schema"], serde_json::json!("cant.graph"));
-    assert_eq!(json["version"], serde_json::json!("1"));
+    assert_eq!(json["version"], serde_json::json!("3"));
 }
 
 /// Every key the schema emits, anywhere in the document, flattened.
@@ -107,9 +112,11 @@ const FROZEN_KEYS: &[&str] = &[
     "expr",
     "predicate",
     "branches",
+    "parallel",
     "body",
     "identity",
     "max_items",
+    "handler",
     // leaves
     "text",
     "effectful",
@@ -172,11 +179,11 @@ fn every_node_kind_and_edge_role_is_named_in_the_document() {
     let doc = std::fs::read_to_string(repo_root().join("docs/cant/graph-schema.md"))
         .expect("docs/cant/graph-schema.md");
     for kind in [
-        "source", "stage", "scatter", "collect", "ward", "fork", "orbit",
+        "source", "stage", "scatter", "collect", "ward", "fork", "orbit", "rescue",
     ] {
         assert!(doc.contains(&format!("`{kind}`")), "`{kind}` undocumented");
     }
-    for role in ["flow", "enter", "join", "orbit_feedback"] {
+    for role in ["flow", "enter", "join", "orbit_feedback", "rescue"] {
         assert!(doc.contains(&format!("`{role}`")), "`{role}` undocumented");
     }
 }
@@ -217,7 +224,7 @@ fn a_foreign_schema_version_is_refused() {
     json["version"] = serde_json::json!("99");
     let text = serde_json::to_string(&json).expect("json");
     let err = validate_deserialized(&text, FileId(0)).expect_err("version mismatch");
-    assert!(err.contains("99") && err.contains('1'), "{err}");
+    assert!(err.contains("99") && err.contains('3'), "{err}");
 }
 
 /// A version-0 graph has no `schema` key at all, so it must fail on the version
@@ -235,6 +242,29 @@ fn a_version_zero_graph_is_refused_on_its_version() {
         err.contains("schema version") && err.contains('0'),
         "expected a version complaint, got: {err}"
     );
+}
+
+/// Version 3's addition: a consumer can tell a fork whose branches interleave
+/// from one whose do not, without reading the source or the modifier that set it.
+#[test]
+fn a_forks_parallelism_is_in_the_json_in_both_states() {
+    for (source, expected) in [(PARALLEL, true), (EVERYTHING, false)] {
+        let json = json_for(source);
+        let fork = json["nodes"]
+            .as_array()
+            .expect("nodes")
+            .iter()
+            .find(|n| n["kind"] == "fork")
+            .expect("a fork");
+        assert_eq!(fork["parallel"], serde_json::json!(expected), "{source}");
+
+        let text = serde_json::to_string(&json).expect("json");
+        let analysis = validate_deserialized(&text, FileId(0)).expect("valid");
+        assert!(analysis.graph.nodes.iter().any(|n| matches!(
+            n.kind,
+            cant_sem::NodeKind::Fork { parallel, .. } if parallel == expected
+        )));
+    }
 }
 
 /// A document that is not a Cant graph is refused by name, before its version is
@@ -290,8 +320,9 @@ fn a_consumer_never_needs_the_source_text() {
     // Structure, without touching the `.cant`.
     assert!(!graph.nodes.is_empty());
     assert!(!graph.edges.is_empty());
-    // Two fork branches plus the orbit body inside the second of them.
-    assert_eq!(graph.subgraphs.len(), 3);
+    // Two fork branches, the orbit body inside the second of them, and the
+    // rescue's handler.
+    assert_eq!(graph.subgraphs.len(), 4);
     // Order — and the reason the document insists `ordinal` is the authority.
     // The raw enter edges come out `[0, 0, 1]`: the fork's edge into branch 0,
     // then the *orbit's* edge into its body (emitted while lowering branch 1),

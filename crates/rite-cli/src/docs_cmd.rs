@@ -203,7 +203,7 @@ pub async fn run(cmd: DocsCmd) -> anyhow::Result<ExitCode> {
             println!("docs written to {}", out.display());
             if !no_skill {
                 let skill = resolve_out(skill_out, "skills/rite", "--skill-out")?;
-                rite_doc::generate_agent_bundle(&skill)?;
+                rite_doc::generate_agent_bundle(&input_root()?, &skill)?;
                 println!("agent skill written to {}", skill.display());
             }
             Ok(ExitCode::SUCCESS)
@@ -216,7 +216,7 @@ pub async fn run(cmd: DocsCmd) -> anyhow::Result<ExitCode> {
         }
         DocsCmd::Agent { output } => {
             let out = resolve_out(output, "skills/rite", "--output")?;
-            rite_doc::generate_agent_bundle(&out)?;
+            rite_doc::generate_agent_bundle(&input_root()?, &out)?;
             println!("agent skill written to {}", out.display());
             Ok(ExitCode::SUCCESS)
         }
@@ -238,6 +238,18 @@ pub async fn run(cmd: DocsCmd) -> anyhow::Result<ExitCode> {
             print,
         } => open(symbol.as_deref(), root, print),
     }
+}
+
+/// The checkout the bundle's inputs come from. Anchored rather than left to
+/// the CWD: run from a subdirectory, the relative reads found nothing and the
+/// generator wrote stubs over the real SKILL.md and aliases.json.
+fn input_root() -> anyhow::Result<PathBuf> {
+    util::checkout_containing("grammar/aliases.json").ok_or_else(|| {
+        anyhow::anyhow!(
+            "no Rite checkout found near the current directory — the agent bundle is \
+             generated from checkout files.\n  run from a checkout or set RITE_REPO_ROOT=<checkout>"
+        )
+    })
 }
 
 /// Resolve an output directory: explicit flag, else the same path inside a

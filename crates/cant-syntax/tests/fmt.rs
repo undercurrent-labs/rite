@@ -87,6 +87,7 @@ const EXTRA: &[&str] = &[
     "a -> b",
     "[1, 2, 3] -> * -> ?{ $ % 2 = 0 } -> square -> []",
     "5 -> |{ $ + 1 ; $ * 2 ; square } -> []",
+    "5 -> |{ $ + 1 ; $ * 2 ; square } :par -> []",
     "roots -> * -> ~{ deps -> * } :by canonical :max 1024 -> []",
     "request -> |{ ?{ $.ok } -> handle ; ~{ children -> * } :max 8 } -> []",
     "// a comment\nx -> f",
@@ -94,6 +95,9 @@ const EXTRA: &[&str] = &[
     "\"a -> b\" -> replace($, \"->\", \"|{\")",
     "xs -> ?{ any($, { |n| n > 0 }) } -> []",
     "rows -> * -> ?{ $.level = :error } -> .message -> []",
+    "clean:{ trim -> ?{ count($) > 0 } }\n[\"a\"] -> * -> clean -> []",
+    "a:{ trim }\nb:{ upper }\n[\"x\"] -> * -> a -> b -> []",
+    "// above the definition\nclean:{ trim }\n[\"a\"] -> clean",
 ];
 
 // ---- layout
@@ -488,4 +492,66 @@ fn use_lines_survive_formatting_in_both_dialects() {
     )
     .expect("formats");
     assert_eq!(again.text, ascii.text);
+}
+
+// ---- definitions
+
+#[test]
+fn a_definition_is_one_line_with_the_name_against_the_brace() {
+    assert_eq!(
+        fmt("clean:{trim->upper}\n[\"a\"]->clean", 88),
+        "clean:{ trim -> upper }\n[\"a\"] -> clean"
+    );
+}
+
+#[test]
+fn a_long_definition_breaks_like_any_other_block() {
+    let out = fmt("clean:{ alpha -> beta -> gamma -> delta }\nx -> clean", 24);
+    assert_eq!(
+        out,
+        "clean:{\n  alpha\n  -> beta\n  -> gamma\n  -> delta\n}\nx -> clean"
+    );
+    // And what came out still parses as the program that went in.
+    assert_eq!(
+        shape(&out),
+        shape("clean:{ alpha -> beta -> gamma -> delta }\nx -> clean")
+    );
+}
+
+/// Compact output is one line, which the braces make possible: nothing about a
+/// definition depends on where the line breaks are.
+#[test]
+fn compact_puts_a_definition_and_the_flow_on_one_line() {
+    let out = format(
+        "clean:{ trim }\n[\"a\"] -> clean",
+        FormatOptions {
+            compact: true,
+            ..Default::default()
+        },
+    )
+    .expect("formats")
+    .text;
+    assert_eq!(out, "clean:{ trim } [\"a\"] -> clean");
+    assert_eq!(shape(&out), shape("clean:{ trim }\n[\"a\"] -> clean"));
+}
+
+#[test]
+fn converting_a_definition_respells_only_its_operators() {
+    let source = "clean:{ trim -> upper }\n// :{ in a comment\n[\"a\"] -> clean";
+    let glyph = convert(source, Dialect::Glyph);
+    assert!(glyph.contains("clean≔⟦ trim → upper ⟧"), "{glyph}");
+    assert!(glyph.contains("// :{ in a comment"), "{glyph}");
+    assert_eq!(convert(&glyph, Dialect::Ascii), source);
+}
+
+/// A `:{` the parser read as a Rite record field is not an operator, so the
+/// converter must not touch it.
+#[test]
+fn a_record_field_holding_a_block_survives_conversion() {
+    let source = "[1] -> map($, { |n| << f:{ n } >> })";
+    assert_eq!(
+        convert(&convert(source, Dialect::Glyph), Dialect::Ascii),
+        source
+    );
+    assert!(!convert(source, Dialect::Glyph).contains('≔'));
 }

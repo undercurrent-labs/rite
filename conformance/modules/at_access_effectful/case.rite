@@ -1,0 +1,3 @@
+use ./shoutmod as s
+
+do @s.shout("through the sigil")

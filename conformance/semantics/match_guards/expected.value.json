@@ -1,0 +1,7 @@
+{
+  "guard_wins": "negative",
+  "literal_before_guard": "zero",
+  "guard_sees_binding": "even",
+  "fallthrough_on_falsy_guard": "odd",
+  "guarded_result": "big"
+}

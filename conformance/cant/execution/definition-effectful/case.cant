@@ -1,0 +1,2 @@
+read:{ !@fs.read($)? -> trim }
+["one.txt"] -> * -> |{ read ; read } -> []

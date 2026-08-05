@@ -167,7 +167,11 @@ impl Parser {
     pub(super) fn parse_import(&mut self, is_pub: bool) -> ImportDecl {
         let start = self.advance().span; // use
         let path = self.parse_module_path();
-        let alias = if self.check(TokenKind::As) {
+        // `use math as m` and `use math -> m` are the same declaration. The arrow
+        // is safe here because no statement can begin with one, so after a module
+        // path it can only be the alias clause; `~` was tried first and lost — it
+        // parses as the start of a match on the next line's scrutinee.
+        let alias = if self.check(TokenKind::As) || self.check(TokenKind::Arrow) {
             self.advance();
             Some(self.parse_ident())
         } else {
@@ -351,19 +355,24 @@ impl Parser {
             if self.check(TokenKind::Semicolon) {
                 self.advance();
             }
-            return Some(Stmt::Expr(Expr::Unary(UnaryExpr {
+            let lowered = Stmt::Expr(Expr::Unary(UnaryExpr {
                 op: UnaryOp::Effect,
                 expr: Box::new(Expr::Call(CallExpr {
                     callee: Box::new(Expr::Capability(CapabilityRef {
                         path: vec!["console".into(), "println".into()],
                         span,
                     })),
-                    args: vec![value],
+                    args: vec![value.clone()],
                     span,
                     trailing_block: false,
                 })),
                 span,
-            })));
+            }));
+            return Some(Stmt::Sugared(SugaredStmt {
+                form: SugarForm::Say { value },
+                lowered: Box::new(lowered),
+                span,
+            }));
         }
 
         // unless / ¿ cond ⟦ … ⟧
@@ -384,17 +393,27 @@ impl Parser {
                 .as_ref()
                 .map(|b| b.span)
                 .unwrap_or(then_branch.span);
+            let span = start.merge(end);
             let not_cond = Expr::Unary(UnaryExpr {
                 op: UnaryOp::Not,
-                expr: Box::new(condition),
+                expr: Box::new(condition.clone()),
                 span: start,
             });
-            return Some(Stmt::Expr(Expr::If(IfExpr {
+            let lowered = Stmt::Expr(Expr::If(IfExpr {
                 condition: Box::new(not_cond),
-                then_branch,
-                else_branch,
-                span: start.merge(end),
-            })));
+                then_branch: then_branch.clone(),
+                else_branch: else_branch.clone(),
+                span,
+            }));
+            return Some(Stmt::Sugared(SugaredStmt {
+                form: SugarForm::Unless {
+                    condition,
+                    then_branch,
+                    else_branch,
+                },
+                lowered: Box::new(lowered),
+                span,
+            }));
         }
 
         // while cond ⟦ … ⟧ — desugar to recursive local helper via special form
@@ -441,21 +460,26 @@ impl Parser {
             args: vec![Expr::Block(Block {
                 has_param_list: true,
                 params: vec![Param {
-                    name: var,
+                    name: var.clone(),
                     ty: None,
                     span,
                 }],
-                body: body.body,
+                body: body.body.clone(),
                 span: body.span,
             })],
             span,
             trailing_block: false,
         });
-        Stmt::Expr(Expr::Pipeline(PipelineExpr {
-            input: Box::new(iter),
+        let lowered = Stmt::Expr(Expr::Pipeline(PipelineExpr {
+            input: Box::new(iter.clone()),
             stages: vec![stage],
             span,
-        }))
+        }));
+        Stmt::Sugared(SugaredStmt {
+            form: SugarForm::ForIn { var, iter, body },
+            lowered: Box::new(lowered),
+            span,
+        })
     }
 
     pub(super) fn parse_while_stmt(&mut self) -> Stmt {
@@ -470,7 +494,7 @@ impl Parser {
         let span = start.merge(body.span);
         // Represent as Call to builtin-like "while_loop" with cond-closure and body-closure
         // Runtime: while_loop(pred_fn, body_fn)
-        Stmt::Expr(Expr::Call(CallExpr {
+        let lowered = Stmt::Expr(Expr::Call(CallExpr {
             callee: Box::new(Expr::Ident(Ident {
                 name: "while_loop".into(),
                 span,
@@ -487,7 +511,7 @@ impl Parser {
                         ty: None,
                         span,
                     }],
-                    body: vec![Item::Statement(Stmt::Expr(cond))],
+                    body: vec![Item::Statement(Stmt::Expr(cond.clone()))],
                     span,
                 }),
                 Expr::Block(Block {
@@ -500,13 +524,21 @@ impl Parser {
                         ty: None,
                         span,
                     }],
-                    body: body.body,
+                    body: body.body.clone(),
                     span: body.span,
                 }),
             ],
             span,
             trailing_block: false,
-        }))
+        }));
+        Stmt::Sugared(SugaredStmt {
+            form: SugarForm::While {
+                condition: cond,
+                body,
+            },
+            lowered: Box::new(lowered),
+            span,
+        })
     }
 
     pub(super) fn parse_loop_stmt(&mut self) -> Stmt {
@@ -525,7 +557,7 @@ impl Parser {
                     kind: LitKind::Int(0),
                     span,
                 }),
-                n,
+                n.clone(),
             ],
             span,
             trailing_block: false,
@@ -545,17 +577,22 @@ impl Parser {
                     ty: None,
                     span,
                 }],
-                body: body.body,
+                body: body.body.clone(),
                 span: body.span,
             })],
             span,
             trailing_block: false,
         });
-        Stmt::Expr(Expr::Pipeline(PipelineExpr {
+        let lowered = Stmt::Expr(Expr::Pipeline(PipelineExpr {
             input: Box::new(range_call),
             stages: vec![stage],
             span,
-        }))
+        }));
+        Stmt::Sugared(SugaredStmt {
+            form: SugarForm::Loop { count: n, body },
+            lowered: Box::new(lowered),
+            span,
+        })
     }
 
     pub(super) fn try_parse_binding_pattern(&mut self) -> Option<Pattern> {

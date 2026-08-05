@@ -1,0 +1,36 @@
+//! An MCP client: connect to another server, read what it offers, call a tool.
+//! Run: rite run examples/12-mcp/client.rite --allow process
+//!
+//! The server it drives is this directory's own main.rite, started as a subprocess —
+//! so the two files together are a complete round trip with nothing else installed.
+//! Run it from the repository root: the path below is relative to the working
+//! directory, as it would be for any client launching a server.
+//!
+//! `--allow process` is what a stdio connection needs, because it starts a program.
+//! An HTTP server would be ⟨url: "https://example.com/mcp"⟩ and --allow net=<host>
+//! instead. Nothing after connect needs a grant of its own.
+
+c ← ! @mcp.connect(⟨command: "rite", args: ["run", "examples/12-mcp/main.rite"]⟩)?
+
+tools ← ! @mcp.tools(c)?
+! @console.println("tools: " + (tools → map { |t| t.name } → join(", ")))
+
+! @console.println("add(20, 22) = " + str(! @mcp.call_tool(c, "add", ⟨a: 20, b: 22⟩)?))
+
+// A tool answering a record answers a record here: the server sends the structured
+// form alongside the text, and that is what comes back.
+stats ← ! @mcp.call_tool(c, "stats", ⟨xs: [3, 1, 4, 1, 5]⟩)?
+! @console.println("stats: count=" + str(stats.count) + " total=" + str(stats.total))
+
+// A tool that fails in band is an err value carrying the server's own reason, not a
+// raise, so this reads the message rather than ending the script.
+divided ← ! @mcp.call_tool(c, "divide", ⟨a: 1, b: 0⟩)
+report ← ~ divided ⟦
+  ok n → "1/0 = " + str(n)
+  err e → "divide refused: " + e.message
+⟧
+! @console.println(report)
+
+! @console.println("config: " + (! @mcp.read_resource(c, "config://server")?))
+
+! @mcp.close(c)

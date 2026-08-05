@@ -246,9 +246,12 @@ fn uses_db(ir: &rite_sem::ProgramIr) -> bool {
 fn generate_cargo_toml(hash: &str, dep_source: &DepSource, needs_db: bool) -> String {
     let dep = |crate_name: &str| -> String {
         // Only `rite-caps` has an optional feature worth turning off, and only when the
-        // program never reaches `@db`.
+        // program never reaches `@db`. `native` must be named explicitly: since the
+        // browser split it is a default feature too, and `default-features = false`
+        // alone stripped the entire native host — every locally-built binary lost
+        // fs/net/env/process and answered "capability @fs is native-only".
         let extra = if crate_name == "rite-caps" && !needs_db {
-            ", default-features = false"
+            ", default-features = false, features = [\"native\"]"
         } else {
             ""
         };

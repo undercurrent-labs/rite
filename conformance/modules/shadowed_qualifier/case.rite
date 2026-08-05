@@ -1,0 +1,7 @@
+use ./mathmod -> mathmod
+
+def f(mathmod) [[
+  return mathmod.field + @mathmod.square(3)
+]]
+
+^ f(<< field: 100 >>)

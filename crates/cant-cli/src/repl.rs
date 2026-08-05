@@ -870,7 +870,10 @@ fn show_explain(program: &str) {
     if let Some(graph) = &analysis.graph {
         print!(
             "{}",
-            cant_sem::explain::render(&cant_sem::explain(graph), false)
+            cant_sem::explain::render(
+                &cant_sem::explain_with(graph, &analysis.definition_names()),
+                false,
+            )
         );
     }
 }

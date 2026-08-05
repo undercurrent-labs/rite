@@ -1,0 +1,3 @@
+use ./fs
+
+^ fs.read(1)

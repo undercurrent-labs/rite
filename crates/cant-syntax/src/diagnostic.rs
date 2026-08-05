@@ -117,7 +117,6 @@ codes! {
     CANT_P007_GLYPH_ONLY_OPERATOR_IN_LEAF = (Parse, 7, "A glyph-only operator (`⋇`, `⌁`) used inside a leaf expression.");
     CANT_P008_MODIFIER_WITHOUT_FORM = (Parse, 8, "A `:name value` modifier that follows no structural form.");
     CANT_P009_MODIFIER_NEEDS_NAME = (Parse, 9, "A modifier `:` not followed by a name.");
-    CANT_P010_MODIFIER_NEEDS_VALUE = (Parse, 10, "A modifier name not followed by a value.");
     CANT_P011_EMPTY_FORK_BRANCH = (Parse, 11, "A fork branch with no stages.");
     CANT_P012_WARD_IS_NOT_A_FLOW = (Parse, 12, "A ward predicate is one expression, not a flow.");
     CANT_P013_NESTING_TOO_DEEP = (Parse, 13, "Structural blocks nested past the supported depth.");
@@ -136,7 +135,16 @@ codes! {
     CANT_G012_DUPLICATE_NODE_ID = (Graph, 12, "Two nodes in a deserialized graph share an identifier.");
     CANT_G013_UNREACHABLE_NODE = (Graph, 13, "A node no edge can reach from the entry.");
     CANT_G014_WARD_PREDICATE_EFFECTFUL = (Graph, 14, "A ward predicate that performs an effect.");
-    CANT_G015_EMPTY_SUBGRAPH = (Graph, 15, "A fork branch or orbit body with no nodes.");
+    CANT_G015_EMPTY_SUBGRAPH = (Graph, 15, "A fork branch, orbit body or rescue handler with no nodes.");
+    CANT_G016_RESCUE_HAS_NO_INPUT = (Graph, 16, "A rescue used where nothing has been emitted yet.");
+    CANT_G017_RESCUE_AFTER_TRY = (Graph, 17, "A `?` immediately before a rescue, which removes the failure the rescue would route.");
+    CANT_G018_DUPLICATE_DEFINITION = (Graph, 18, "Two definitions share a name.");
+    CANT_G019_DEFINITION_SHADOWS = (Graph, 19, "A definition's name is a Rite builtin or an imported module.");
+    CANT_G020_RECURSIVE_DEFINITION = (Graph, 20, "A definition that reaches itself, directly or through others.");
+    CANT_G021_UNUSED_DEFINITION = (Graph, 21, "A definition the program never uses.");
+    CANT_G022_MODIFIER_NEEDS_VALUE = (Graph, 22, "A modifier that takes a value, written without one.");
+    CANT_G023_MODIFIER_TAKES_NO_VALUE = (Graph, 23, "A value written after a modifier that takes none, such as `:par`.");
+    CANT_G024_PARALLEL_SINGLE_BRANCH = (Graph, 24, "`:par` on a fork with one branch, which has nothing to run alongside.");
 
     CANT_S001_EFFECT_REQUIRED = (Semantic, 1, "A host call without a `!` marker, as Rite requires.");
     CANT_S002_UNDEFINED_NAME = (Semantic, 2, "A name that does not resolve.");

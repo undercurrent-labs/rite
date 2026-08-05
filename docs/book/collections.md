@@ -209,6 +209,43 @@ xs ← [3, 1, 2, 3, 4]
 a sort. `chunk` splits into fixed-size pieces and the final piece is short rather
 than padded, so it suits batching a list of work into requests of at most *n*.
 
+### Sliding windows
+
+```rite browser
+! @console.println(window([1, 2, 3, 4], 3))
+```
+
+```text
+[[1, 2, 3], [2, 3, 4]]
+```
+
+`window(xs, n)` overlaps, stepping one element at a time; `chunk` does not. A
+list shorter than *n* answers `[]` — there is no partial window.
+
+### Splitting on a condition
+
+```rite browser
+xs ← [1, 2, 3, 4, 1]
+
+! @console.println(take_while(xs, { |x| x < 3 }))
+! @console.println(drop_while(xs, { |x| x < 3 }))
+! @console.println(partition(xs, { |x| x % 2 = 1 }))
+! @console.println(flat_map(xs, { |x| [x, x * 10] }))
+```
+
+```text
+[1, 2]
+[3, 4, 1]
+⟨kept: [1, 3, 1], rejected: [2, 4]⟩
+[1, 10, 2, 20, 3, 30, 4, 40, 1, 10]
+```
+
+`take_while` stops at the first element the predicate refuses; `drop_while`
+starts keeping there and never asks again — the trailing `1` survives above
+because it comes after the first `3`. `partition` is `keep` and `reject` in one
+pass, answering both halves as a record. `flat_map` maps and splices: a list
+result merges into the output, anything else stays a single element.
+
 ### Pairing things up
 
 ```rite browser
@@ -322,6 +359,37 @@ There is no heavy OOP “set field” model. Build a new record by merge:
 base ← ⟨count: 0⟩
 next ← base + ⟨count: 1⟩
 ```
+
+### Reading and reshaping by key
+
+Field access needs the name written in the source; these take it as a value:
+
+```rite browser
+r ← ⟨b: 2, a: 1⟩
+
+! @console.println(get(r, "a"))
+! @console.println(get(r, "zz", 0))
+! @console.println(has(r, "b"))
+! @console.println(entries(r))
+! @console.println(merge(r, ⟨a: 9, c: 3⟩))
+! @console.println(update(r, "a", { |v| v + 100 }))
+```
+
+```text
+1
+0
+true
+[[b, 2], [a, 1]]
+⟨b: 2, a: 9, c: 3⟩
+⟨b: 2, a: 101⟩
+```
+
+`get` answers `none` for a missing key unless given a third-argument fallback.
+`entries` pairs each key with its value, in insertion order like `keys`, so it
+destructures the same way `zip` output does. `merge` is the function form of
+record `+` and takes any number of records, later ones winning. `update`
+transforms one key with a function — the function sees `none` when the key is
+absent, so `update(r, k, { |v| (v ?? 0) + 1 })` counts from nothing.
 
 ## Records vs maps
 

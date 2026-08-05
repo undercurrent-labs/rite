@@ -39,10 +39,10 @@ trade `awk`, `sed` and `jq` make.
 
 ```bash
 $ cant version
-cant 0.2.0
-cant_language_version: 0
-cant_graph_schema_version: 1
-rite: 0.9.1
+cant 0.3.0
+cant_language_version: 1
+cant_graph_schema_version: 3
+rite: 0.10.0
 ```
 
 Four numbers because they move independently: the tool, the language it

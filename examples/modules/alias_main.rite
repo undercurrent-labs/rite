@@ -1,7 +1,8 @@
 //! Alias + relative import demo
 
-use math as m
+use math → m
 use ./lib/helpers
 
+! @console.println(str(@m.square(12)))
 ! @console.println(str(m.square(12)))
 ! @console.println(str(triple(5)))

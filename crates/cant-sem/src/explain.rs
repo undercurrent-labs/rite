@@ -30,6 +30,14 @@ pub struct Step {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Explanation {
     pub steps: Vec<Step>,
+    /// The flows the program names, in source order.
+    ///
+    /// From the AST rather than the graph, because the graph does not have them:
+    /// a definition is spliced into the flow that used it during lowering, so
+    /// what the steps describe is the program that runs (ADR 0011). Naming them
+    /// is what keeps a definition used twice from reading as a repetition
+    /// someone typed out.
+    pub definitions: Vec<String>,
     /// Capabilities the program names, in source order.
     pub capabilities: Vec<String>,
     /// Stages that perform an effect, described.
@@ -38,9 +46,20 @@ pub struct Explanation {
     pub max_orbit_items: Option<u64>,
     /// Caveats to be aware of before running it.
     pub hazards: Vec<String>,
+    /// The program contains a `:par` fork.
+    ///
+    /// The "Order" section is otherwise a flat statement that nothing runs
+    /// concurrently, and one parallel fork makes that false for the only thing
+    /// it was ever about — the order effects happen in.
+    pub has_parallel_fork: bool,
 }
 
 pub fn explain(program: &CantProgram) -> Explanation {
+    explain_with(program, &[])
+}
+
+/// [`explain`], told which flows the program named.
+pub fn explain_with(program: &CantProgram, definitions: &[String]) -> Explanation {
     let top: Vec<NodeId> = program
         .nodes
         .iter()
@@ -52,10 +71,15 @@ pub fn explain(program: &CantProgram) -> Explanation {
 
     Explanation {
         steps,
+        definitions: definitions.to_vec(),
         capabilities: program.capabilities(),
         effects: effect_descriptions(program),
         max_orbit_items: program.max_orbit_items(),
         hazards: hazards(program),
+        has_parallel_fork: program
+            .nodes
+            .iter()
+            .any(|n| matches!(n.kind, NodeKind::Fork { parallel: true, .. })),
     }
 }
 
@@ -85,12 +109,17 @@ fn step(program: &CantProgram, id: NodeId) -> Step {
             ),
             Vec::new(),
         ),
-        NodeKind::Fork { branches } => (
+        NodeKind::Fork { branches, parallel } => (
             format!(
-                "Fork into {} branch{}, each seeing the same value, and concatenate \
-                 their emissions in order:",
+                "Fork into {} branch{}, each seeing the same value, run {}, and \
+                 concatenate their emissions in branch order:",
                 branches.len(),
-                if branches.len() == 1 { "" } else { "es" }
+                if branches.len() == 1 { "" } else { "es" },
+                if *parallel {
+                    "concurrently"
+                } else {
+                    "one after another"
+                }
             ),
             branches
                 .iter()
@@ -137,6 +166,16 @@ fn step(program: &CantProgram, id: NodeId) -> Step {
                 children,
             )
         }
+        NodeKind::Rescue { handler } => (
+            "Route each failed emission to a handler; an `ok` continues unwrapped \
+             and anything that is not a result passes through:"
+                .to_string(),
+            vec![Step {
+                text: "For an `err`, with `$` bound to the failure record:".to_string(),
+                children: subgraph_steps(program, *handler),
+                node: node.id,
+            }],
+        ),
     };
     Step {
         text,
@@ -206,15 +245,29 @@ fn hazards(program: &CantProgram) -> Vec<String> {
                 .to_string(),
         );
     }
-    let forks = program
+    let forks: Vec<bool> = program
         .nodes
         .iter()
-        .filter(|n| matches!(n.kind, NodeKind::Fork { .. }))
-        .count();
-    if forks > 0 && !program.effectful_nodes().is_empty() {
+        .filter_map(|n| match n.kind {
+            NodeKind::Fork { parallel, .. } => Some(parallel),
+            _ => None,
+        })
+        .collect();
+    let effectful = !program.effectful_nodes().is_empty();
+    if forks.iter().any(|p| !p) && effectful {
         out.push(
             "Fork branches run one after another, left to right — so do the effects \
              inside them."
+                .to_string(),
+        );
+    }
+    // The one thing about a parallel fork that a reader has to be told, and the
+    // only place in the language where two effects have no order between them.
+    if forks.iter().any(|p| *p) && effectful {
+        out.push(
+            "A `:par` fork's branches run concurrently, so the effects inside them \
+             reach the world in no fixed order. What each branch emits still joins \
+             in branch order."
                 .to_string(),
         );
     }
@@ -241,6 +294,17 @@ pub fn render(explanation: &Explanation, verbose: bool) -> String {
          one value becomes that value, and several become a list in emission order.\n",
     );
 
+    if !explanation.definitions.is_empty() {
+        out.push_str("\nFlows it names\n\n");
+        for name in &explanation.definitions {
+            out.push_str(&format!("  {name}\n"));
+        }
+        out.push_str(
+            "\n  Each is spliced in where it is named, so one used twice appears twice\n  \
+             in the steps above.\n",
+        );
+    }
+
     if !explanation.capabilities.is_empty() {
         out.push_str("\nCapabilities it needs\n\n");
         for capability in &explanation.capabilities {
@@ -264,11 +328,22 @@ pub fn render(explanation: &Explanation, verbose: bool) -> String {
 
     out.push_str(
         "\nOrder\n\n  \
-         Everything here is deterministic. Stages run in source order, fork branches\n  \
-         left to right, scatter preserves list order, collect preserves emission order,\n  \
-         and an orbit is breadth-first with the first occurrence of a value winning.\n  \
-         Effects happen in exactly that order. Nothing runs in parallel.\n",
+         Stages run in source order, fork branches join in branch order, scatter\n  \
+         preserves list order, collect preserves emission order, and an orbit is\n  \
+         breadth-first with the first occurrence of a value winning.\n",
     );
+    if explanation.has_parallel_fork {
+        out.push_str(
+            "\n  The value this program produces is deterministic. Its effects are not\n  \
+             ordered: a `:par` fork runs its branches concurrently, so two of them\n  \
+             writing files or calling a host do so in whatever order they get there.\n",
+        );
+    } else {
+        out.push_str(
+            "\n  All of it is deterministic. Effects happen in exactly that order, and\n  \
+             nothing runs concurrently.\n",
+        );
+    }
 
     if verbose {
         out.push_str(
@@ -344,6 +419,15 @@ mod tests {
     }
 
     #[test]
+    fn a_rescue_says_where_the_failures_go() {
+        let out = text("x -> !{ $.message -> upper }");
+        assert!(out.contains("Route each failed emission"), "{out}");
+        assert!(out.contains("an `ok` continues unwrapped"), "{out}");
+        assert!(out.contains("a. For an `err`"), "{out}");
+        assert!(out.contains("Evaluate `$.message`"), "{out}");
+    }
+
+    #[test]
     fn capabilities_and_effects_are_reported() {
         let out = text("\"p\" -> !@fs.read -> @json.decode");
         assert!(out.contains("Capabilities it needs"), "{out}");
@@ -364,7 +448,12 @@ mod tests {
 
     #[test]
     fn every_explanation_states_the_ordering_rules() {
-        for source in ["3", "x -> |{ a ; b }", "r -> ~{ d } :max 2"] {
+        for source in [
+            "3",
+            "x -> |{ a ; b }",
+            "x -> |{ a ; b }:par",
+            "r -> ~{ d } :max 2",
+        ] {
             assert!(text(source).contains("deterministic"), "{source}");
         }
     }

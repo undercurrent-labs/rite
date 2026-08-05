@@ -38,9 +38,12 @@ reaches inside a string or a comment.
 
 ## Named functions
 
-Cant has no function definitions and is not going to grow them. It has `use`,
-which imports an ordinary **Rite** module, so a name you want twice lives in
-Rite:
+Cant names *flows*, not functions. `clean:{ trim -> ?{ count($) > 0 } }` is a
+chain, spliced in wherever it is used; it takes no argument and cannot leave the
+file it is written in — see [the language reference](language.md).
+
+Anything that needs a parameter, or needs the same name in two programs, is a
+Rite function, and `use` imports an ordinary **Rite** module:
 
 `report.rite`:
 

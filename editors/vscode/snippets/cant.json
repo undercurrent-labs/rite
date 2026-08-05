@@ -19,6 +19,16 @@
     "body": ["-> ~{ ${1:body} } :by str :max ${2:1024}"],
     "description": "Bounded breadth-first fixed point"
   },
+  "rescue": {
+    "prefix": "rescue",
+    "body": ["-> !{ ${1:\"failed: \" + \\$.message} }"],
+    "description": "Route a failed emission into a handler flow"
+  },
+  "definition": {
+    "prefix": "def",
+    "body": ["${1:clean}:{ ${2:trim -> ?{ count(\\$) > 0 }} }", "${3:[\"a\"]} -> * -> ${1:clean} -> []"],
+    "description": "Name a flow, spliced in wherever it is used"
+  },
   "read a file": {
     "prefix": "read",
     "body": ["\"${1:path}\" -> !@fs.read? -> lines -> * -> ?{ \\$ != \"\" } -> []"],

@@ -334,7 +334,7 @@ fn relative_imports_round_trip() {
     // token), so it cannot be formatted either.
     let src = "use ./lib/helpers\nuse math as m\npub use math\n";
     let out = format_with_dialect(src, Dialect::Glyph).unwrap().text;
-    assert_eq!(out, "⊏ ./lib/helpers\n⊏ math as m\npub ⊏ math\n", "{out}");
+    assert_eq!(out, "⊏ ./lib/helpers\n⊏ math → m\npub ⊏ math\n", "{out}");
     let ascii = format_with_dialect(src, Dialect::Ascii).unwrap().text;
     assert_eq!(ascii, src, "{ascii}");
 }

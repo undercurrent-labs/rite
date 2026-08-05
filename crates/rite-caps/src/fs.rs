@@ -165,6 +165,7 @@ impl FsCap {
             "read" => {
                 let path = path_arg_for("fs.read", &args, 0)?;
                 let path = perms.check_fs_read(&path).map_err(EvalError::Permission)?;
+                check_file_size("fs.read", &path, ctx)?;
                 match std::fs::read_to_string(&path) {
                     Ok(s) => Ok(Value::ok(Value::string(s))),
                     Err(e) => Ok(io_err("fs.read", &path, e)),
@@ -173,6 +174,7 @@ impl FsCap {
             "read_bytes" => {
                 let path = path_arg_for("fs.read_bytes", &args, 0)?;
                 let path = perms.check_fs_read(&path).map_err(EvalError::Permission)?;
+                check_file_size("fs.read_bytes", &path, ctx)?;
                 match std::fs::read(&path) {
                     Ok(b) => Ok(Value::ok(Value::Bytes(b.into()))),
                     Err(e) => Ok(io_err("fs.read_bytes", &path, e)),
@@ -209,9 +211,13 @@ impl FsCap {
             "lines" => {
                 let path = path_arg_for("fs.lines", &args, 0)?;
                 let path = perms.check_fs_read(&path).map_err(EvalError::Permission)?;
+                check_file_size("fs.lines", &path, ctx)?;
                 match std::fs::read_to_string(&path) {
                     Ok(s) => {
                         let lines: Vec<Value> = s.lines().map(Value::string).collect();
+                        ctx.budget
+                            .limits()
+                            .check_collection(lines.len(), "fs.lines")?;
                         Ok(Value::ok(Value::list(lines)))
                     }
                     Err(e) => Ok(io_err("fs.lines", &path, e)),
@@ -564,6 +570,25 @@ fn simple_io_err(op: &str, e: std::io::Error) -> Value {
     ]))
 }
 
+/// Refuse to buffer a file over the run's `max_string_size`, before paying the
+/// allocation the ceiling exists to prevent. Sized from metadata; a file that
+/// grows between the check and the read still cannot grow the *check*, and the
+/// knob defaults to unlimited so nothing changes for an unconfigured run.
+fn check_file_size(
+    who: &str,
+    path: &std::path::Path,
+    ctx: &rite_runtime::RuntimeContext,
+) -> Result<(), EvalError> {
+    let limits = ctx.budget.limits();
+    if limits.max_string_size == usize::MAX {
+        return Ok(());
+    }
+    if let Ok(m) = std::fs::metadata(path) {
+        limits.check_string(m.len() as usize, who)?;
+    }
+    Ok(())
+}
+
 fn read_chunk(args: &[Value], ctx: &rite_runtime::RuntimeContext) -> Result<Value, EvalError> {
     let n = args
         .get(1)
@@ -574,6 +599,11 @@ fn read_chunk(args: &[Value], ctx: &rite_runtime::RuntimeContext) -> Result<Valu
             "fs.read_chunk: byte count cannot be negative".into(),
         ));
     }
+    // The buffer is allocated at the caller's size before anything is read, so
+    // the caller's size is what the ceiling applies to.
+    ctx.budget
+        .limits()
+        .check_string(n as usize, "fs.read_chunk")?;
     let outcome = with_file(args, ctx, |file| match file {
         OpenFile::Write(_) => wrong_mode("reading"),
         OpenFile::Read(r) => {

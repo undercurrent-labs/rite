@@ -9,7 +9,7 @@ them.
 ## The pipeline
 
 ```text
-Cant source ──(cant-syntax, cant-sem)──▶ cant.graph v1
+Cant source ──(cant-syntax, cant-sem)──▶ cant.graph v2
     ──(adapter, cant-sem::sigil)──▶ rite.sigil.graph v1
     ──(normalize: validate + limits + fingerprint)──▶ NormalizedGraph
     ──(analyze: topology, placement, region weights)──▶ Topology

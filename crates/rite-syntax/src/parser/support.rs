@@ -451,5 +451,6 @@ pub(super) fn pattern_span(p: &Pattern) -> Span {
         Pattern::List(l) => l.span,
         Pattern::Record(r) => r.span,
         Pattern::Result(r) => r.span,
+        Pattern::Or(o) => o.span,
     }
 }

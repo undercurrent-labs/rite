@@ -55,12 +55,12 @@ pub struct RunOptions {
     pub allow_all: bool,
     pub timeout_ms: Option<u64>,
     pub seed: Option<u64>,
-    /// Extra in-memory sources, keyed by name.
+    /// Extra in-memory modules, resolved by `use` before the filesystem.
     ///
-    /// **Not implemented.** The field is accepted so an existing payload still
-    /// deserialises, but supplying a non-empty map is an error rather than a silent
-    /// no-op: nothing here has ever read it, so a caller who sent files got a script
-    /// run without them and no indication why.
+    /// Keys may be module names (`coolio`, `lib.helpers`) or file names
+    /// (`coolio.rite`, `lib/helpers.rite`) — the `.rite` suffix drops and `/`
+    /// becomes `.`. This is what lets a Studio run execute a multi-file
+    /// program: the browser has no filesystem for `use` to search.
     pub files: HashMap<String, String>,
     #[serde(default)]
     pub browser_safe: bool,
@@ -241,20 +241,15 @@ pub fn hover(source: &str, line: u32, character: u32) -> serde_json::Value {
 pub async fn run(source: &str, options: RunOptions) -> ExecutionResult {
     let browser = options.browser_safe || cfg!(not(feature = "native"));
 
-    if !options.files.is_empty() {
-        return ExecutionResult {
-            ok: false,
-            value: serde_json::Value::Null,
-            stdout: String::new(),
-            stderr: String::new(),
-            error: Some(
-                "`files` is not implemented: this runtime resolves no imports, so the \
-                 supplied sources would be ignored rather than used"
-                    .into(),
-            ),
-            virtual_http: None,
-        };
-    }
+    // Module overlay: file-name keys normalise to module names.
+    let module_files: HashMap<String, String> = options
+        .files
+        .iter()
+        .map(|(k, v)| {
+            let name = k.strip_suffix(".rite").unwrap_or(k).replace('/', ".");
+            (name, v.clone())
+        })
+        .collect();
 
     if browser {
         // Capabilities with no browser answer at all. `@http` is not here: the
@@ -320,9 +315,13 @@ pub async fn run(source: &str, options: RunOptions) -> ExecutionResult {
         };
     }
 
-    // Shared pure evaluator path (works on wasm32 without Tokio/caps).
-    // Native builds optionally install full caps for FS/HTTP/process.
+    // Shared evaluator path. `rite-caps` is installed either way: on wasm32 it
+    // carries only the capabilities that need no host — @json, @csv, @crypto,
+    // @regex, @store, @random, @game — and answers the rest by naming them
+    // native-only. Before this, a wasm build installed no host at all and
+    // `@json.encode` came back as "capability `@json` not registered".
     {
+        use rite_caps::{install_defaults, Permission, PermissionSet};
         use rite_runtime::{run_source, RuntimeContext};
 
         let mut ctx = RuntimeContext::new();
@@ -334,25 +333,31 @@ pub async fn run(source: &str, options: RunOptions) -> ExecutionResult {
                 .with_timeout(std::time::Duration::from_millis(ms));
         }
 
-        #[cfg(feature = "native")]
-        {
-            use rite_caps::{install_defaults, Permission, PermissionSet};
-            let mut perms = if options.allow_all {
-                let mut p = PermissionSet::allow_all();
-                if browser {
-                    p.deny(Permission::Process);
-                }
-                p
-            } else {
-                PermissionSet::default_secure()
-            };
-            if browser {
-                perms.deny(Permission::Process);
-            }
-            install_defaults(&mut ctx, perms);
+        let mut perms = if options.allow_all {
+            PermissionSet::allow_all()
+        } else {
+            PermissionSet::default_secure()
+        };
+        if browser {
+            perms.deny(Permission::Process);
         }
+        install_defaults(&mut ctx, perms);
 
-        match run_source("browser.rite", source, &mut ctx).await {
+        let outcome = if module_files.is_empty() {
+            run_source("browser.rite", source, &mut ctx).await
+        } else {
+            // With an overlay, compile through the module loader so `use`
+            // resolves against it, then evaluate the IR as `run_source` would.
+            let mut sources = rite_core::SourceMap::new();
+            let id = sources.add_file("browser.rite", source);
+            let sf = sources.get(id).unwrap().clone();
+            let (ir, diags) = rite_sem::compile_to_ir_with_files(&sf, module_files);
+            match ir {
+                Some(ir) => rite_runtime::run_ir(&ir, &mut ctx).await,
+                None => Err(rite_runtime::EvalError::Compile(diags)),
+            }
+        };
+        match outcome {
             Ok(v) => ExecutionResult {
                 ok: true,
                 value: v.to_json(&ctx.atoms),

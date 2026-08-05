@@ -143,12 +143,23 @@ pub enum NodeKind {
     },
     Fork {
         branches: Vec<SubgraphId>,
+        /// The branches run concurrently (`|{ a ; b }:par`).
+        ///
+        /// Always serialized, including when false. A consumer deciding whether
+        /// a fork's effects can interleave must be able to read the answer
+        /// rather than infer it from a key's absence, and a renderer that wants
+        /// to draw the two differently needs the same.
+        parallel: bool,
     },
     Orbit {
         body: SubgraphId,
         #[serde(skip_serializing_if = "Option::is_none")]
         identity: Option<LeafExpr>,
         max_items: u64,
+    },
+    /// An `err` goes into `handler`; an `ok` continues unwrapped.
+    Rescue {
+        handler: SubgraphId,
     },
 }
 
@@ -162,28 +173,30 @@ impl NodeKind {
             NodeKind::Ward { .. } => "ward",
             NodeKind::Fork { .. } => "fork",
             NodeKind::Orbit { .. } => "orbit",
+            NodeKind::Rescue { .. } => "rescue",
         }
     }
 
     /// How many output ports this node has.
     ///
     /// Port 0 is always the continuation — the value leaving the node along the
-    /// main flow. A fork adds one port per branch and an orbit one for its body,
-    /// so an edge into a branch is distinguishable from the edge that carries the
-    /// concatenated result onward.
+    /// main flow. A fork adds one port per branch, an orbit one for its body and
+    /// a rescue one for its handler, so an edge into a branch is distinguishable
+    /// from the edge that carries the concatenated result onward.
     pub fn out_ports(&self) -> u32 {
         match self {
-            NodeKind::Fork { branches } => 1 + branches.len() as u32,
-            NodeKind::Orbit { .. } => 2,
+            NodeKind::Fork { branches, .. } => 1 + branches.len() as u32,
+            NodeKind::Orbit { .. } | NodeKind::Rescue { .. } => 2,
             _ => 1,
         }
     }
 
     /// How many input ports. Port 0 is the incoming value; port 1, where it
-    /// exists, is the join a branch or an orbit body returns to.
+    /// exists, is the join a branch, an orbit body or a rescue handler returns
+    /// to.
     pub fn in_ports(&self) -> u32 {
         match self {
-            NodeKind::Fork { .. } | NodeKind::Orbit { .. } => 2,
+            NodeKind::Fork { .. } | NodeKind::Orbit { .. } | NodeKind::Rescue { .. } => 2,
             _ => 1,
         }
     }
@@ -255,6 +268,11 @@ pub enum EdgeRole {
     /// An orbit body returning candidates to the orbit's worklist. **The only
     /// cycle v0 permits.**
     OrbitFeedback,
+    /// A rescue into its handler: the failure path. Its own role rather than an
+    /// [`EdgeRole::Enter`] so a consumer can tell a failure path from a branch
+    /// without looking up the node at each end. The handler rejoins with a
+    /// [`EdgeRole::Join`], being a concatenation point like a fork branch's.
+    Rescue,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -489,6 +507,7 @@ mod tests {
         assert_eq!(NodeKind::Scatter.in_ports(), 1);
         let fork = NodeKind::Fork {
             branches: vec![SubgraphId(0), SubgraphId(1), SubgraphId(2)],
+            parallel: false,
         };
         // One continuation plus one per branch.
         assert_eq!(fork.out_ports(), 4);

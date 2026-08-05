@@ -1,4 +1,4 @@
-# The Cant graph, version 1
+# The Cant graph, version 3
 
 The serialized form of a Cant program: what `cant graph --format json` emits, and
 what a renderer (Sigil) consumes.
@@ -12,13 +12,13 @@ wrote it.
 
 ```bash
 $ cant version
-cant_graph_schema_version: 1
+cant_graph_schema_version: 3
 ```
 
 Check it and refuse rather than guess. Cant's own reader does:
 
 ```text
-graph schema version `99`, expected `1`
+graph schema version `99`, expected `3`
 ```
 
 and, before it looks at the number at all:
@@ -28,6 +28,43 @@ graph schema `rite.sigil.graph`, expected `cant.graph`
 ```
 
 Name first, because a version is only meaningful once it is known whose it is.
+
+## What changed in version 3
+
+Whether a fork's branches run concurrently.
+
+- **`parallel` on a `fork` node** — `true` for `|{ a ; b }:par`, `false`
+  otherwise. Always present, in both states: a consumer deciding whether two
+  branches' effects have an order between them has to read an answer rather than
+  infer one from a missing key.
+
+Nothing else moves. A parallel fork has the same branches, the same ordinals and
+the same two-port shape as a sequential one, because it *is* one — the flag says
+how the branches are scheduled, not what they are. Sigil draws it with the fork's
+existing mark and says "parallel" in the label; a distinct visual treatment for
+concurrency is future work.
+
+See `docs/adr/0012-parallel-fork-is-a-modifier.md`. Version 2 graphs are refused
+rather than defaulted to `false`, for the same reason version 1 graphs were: a
+reader that guessed would be claiming an ordering the producer never stated.
+
+## What changed in version 2
+
+The failure path is in the graph. Previously an error was handled inside a stage
+— `unwrap_or($, "")` is a stage like any other — so where a program's failures
+went could not be read off the topology at all.
+
+- **`rescue`** — a node kind, with a `handler` subgraph id. Its out port 1 enters
+  the handler and its in port 1 is where the handler rejoins, the same two-port
+  shape an orbit uses for its body.
+- **`rescue`** — an edge role, on the edge from that out port into the handler.
+  Its own role rather than `enter` so that "which edge is the failure path" is a
+  field rather than an inference from the nodes at each end. The handler returns
+  along a `join`, being a concatenation point like a fork branch's.
+
+See `docs/adr/0010-error-routing-is-a-rescue-stage.md`. Version 1 graphs are
+refused, not upgraded — a version 1 consumer walking a version 2 document
+would read a rescue's continuation and its failure path as the same kind of edge.
 
 ## What changed in version 1
 
@@ -71,9 +108,9 @@ picture comes from the JSON below.
 ```json
 {
   "schema": "cant.graph",
-  "version": "1",
+  "version": "3",
   "language_version": "0",
-  "producer": { "name": "cant", "version": "0.2.0" },
+  "producer": { "name": "cant", "version": "0.3.0" },
   "entry": 0,
   "exit": 4,
   "nodes": [ … ],
@@ -91,6 +128,13 @@ is still in range for the text it has.
 (ADR 0001, Amendment 2). It is there to make a bug report legible and for nothing
 else: a consumer that mixed it into a cache key or a fingerprint would invalidate
 every stored artifact on a release that changed no graph.
+
+A program's **named flows are not here**, and there is no key for them. A
+definition is spliced into the flow that used it before the graph is built, so
+what a consumer reads is the program that runs, and a definition used twice is
+two copies of its nodes. See
+`docs/adr/0011-named-flows-are-spliced.md`; recording the names and the splice
+points would be another version, and nothing needs them yet.
 
 `uses` is the program's leading `use` imports, as module names in source order.
 Additive and absent when empty, so graphs predating the field serialize
@@ -112,15 +156,16 @@ not what exists.
 ```
 
 `kind` is one of `source`, `stage`, `scatter`, `collect`, `ward`, `fork`,
-`orbit`, and its payload is flattened alongside it:
+`orbit`, `rescue`, and its payload is flattened alongside it:
 
 | `kind` | payload |
 |---|---|
 | `source`, `stage` | `expr`: a leaf |
 | `scatter`, `collect` | — |
 | `ward` | `predicate`: a leaf |
-| `fork` | `branches`: subgraph ids, **in branch order** |
+| `fork` | `branches`: subgraph ids, **in branch order** · `parallel`: whether they run concurrently |
 | `orbit` | `body`: a subgraph id · `identity`: an optional leaf (`:by`) · `max_items`: the `:max` |
+| `rescue` | `handler`: a subgraph id |
 
 A **leaf** is Rite expression text with what Cant knows about it on its own:
 `text`, `span`, `effectful` (it carries a `!`), and `placeholder` (it names `$`).
@@ -176,9 +221,9 @@ Ports are explicit and numbered:
 
 - **out port 0** is the continuation: the value leaving along the main flow.
 - **a fork's out port *n+1*** enters branch *n*; **an orbit's out port 1** enters
-  its body.
-- **in port 0** is the incoming value; **in port 1** is the join a branch or an
-  orbit body returns to.
+  its body; **a rescue's out port 1** enters its handler.
+- **in port 0** is the incoming value; **in port 1** is the join a branch, an
+  orbit body or a rescue handler returns to.
 
 `role` is one of:
 
@@ -186,8 +231,9 @@ Ports are explicit and numbered:
 |---|---|
 | `flow` | one stage to the next |
 | `enter` | a fork or orbit into its branch or body |
-| `join` | a fork branch returning its emissions to the fork |
+| `join` | a fork branch or rescue handler returning its emissions |
 | `orbit_feedback` | an orbit body returning candidates to the worklist; **the only cycle** |
+| `rescue` | a rescue into its handler: the failure path |
 
 **Branch order lives in `ordinal`, not in the array order.** A consumer that
 sorts or reorders the edge list must still read branch order correctly, and one
@@ -204,8 +250,8 @@ actually ask. Expect exactly one cycle per orbit, and draw it distinctly:
 { "id": 0, "owner": 1, "entry": 2, "exit": 4, "nodes": [2, 3, 4] }
 ```
 
-A fork branch or an orbit body. `owner` is the node that contains it; `nodes` is
-its members in flow order. `entry` and `exit` are absent for an empty branch,
+A fork branch, an orbit body or a rescue handler. `owner` is the node that
+contains it; `nodes` is its members in flow order. `entry` and `exit` are absent for an empty branch,
 which is a validation error but still has to be representable.
 
 Every node appears once in the flat top-level `nodes` array, whatever subgraph it
@@ -269,12 +315,11 @@ without walking anything: `capabilities()`, `effectful_nodes()`, and
 
 ## What could change
 
-Things version 0 does not settle, so a consumer knows where the edges are:
+Things this version does not settle, so a consumer knows where the edges are:
 
 - **Named anchors and explicit feedback edges** would add edge roles and would end
   "exactly one cycle per orbit".
-- **Parallel fork** would need an ordering or concurrency field on the fork node.
-  Today sequential-left-to-right is implied by the branch ordinals alone.
-- **Error-routing edges** would add a role and a second out-port convention.
 - **Multi-output nodes** are representable, which is why ports are numbered
-  rather than anonymous, but nothing produces one yet.
+  rather than anonymous, and a rescue is the first thing to use the second one.
+- **Retries** would put a policy on a rescue, and are the one place a `:max`-like
+  modifier could reappear.

@@ -46,6 +46,7 @@ render fork    '5 -> |{ $ + 1 ; $ * 2 ; $ * $ } -> []'
 render orbit   '[1, 2] -> * -> ~{ ?{ $ < 8 } -> $ * 2 } :by str :max 64 -> []'
 render nested  '4 -> |{ ?{ $ > 2 } -> $ * 10 ; ~{ ?{ $ < 8 } -> $ + 2 } :max 8 } -> []'
 render effects '"data.json" -> !@fs.read? -> @json.decode? -> .name'
+render rescue  '["a.txt"] -> * -> !@fs.read($) -> !{ $.message } -> []'
 
 echo "==> done"
 ls -la "$OUT"

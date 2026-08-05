@@ -756,6 +756,70 @@ The JSON Schema a function would be published with, derived from its declared pa
 - effectful: false
 - permission: 
 
+### connect
+
+Open a connection to another MCP server and return `ok(handle)`. The spec is a record naming one transport: `⟨command: "npx", args: ["-y", "…"]⟩` starts a server as a subprocess and speaks JSON-RPC on its stdin and stdout, and `⟨url: "https://example.com/mcp"⟩` posts to a Streamable HTTP endpoint. Also understands `env` (record, stdio only), `headers` (record, HTTP only) and `timeout_ms` (default 30000, the ceiling on every request made through the handle). **A `command` spec needs `--allow process`; a `url` spec needs `--allow net=<host>`** — the grant is checked here and nowhere else, so the calls that take the handle need none of their own.
+
+- arity: 1
+- effectful: true
+- permission: process
+
+### tools
+
+What a connected server offers: `ok([⟨name, description, input_schema⟩])`. `input_schema` is the tool's JSON Schema, as a record.
+
+- arity: 1
+- effectful: true
+- permission: 
+
+### call_tool
+
+Call a tool on a connected server: `! @mcp.call_tool(c, "add", ⟨a: 2, b: 3⟩)`. Answers `ok(value)` — the structured result if the server sent one, otherwise the text of its content blocks. A tool that fails in band (`isError`) is `err(⟨kind: "mcp.tool_error", tool, message⟩)` rather than a raise, so the reason is readable and the call can be retried.
+
+- arity: 3
+- effectful: true
+- permission: 
+
+### resources
+
+What a connected server publishes: `ok([⟨uri, name, description⟩])`.
+
+- arity: 1
+- effectful: true
+- permission: 
+
+### read_resource
+
+Read one resource by URI: `! @mcp.read_resource(c, "config://app")`. Answers `ok(text)`, the contents joined with newlines; a JSON resource comes back as its text, which `@json.decode` parses.
+
+- arity: 2
+- effectful: true
+- permission: 
+
+### prompts
+
+What prompts a connected server offers: `ok([⟨name, description, arguments⟩])`, where each argument is `⟨name, required⟩`.
+
+- arity: 1
+- effectful: true
+- permission: 
+
+### get_prompt
+
+Render a prompt: `! @mcp.get_prompt(c, "review", ⟨code: src⟩)`. Answers `ok(⟨description, messages⟩)`, with each message `⟨role, text⟩`.
+
+- arity: 3
+- effectful: true
+- permission: 
+
+### close
+
+Close a connection handle. Under stdio the server is sent EOF and then stopped. Closing an unknown or already-closed handle answers ok(none), and every connection closes when the run ends.
+
+- arity: 1
+- effectful: true
+- permission: 
+
 ## @udp
 
 ### bind

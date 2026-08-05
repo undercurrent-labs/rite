@@ -1,0 +1,9 @@
+{
+  "flat_map_splices": [1, 10, 2, 20, 3, 30, 4, 40, 1, 10],
+  "flat_map_keeps_scalars": [2, 4, 6, 8, 2],
+  "partition_both_halves": {"kept": [1, 3, 1], "rejected": [2, 4]},
+  "take_while_stops": [1, 2],
+  "drop_while_keeps_rest": [3, 4, 1],
+  "window_slides": [[1, 2, 3], [2, 3, 4], [3, 4, 1]],
+  "window_short_is_empty": []
+}

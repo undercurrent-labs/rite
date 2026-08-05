@@ -33,8 +33,8 @@ fn version_reports_cant_the_language_and_the_rite_it_targets() {
     assert_eq!(code(&out), 0);
     let text = stdout(&out);
     assert!(text.starts_with("cant "), "{text}");
-    assert!(text.contains("cant_language_version: 0"), "{text}");
-    assert!(text.contains("cant_graph_schema_version: 1"), "{text}");
+    assert!(text.contains("cant_language_version: 1"), "{text}");
+    assert!(text.contains("cant_graph_schema_version: 3"), "{text}");
     // `rite-core`'s version, not this crate's: Cant versions independently, so
     // `CARGO_PKG_VERSION` here is Cant's number and would never match.
     assert!(
@@ -504,7 +504,7 @@ fn graph_emits_json_by_default() {
     assert_eq!(code(&out), 0, "{}", stderr(&out));
     let json: serde_json::Value = serde_json::from_str(&stdout(&out)).expect("valid JSON");
     assert_eq!(json["schema"], serde_json::json!("cant.graph"));
-    assert_eq!(json["version"], serde_json::json!("1"));
+    assert_eq!(json["version"], serde_json::json!("3"));
     // Five: roots, scatter, orbit, the `deps` inside its body, collect. Nodes
     // nested in a subgraph are members of the one flat list, with a `subgraph`
     // field saying where they live — a renderer walking `nodes` sees all of them.
@@ -1099,6 +1099,45 @@ fn a_traced_run_weights_a_sigil() {
         svg.contains("stroke-opacity"),
         "the weighted render did not scale its edges"
     );
+}
+
+/// Trace counts survive a parallel fork, and match the sequential program's.
+///
+/// The counters are `@store` reads and writes, and `RuntimeContext::fork` shares
+/// the capability host through an `Arc`, so every branch increments the same
+/// namespace. The read-modify-write is one statement with no suspension point
+/// inside it — `@store` never returns a pending future — so no branch can
+/// interleave between the read and the write, and addition does not care what
+/// order the windows finish in. This test is what would catch that changing.
+#[test]
+fn a_traced_parallel_fork_counts_what_the_sequential_one_does() {
+    let dir = std::env::temp_dir().join("cant-trace-parallel");
+    std::fs::create_dir_all(&dir).expect("temp dir");
+
+    let mut counts = Vec::new();
+    for (name, source) in [
+        ("seq.cant", "[1, 2] -> * -> |{ $ + 1 ; $ * 2 } -> []\n"),
+        ("par.cant", "[1, 2] -> * -> |{ $ + 1 ; $ * 2 }:par -> []\n"),
+    ] {
+        let program = dir.join(name);
+        std::fs::write(&program, source).expect("write");
+        let trace = dir.join(format!("{name}.trace.json"));
+        let run = Command::new(env!("CARGO_BIN_EXE_cant"))
+            .args(["run", "--trace-out"])
+            .arg(&trace)
+            .arg(&program)
+            .output()
+            .expect("cant binary");
+        assert_eq!(code(&run), 0, "{}", stderr(&run));
+        assert_eq!(stdout(&run).trim(), "[2, 2, 3, 4]", "{name}");
+        let doc: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&trace).expect("trace written"))
+                .expect("trace is JSON");
+        counts.push(doc["nodes"].clone());
+    }
+    assert_eq!(counts[0], counts[1], "parallel lost or double-counted");
+    // The fork emitted four: two branches over two scattered values.
+    assert_eq!(counts[1]["n2"], serde_json::json!(4));
 }
 
 /// `cant sigil --diff`: the review picture — old ghosted beneath new,

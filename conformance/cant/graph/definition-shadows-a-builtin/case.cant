@@ -1,0 +1,2 @@
+count:{ trim }
+["x"] -> * -> count -> []

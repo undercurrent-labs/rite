@@ -8,6 +8,27 @@ use crate::ast::*;
 use crate::token::TokenKind;
 
 impl Parser {
+    /// `1 | 2 | 3` — alternatives at the top level of a match arm only.
+    /// Bindings and nested positions use `parse_pattern` directly, where a
+    /// refutable alternative would have nowhere to fall through to.
+    pub(super) fn parse_or_pattern(&mut self) -> Pattern {
+        let first = self.parse_pattern();
+        if !self.check(TokenKind::Pipe) {
+            return first;
+        }
+        let start = pattern_span(&first);
+        let mut alternatives = vec![first];
+        while self.check(TokenKind::Pipe) {
+            self.advance();
+            alternatives.push(self.parse_pattern());
+        }
+        let end = alternatives.last().map(pattern_span).unwrap_or(start);
+        Pattern::Or(OrPattern {
+            alternatives,
+            span: start.merge(end),
+        })
+    }
+
     pub(super) fn parse_pattern(&mut self) -> Pattern {
         if self.check(TokenKind::Underscore) {
             let t = self.advance();

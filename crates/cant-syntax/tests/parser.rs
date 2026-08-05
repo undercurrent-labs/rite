@@ -91,6 +91,74 @@ fn modifiers_attach_to_the_form_on_their_left() {
     );
 }
 
+/// A modifier with nothing after it is a modifier without a value, not a parse
+/// error. Which names are allowed to have none is `cant-sem`'s question, and a
+/// `:max` written this way is `CANT-G022` from there.
+#[test]
+fn a_modifier_may_have_no_value() {
+    assert_eq!(
+        shape("5 -> |{ $ + 1 ; $ * 2 }:par"),
+        json!([
+            {"leaf": "5"},
+            {
+                "kind": {"fork": [[{"leaf": "$ + 1"}], [{"leaf": "$ * 2"}]]},
+                "modifiers": [{"name": "par"}]
+            }
+        ])
+    );
+    assert_eq!(
+        shape("roots -> ~{ deps } :max"),
+        json!([
+            {"leaf": "roots"},
+            {
+                "kind": {"orbit": [{"leaf": "deps"}]},
+                "modifiers": [{"name": "max"}]
+            }
+        ])
+    );
+}
+
+/// A valueless modifier does not swallow the flow that follows it, and does not
+/// need one: the value run stops at `->` as it always did.
+#[test]
+fn a_valueless_modifier_ends_at_the_arrow() {
+    assert_eq!(
+        shape("5 -> |{ $ ; $ }:par -> []"),
+        json!([
+            {"leaf": "5"},
+            {
+                "kind": {"fork": [[{"leaf": "$"}], [{"leaf": "$"}]]},
+                "modifiers": [{"name": "par"}]
+            },
+            "collect"
+        ])
+    );
+}
+
+#[test]
+fn a_rescue_holds_a_flow() {
+    assert_eq!(
+        shape("rows -> !{ $.message -> upper }"),
+        json!([
+            {"leaf": "rows"},
+            {"rescue": [{"leaf": "$.message"}, {"leaf": "upper"}]}
+        ])
+    );
+}
+
+/// The one thing `!{` could have been mistaken for.
+#[test]
+fn an_effectful_leaf_is_not_a_rescue() {
+    assert_eq!(
+        shape("p -> !@fs.read($) -> !{ $.kind }"),
+        json!([
+            {"leaf": "p"},
+            {"leaf": "!@fs.read($)"},
+            {"rescue": [{"leaf": "$.kind"}]}
+        ])
+    );
+}
+
 #[test]
 fn blocks_nest() {
     let program = ok("request -> |{ ?{ $.ok } -> handle ; ~{ children -> * } :max 8 }");
@@ -222,6 +290,7 @@ fn ascii_and_glyph_parse_to_the_same_program() {
         ("rows -> ?{ $ > 0 }", "rows → ⊣⟦ $ > 0 ⟧"),
         ("5 -> |{ $ + 1 ; $ * 2 }", "5 → ⫴⟦ $ + 1 ; $ * 2 ⟧"),
         ("r -> ~{ d -> * } :max 8", "r → ⟲⟦ d → ⋇ ⟧ :max 8"),
+        ("r -> !{ $.kind }", "r → ↯⟦ $.kind ⟧"),
         // Mixed input parses; nothing requires one spelling throughout.
         (
             "roots -> * -> ?{ $ > 0 } -> []",
@@ -261,7 +330,6 @@ fn malformed_sources_report_the_code_that_names_the_mistake() {
         ("a -> f ⋇ 2", "CANT-P007"),
         ("a -> ~{ f } -> :max 4", "CANT-P008"),
         ("a -> ~{ f } :max 4 : by g", "CANT-P009"),
-        ("a -> ~{ f } :max", "CANT-P010"),
         ("5 -> |{ $ + 1 ; }", "CANT-P011"),
         ("rows -> ?{ $.a -> $.b }", "CANT-P012"),
         ("x -> \"never closed", "CANT-L002"),
@@ -366,5 +434,113 @@ fn use_lines_join_the_span_free_structure() {
     assert_ne!(
         shape("use m\n[1] -> * -> m.f($) -> []"),
         shape("[1] -> * -> m.f($) -> []")
+    );
+}
+
+// ---- definitions
+
+#[test]
+fn a_definition_names_a_flow_before_the_main_one() {
+    let program = ok("clean:{ trim -> ?{ count($) > 0 } }\n[\"a\"] -> * -> clean -> []");
+    assert_eq!(
+        program
+            .defs
+            .iter()
+            .map(|d| d.name.as_str())
+            .collect::<Vec<_>>(),
+        ["clean"]
+    );
+    assert_eq!(program.defs[0].flow.stages.len(), 2);
+    // The main flow keeps its own four stages; the definition is not in it.
+    assert_eq!(program.flow.stages.len(), 4);
+}
+
+#[test]
+fn definitions_and_use_lines_may_be_interleaved() {
+    let program = ok("use m\nclean:{ trim }\nuse n\n[\"a\"] -> * -> clean -> []");
+    assert_eq!(
+        program
+            .uses
+            .iter()
+            .map(|u| u.name.as_str())
+            .collect::<Vec<_>>(),
+        ["m", "n"]
+    );
+    assert_eq!(program.defs.len(), 1);
+}
+
+/// The braces end the definition, so nothing depends on where the line breaks
+/// are. This is what keeps a program with a definition writable with `-e`.
+#[test]
+fn a_definition_and_the_flow_fit_on_one_line() {
+    assert_eq!(
+        shape("clean:{ trim } [\"a\"] -> clean"),
+        shape("clean:{ trim }\n[\"a\"] -> clean")
+    );
+}
+
+#[test]
+fn both_spellings_of_a_definition_are_the_same_program() {
+    assert_eq!(
+        shape("clean:{ trim -> upper }\n[\"a\"] -> * -> clean -> []"),
+        shape("clean≔⟦ trim → upper ⟧\n[\"a\"] → ⋇ → clean → ⌁")
+    );
+    assert_ne!(
+        shape("clean:{ trim }\n[\"a\"] -> clean"),
+        shape("[\"a\"] -> clean")
+    );
+}
+
+/// The whole reason `:{` is resolved from position rather than by the lexer: a
+/// Rite record whose field holds a block is spelled the same way, and it is
+/// ordinary leaf text.
+#[test]
+fn a_rite_record_holding_a_block_is_not_a_definition() {
+    let program = ok("[1] -> * -> map($, { |n| << f:{ n } >> })");
+    assert!(program.defs.is_empty());
+    assert_eq!(program.flow.stages.len(), 3);
+    match &program.flow.stages[2].kind {
+        StageKind::Leaf(leaf) => assert_eq!(leaf.text, "map($, { |n| << f:{ n } >> })"),
+        other => panic!("expected a leaf, got {other:?}"),
+    }
+}
+
+#[test]
+fn a_definition_with_no_stages_is_rejected() {
+    assert_eq!(first_error("empty:{ }\n[1] -> empty"), "CANT-P002");
+}
+
+#[test]
+fn an_unclosed_definition_is_reported_as_one() {
+    assert_eq!(first_error("clean:{ trim\n[1] -> clean"), "CANT-P003");
+}
+
+/// `:{` in stage position is a definition in the wrong place. Saying so beats
+/// carrying it into generated Rite as leaf text.
+#[test]
+fn a_definition_opener_in_stage_position_is_rejected() {
+    assert_eq!(first_error("[1] -> :{ trim }"), "CANT-P002");
+}
+
+#[test]
+fn the_definition_glyph_inside_a_leaf_is_reported() {
+    assert_eq!(first_error("[1] -> f(≔⟦)"), "CANT-P007");
+}
+
+/// A program that defines flows and runs none of them has nothing to run, and
+/// the help says where the flow goes.
+#[test]
+fn definitions_without_a_flow_are_an_empty_program() {
+    let (result, _) = parse_source("t.cant", "clean:{ trim }\n");
+    let diagnostic = result.diagnostics.errors().next().expect("rejected");
+    assert_eq!(diagnostic.code.to_string(), "CANT-P001");
+    assert!(
+        diagnostic
+            .help
+            .as_deref()
+            .unwrap_or_default()
+            .contains("last"),
+        "{:?}",
+        diagnostic.help
     );
 }

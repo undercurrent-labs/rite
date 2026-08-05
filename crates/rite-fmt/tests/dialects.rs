@@ -163,3 +163,87 @@ fn glyph_only_operators_print_as_calls_in_ascii() {
     let glyph = rite_fmt::format_source("c ← f ∘ g\n", false).expect("format glyph");
     assert!(glyph.contains('∘'), "glyph lost ∘: {glyph}");
 }
+
+#[test]
+fn import_alias_prints_as_in_ascii_and_arrow_in_glyph() {
+    let src = "use coolio -> cool\n";
+    let ascii = format_with_dialect(src, Dialect::Ascii).unwrap().text;
+    assert!(ascii.contains("use coolio as cool"), "ascii alias: {ascii}");
+    let glyph = format_with_dialect(src, Dialect::Glyph).unwrap().text;
+    assert!(glyph.contains("⊏ coolio → cool"), "glyph alias: {glyph}");
+    // And back: the glyph arrow parses and normalises to `as` in ASCII.
+    let back = format_with_dialect(&glyph, Dialect::Ascii).unwrap().text;
+    assert!(back.contains("use coolio as cool"), "round trip: {back}");
+}
+
+#[test]
+fn module_access_keeps_the_sigil_in_both_dialects() {
+    // `@cool` is a module, not the host: ASCII must not print `host.cool`,
+    // while a real capability in the same file still becomes `host.fs`.
+    let src = "use coolio as cool\nx <- @cool.square(2)\ny <- do @fs.read(\"f\")\n";
+    let ascii = format_with_dialect(src, Dialect::Ascii).unwrap().text;
+    assert!(
+        ascii.contains("@cool.square"),
+        "module lost its sigil: {ascii}"
+    );
+    assert!(
+        ascii.contains("host.fs.read"),
+        "capability kept `@`: {ascii}"
+    );
+    let glyph = format_with_dialect(src, Dialect::Glyph).unwrap().text;
+    assert!(
+        glyph.contains("@cool.square"),
+        "glyph module access: {glyph}"
+    );
+    assert!(glyph.contains("@fs.read"), "glyph capability: {glyph}");
+}
+
+#[test]
+fn guards_and_or_patterns_survive_formatting() {
+    let src = "x <- match 1 [[\n  1 | 2 -> \"a\"\n  n if n > 0 -> \"b\"\n  _ -> \"c\"\n]]\n";
+    let ascii = format_with_dialect(src, Dialect::Ascii).unwrap().text;
+    assert!(ascii.contains("1 | 2 ->"), "or-pattern dropped: {ascii}");
+    assert!(ascii.contains("n if n > 0 ->"), "guard dropped: {ascii}");
+    let glyph = format_with_dialect(src, Dialect::Glyph).unwrap().text;
+    assert!(glyph.contains("1 | 2 →"), "glyph or-pattern: {glyph}");
+    assert!(glyph.contains("n ? n > 0 →"), "glyph guard: {glyph}");
+    // An arm without a guard must not gain one.
+    assert!(!glyph.contains("_ ?"), "wildcard arm grew a guard: {glyph}");
+    // Round trip: the glyph spelling parses back to the same ASCII.
+    let back = format_with_dialect(&glyph, Dialect::Ascii).unwrap().text;
+    assert_eq!(ascii, back, "guard/or round trip changed the program");
+}
+
+#[test]
+fn statement_sugar_survives_formatting() {
+    let src = "say \"hi\"\nunless done [[\n  say \"go\"\n]]\nfor x in [1, 2] [[\n  say x\n]]\nwhile n < 3 [[\n  n := n + 1\n]]\nloop 2 [[\n  say \"tick\"\n]]\n";
+    let ascii = format_with_dialect(src, Dialect::Ascii).unwrap().text;
+    for kept in [
+        "say \"hi\"",
+        "unless done",
+        "for x in [1, 2]",
+        "while n < 3",
+        "loop 2",
+    ] {
+        assert!(ascii.contains(kept), "`{kept}` was lowered away:\n{ascii}");
+    }
+    // The expansions must not appear.
+    for gone in ["console.println", "each", "while_loop", "range(0"] {
+        assert!(!ascii.contains(gone), "expansion `{gone}` leaked:\n{ascii}");
+    }
+    let glyph = format_with_dialect(src, Dialect::Glyph).unwrap().text;
+    for kept in [
+        "¶ \"hi\"",
+        "¿ done",
+        "∀ x ∈ [1, 2]",
+        "while n < 3",
+        "loop 2",
+    ] {
+        assert!(glyph.contains(kept), "glyph `{kept}` missing:\n{glyph}");
+    }
+    // Idempotent, and stable across a dialect round trip.
+    let twice = format_with_dialect(&ascii, Dialect::Ascii).unwrap().text;
+    assert_eq!(ascii, twice, "ascii formatting is not idempotent");
+    let back = format_with_dialect(&glyph, Dialect::Ascii).unwrap().text;
+    assert_eq!(ascii, back, "glyph→ascii changed the program");
+}

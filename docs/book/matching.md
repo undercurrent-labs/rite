@@ -129,6 +129,63 @@ the error to `e` — and either arm may be `_` if you do not need the payload:
 
 Unwrap fallible host calls with postfix `?` when you want early-return style error propagation ([Results](results.md)).
 
+## Or-patterns
+
+`|` joins alternatives in one arm, tried left to right:
+
+```rite browser
+◆ size(n) ⟦
+  ^ ~ n ⟦
+    1 | 2 | 3 → "small"
+    4 | 5 | 6 → "medium"
+    _ → "large"
+  ⟧
+⟧
+
+! @console.println(size(2))    // small
+! @console.println(size(5))    // medium
+```
+
+Alternatives may bind names, but every alternative must bind the **same**
+names — the arm body runs whichever one matched:
+
+```rite
+~ outcome ⟦
+  ok v | err v → v      // the payload, success or not
+⟧
+```
+
+`ok v | err e → …` is an error, since `e` would be unbound when `ok v`
+matched. Or-patterns join whole arms only; inside a list or record pattern,
+write separate arms instead. `true | false` counts as covering the whole
+boolean domain for the exhaustiveness warning.
+
+## Guards
+
+A guard is a condition after the pattern — glyph `?`, ASCII `if`. The arm
+matches only when the pattern matches **and** the guard is truthy; otherwise
+the value moves on to the next arm:
+
+```rite browser
+◆ classify(n) ⟦
+  ^ ~ n ⟦
+    x ? x < 0 → "negative"
+    0 → "zero"
+    x ? x % 2 = 0 → "even"
+    _ → "odd"
+  ⟧
+⟧
+
+! @console.println(classify(6))     // even
+! @console.println(classify(7))     // odd
+```
+
+The guard sees the pattern's bindings (`x` above). It is parsed below pipeline
+precedence, so the `→` after it always belongs to the arm; parenthesize a
+pipeline if a guard needs one. A guarded arm never counts toward
+exhaustiveness — the guard can refuse any value — so `x ? x > 0 → …` still
+wants a `_` arm after it.
+
 ## Match is an expression
 
 You can bind the whole match:

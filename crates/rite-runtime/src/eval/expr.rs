@@ -225,6 +225,22 @@ impl<'a> Evaluator<'a> {
                         for (name, val) in bindings {
                             self.ctx.env.define_name(&name, val, false);
                         }
+                        // The guard runs with the arm's bindings in scope; a
+                        // falsy answer sends the value on to the next arm.
+                        if let Some(guard) = &arm.guard {
+                            let verdict = self.eval_operand(guard).await;
+                            match verdict {
+                                Ok(v) if !v.is_truthy() => {
+                                    self.ctx.env.pop_frame();
+                                    continue;
+                                }
+                                Err(e) => {
+                                    self.ctx.env.pop_frame();
+                                    return Err(e);
+                                }
+                                Ok(_) => {}
+                            }
+                        }
                         let result = self.eval_operand(&arm.body).await;
                         self.ctx.env.pop_frame();
                         return result;

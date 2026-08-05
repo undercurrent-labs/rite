@@ -27,6 +27,12 @@ pub fn lower(ast: &CantProgramAst, source_name: &str, source_len: usize) -> Cant
         subgraphs: Vec::new(),
         next_node: 0,
         next_subgraph: 0,
+        definitions: ast
+            .defs
+            .iter()
+            .map(|d| (d.name.as_str(), &d.flow))
+            .collect(),
+        splicing: Vec::new(),
     };
 
     let flow = builder.flow(&ast.flow, None, true);
@@ -53,15 +59,22 @@ struct Wired {
     members: Vec<NodeId>,
 }
 
-struct Builder {
+struct Builder<'a> {
     nodes: Vec<Node>,
     edges: Vec<Edge>,
     subgraphs: Vec<Subgraph>,
     next_node: u32,
     next_subgraph: u32,
+    /// The program's named flows, in source order. First declaration wins; a
+    /// duplicate name is validation's to report.
+    definitions: Vec<(&'a str, &'a AstFlow)>,
+    /// The definitions currently being spliced, innermost last. A name already
+    /// on it is a cycle, and lowering leaves it as an ordinary leaf so that this
+    /// terminates and `CANT-G020` has a node to point at.
+    splicing: Vec<&'a str>,
 }
 
-impl Builder {
+impl<'a> Builder<'a> {
     fn add_node(
         &mut self,
         kind: NodeKind,
@@ -104,19 +117,15 @@ impl Builder {
     /// from the enclosing node, so it is an ordinary `Stage` — calling it a
     /// source would say the branch invents its input, which is the opposite of
     /// what a fork does.
-    fn flow(&mut self, flow: &AstFlow, subgraph: Option<SubgraphId>, is_top_level: bool) -> Wired {
+    fn flow(
+        &mut self,
+        flow: &'a AstFlow,
+        subgraph: Option<SubgraphId>,
+        is_top_level: bool,
+    ) -> Wired {
         let mut members = Vec::new();
         let mut previous: Option<NodeId> = None;
-
-        for (index, stage) in flow.stages.iter().enumerate() {
-            let id = self.stage(stage, subgraph, is_top_level && index == 0);
-            members.push(id);
-            if let Some(prev) = previous {
-                self.connect(prev, id, EdgeRole::Flow);
-            }
-            previous = Some(id);
-        }
-
+        self.stages(flow, subgraph, is_top_level, &mut members, &mut previous);
         Wired {
             entry: members.first().copied(),
             exit: previous,
@@ -124,7 +133,54 @@ impl Builder {
         }
     }
 
-    fn stage(&mut self, stage: &Stage, subgraph: Option<SubgraphId>, is_source: bool) -> NodeId {
+    /// Append a flow's stages to the chain being built, splicing definitions.
+    ///
+    /// A stage that is nothing but a definition's name contributes that
+    /// definition's stages instead of a node of its own, at the position it was
+    /// named — so a definition is a chain, and the emissions rule at each of its
+    /// stages is the ordinary one. Nothing records that a splice happened: the
+    /// graph is the program that runs (ADR 0011).
+    fn stages(
+        &mut self,
+        flow: &'a AstFlow,
+        subgraph: Option<SubgraphId>,
+        is_top_level: bool,
+        members: &mut Vec<NodeId>,
+        previous: &mut Option<NodeId>,
+    ) {
+        for stage in &flow.stages {
+            if let Some(body) = self.definition_body(stage) {
+                let name = definition_use(stage).expect("a body was found for it");
+                self.splicing.push(name);
+                self.stages(body, subgraph, is_top_level, members, previous);
+                self.splicing.pop();
+                continue;
+            }
+            // The first stage of the top-level flow is the source, wherever it
+            // came from: a definition spliced in at the front supplies it.
+            let id = self.stage(stage, subgraph, is_top_level && members.is_empty());
+            members.push(id);
+            if let Some(prev) = *previous {
+                self.connect(prev, id, EdgeRole::Flow);
+            }
+            *previous = Some(id);
+        }
+    }
+
+    /// The flow this stage names, when it names one that is not already being
+    /// spliced.
+    fn definition_body(&self, stage: &'a Stage) -> Option<&'a AstFlow> {
+        let name = definition_use(stage)?;
+        if self.splicing.contains(&name) {
+            return None;
+        }
+        self.definitions
+            .iter()
+            .find(|(defined, _)| *defined == name)
+            .map(|(_, flow)| *flow)
+    }
+
+    fn stage(&mut self, stage: &'a Stage, subgraph: Option<SubgraphId>, is_source: bool) -> NodeId {
         match &stage.kind {
             StageKind::Leaf(leaf) => {
                 let expr = leaf_expr(leaf);
@@ -146,13 +202,14 @@ impl Builder {
             ),
             StageKind::Fork { branches } => self.fork(stage, branches, subgraph),
             StageKind::Orbit { body } => self.orbit(stage, body, subgraph),
+            StageKind::Rescue { handler } => self.rescue(stage, handler, subgraph),
         }
     }
 
     fn fork(
         &mut self,
-        stage: &Stage,
-        branches: &[AstFlow],
+        stage: &'a Stage,
+        branches: &'a [AstFlow],
         subgraph: Option<SubgraphId>,
     ) -> NodeId {
         // The node is created before its branches so that its identifier is
@@ -163,9 +220,15 @@ impl Builder {
             .collect();
         self.next_subgraph += branches.len() as u32;
 
+        // `:par` is present or it is not; a value on it, or the name on anything
+        // other than a fork, is validation's to report from the AST — the graph
+        // keeps only the answer.
+        let parallel = modifier(&stage.modifiers, "par").is_some();
+
         let node = self.add_node(
             NodeKind::Fork {
                 branches: ids.clone(),
+                parallel,
             },
             stage.span,
             subgraph,
@@ -203,16 +266,24 @@ impl Builder {
         node
     }
 
-    fn orbit(&mut self, stage: &Stage, body: &AstFlow, subgraph: Option<SubgraphId>) -> NodeId {
+    fn orbit(
+        &mut self,
+        stage: &'a Stage,
+        body: &'a AstFlow,
+        subgraph: Option<SubgraphId>,
+    ) -> NodeId {
         let id = SubgraphId(self.next_subgraph);
         self.next_subgraph += 1;
 
-        let identity = modifier(&stage.modifiers, "by").map(|m| leaf_expr(&m.value));
+        let identity = modifier(&stage.modifiers, "by")
+            .and_then(|m| m.value.as_ref())
+            .map(leaf_expr);
         // An unparseable `:max` keeps the default here and is reported by
         // validation, which can point at the modifier's span and say what was
         // written. Failing in the builder would mean no graph to point at.
         let max_items = modifier(&stage.modifiers, "max")
-            .and_then(|m| m.value.text.trim().parse::<u64>().ok())
+            .and_then(|m| m.value.as_ref())
+            .and_then(|v| v.text.trim().parse::<u64>().ok())
             .filter(|n| *n > 0)
             .unwrap_or(DEFAULT_ORBIT_MAX);
 
@@ -255,6 +326,61 @@ impl Builder {
         }
         node
     }
+
+    /// A rescue: out port 0 continues, out port 1 is the failure path into the
+    /// handler, and the handler rejoins at in port 1.
+    fn rescue(
+        &mut self,
+        stage: &'a Stage,
+        handler: &'a AstFlow,
+        subgraph: Option<SubgraphId>,
+    ) -> NodeId {
+        let id = SubgraphId(self.next_subgraph);
+        self.next_subgraph += 1;
+
+        let node = self.add_node(NodeKind::Rescue { handler: id }, stage.span, subgraph);
+
+        let wired = self.flow(handler, Some(id), false);
+        self.subgraphs.push(Subgraph {
+            id,
+            owner: node,
+            entry: wired.entry,
+            exit: wired.exit,
+            nodes: wired.members,
+        });
+
+        if let Some(entry) = wired.entry {
+            self.edges.push(Edge {
+                from: port(node, PortKind::Out, 1),
+                to: port(entry, PortKind::In, 0),
+                ordinal: 0,
+                role: EdgeRole::Rescue,
+            });
+        }
+        if let Some(exit) = wired.exit {
+            self.edges.push(Edge {
+                from: port(exit, PortKind::Out, 0),
+                to: port(node, PortKind::In, 1),
+                ordinal: 0,
+                role: EdgeRole::Join,
+            });
+        }
+        node
+    }
+}
+
+/// The name a stage would be a use of, which is a stage that is nothing but a
+/// leaf.
+///
+/// Whether the name *is* defined is the caller's question. A stage carrying
+/// anything else — `clean($)`, `upper -> clean` — is leaf text, so a definition
+/// is never callable and never part of an expression.
+pub(crate) fn definition_use(stage: &Stage) -> Option<&str> {
+    let StageKind::Leaf(leaf) = &stage.kind else {
+        return None;
+    };
+    let text = leaf.text.trim();
+    (!text.is_empty()).then_some(text)
 }
 
 fn leaf_expr(leaf: &AstLeaf) -> LeafExpr {
@@ -312,7 +438,7 @@ mod tests {
             .iter()
             .find(|n| matches!(n.kind, NodeKind::Fork { .. }))
             .expect("fork");
-        let NodeKind::Fork { branches } = &fork.kind else {
+        let NodeKind::Fork { branches, .. } = &fork.kind else {
             unreachable!()
         };
         assert_eq!(branches.len(), 2);
@@ -338,6 +464,41 @@ mod tests {
         assert!(joins
             .iter()
             .all(|e| e.to.node == fork.id && e.to.index == 1));
+    }
+
+    /// `:par` is the whole difference in the graph. Everything else about a
+    /// parallel fork — branch count, ordinals, ports — is a sequential fork's.
+    #[test]
+    fn a_par_modifier_becomes_the_forks_parallel_flag() {
+        for (source, expected) in [("x -> |{ a ; b }:par", true), ("x -> |{ a ; b }", false)] {
+            let g = graph_of(source);
+            let fork = g
+                .nodes
+                .iter()
+                .find_map(|n| match n.kind {
+                    NodeKind::Fork { parallel, .. } => Some(parallel),
+                    _ => None,
+                })
+                .expect("a fork");
+            assert_eq!(fork, expected, "for {source:?}");
+        }
+
+        let par = graph_of("x -> |{ a ; b }:par");
+        let seq = graph_of("x -> |{ a ; b }");
+        assert_eq!(par.edges.len(), seq.edges.len());
+        assert_eq!(par.subgraphs.len(), seq.subgraphs.len());
+    }
+
+    /// The name is what selects it, not the value the parser did or did not
+    /// record — `:par true` is `CANT-G023` and still a parallel fork.
+    #[test]
+    fn par_on_anything_but_a_fork_leaves_no_trace_in_the_graph() {
+        let g = graph_of("roots -> ~{ deps }:par");
+        assert_eq!(g.max_orbit_items(), Some(DEFAULT_ORBIT_MAX));
+        assert!(!g
+            .nodes
+            .iter()
+            .any(|n| matches!(n.kind, NodeKind::Fork { .. })));
     }
 
     #[test]
@@ -369,6 +530,38 @@ mod tests {
             .expect("orbit");
         assert_eq!(feedback[0].to.node, orbit.id);
         assert_eq!(feedback[0].to.index, 1, "feedback arrives at the join port");
+    }
+
+    /// The failure path is an edge of its own, and the handler comes back the
+    /// way a fork branch does.
+    #[test]
+    fn a_rescue_wires_its_handler_on_the_second_out_port() {
+        let g = graph_of("x -> !{ $.message }");
+        let rescue = g
+            .nodes
+            .iter()
+            .find(|n| matches!(n.kind, NodeKind::Rescue { .. }))
+            .expect("rescue");
+
+        let failure: Vec<_> = g
+            .edges
+            .iter()
+            .filter(|e| e.role == EdgeRole::Rescue)
+            .collect();
+        assert_eq!(failure.len(), 1);
+        assert_eq!(failure[0].from.node, rescue.id);
+        assert_eq!(failure[0].from.index, 1, "port 0 is the continuation");
+
+        let joins: Vec<_> = g
+            .edges
+            .iter()
+            .filter(|e| e.role == EdgeRole::Join)
+            .collect();
+        assert_eq!(joins.len(), 1);
+        assert_eq!(joins[0].to.node, rescue.id);
+        assert_eq!(joins[0].to.index, 1);
+        // A rescue is not a cycle, whatever a naive edge walk makes of it.
+        assert!(g.edges.iter().all(|e| e.role != EdgeRole::OrbitFeedback));
     }
 
     #[test]
@@ -417,6 +610,74 @@ mod tests {
         let g = graph_of("\"p\" -> !@fs.read -> @json.decode");
         assert_eq!(g.effectful_nodes().len(), 1);
         assert_eq!(g.capabilities(), vec!["@fs.read", "@json.decode"]);
+    }
+
+    // ---- definitions
+
+    #[test]
+    fn a_definition_is_spliced_where_it_is_named() {
+        let g = graph_of("double:{ $ * 2 }\n[1] -> * -> double -> []");
+        // Source, scatter, the definition's one stage, collect: no node stands
+        // for the definition itself.
+        assert_eq!(g.nodes.len(), 4);
+        assert!(matches!(g.nodes[2].kind, NodeKind::Stage { .. }));
+        assert_eq!(
+            g.nodes[2].kind.leaf().expect("a leaf").text,
+            "$ * 2",
+            "the definition's stage, not its name"
+        );
+    }
+
+    /// Two uses are two nodes, which is what makes effect-ness per splice rather
+    /// than memoized: each carries its own leaf and is analyzed on its own.
+    #[test]
+    fn a_definition_used_twice_becomes_two_nodes() {
+        let g = graph_of("read:{ !@fs.read($) }\n[\"a\"] -> * -> read -> read -> []");
+        let reads: Vec<_> = g
+            .nodes
+            .iter()
+            .filter(|n| n.kind.leaf().is_some_and(|l| l.effectful))
+            .collect();
+        assert_eq!(reads.len(), 2);
+        assert_ne!(reads[0].id, reads[1].id);
+        assert_eq!(g.effectful_nodes().len(), 2);
+    }
+
+    #[test]
+    fn a_definition_splices_into_the_subgraph_that_used_it() {
+        let g = graph_of("clean:{ trim -> upper }\n[\"a\"] -> |{ clean ; lower }");
+        let branch: Vec<_> = g.nodes.iter().filter(|n| n.subgraph.is_some()).collect();
+        // Two spliced stages in the first branch, one in the second.
+        assert_eq!(branch.len(), 3);
+        assert_eq!(branch[0].kind.leaf().expect("leaf").text, "trim");
+        assert_eq!(branch[0].subgraph, branch[1].subgraph);
+        assert_ne!(branch[0].subgraph, branch[2].subgraph);
+    }
+
+    /// A definition spliced at the front supplies the program's source, because
+    /// the first stage of the top-level flow is the source wherever it came from.
+    #[test]
+    fn a_definition_used_first_supplies_the_source() {
+        let g = graph_of("start:{ [1, 2] -> * }\nstart -> []");
+        assert!(matches!(g.nodes[0].kind, NodeKind::Source { .. }));
+        assert_eq!(g.nodes[0].kind.leaf().expect("leaf").text, "[1, 2]");
+        assert_eq!(g.entry, NodeId(0));
+    }
+
+    /// Lowering rejects nothing, so it has to survive a program `CANT-G020`
+    /// refuses: a name already being spliced is left as an ordinary leaf, which
+    /// terminates and leaves a node for the diagnostic to point at.
+    #[test]
+    fn a_recursive_definition_terminates_as_a_leaf() {
+        let g = graph_of("a:{ trim -> a }\n[\"x\"] -> a");
+        assert_eq!(g.nodes.len(), 3);
+        assert_eq!(g.nodes[2].kind.leaf().expect("leaf").text, "a");
+    }
+
+    #[test]
+    fn an_unused_definition_contributes_no_nodes() {
+        let g = graph_of("spare:{ trim }\n[1] -> upper");
+        assert_eq!(g.nodes.len(), 2);
     }
 
     #[test]

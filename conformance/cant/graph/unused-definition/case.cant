@@ -1,0 +1,2 @@
+spare:{ trim }
+["x"] -> * -> upper -> []

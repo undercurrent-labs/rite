@@ -110,6 +110,8 @@ fn kind_of(token: K, spelling: Spelling) -> Kind {
         | K::WardOpen
         | K::ForkOpen
         | K::OrbitOpen
+        | K::RescueOpen
+        | K::DefineOpen
         | K::BlockClose
         | K::Dollar
         | K::Bang

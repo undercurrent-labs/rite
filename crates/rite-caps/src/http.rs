@@ -249,7 +249,7 @@ impl HttpCap {
                     Some(Value::None) | None => String::new(),
                     Some(v) => v.as_str().map(str::to_string).unwrap_or_default(),
                 };
-                serve_file(&root, &sub, perms)
+                serve_file(&root, &sub, perms, ctx)
             }
             // Middleware identifiers are resolved at listen-time via `use` / `⊏`.
             // Calling them as values is a no-op document of the plug-in.
@@ -326,10 +326,31 @@ impl HttpCap {
                     .or_insert_with(|| Value::string(v));
             }
         }
-        let bytes = match resp.bytes().await {
-            Ok(b) => b.to_vec(),
-            Err(e) => return Ok(net_err("http.body", url, &e.to_string())),
-        };
+        // The body comes from a machine this run does not control, so it is
+        // read to a ceiling: the run's `max_string_size` when that is tighter,
+        // else 64 MiB — the same class of cap `@tcp.recv` (16 MiB) and
+        // `@http.listen` (1 MiB) already put on remote input. Over the ceiling
+        // is a catchable `err`, like any other network failure: the remote's
+        // size is not the script's bug.
+        let cap = ctx.budget.limits().max_string_size.min(MAX_RESPONSE_BYTES);
+        let mut resp = resp;
+        let mut bytes: Vec<u8> = Vec::new();
+        loop {
+            match resp.chunk().await {
+                Ok(Some(chunk)) => {
+                    if bytes.len().saturating_add(chunk.len()) > cap {
+                        return Ok(net_err(
+                            "http.body",
+                            url,
+                            &format!("response body exceeded the {} byte ceiling", cap),
+                        ));
+                    }
+                    bytes.extend_from_slice(&chunk);
+                }
+                Ok(None) => break,
+                Err(e) => return Ok(net_err("http.body", url, &e.to_string())),
+            }
+        }
         let text = String::from_utf8_lossy(&bytes).to_string();
         let json = match serde_json::from_str::<serde_json::Value>(&text) {
             Ok(j) => Value::ok(Value::from_json(&j)),
@@ -562,6 +583,12 @@ async fn dispatch_fallback(state: ServerState, req: Request<Body>) -> Response {
 /// A larger body is rejected with `413 Payload Too Large` rather than silently
 /// arriving as an empty body.
 const MAX_REQUEST_BODY_BYTES: usize = 1_048_576; // 1 MiB
+
+/// Ceiling on an outbound response body when no tighter `max_string_size` is
+/// configured. Remote input gets a hard cap like `@tcp.recv`'s 16 MiB; this one
+/// is larger because whole-response reads (a file download, a big JSON API
+/// page) are the normal use of `@http.get`.
+const MAX_RESPONSE_BYTES: usize = 64 * 1024 * 1024;
 
 async fn dispatch_rite(state: ServerState, idx: usize, req: Request<Body>) -> Response {
     let route = match state.routes.get(idx) {
@@ -1330,7 +1357,10 @@ fn hex_nibble(b: u8) -> Option<u8> {
 }
 
 /// Host portion of a URL, without scheme, credentials, port or path.
-fn host_of(url: &str) -> Option<String> {
+///
+/// Shared with `@mcp.connect`, so an MCP endpoint is matched against `--allow net=…`
+/// by the same rule an outbound `@http.get` is.
+pub(crate) fn host_of(url: &str) -> Option<String> {
     let rest = url.split_once("://").map(|(_, r)| r).unwrap_or(url);
     let authority = rest.split(['/', '?', '#']).next()?;
     let authority = authority
@@ -1454,7 +1484,12 @@ fn match_path(pattern: &str, path: &str) -> Option<HashMap<String, String>> {
 ///
 /// A directory resolves to its `index.html`, so `GET "/"` and an SPA's
 /// client-routed deep links work without a special case in the handler.
-fn serve_file(root: &str, sub: &str, perms: &PermissionSet) -> Result<Value, EvalError> {
+fn serve_file(
+    root: &str,
+    sub: &str,
+    perms: &PermissionSet,
+    ctx: &RuntimeContext,
+) -> Result<Value, EvalError> {
     let root_path = std::path::Path::new(root);
     let root_canon = crate::permissions::canonicalize_loose(root_path);
 
@@ -1492,6 +1527,15 @@ fn serve_file(root: &str, sub: &str, perms: &PermissionSet) -> Result<Value, Eva
     let target = perms
         .check_fs_read(&target)
         .map_err(EvalError::Permission)?;
+
+    // Whole-file buffering, same class as `@fs.read_bytes`: the configured
+    // `max_string_size` bounds it, checked from metadata before the read.
+    let limits = ctx.budget.limits();
+    if limits.max_string_size != usize::MAX {
+        if let Ok(m) = std::fs::metadata(&target) {
+            limits.check_string(m.len() as usize, "http.file")?;
+        }
+    }
 
     match std::fs::read(&target) {
         Ok(bytes) => Ok(Value::ok(Value::record(vec![

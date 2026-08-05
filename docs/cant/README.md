@@ -9,8 +9,8 @@ $ cant -e '[1, 2, 3, 4, 5, 6] -> * -> ?{ $ % 2 = 0 } -> []'
 
 Cant is not another spelling of Rite. Rite's ASCII and glyph forms are two ways
 of writing the same program; Cant composes differently. Every stage emits zero or
-more values, and scatter, collect, ward, fork and orbit change how many are in
-flight. It is a separate language that compiles to Rite and runs on Rite's
+more values, and scatter, collect, ward, fork, orbit and rescue change how many
+are in flight and where they go. It is a separate language that compiles to Rite and runs on Rite's
 runtime, capabilities, budgets and compiler.
 
 - [Your first program](tutorial.md) — start here; the language from one value up
@@ -32,7 +32,7 @@ change between versions.
 
 ## The vocabulary
 
-Ten operators, all typeable, each with at most one glyph you never have to
+Twelve operators, all typeable, each with at most one glyph you never have to
 type.
 
 | Concept | ASCII | Glyph | Meaning |
@@ -46,13 +46,17 @@ type.
 | Ward | `?{ p }` | `⊣⟦ p ⟧` | Pass the input only when `p` is truthy |
 | Fork | `\|{ a ; b }` | `⫴⟦ a ; b ⟧` | Ordered branches from the same input |
 | Orbit | `~{ b }` | `⟲⟦ b ⟧` | Bounded breadth-first fixed point |
+| Rescue | `!{ h }` | `↯⟦ h ⟧` | Route a failed emission into a handler flow |
+| Definition | `n:{ f }` | `n≔⟦ f ⟧` | Name a flow, spliced in wherever it is used |
 | Modifier | `:name v` | same | Configure the form to its left |
 
-Two ASCII spellings do double duty, and position decides which you meant:
+Three ASCII spellings do double duty, and position decides which you meant:
 
 - `*` is scatter only when it is a whole stage, so `$ * 2` stays multiplication;
 - `:name` is a modifier only right after a block's `}`, so `= :error` stays an
-  atom.
+  atom;
+- `:{` opens a definition only after a name in the preamble, so a Rite record
+  field holding a block, `<< f:{ |x| x } >>`, stays one.
 
 ## Reading a program
 
@@ -77,10 +81,15 @@ Three commands show that before running it: `cant graph` gives the topology,
 
 ## Determinism
 
-Cant has no parallelism and no nondeterminism. Stages run in source order, fork
-branches left to right, scatter preserves list order, collect preserves emission
-order, and an orbit is breadth-first with the first occurrence of a value
-winning. Effects happen in exactly that order.
+A Cant program's value is deterministic. Stages run in source order, fork
+branches join in branch order, scatter preserves list order, collect preserves
+emission order, and an orbit is breadth-first with the first occurrence of a
+value winning.
+
+Effects happen in exactly that order too, unless a fork asks for otherwise. The
+one construct that runs concurrently is `|{ a ; b }:par`, and even there the
+branches' emissions join in branch order — what has no order is when their
+effects reach the world.
 
 Orbit is the only cyclic construct, and it cannot run away: `:max` bounds
 accepted candidates (1024 by default), and Rite's step and time budgets apply

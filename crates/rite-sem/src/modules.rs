@@ -106,6 +106,11 @@ pub struct ModuleLoader<'a> {
     visiting: Vec<String>,
     visited: HashSet<String>,
     graph: ModuleGraph,
+    /// In-memory modules, keyed by dotted module name (`coolio`, `lib.helpers`).
+    /// Consulted before the filesystem, which is what lets a browser run — no
+    /// filesystem at all — resolve `use`. Relative imports drop their `./`
+    /// prefix for the lookup, since an overlay has no directories.
+    virtual_files: HashMap<String, String>,
 }
 
 impl<'a> ModuleLoader<'a> {
@@ -117,7 +122,13 @@ impl<'a> ModuleLoader<'a> {
             visiting: Vec::new(),
             visited: HashSet::new(),
             graph: ModuleGraph::default(),
+            virtual_files: HashMap::new(),
         }
+    }
+
+    pub fn with_virtual_files(mut self, files: HashMap<String, String>) -> Self {
+        self.virtual_files = files;
+        self
     }
 
     pub fn into_graph(self) -> (ModuleGraph, Diagnostics) {
@@ -174,39 +185,54 @@ impl<'a> ModuleLoader<'a> {
             if self.visited.contains(&key) {
                 continue;
             }
-            let path = match resolve_module_path(&segs, from_dir, &self.roots) {
-                Some(p) => p,
+            // In-memory modules win over the filesystem: a browser run has no
+            // filesystem, and an embedder that supplies both meant the overlay.
+            // Relative prefixes drop out of the key — an overlay has no
+            // directories, so `use ./helpers` finds `files["helpers"]`.
+            let overlay_key = segs
+                .iter()
+                .filter(|s| s.as_str() != "." && s.as_str() != "..")
+                .map(|s| s.as_str())
+                .collect::<Vec<_>>()
+                .join(".");
+            let (path, text) = match self.virtual_files.get(&overlay_key).cloned() {
+                Some(text) => (PathBuf::from(format!("{overlay_key}.rite")), text),
                 None => {
-                    self.diagnostics.push(simple_error(
-                        E026_MODULE_NOT_FOUND,
-                        format!("module `{}` not found", key),
-                        file,
-                        imp.span,
-                        format!(
-                            "looked for {}.rite and {}/mod.rite under {}",
-                            segs.join("/"),
-                            segs.join("/"),
-                            from_dir.display()
-                        ),
-                    ));
-                    continue;
+                    let path = match resolve_module_path(&segs, from_dir, &self.roots) {
+                        Some(p) => p,
+                        None => {
+                            self.diagnostics.push(simple_error(
+                                E026_MODULE_NOT_FOUND,
+                                format!("module `{}` not found", key),
+                                file,
+                                imp.span,
+                                format!(
+                                    "looked for {}.rite and {}/mod.rite under {}",
+                                    segs.join("/"),
+                                    segs.join("/"),
+                                    from_dir.display()
+                                ),
+                            ));
+                            continue;
+                        }
+                    };
+                    let text = match std::fs::read_to_string(&path) {
+                        Ok(t) => t,
+                        Err(e) => {
+                            self.diagnostics.push(simple_error(
+                                E026_MODULE_NOT_FOUND,
+                                format!("failed to read module `{}`: {}", key, e),
+                                file,
+                                imp.span,
+                                path.display().to_string(),
+                            ));
+                            continue;
+                        }
+                    };
+                    (path, text)
                 }
             };
             self.visiting.push(key.clone());
-            let text = match std::fs::read_to_string(&path) {
-                Ok(t) => t,
-                Err(e) => {
-                    self.diagnostics.push(simple_error(
-                        E026_MODULE_NOT_FOUND,
-                        format!("failed to read module `{}`: {}", key, e),
-                        file,
-                        imp.span,
-                        path.display().to_string(),
-                    ));
-                    self.visiting.pop();
-                    continue;
-                }
-            };
             let id = self.sources.add_file(path.display().to_string(), text);
             let sf = self.sources.get(id).unwrap().clone();
             let (mut child_ast, pdiags) = parse_file(&sf);
@@ -343,11 +369,19 @@ fn inject_dependencies(program: &mut Program, graph: &ModuleGraph) {
 
 /// Merge loaded modules' public functions into the entry program AST (as non-pub
 /// copies for execution), and bind a qualifier for each import.
+///
+/// Returns the merged qualifiers and the names of every function this merge
+/// injected, for `resolve_with_qualifiers`: a copied body's `i.double` refers
+/// to an import the entry does not have, so the resolver and desugar must be
+/// told about it or the copy fails as an undefined name. The injected-function
+/// set is what scopes that knowledge — a module's qualifiers work inside the
+/// bodies copied out of modules and nowhere else, which is what keeps
+/// `i.double` in the *entry* an undefined name.
 pub fn merge_exports_into_entry(
     entry: &mut Program,
     graph: &ModuleGraph,
     diagnostics: &mut Diagnostics,
-) {
+) -> MergedImports {
     // Build import alias map from the entry.
     let mut bindings: Vec<ImportBinding> = Vec::new();
     for item in &entry.items {
@@ -398,13 +432,24 @@ pub fn merge_exports_into_entry(
     let mut seen_bindings: HashSet<(Option<String>, String)> = HashSet::new();
     bindings.retain(|(alias, key, _, _)| seen_bindings.insert((alias.clone(), key.clone())));
 
+    let qualifiers: HashSet<String> = bindings
+        .iter()
+        .map(|(alias, key, _, _)| {
+            alias
+                .clone()
+                .unwrap_or_else(|| key.rsplit('.').next().unwrap_or(key.as_str()).to_string())
+        })
+        .collect();
+    let mut injected_functions: HashSet<String> = HashSet::new();
+
     // Which module put each unqualified name in scope, so a clash can name both.
     let mut flat_origin: HashMap<String, String> = HashMap::new();
 
-    let inject = |entry: &mut Program, mut f: rite_syntax::FunctionDecl, keep_pub: bool| {
+    let mut inject = |entry: &mut Program, mut f: rite_syntax::FunctionDecl, keep_pub: bool| {
         if !keep_pub {
             f.is_pub = false;
         }
+        injected_functions.insert(f.name.name.clone());
         entry.items.insert(0, Item::Function(f));
     };
 
@@ -503,6 +548,18 @@ pub fn merge_exports_into_entry(
         }
         let _ = alias;
     }
+
+    MergedImports {
+        qualifiers,
+        injected_functions,
+    }
+}
+
+/// What [`merge_exports_into_entry`] added to the entry: the import qualifiers
+/// the copied bodies rely on, and the names of the copies themselves.
+pub struct MergedImports {
+    pub qualifiers: HashSet<String>,
+    pub injected_functions: HashSet<String>,
 }
 
 fn find_pub_function(graph: &ModuleGraph, name: &str) -> Option<rite_syntax::FunctionDecl> {

@@ -56,6 +56,10 @@
           "match": "(@|host\\.)(clock|console|crypto|csv|db|env|fs|game|http|json|mcp|process|random|regex|stdin|store|sys|tcp|udp)\\b"
         },
         {
+          "name": "entity.name.namespace.module.rite",
+          "match": "@[A-Za-z_][A-Za-z0-9_]*\\b"
+        },
+        {
           "name": "support.function.capability.rite",
           "match": "\\.(print|println|read|write|listen|decode|encode|now)\\b"
         }

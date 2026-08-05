@@ -57,7 +57,7 @@ concept = "fork_open"
 token = "ForkOpen"
 ascii = "|{"
 glyph = "⫴⟦"
-description = "Open a fork: run ordered branches from the same input"
+description = "Open a fork: run ordered branches from the same input, sequentially or, with `:par`, concurrently"
 
 [[operator]]
 concept = "orbit_open"
@@ -67,11 +67,26 @@ glyph = "⟲⟦"
 description = "Open an orbit: bounded breadth-first fixed-point traversal"
 
 [[operator]]
+concept = "rescue_open"
+token = "RescueOpen"
+ascii = "!{"
+glyph = "↯⟦"
+description = "Open a rescue: route a failed emission into a handler flow"
+
+[[operator]]
+concept = "define_open"
+token = "DefineOpen"
+ascii = ":{"
+glyph = "≔⟦"
+ambiguous = true
+description = "Open a named flow definition; also a Rite record field holding a block, inside a leaf"
+
+[[operator]]
 concept = "block_close"
 token = "BlockClose"
 ascii = "}"
 glyph = "⟧"
-description = "Close a ward, fork, or orbit"
+description = "Close a ward, fork, orbit, rescue, or definition"
 
 [[operator]]
 concept = "branch_separator"
@@ -103,4 +118,4 @@ concept = "modifier"
 token = "Colon"
 ascii = ":"
 ambiguous = true
-description = "Configure the preceding structural form, as `:name value`; also Rite's ASCII atom prefix inside a leaf"
+description = "Configure the preceding structural form, as `:name value` or `:name` alone; also Rite's ASCII atom prefix inside a leaf"

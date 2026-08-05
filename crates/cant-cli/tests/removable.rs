@@ -49,6 +49,9 @@ const CANT_PATHS: &[&str] = &[
     "docs/cant",
     "docs/adr/0001-cant-sibling-frontend.md",
     "docs/adr/0002-cant-lowers-through-rite.md",
+    "docs/adr/0010-error-routing-is-a-rescue-stage.md",
+    "docs/adr/0011-named-flows-are-spliced.md",
+    "docs/adr/0012-parallel-fork-is-a-modifier.md",
     "conformance/cant",
     "examples/cant",
     // Sigil's examples are Cant programs and its scene fixtures are generated

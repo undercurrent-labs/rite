@@ -1,0 +1,5 @@
+use ./inner -> i
+
+pub def quad(x) [[
+  return @i.double(@i.double(x))
+]]

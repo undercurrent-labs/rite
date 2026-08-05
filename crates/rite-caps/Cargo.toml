@@ -10,41 +10,73 @@ rite-core = { workspace = true }
 rite-runtime = { workspace = true }
 rite-sem = { workspace = true }
 async-trait = { workspace = true }
-tokio = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 indexmap = { workspace = true }
-chrono = { workspace = true }
-glob = { workspace = true }
 sha2 = { workspace = true }
 hex = { workspace = true }
 uuid = { workspace = true }
 rand = { workspace = true }
-rand_chacha = { workspace = true }
 parking_lot = { workspace = true }
-axum = { workspace = true }
-tower = { workspace = true }
-tower-http = { workspace = true }
-bytes = { workspace = true }
-futures = { workspace = true }
-tracing = { workspace = true }
 regex = { workspace = true }
-walkdir = { workspace = true }
-ctrlc = { workspace = true }
-hyper = { workspace = true }
-hyper-util = { version = "0.1", features = ["tokio"] }
-http-body-util = { workspace = true }
 csv = "1"
+
+# Native host only. Everything here is a socket, a subprocess, a clock or a
+# filesystem, none of which exist on wasm32 — see the `native` feature.
+tokio = { workspace = true, optional = true }
+chrono = { workspace = true, optional = true }
+glob = { workspace = true, optional = true }
+rand_chacha = { workspace = true, optional = true }
+axum = { workspace = true, optional = true }
+tower = { workspace = true, optional = true }
+tower-http = { workspace = true, optional = true }
+bytes = { workspace = true, optional = true }
+futures = { workspace = true, optional = true }
+tracing = { workspace = true, optional = true }
+walkdir = { workspace = true, optional = true }
+ctrlc = { workspace = true, optional = true }
+hyper = { workspace = true, optional = true }
+hyper-util = { version = "0.1", features = ["tokio"], optional = true }
+http-body-util = { workspace = true, optional = true }
 
 # Outbound HTTP (`@http.get`/`post`/`request`). Not built for wasm32 — the browser host
 # has no socket layer; those calls return a capability error there, as `@db` does.
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-reqwest = { workspace = true }
+reqwest = { workspace = true, optional = true }
+
+# `@random` and `@crypto.random_bytes` draw from `getrandom`, which refuses to
+# compile for wasm32-unknown-unknown unless told where the entropy comes from.
+# Declared here rather than left to the binding crate so this crate builds for
+# wasm32 on its own.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+getrandom = { version = "0.2", features = ["js"] }
 
 [features]
-default = ["duckdb"]
+default = ["native", "duckdb"]
+# The native host: filesystem, clock, environment, subprocesses, sockets, HTTP,
+# MCP and the database. Off for wasm32, which leaves the capabilities that are
+# pure value transforms — @json, @csv, @crypto, @regex, @store, plus @random and
+# @game, which own their state in-process — reachable in the browser.
+native = [
+  "dep:tokio",
+  "dep:chrono",
+  "dep:glob",
+  "dep:rand_chacha",
+  "dep:axum",
+  "dep:tower",
+  "dep:tower-http",
+  "dep:bytes",
+  "dep:futures",
+  "dep:tracing",
+  "dep:walkdir",
+  "dep:ctrlc",
+  "dep:hyper",
+  "dep:hyper-util",
+  "dep:http-body-util",
+  "dep:reqwest",
+]
 # Native DuckDB host for @db (off on wasm / when linking is undesirable).
-duckdb = ["dep:duckdb"]
+duckdb = ["native", "dep:duckdb"]
 
 [dependencies.duckdb]
 version = "1.10505.0"

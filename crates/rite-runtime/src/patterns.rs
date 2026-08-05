@@ -97,6 +97,19 @@ pub fn match_inner(
             }
             Ok(true)
         }
+        // Alternatives in order, first match wins. A failed alternative's
+        // bindings are discarded — matching alt 2 must not also leave alt 1's
+        // partial bindings behind, so each try gets its own scratch list.
+        PatternIr::Or { alternatives } => {
+            for alt in alternatives {
+                let mut alt_bindings = Vec::new();
+                if match_inner(atoms, alt, value, &mut alt_bindings)? {
+                    bindings.extend(alt_bindings);
+                    return Ok(true);
+                }
+            }
+            Ok(false)
+        }
         PatternIr::Result { kind, binding } => match (kind, value) {
             (ResultPatKindIr::Ok, Value::Result(ResultValue::Ok(v)))
             | (ResultPatKindIr::Err, Value::Result(ResultValue::Err(v))) => match binding {

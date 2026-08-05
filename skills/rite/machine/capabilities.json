@@ -670,6 +670,62 @@
       "effectful": false,
       "name": "tool_schema",
       "permission": ""
+    },
+    {
+      "arity": 1,
+      "docs": "Open a connection to another MCP server and return `ok(handle)`. The spec is a record naming one transport: `⟨command: \"npx\", args: [\"-y\", \"…\"]⟩` starts a server as a subprocess and speaks JSON-RPC on its stdin and stdout, and `⟨url: \"https://example.com/mcp\"⟩` posts to a Streamable HTTP endpoint. Also understands `env` (record, stdio only), `headers` (record, HTTP only) and `timeout_ms` (default 30000, the ceiling on every request made through the handle). **A `command` spec needs `--allow process`; a `url` spec needs `--allow net=<host>`** — the grant is checked here and nowhere else, so the calls that take the handle need none of their own.",
+      "effectful": true,
+      "name": "connect",
+      "permission": "process"
+    },
+    {
+      "arity": 1,
+      "docs": "What a connected server offers: `ok([⟨name, description, input_schema⟩])`. `input_schema` is the tool's JSON Schema, as a record.",
+      "effectful": true,
+      "name": "tools",
+      "permission": ""
+    },
+    {
+      "arity": 3,
+      "docs": "Call a tool on a connected server: `! @mcp.call_tool(c, \"add\", ⟨a: 2, b: 3⟩)`. Answers `ok(value)` — the structured result if the server sent one, otherwise the text of its content blocks. A tool that fails in band (`isError`) is `err(⟨kind: \"mcp.tool_error\", tool, message⟩)` rather than a raise, so the reason is readable and the call can be retried.",
+      "effectful": true,
+      "name": "call_tool",
+      "permission": ""
+    },
+    {
+      "arity": 1,
+      "docs": "What a connected server publishes: `ok([⟨uri, name, description⟩])`.",
+      "effectful": true,
+      "name": "resources",
+      "permission": ""
+    },
+    {
+      "arity": 2,
+      "docs": "Read one resource by URI: `! @mcp.read_resource(c, \"config://app\")`. Answers `ok(text)`, the contents joined with newlines; a JSON resource comes back as its text, which `@json.decode` parses.",
+      "effectful": true,
+      "name": "read_resource",
+      "permission": ""
+    },
+    {
+      "arity": 1,
+      "docs": "What prompts a connected server offers: `ok([⟨name, description, arguments⟩])`, where each argument is `⟨name, required⟩`.",
+      "effectful": true,
+      "name": "prompts",
+      "permission": ""
+    },
+    {
+      "arity": 3,
+      "docs": "Render a prompt: `! @mcp.get_prompt(c, \"review\", ⟨code: src⟩)`. Answers `ok(⟨description, messages⟩)`, with each message `⟨role, text⟩`.",
+      "effectful": true,
+      "name": "get_prompt",
+      "permission": ""
+    },
+    {
+      "arity": 1,
+      "docs": "Close a connection handle. Under stdio the server is sent EOF and then stopped. Closing an unknown or already-closed handle answers ok(none), and every connection closes when the run ends.",
+      "effectful": true,
+      "name": "close",
+      "permission": ""
     }
   ],
   "process": [

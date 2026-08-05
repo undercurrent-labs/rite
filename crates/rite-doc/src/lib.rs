@@ -602,51 +602,43 @@ let value = engine.run_source("s.rite", source).await?;
     ]
 }
 
-/// Generate agent skill bundle under `skills/rite`.
-pub fn generate_agent_bundle(output: &Path) -> anyhow::Result<()> {
+/// Generate the agent skill bundle into `output`, reading its inputs
+/// (`skills/rite/SKILL.md`, `grammar/aliases.json`, `grammar/rite.ebnf`) from
+/// `repo_root`.
+///
+/// Inputs used to resolve against the CWD with silent stub fallbacks, so
+/// `rite docs build` run from a *subdirectory* of the checkout found none of
+/// them and quietly replaced the real SKILL.md with a placeholder and
+/// aliases.json with `{}`. Anchoring to `repo_root` and refusing on a missing
+/// input closes both halves of that.
+pub fn generate_agent_bundle(repo_root: &Path, output: &Path) -> anyhow::Result<()> {
     std::fs::create_dir_all(output.join("references"))?;
     std::fs::create_dir_all(output.join("examples/scripts"))?;
     std::fs::create_dir_all(output.join("machine"))?;
 
-    // `SKILL.md` is hand-written and only copied here. The source path is relative to
-    // the cwd, so when `output` IS `skills/rite` (what CI and `rite docs agent` do) this
-    // reads and writes the same file. Skip that case entirely rather than round-tripping
-    // it: a failed read falls back to the stub below, which would otherwise silently
-    // replace the real file with a placeholder — that is how it once got clobbered.
-    let source_skill = Path::new("skills/rite/SKILL.md");
+    // `SKILL.md` is hand-written and only copied here. When `output` IS
+    // `skills/rite` (what CI and `rite docs agent` do) source and destination
+    // are the same file; skip the copy entirely rather than round-tripping it.
+    let source_skill = repo_root.join("skills/rite/SKILL.md");
     let dest_skill = output.join("SKILL.md");
     let same_file = match (source_skill.canonicalize(), dest_skill.canonicalize()) {
         (Ok(a), Ok(b)) => a == b,
         _ => false,
     };
-    if same_file {
-        // Already in place and authoritative; nothing to copy.
-        return finish_agent_bundle(output);
+    if !same_file {
+        let skill = std::fs::read_to_string(&source_skill)
+            .map_err(|e| anyhow::anyhow!("cannot read {}: {e}", source_skill.display()))?;
+        std::fs::write(&dest_skill, skill)?;
     }
 
-    let skill = std::fs::read_to_string(source_skill).unwrap_or_else(|_| {
-        r#"# Rite Agent Skill
-
-Rite is an expression-oriented scripting language with glyphic and ASCII syntax.
-
-## Rules
-- Prefer pipelines and explicit effects (`!` / `do`).
-- Capabilities use `@name` (glyph) or `host.name` (ASCII).
-- Only `false` and `none` are falsey.
-- Do not invent syntax not in grammar/aliases.json.
-- Run with `rite run --allow-all file.rite` during development.
-- Format with `rite fmt` / convert with `rite convert --to ascii|glyph`.
-"#
-        .into()
-    });
-    std::fs::write(&dest_skill, skill)?;
-
-    finish_agent_bundle(output)
+    finish_agent_bundle(repo_root, output)
 }
 
 /// Everything in the bundle except `SKILL.md`, which is hand-written and only copied.
-fn finish_agent_bundle(output: &Path) -> anyhow::Result<()> {
-    let aliases = std::fs::read_to_string("grammar/aliases.json").unwrap_or_else(|_| "{}".into());
+fn finish_agent_bundle(repo_root: &Path, output: &Path) -> anyhow::Result<()> {
+    let aliases_path = repo_root.join("grammar/aliases.json");
+    let aliases = std::fs::read_to_string(&aliases_path)
+        .map_err(|e| anyhow::anyhow!("cannot read {}: {e}", aliases_path.display()))?;
     std::fs::write(output.join("machine/aliases.json"), &aliases)?;
     std::fs::write(
         output.join("machine/version.json"),
@@ -697,9 +689,10 @@ fn finish_agent_bundle(output: &Path) -> anyhow::Result<()> {
             {"code": "E024", "summary": "circular import"},
         ]))?,
     )?;
-    if let Ok(ebnf) = std::fs::read_to_string("grammar/rite.ebnf") {
-        std::fs::write(output.join("machine/grammar.ebnf"), ebnf)?;
-    }
+    let ebnf_path = repo_root.join("grammar/rite.ebnf");
+    let ebnf = std::fs::read_to_string(&ebnf_path)
+        .map_err(|e| anyhow::anyhow!("cannot read {}: {e}", ebnf_path.display()))?;
+    std::fs::write(output.join("machine/grammar.ebnf"), ebnf)?;
     std::fs::write(
         output.join("examples/scripts/hello.rite"),
         "! @console.println(\"hello from agent skill\")\n",

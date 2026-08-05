@@ -164,9 +164,9 @@ enum Commands {
     },
     /// Check a Cant source
     ///
-    /// Phase 1 checks syntax only. Name resolution, effect discipline and
-    /// capability requirements are checked by Rite once expansion lands, and
-    /// this command will report those too without changing its interface.
+    /// Syntax and graph validation, then the expansion is checked by Rite's
+    /// resolver, so name resolution, effect discipline and capability
+    /// requirements are all reported here too.
     Check {
         /// Source file, or `-` for standard input
         source: Option<PathBuf>,
@@ -1337,7 +1337,10 @@ fn print_explanation(input: Input, verbose: bool) -> ExitCode {
     };
     print!(
         "{}",
-        cant_sem::explain::render(&cant_sem::explain(graph), verbose)
+        cant_sem::explain::render(
+            &cant_sem::explain_with(graph, &analysis.definition_names()),
+            verbose,
+        )
     );
     if analysis.diagnostics.has_errors() {
         return ExitCode::from(analysis.diagnostics.rejection_exit_code());

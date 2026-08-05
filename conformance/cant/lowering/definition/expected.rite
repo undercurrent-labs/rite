@@ -1,0 +1,70 @@
+// Generated from case.cant by cant 0.2.0. Do not edit.
+//
+// This is ordinary Rite, and it is exactly what `cant run` executes.
+// Every generated name carries the prefix `cant_90800366`, which combines a
+// reserved word, a hash of the Cant source, and a node number.
+
+// n0: the source
+def cant_90800366_n0(__in) [[
+  __ignored <- __in
+  ^ [ [1, 2] ]
+]]
+
+// n1: scatter — one emission per element
+def cant_90800366_n1(__in) [[
+  __out <~ []
+  for __e in __in [[
+    if (type_of(__e) != "list") [[
+      ^ panic("CANT-R003: scatter expected a list at case.cant+27, got " + type_of(__e))
+    ]]
+    for __x in __e [[
+      __out := concat(__out, [ __x ])
+    ]]
+  ]]
+  ^ __out
+]]
+
+// n2: a stage, once per emission
+def cant_90800366_n2(__in) [[
+  __out <~ []
+  for __e in __in [[
+    __out := concat(__out, [ __e * 2 ])
+  ]]
+  ^ __out
+]]
+
+// n3: a stage, once per emission
+def cant_90800366_n3(__in) [[
+  __out <~ []
+  for __e in __in [[
+    __out := concat(__out, [ __e * 2 ])
+  ]]
+  ^ __out
+]]
+
+// n4: collect — every emission becomes one list
+def cant_90800366_n4(__in) [[
+  ^ [ __in ]
+]]
+
+// The program boundary: zero emissions become `none`, one becomes
+// that value, and many become a list in emission order.
+def cant_90800366_boundary(__in) [[
+  __n <- count(__in)
+  if (__n = 0) [[ ^ none ]]
+  if (__n = 1) [[ ^ first(__in) ]]
+  ^ __in
+]]
+
+// The top-level flow.
+def cant_90800366_main() [[
+  __v <~ [ none ]
+  __v := cant_90800366_n0(__v)
+  __v := cant_90800366_n1(__v)
+  __v := cant_90800366_n2(__v)
+  __v := cant_90800366_n3(__v)
+  __v := cant_90800366_n4(__v)
+  ^ cant_90800366_boundary(__v)
+]]
+
+cant_90800366_main()

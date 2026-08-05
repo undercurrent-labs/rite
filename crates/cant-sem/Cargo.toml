@@ -2,7 +2,7 @@
 name = "cant-sem"
 # Cant's own version, not the workspace's: it is a separate language with its own
 # vocabulary and its own compatibility story. See ADR 0001, Amendment 2.
-version = "0.2.0"
+version = "0.3.0"
 edition.workspace = true
 license.workspace = true
 description = "Cant graph IR, validation, lowering to Rite, and source maps"
@@ -10,6 +10,10 @@ description = "Cant graph IR, validation, lowering to Rite, and source maps"
 [dependencies]
 cant-syntax = { workspace = true }
 rite-core = { workspace = true }
+# For `rite_sem::resolve::BUILTIN_NAMES` alone: a definition may not shadow a
+# name Rite already binds in every scope, and a second copy of that list here is
+# the drift the single-list rule exists to prevent.
+rite-sem = { workspace = true }
 # The Sigil adapter. This edge is `cant-* -> rite-*`, which ADR 0001 allows and
 # ADR 0006 requires: `rite-sigil` may not know what Cant is, so the crate that
 # knows both shapes has to be this one.

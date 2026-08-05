@@ -80,6 +80,18 @@ impl AnalyzeResult {
         self.diagnostics.has_errors()
     }
 
+    /// The flows the program names, in source order.
+    ///
+    /// Read from the AST because the graph does not carry them: a definition is
+    /// spliced into the flow that used it (ADR 0011).
+    pub fn definition_names(&self) -> Vec<String> {
+        self.parse
+            .program
+            .as_ref()
+            .map(|ast| ast.defs.iter().map(|d| d.name.clone()).collect())
+            .unwrap_or_default()
+    }
+
     /// Rendered diagnostics, ready for a terminal.
     pub fn render(&self) -> String {
         self.diagnostics.render_all(&self.sources)
@@ -305,12 +317,12 @@ mod tests {
     fn version_info_names_both_languages() {
         let v = version_info();
         assert!(!v.tool.is_empty());
-        assert_eq!(v.language, "0");
+        assert_eq!(v.language, "1");
         // Independent numbers, and this asserts the *source* rather than the
         // values so it keeps meaning something if they ever coincide.
         assert_eq!(v.rite, rite_core::VERSION);
         assert_eq!(v.tool, TOOL_VERSION);
-        assert_eq!(v.to_json()["cant_language_version"], serde_json::json!("0"));
+        assert_eq!(v.to_json()["cant_language_version"], serde_json::json!("1"));
     }
 
     #[test]

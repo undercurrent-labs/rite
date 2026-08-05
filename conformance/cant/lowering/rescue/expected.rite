@@ -1,0 +1,80 @@
+// Generated from case.cant by cant 0.2.0. Do not edit.
+//
+// This is ordinary Rite, and it is exactly what `cant run` executes.
+// Every generated name carries the prefix `cant_6b654db7`, which combines a
+// reserved word, a hash of the Cant source, and a node number.
+
+// n0: the source
+def cant_6b654db7_n0(__in) [[
+  __ignored <- __in
+  ^ [ [ok(1), err("nope")] ]
+]]
+
+// n1: scatter — one emission per element
+def cant_6b654db7_n1(__in) [[
+  __out <~ []
+  for __e in __in [[
+    if (type_of(__e) != "list") [[
+      ^ panic("CANT-R003: scatter expected a list at case.cant+24, got " + type_of(__e))
+    ]]
+    for __x in __e [[
+      __out := concat(__out, [ __x ])
+    ]]
+  ]]
+  ^ __out
+]]
+
+// n2: rescue — an err routes to the handler, an ok continues unwrapped
+def cant_6b654db7_n2(__in) [[
+  __out <~ []
+  for __e in __in [[
+    __out := concat(__out, match __e [[
+      ok __v -> [ __v ]
+      err __r -> cant_6b654db7_s0([ __r ])
+      _ -> [ __e ]
+    ]])
+  ]]
+  ^ __out
+]]
+
+// n3: a stage, once per emission
+def cant_6b654db7_n3(__in) [[
+  __out <~ []
+  for __e in __in [[
+    __out := concat(__out, [ "fallback: " + __e ])
+  ]]
+  ^ __out
+]]
+
+// n4: collect — every emission becomes one list
+def cant_6b654db7_n4(__in) [[
+  ^ [ __in ]
+]]
+
+// s0: the handler for n2
+def cant_6b654db7_s0(__in) [[
+  __v <~ __in
+  __v := cant_6b654db7_n3(__v)
+  ^ __v
+]]
+
+// The program boundary: zero emissions become `none`, one becomes
+// that value, and many become a list in emission order.
+def cant_6b654db7_boundary(__in) [[
+  __n <- count(__in)
+  if (__n = 0) [[ ^ none ]]
+  if (__n = 1) [[ ^ first(__in) ]]
+  ^ __in
+]]
+
+// The top-level flow.
+def cant_6b654db7_main() [[
+  __v <~ [ none ]
+  __v := cant_6b654db7_n0(__v)
+  __v := cant_6b654db7_n1(__v)
+  __v := cant_6b654db7_n2(__v)
+  __v := cant_6b654db7_n4(__v)
+  ^ cant_6b654db7_boundary(__v)
+]]
+
+cant_6b654db7_main()

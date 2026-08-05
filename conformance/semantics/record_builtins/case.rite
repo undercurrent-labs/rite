@@ -1,0 +1,12 @@
+r ← ⟨ b: 2, a: 1 ⟩
+^ ⟨
+  get_present: get(r, "a"),
+  get_absent_is_none: get(r, "zz") ?? "absent",
+  get_with_fallback: get(r, "zz", 0),
+  has_present: has(r, "b"),
+  has_absent: has(r, "zz"),
+  entries_pairs: entries(r),
+  merge_later_wins: merge(r, ⟨ a: 9, c: 3 ⟩),
+  update_existing: update(r, "a", ⟦ |v| v + 100 ⟧),
+  update_absent_sees_none: update(r, "new", ⟦ |v| v ?? "made" ⟧)
+⟩

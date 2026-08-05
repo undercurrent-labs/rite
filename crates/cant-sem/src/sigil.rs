@@ -106,6 +106,10 @@ pub fn to_sigil_graph(program: &CantProgram, options: AdaptOptions) -> SigilGrap
                 EdgeRole::Enter => EdgeKind::Enter,
                 EdgeRole::Join => EdgeKind::Join,
                 EdgeRole::OrbitFeedback => EdgeKind::Feedback,
+                // A rescue enters a region that rejoins, which is what `Enter`
+                // already draws. Sigil gets no failure-path vocabulary from
+                // here; see ADR 0010.
+                EdgeRole::Rescue => EdgeKind::Enter,
             },
             region: region_of(program, edge.to.node).map(region_id),
         });
@@ -143,6 +147,11 @@ fn adapt_node(
             NodeKind::Ward { .. } => SigilNodeKind::Ward,
             NodeKind::Fork { .. } => SigilNodeKind::Fork,
             NodeKind::Orbit { .. } => SigilNodeKind::Orbit,
+            // A split into a region that rejoins, which is what the fork
+            // treatment already draws. A mark of its own would need a visual
+            // vocabulary for failure, which belongs to the renderer rather than
+            // to this adapter — ADR 0010.
+            NodeKind::Rescue { .. } => SigilNodeKind::Fork,
         }
     };
 
@@ -228,8 +237,16 @@ fn structural_label(kind: &NodeKind) -> Option<String> {
     match kind {
         NodeKind::Scatter => Some("scatter".into()),
         NodeKind::Collect => Some("collect".into()),
-        NodeKind::Fork { branches } => Some(format!("fork ({} branches)", branches.len())),
+        // The mark is the fork's, unchanged: a distinct visual treatment for a
+        // parallel fork would need a vocabulary for concurrency this renderer
+        // does not have. The label is where the difference is said out loud.
+        NodeKind::Fork { branches, parallel } => Some(format!(
+            "{}fork ({} branches)",
+            if *parallel { "parallel " } else { "" },
+            branches.len()
+        )),
         NodeKind::Orbit { max_items, .. } => Some(format!("orbit (max {max_items})")),
+        NodeKind::Rescue { .. } => Some("rescue".into()),
         _ => None,
     }
 }
@@ -254,7 +271,7 @@ fn adapt_region(subgraph: &Subgraph, program: &CantProgram) -> SigilRegion {
     let owner = program.node(subgraph.owner);
     let kind = match owner.map(|n| &n.kind) {
         Some(NodeKind::Orbit { .. }) => RegionKind::Orbit,
-        Some(NodeKind::Fork { .. }) => RegionKind::Branch,
+        Some(NodeKind::Fork { .. }) | Some(NodeKind::Rescue { .. }) => RegionKind::Branch,
         _ => RegionKind::Group,
     };
 
@@ -268,7 +285,7 @@ fn adapt_region(subgraph: &Subgraph, program: &CantProgram) -> SigilRegion {
     // subgraphs happen to appear in — the `ordinal`-not-array-position rule the
     // Cant schema insists on, applied at the one place it decides a sector.
     region.ordinal = match owner.map(|n| &n.kind) {
-        Some(NodeKind::Fork { branches }) => {
+        Some(NodeKind::Fork { branches, .. }) => {
             branches.iter().position(|b| *b == subgraph.id).unwrap_or(0) as u32
         }
         _ => 0,
@@ -391,6 +408,19 @@ mod tests {
     fn http_lands_in_the_network_family() {
         let g = adapt(r#"["https://example.com"] -> * -> ! @http.get($) -> []"#);
         assert_eq!(g.capability_families(), vec![CapabilityFamily::Net]);
+    }
+
+    /// A rescue reuses the fork's treatment — a split into a region that
+    /// rejoins — rather than getting a mark chosen in passing. ADR 0010.
+    #[test]
+    fn a_rescue_draws_as_a_fork_over_a_branch_region() {
+        let g = adapt("[ok(1)] -> * -> !{ $.kind } -> []");
+        assert!(kinds(&g).contains(&"fork"), "{:?}", kinds(&g));
+        assert!(g.regions.iter().any(|r| r.kind == RegionKind::Branch));
+        assert!(
+            g.edges.iter().any(|e| e.kind == EdgeKind::Enter),
+            "the failure path enters the handler region"
+        );
     }
 
     /// A collect is already a seal; promoting it would erase the difference
@@ -518,6 +548,7 @@ mod tests {
             "[1] -> * -> ~{ $ + 1 } :by str :max 4 -> []",
             r#"["a"] -> * -> ! @fs.read($) -> []"#,
             "[1] -> * -> |{ ?{ $ > 1 } -> $ * 10 ; ~{ ?{ $ < 8 } -> $ + 2 } :max 8 } -> []",
+            r#"["a"] -> * -> ! @fs.read($) -> !{ $.kind } -> []"#,
         ] {
             for options in [AdaptOptions::default(), AdaptOptions::with_labels()] {
                 let g = to_sigil_graph(&graph_of(source), options);

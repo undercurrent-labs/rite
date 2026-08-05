@@ -1,4 +1,8 @@
-//! Model Context Protocol server, over stdio and Streamable HTTP.
+//! Model Context Protocol, over stdio and Streamable HTTP.
+//!
+//! This file is the server half. The client half — `@mcp.connect` and the calls that
+//! take its handle — is in [`client`], and shares this module's revision constants and
+//! `_meta` keys so the two cannot drift apart on what they speak.
 //!
 //! `@mcp.serve` is the `@http.listen` of this module: a declaration table rather than a
 //! call graph, with each `tool` / `resource` / `prompt` body run per request in its own
@@ -43,6 +47,10 @@ use rite_sem::McpDeclIr;
 use serde_json::{json, Map, Value as Json};
 use std::collections::HashMap;
 use std::sync::Arc;
+
+/// The other direction: calling servers rather than being one.
+#[cfg(not(target_arch = "wasm32"))]
+pub mod client;
 
 /// The MCP specification revision this server implements natively.
 pub const MCP_PROTOCOL_VERSION: &str = "2026-07-28";
@@ -135,6 +143,83 @@ impl McpCap {
             effectful: false,
             permission: "",
         },
+        NativeFunctionDescriptor {
+            name: "connect",
+            docs: "Open a connection to another MCP server and return `ok(handle)`. The spec \
+                   is a record naming one transport: `⟨command: \"npx\", args: [\"-y\", \"…\"]⟩` \
+                   starts a server as a subprocess and speaks JSON-RPC on its stdin and \
+                   stdout, and `⟨url: \"https://example.com/mcp\"⟩` posts to a Streamable HTTP \
+                   endpoint. Also understands `env` (record, stdio only), `headers` (record, \
+                   HTTP only) and `timeout_ms` (default 30000, the ceiling on every request \
+                   made through the handle). **A `command` spec needs `--allow process`; a \
+                   `url` spec needs `--allow net=<host>`** — the grant is checked here and \
+                   nowhere else, so the calls that take the handle need none of their own.",
+            arity: 1,
+            effectful: true,
+            permission: "process",
+        },
+        NativeFunctionDescriptor {
+            name: "tools",
+            docs: "What a connected server offers: `ok([⟨name, description, input_schema⟩])`. \
+                   `input_schema` is the tool's JSON Schema, as a record.",
+            arity: 1,
+            effectful: true,
+            permission: "",
+        },
+        NativeFunctionDescriptor {
+            name: "call_tool",
+            docs:
+                "Call a tool on a connected server: `! @mcp.call_tool(c, \"add\", ⟨a: 2, b: 3⟩)`. \
+                   Answers `ok(value)` — the structured result if the server sent one, \
+                   otherwise the text of its content blocks. A tool that fails in band \
+                   (`isError`) is `err(⟨kind: \"mcp.tool_error\", tool, message⟩)` rather than \
+                   a raise, so the reason is readable and the call can be retried.",
+            arity: 3,
+            effectful: true,
+            permission: "",
+        },
+        NativeFunctionDescriptor {
+            name: "resources",
+            docs: "What a connected server publishes: `ok([⟨uri, name, description⟩])`.",
+            arity: 1,
+            effectful: true,
+            permission: "",
+        },
+        NativeFunctionDescriptor {
+            name: "read_resource",
+            docs: "Read one resource by URI: `! @mcp.read_resource(c, \"config://app\")`. Answers \
+                   `ok(text)`, the contents joined with newlines; a JSON resource comes back as \
+                   its text, which `@json.decode` parses.",
+            arity: 2,
+            effectful: true,
+            permission: "",
+        },
+        NativeFunctionDescriptor {
+            name: "prompts",
+            docs: "What prompts a connected server offers: \
+                   `ok([⟨name, description, arguments⟩])`, where each argument is \
+                   `⟨name, required⟩`.",
+            arity: 1,
+            effectful: true,
+            permission: "",
+        },
+        NativeFunctionDescriptor {
+            name: "get_prompt",
+            docs: "Render a prompt: `! @mcp.get_prompt(c, \"review\", ⟨code: src⟩)`. Answers \
+                   `ok(⟨description, messages⟩)`, with each message `⟨role, text⟩`.",
+            arity: 3,
+            effectful: true,
+            permission: "",
+        },
+        NativeFunctionDescriptor {
+            name: "close",
+            docs: "Close a connection handle. Under stdio the server is sent EOF and then \
+                   stopped. Closing an unknown or already-closed handle answers ok(none), and \
+                   every connection closes when the run ends.",
+            arity: 1,
+            effectful: true,
+            permission: "",
+        },
     ];
 
     pub async fn call(
@@ -151,11 +236,35 @@ impl McpCap {
             // `@http.log` does.
             "log" => Ok(Value::string("mcp.log")),
             "tool_schema" => tool_schema(args),
-            other => Err(EvalError::Capability(format!(
-                "unknown @mcp function `{other}`"
-            ))),
+            // `connect` and everything that takes its handle, plus the unknown-name
+            // error: the client half owns every remaining name.
+            other => client_call(other, args, perms, ctx).await,
         }
     }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+async fn client_call(
+    method: &str,
+    args: Vec<Value>,
+    perms: &PermissionSet,
+    ctx: &RuntimeContext,
+) -> Result<Value, EvalError> {
+    client::call(method, args, perms, ctx).await
+}
+
+#[cfg(target_arch = "wasm32")]
+async fn client_call(
+    _method: &str,
+    _args: Vec<Value>,
+    _perms: &PermissionSet,
+    _ctx: &RuntimeContext,
+) -> Result<Value, EvalError> {
+    Err(EvalError::Capability(
+        "@mcp.connect requires the native host: the browser runtime has neither \
+         subprocesses nor a socket layer"
+            .into(),
+    ))
 }
 
 /// `@mcp.tool_schema(f)` — the schema `f` would be published with.

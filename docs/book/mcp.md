@@ -1,7 +1,13 @@
-# Model Context Protocol servers
+# Model Context Protocol
 
 > CLI only. `@mcp` needs the native host — the browser runtime has neither process
 > streams nor a socket layer.
+
+Rite speaks MCP in both directions. `@mcp.serve` publishes tools, resources and
+prompts; `@mcp.connect` calls someone else's. [Jump to the client](#calling-other-servers)
+if that is what you are here for.
+
+## Serving
 
 An MCP server exposes tools, resources and prompts to a model host. In Rite it is a
 declaration table, the same shape as [an HTTP service](http.md):
@@ -153,6 +159,92 @@ deprecated — its suggested migration is exactly this. `@mcp.progress` does sen
 > `@mcp.progress` only means something inside a tool body. Called anywhere else it
 > fails, rather than quietly reporting progress nobody could receive.
 
+## Calling other servers
+
+`@mcp.connect` opens a connection to a server someone else wrote and answers a handle,
+the same kind of value [`@tcp.connect`](sockets.md) and `@db.open` give you:
+
+```rite native_only
+c ← ! @mcp.connect(⟨command: "npx", args: ["-y", "@modelcontextprotocol/server-memory"]⟩)?
+
+! @console.println(! @mcp.call_tool(c, "search", ⟨query: "rite"⟩)?)
+
+! @mcp.close(c)
+```
+
+The spec names one transport. `command` starts the server as a subprocess and speaks
+JSON-RPC on its stdin and stdout, which is how a local MCP server is normally launched:
+
+| Key | For | Meaning |
+|---|---|---|
+| `command` | stdio | the program to start |
+| `args` | stdio | its arguments, as a list |
+| `env` | stdio | extra environment variables for the child, as a record |
+| `url` | HTTP | a Streamable HTTP endpoint to POST to |
+| `headers` | HTTP | extra request headers, as a record |
+| `timeout_ms` | both | how long any one call waits, default `30000` |
+
+```rite native_only
+c ← ! @mcp.connect(⟨url: "https://example.com/mcp",
+                    headers: ⟨authorization: "Bearer " + token⟩⟩)?
+```
+
+A key the spec does not understand is an error rather than ignored, and naming both
+`command` and `url` is refused — there is no sensible way to guess which was meant.
+
+### What you can ask a connection
+
+| Call | Answers |
+|---|---|
+| `! @mcp.tools(c)` | `ok([⟨name, description, input_schema⟩])` |
+| `! @mcp.call_tool(c, name, args)` | `ok(result)` |
+| `! @mcp.resources(c)` | `ok([⟨uri, name, description⟩])` |
+| `! @mcp.read_resource(c, uri)` | `ok(text)` |
+| `! @mcp.prompts(c)` | `ok([⟨name, description, arguments⟩])` |
+| `! @mcp.get_prompt(c, name, args)` | `ok(⟨description, messages⟩)` |
+| `! @mcp.close(c)` | `ok(none)` |
+
+`input_schema` is the tool's JSON Schema as an ordinary record, so it can be read
+field by field. Each prompt argument is `⟨name, required⟩`, and each message of a
+rendered prompt is `⟨role, text⟩`.
+
+`call_tool` answers whatever the tool returned, decoded the way the server encoded it:
+a structured result comes back as a record or a list, and anything else comes back as
+the text of its content blocks joined with newlines. That is the [serving table](#what-a-tool-returns)
+read backwards, so a Rite tool's record arrives as a record.
+
+```rite native_only
+stats ← ! @mcp.call_tool(c, "stats", ⟨xs: [3, 1, 4]⟩)?
+! @console.println(stats.total)
+```
+
+Connections close when the run ends. `@mcp.close` is for closing one earlier, and under
+stdio it sends the server EOF before stopping it. Closing twice is fine.
+
+### When a call does not work
+
+Everything after `connect` answers `ok` or `err`, so `?` unwraps it and a `~` reads the
+reason. Four kinds, told apart by `e.kind`:
+
+| `kind` | What happened |
+|---|---|
+| `mcp.tool_error` | the tool ran and reported failure — `⟨kind, tool, message⟩` |
+| `mcp.error` | the server refused in JSON-RPC terms — `⟨kind, operation, code, message⟩` |
+| `mcp.transport` | the pipe or the socket — `⟨kind, operation, message⟩` |
+| `mcp.timeout` | no answer within `timeout_ms` — `⟨kind, operation, timeout_ms, message⟩` |
+
+```rite native_only
+report ← ~ (! @mcp.call_tool(c, "divide", ⟨a: 1, b: 0⟩)) ⟦
+  ok n → "got " + str(n)
+  err e → "refused: " + e.message
+⟧
+```
+
+The first is the mirror of what a Rite tool returning `err(…)` produces. It is a value
+rather than a raise for the same reason it is on the serving side: a model can read the
+message and try again. Using a handle after closing it raises instead, because that is
+a mistake in the script rather than something the server did.
+
 ## Permissions
 
 | What | Needs |
@@ -161,9 +253,22 @@ deprecated — its suggested migration is exactly this. `@mcp.progress` does sen
 | `transport: #http`, loopback address | nothing |
 | `transport: #http`, any other interface | `--allow net=<host>` |
 | whatever the tool bodies do | their own grants, as usual |
+| `@mcp.connect` with `command` | `--allow process` |
+| `@mcp.connect` with `url` | `--allow net=<host>` |
+| every other call on a connection | nothing further |
 
 Serving does not widen anything. A tool that reads a file still needs
 `--allow fs:read=…`, and it is denied to the client exactly as it would be to the script.
+
+Connecting is checked once, at `connect`, and the two transports do not cover for each
+other: `--allow process` will not reach a URL, and `--allow net=…` will not start a
+subprocess. A `url` host is matched as written, before DNS, the same rule
+[`@http.get`](http.md) follows. The calls that take an open handle need no grant of
+their own — the handle cannot exist without the one that was already checked.
+
+> Starting a server is running a program of the caller's choosing, which is exactly what
+> `--allow process` means. A connection spec taken from untrusted input is a command
+> taken from untrusted input.
 
 ## Which revision this speaks
 
@@ -172,6 +277,11 @@ handshake, no sessions, and `server/discover` as the one mandatory call. Clients
 still speak the older shape are answered too — send `initialize` and the connection
 falls back to `2025-06-18` for its lifetime.
 
+`@mcp.connect` does the same negotiation from the other side, and there is nothing to
+configure. It probes with `server/discover`; a server that has never heard of it gets
+the `initialize` handshake instead and stays on `2025-06-18` for the life of the
+connection. Most servers in the field today take that path.
+
 Not implemented, deliberately:
 
 - `subscriptions/listen` and the `*ListChanged` notifications. A Rite server's tables
@@ -179,6 +289,10 @@ Not implemented, deliberately:
   is not advertised rather than advertised and never fired.
 - `notifications/message`, deprecated upstream — see logging above.
 - Multi Round-Trip Requests. Every result is `"complete"`.
+- On the client side, sampling and elicitation. Those are a server asking the *client*
+  to run a model or prompt a person, and a Rite script has neither to offer. A
+  connected server's progress notifications are read off the wire and dropped, since
+  `call_tool` answers one value.
 
 ## Troubleshooting
 
@@ -189,6 +303,10 @@ Not implemented, deliberately:
 | the client reports a parse error | something wrote to stdout under `#stdio` — an `@http.listen` in the same script, or a native library |
 | `E040` on start | a non-loopback HTTP bind without `--allow net=<host>` |
 | a tool always errors on a valid-looking argument | the declared type is narrower than what the client sends; check with `@mcp.tool_schema` |
+| `connect` answers `err(⟨kind: "mcp.transport"⟩)` naming the command | the program is not on PATH, or the arguments do not start a server |
+| `connect` is denied | `command` needs `--allow process`; `url` needs `--allow net=<host>` for the host as written |
+| every call answers `mcp.timeout` | the server is slow or wedged; raise `timeout_ms` on the spec, or check its stderr, which a stdio connection passes straight through |
+| `@mcp.connect: unknown option …` | a key the spec does not understand — the accepted ones are `command`, `args`, `env`, `url`, `headers`, `timeout_ms` |
 
 ## Next
 

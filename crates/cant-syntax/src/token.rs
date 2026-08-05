@@ -38,6 +38,13 @@ pub enum CantTokenKind {
     ForkOpen,
     /// `~{` `⟲⟦`
     OrbitOpen,
+    /// `!{` `↯⟦` — one token only when the brace touches the `!`.
+    RescueOpen,
+    /// `:{` `≔⟦` — opens a named flow definition after an identifier in the
+    /// preamble, and is leaf material anywhere else. A Rite record field holding
+    /// a block (`<< f:{ |x| x } >>`) is spelled the same way, which is why this
+    /// counts leaf depth but does not open a Cant block.
+    DefineOpen,
     /// `}` `⟧` — and `⟩`, which closes a Rite record inside a leaf. All three
     /// close *something*; only one seen at leaf-depth zero closes a Cant block.
     BlockClose,
@@ -98,7 +105,10 @@ impl CantTokenKind {
     pub fn opens_depth(self) -> bool {
         matches!(
             self,
-            CantTokenKind::LParen | CantTokenKind::LBracket | CantTokenKind::LBrace
+            CantTokenKind::LParen
+                | CantTokenKind::LBracket
+                | CantTokenKind::LBrace
+                | CantTokenKind::DefineOpen
         )
     }
 
@@ -114,11 +124,20 @@ impl CantTokenKind {
         )
     }
 
-    /// Opens a Cant structural block.
+    /// Opens a Cant structural block: a stage that contains a flow.
+    ///
+    /// [`CantTokenKind::DefineOpen`] is deliberately absent. A block opener
+    /// breaks a leaf run ("a block opener can only start a stage"), and `:{` is
+    /// how a Rite record holds a block, so treating one inside a leaf as
+    /// structural would truncate the leaf. A definition is recognised by the
+    /// parser from position instead.
     pub fn opens_block(self) -> bool {
         matches!(
             self,
-            CantTokenKind::WardOpen | CantTokenKind::ForkOpen | CantTokenKind::OrbitOpen
+            CantTokenKind::WardOpen
+                | CantTokenKind::ForkOpen
+                | CantTokenKind::OrbitOpen
+                | CantTokenKind::RescueOpen
         )
     }
 
@@ -135,6 +154,8 @@ impl CantTokenKind {
             CantTokenKind::WardOpen => "WardOpen",
             CantTokenKind::ForkOpen => "ForkOpen",
             CantTokenKind::OrbitOpen => "OrbitOpen",
+            CantTokenKind::RescueOpen => "RescueOpen",
+            CantTokenKind::DefineOpen => "DefineOpen",
             CantTokenKind::BlockClose => "BlockClose",
             CantTokenKind::Semi => "Semi",
             CantTokenKind::Dollar => "Dollar",
@@ -153,6 +174,8 @@ impl CantTokenKind {
         CantTokenKind::WardOpen,
         CantTokenKind::ForkOpen,
         CantTokenKind::OrbitOpen,
+        CantTokenKind::RescueOpen,
+        CantTokenKind::DefineOpen,
         CantTokenKind::BlockClose,
         CantTokenKind::Semi,
         CantTokenKind::Dollar,
@@ -171,6 +194,8 @@ impl fmt::Display for CantTokenKind {
             CantTokenKind::WardOpen => "`?{`",
             CantTokenKind::ForkOpen => "`|{`",
             CantTokenKind::OrbitOpen => "`~{`",
+            CantTokenKind::RescueOpen => "`!{`",
+            CantTokenKind::DefineOpen => "`:{`",
             CantTokenKind::BlockClose => "`}`",
             CantTokenKind::Semi => "`;`",
             CantTokenKind::Dollar => "`$`",

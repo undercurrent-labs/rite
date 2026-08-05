@@ -24,11 +24,22 @@ use rite_core::{SourceFile, SourceSpan, Span};
 /// Order is load-bearing: `->` must be tried before `-`, `[]` before `[`, and
 /// `?{` before `?`. Kept next to the manifest's ASCII column, and checked
 /// against it by `manifest_sync`.
+///
+/// `!{` is here, ahead of both `!=` and the bare `!`, and is safe there because
+/// Rite's `!` prefixes a call: no leaf can hold a `!` with a brace against it.
+/// A space keeps it leaf text, as it does for `? cond { … }`.
+///
+/// `:{` is here ahead of the bare `:`, and unlike `!{` it *can* occur inside a
+/// leaf: `<< f:{ |x| x } >>` is a Rite record holding a block. It is one token
+/// wherever it appears, and only the parser calls it a definition. See
+/// [`K::DefineOpen`].
 const ASCII_STRUCTURAL: &[(&str, K)] = &[
     ("->", K::Flow),
     ("?{", K::WardOpen),
     ("|{", K::ForkOpen),
     ("~{", K::OrbitOpen),
+    ("!{", K::RescueOpen),
+    (":{", K::DefineOpen),
     ("[]", K::Collect),
 ];
 
@@ -37,6 +48,8 @@ const GLYPH_STRUCTURAL: &[(&str, K)] = &[
     ("⊣⟦", K::WardOpen),
     ("⫴⟦", K::ForkOpen),
     ("⟲⟦", K::OrbitOpen),
+    ("↯⟦", K::RescueOpen),
+    ("≔⟦", K::DefineOpen),
     ("→", K::Flow),
     ("⋇", K::Star),
     ("⌁", K::Collect),
@@ -214,7 +227,7 @@ impl Lexer<'_> {
                     )
                     .with_primary(token.source_span(), "not part of any operator or literal")
                     .with_help(
-                        "Cant's operators are `-> * [] ?{ |{ ~{ } ; $ ! @ :`; \
+                        "Cant's operators are `-> * [] ?{ |{ ~{ !{ :{ } ; $ ! @ :`; \
                          run `cant version` for the manifest they come from",
                     ),
                 );
@@ -441,6 +454,59 @@ mod tests {
             vec![K::Bang, K::At, K::Ident, K::Dot, K::Ident]
         );
         assert_eq!(kinds("$ != 2"), vec![K::Dollar, K::Op, K::Int]);
+    }
+
+    /// `!{` is a rescue; `!@`, `!=` and a spaced `! {` are not.
+    #[test]
+    fn a_bang_only_opens_a_rescue_when_the_brace_touches_it() {
+        assert_eq!(
+            kinds("!{ $ }"),
+            vec![K::RescueOpen, K::Dollar, K::BlockClose]
+        );
+        assert_eq!(kinds("↯⟦ $ ⟧"), kinds("!{ $ }"));
+        assert_eq!(
+            kinds("! { |n| n }"),
+            vec![
+                K::Bang,
+                K::LBrace,
+                K::Op,
+                K::Ident,
+                K::Op,
+                K::Ident,
+                K::BlockClose
+            ]
+        );
+        assert_eq!(kinds("$ != 2"), vec![K::Dollar, K::Op, K::Int]);
+    }
+
+    /// `:{` is one token everywhere, and a Rite record that spells it stays
+    /// balanced: the closer is the same `}`, so leaf depth still comes out even.
+    #[test]
+    fn a_colon_brace_is_one_token_whether_it_defines_or_holds_a_block() {
+        assert_eq!(
+            kinds("clean:{ trim }"),
+            vec![K::Ident, K::DefineOpen, K::Ident, K::BlockClose]
+        );
+        assert_eq!(kinds("clean≔⟦ trim ⟧"), kinds("clean:{ trim }"));
+        assert_eq!(
+            kinds("<< f:{ |x| x } >>"),
+            vec![
+                K::Op,
+                K::Ident,
+                K::DefineOpen,
+                K::Op,
+                K::Ident,
+                K::Op,
+                K::Ident,
+                K::BlockClose,
+                K::Op
+            ]
+        );
+        // A space keeps the colon a colon, so `<< a: {…} >>` is unaffected.
+        assert_eq!(
+            kinds("x : { y }"),
+            vec![K::Ident, K::Colon, K::LBrace, K::Ident, K::BlockClose]
+        );
     }
 
     #[test]

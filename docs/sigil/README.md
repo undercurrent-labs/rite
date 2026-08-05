@@ -47,7 +47,7 @@ interchangeable, and the repository was migrated so they never have been
 
 ```text
 Cant source
-  -> cant-syntax parse, cant-sem lower       (cant.graph v1)
+  -> cant-syntax parse, cant-sem lower       (cant.graph v2)
   -> Sigil graph adapter                     (rite.sigil.graph v1)
   -> topology analysis, radial layout
   -> Sigil scene                             (rite.sigil.scene v1)

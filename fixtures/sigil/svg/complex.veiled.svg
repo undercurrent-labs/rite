@@ -164,5 +164,5 @@
 <path d="M453.125 431.321L453.125 468.761M445.925 431.321L460.325 431.321M445.925 468.761L460.325 468.761" id="node-n8" class="sigil-node sigil-node-stage" stroke="#38F2FF" filter="url(#sigil-glow)" transform="rotate(-134.091 453.125 450.041)"><title>stage</title></path>
 <path d="M831.921 1343.311L810.409 1330.971M821.681 1354.735L807.07 1334.696M807.671 1360.992L802.502 1336.736M792.329 1360.992L797.498 1336.736M778.319 1354.735L792.93 1334.696M768.079 1343.311L789.591 1330.971M812 1325C812 1331.627 806.627 1337 800 1337C793.373 1337 788 1331.627 788 1325C788 1318.373 793.373 1313 800 1313C806.627 1313 812 1318.373 812 1325M791.6 1316.6L808.4 1333.4M808.4 1316.6L791.6 1333.4" id="node-n9" class="sigil-node sigil-node-collect" stroke="#D8B35C" filter="url(#sigil-glow)" transform="rotate(87.772 800 1325)"><title>collect</title></path>
 </g>
-<desc>sigil/0.1.0 graph=a67b51b9c916d72906f4a5da3aa929ca theme=neon-ritual@1 tracery=flowing seed=0 mode=veiled metadata=safe format=svg</desc>
+<desc>sigil/0.1.0 graph=9924bbbb36070ee5b9bc1935d4e1e725 theme=neon-ritual@1 tracery=flowing seed=0 mode=veiled metadata=safe format=svg</desc>
 </svg>

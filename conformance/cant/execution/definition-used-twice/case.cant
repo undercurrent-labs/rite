@@ -1,0 +1,2 @@
+loud:{ upper -> $ + "!" }
+["a", "b"] -> * -> loud -> loud -> []

@@ -49,15 +49,41 @@ The runtime resolves `use math` to `math.rite` next to the entry file (and confi
 ## Import rules
 
 1. **`use name`** loads the module, brings its **public** exports into scope, and
-   binds `name` as a qualifier — both `square(12)` and `math.square(12)` work.
+   binds `name` as a qualifier — `square(12)`, `math.square(12)` and
+   `@math.square(12)` all work.
 2. **`use path as alias`** binds the qualifier under another name, and *only* under
    that name: `use math as m` gives `m.square(12)` and no bare `square`.
+   `use math -> m` (glyph: `⊏ math → m`) is the same declaration.
 3. **`use ./rel` / `use ../pkg/mod`** — path relative to the **importing file**.
 4. **`pub use name`** — re-export that module's public names from this file (facades).
 5. **Circular imports** are errors (`E024`) and include the import chain in diagnostics.
 6. **Modules may import modules.** A module's own imports are private to it and are
    never re-exported; use `pub use` for that.
 7. Prefer **acyclic** graphs: leaves = pure helpers, root = main/server.
+
+## The `@` qualifier
+
+`@m.square(12)` is qualified module access through the sigil. It calls the same
+function `m.square(12)` does, with one difference: `@m` always means the module.
+A parameter or binding named `m` shadows the bare qualifier — `◆ f(m) ⟦ ^ m.x ⟧`
+reads a field of the argument — but never the sigil form, so `@m.square` keeps
+meaning the import wherever it appears.
+
+```rite
+use math as m
+
+! @console.println(str(@m.square(12)))
+f ← @m.square          // exports are values too
+```
+
+`@` is the same sigil capabilities use, and the two cannot collide: an import
+may not bind a capability namespace as its qualifier. `use fs` is an error with
+the fix in it — alias the module (`use fs as fsm`) and `@fs.read` still means
+the host. Effect discipline is unchanged either way: calling an effectful
+export needs its marker, `! @m.fetch(url)`, exactly as the bare spelling does.
+
+An `@name` that is neither a capability nor an import is `E042` at `rite
+check`, with the import to add named in the help.
 
 ## Two modules, one name
 
@@ -111,6 +137,14 @@ Resolves to `lib/helpers.rite` (or `lib/helpers/mod.rite`) next to the importer.
 ```rite
 use math as m
 ! @console.println(str(m.square(12)))
+```
+
+`as` is the ASCII spelling and `→` the glyph one; the formatter converts
+between them, and `->` parses in either dialect:
+
+```rite
+⊏ math → m
+! @console.println(str(@m.square(12)))
 ```
 
 ### Re-exports

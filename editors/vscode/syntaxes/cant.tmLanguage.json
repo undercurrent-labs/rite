@@ -64,17 +64,25 @@
       ]
     },
     "modifiers": {
-      "_comment": "`:by`/`:max` after a block, and Rite's atom prefix everywhere else. Both read as a named thing, which is what the palette gives `atom`.",
+      "_comment": "`:by`/`:max`/`:par` after a block, and Rite's atom prefix everywhere else. Both read as a named thing, which is what the palette gives `atom`. A valueless modifier such as `:par` needs no separate rule: the name is what is highlighted either way.",
       "patterns": [
         { "name": "constant.other.atom.cant", "match": ":[A-Za-z_][A-Za-z0-9_]*" }
       ]
     },
     "structure": {
-      "_comment": "The block openers, longest first: `?{` before `?`, and the two-character glyphs before their first character.",
+      "_comment": "The block openers, longest first: `?{` before `?`, and the two-character glyphs before their first character. The definition opener is anchored to the start of a line, because `:{` is also how a Rite record holds a block and only a definition begins one.",
       "patterns": [
+        {
+          "match": "^\\s*([A-Za-z_][A-Za-z0-9_]*)(:\\{|≔⟦)",
+          "captures": {
+            "1": { "name": "entity.name.function.cant" },
+            "2": { "name": "keyword.control.definition.cant" }
+          }
+        },
         { "name": "keyword.control.ward.cant", "match": "\\?\\{|⊣⟦" },
         { "name": "keyword.control.fork.cant", "match": "\\|\\{|⫴⟦" },
         { "name": "keyword.control.orbit.cant", "match": "~\\{|⟲⟦" },
+        { "name": "keyword.control.rescue.cant", "match": "!\\{|↯⟦" },
         { "name": "keyword.control.block-close.cant", "match": "\\}|⟧" },
         { "name": "keyword.control.collect.cant", "match": "\\[\\]|⌁" },
         { "name": "punctuation.separator.branch.cant", "match": ";" }

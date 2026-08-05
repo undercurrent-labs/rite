@@ -202,14 +202,99 @@ inside leaf expressions like `?{ $.level = :error }`. The parser accepts `:name`
 as a modifier only immediately after a structural block's closing `}` / `⟧`.
 Everywhere else it is leaf text and is handed to Rite unchanged.
 
+A modifier's **value is optional**, and the parser does not decide which names
+take one. `:par` is the whole modifier and `:max 4` is a name and a value, and
+after a `}` there is no third reading to confuse them with: a bare leaf cannot
+follow a block, so a run of tokens there is a value or there is nothing. Which
+names may have none is `validate_modifiers`', beside which names exist —
+`CANT-G022` for a `:max` written without its number, `CANT-G023` for a `:par`
+written with one. `CANT-P010` was the parser's version of the first and is
+retired.
+
 A third case is handled by requiring adjacency: `?{`, `|{` and `~{` are single
 tokens only when the brace immediately follows the glyph. Rite’s parser accepts
 `{` as a block opener, so `? cond { … }` with a space is a Rite conditional and
 stays leaf text.
 
+A third: **`:{` — a definition or a Rite record field.** `clean:{ trim }` names a
+flow; `<< f:{ |x| x } >>` is a record whose field holds a block, and is ordinary
+leaf text. The lexer emits one `DefineOpen` for both, and the parser calls it a
+definition only after an identifier in the preamble. Unlike `?{`, `|{`, `~{` and
+`!{`, it is deliberately **not** a block opener for the purposes of "a block
+opener can only start a stage": that rule breaks a leaf run, so applying it here
+would truncate the record. It counts leaf depth instead, so the `}` still
+matches and the leaf comes out whole.
+
 Block nesting is tracked by the parser over `(`/`)`, `[`/`]` and `{`/`}`: a `}`
 seen at leaf-depth zero closes the enclosing Cant block, and one seen deeper
 belongs to a Rite closure such as `keep { |n| n % 2 = 0 }`.
+
+## Parallel forks
+
+`|{ a ; b }:par` lowers to Rite's `parallel(xs, f)` over one item per branch,
+plus a generated **named** dispatcher that calls the right branch chain. See
+[ADR 0012](../adr/0012-parallel-fork-is-a-modifier.md).
+
+The dispatcher is the entire reason this is expressible. Rite's effect analysis
+cannot see through a function *value*, so handing it a closure would have hidden
+every host call inside the branches — but it does track a named function passed
+as an argument (`resolve.rs`, the `each(shout)` case), so a `def!` dispatcher
+forces the `!` on `parallel` and propagates effect-ness outward exactly as a
+direct call would. The branch chains themselves are the ones a sequential fork
+already calls; nothing about them changes.
+
+Two properties of `parallel` are load-bearing and both are its own documented
+guarantees: results come back in **input order**, which is what keeps the joined
+value in branch order and therefore deterministic; and at most 16 branches are in
+flight, each window settling before the next, which is why a failing branch is
+reported only after its siblings finish.
+
+**Tracing is safe over one, and was checked rather than assumed.** Counts are
+`@store` reads and writes; `RuntimeContext::fork` shares the capability host
+through an `Arc` so every branch increments the same namespace, the increment is
+one statement with no suspension point inside it (`@store` never returns a
+pending future, and the evaluator has no cooperative yield), and addition does
+not care about arrival order. `a_traced_parallel_fork_counts_what_the_sequential_one_does`
+in `crates/cant-cli/tests/cli.rs` compares the two traces and requires them
+equal, so this stops being true loudly.
+
+**Console output does not interleave.** Each branch buffers its own and
+`parallel` splices them back in branch order. So a `:par` program prints the same
+thing every run; what has no order is effects that reach the world directly —
+files, hosts, `@store`.
+
+## Named flows
+
+A definition is spliced into the flow that used it during lowering, so nothing
+downstream of `lower` knows definitions exist: not the graph, not the schema,
+not `expand`, not Sigil. See
+[ADR 0011](../adr/0011-named-flows-are-spliced.md).
+
+Three consequences worth knowing before changing any of it.
+
+**Lowering has to terminate on a program validation will refuse.** Lowering
+rejects nothing, and it runs first, so a definition that names itself would
+recurse until the stack ran out — with no diagnostic, because a stack overflow
+is not one. `Builder::splicing` holds the names currently being spliced, and a
+name already on it is left as an ordinary leaf. That terminates, and it leaves a
+node for `CANT-G020` to point at.
+
+**The four definition checks read the AST, not the graph**, for the same reason
+modifier validation does: by the time there is a graph, the definition and its
+name are gone. `validate_definitions` runs before `validate_modifiers` so that a
+recursion is the first error reported, since the graph after that is not worth
+describing.
+
+**Effect-ness is per splice, and gets it for free.** Each use produces fresh
+nodes with fresh hygienic names, so `expand` computes effects over the generated
+call graph exactly as it always did and each splice site gets its own `def!` and
+its own `!`. `conformance/cant/execution/definition-effectful` pins it: one
+definition holding `!@fs.read`, used in two fork branches, two `def!` functions,
+and a permission denial without the grant.
+
+`cant-sem` gained a dependency on `rite-sem` for this, for
+`resolve::BUILTIN_NAMES` alone: a definition may not shadow a name Rite binds in
+every scope, and the alternative was a second copy of that list.
 
 ## Formatting and conversion
 
@@ -278,7 +363,8 @@ that was written.
 
 Generated Rite is one function per node, chained. A stage becomes a loop over the
 incoming emissions; a ward a conditional emission; a fork a call to each branch's
-chain, concatenated; an orbit a FIFO worklist, a seen-set and a bounded `while`.
+chain, concatenated; an orbit a FIFO worklist, a seen-set and a bounded `while`;
+a rescue a `match` over each emission whose `err` arm calls the handler's chain.
 The program boundary normalizes zero, one and many.
 
 ### Three ways to apply a leaf, and why

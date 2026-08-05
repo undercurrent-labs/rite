@@ -334,6 +334,57 @@ fn ordered_effects_match_between_the_two_paths() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// A `:par` fork's *value* is deterministic and identical on both paths, and so
+/// is its console output.
+///
+/// The output part is not a promise Cant arranges: `parallel` gives each branch
+/// its own output buffer and splices them back in branch order, so two branches
+/// printing cannot interleave. What a `:par` fork does not order is effects that
+/// reach the world directly — a file written, a host called — and there is
+/// nothing here to assert about those beyond that they happen.
+#[test]
+fn a_parallel_fork_agrees_between_the_two_paths() {
+    let Some(rite) = rite_bin() else {
+        println!("note: the `rite` binary is not built; parallel parity was not checked.");
+        return;
+    };
+    let dir = std::env::temp_dir().join("cant-differential-parallel");
+    std::fs::create_dir_all(&dir).expect("temp dir");
+    let source = "[1, 2] -> * -> |{ !@console.println($) ; $ * 10 } :par -> []\n";
+    std::fs::write(dir.join("case.cant"), source).expect("write");
+
+    let case = Case {
+        dir: dir.clone(),
+        name: "parallel-effects".into(),
+        expected_exit: 0,
+        expected_value: None,
+        allow: Vec::new(),
+    };
+    let direct = cant_run(&case);
+    let expanded = rite_run(&case, &rite).expect("rite run");
+
+    assert_eq!(direct.exit, 0, "{}", direct.stderr);
+    assert_eq!(direct.stdout, expanded.stdout, "the two paths disagree");
+    // Branch order, per scattered value: the fork's first branch prints, its
+    // second multiplies, and the collected list interleaves them accordingly.
+    let printed: Vec<&str> = direct
+        .stdout
+        .lines()
+        .filter(|l| ["1", "2"].contains(l))
+        .collect();
+    assert_eq!(printed, vec!["1", "2"], "{}", direct.stdout);
+    assert!(
+        direct.stdout.contains("[none, 10, none, 20]"),
+        "the value is not joined in branch order: {}",
+        direct.stdout
+    );
+
+    // And running it again produces exactly the same bytes.
+    let again = cant_run(&case);
+    assert_eq!(direct.stdout, again.stdout, "a second run differed");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 // ---- compiled parity (slow)
 
 /// `cant run` == the binary `cant build` produces.

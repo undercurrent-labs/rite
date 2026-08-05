@@ -39,7 +39,7 @@ checked for `x`, `y`, `width`, `height`, `radius`, `angle`, `rotation` and
   "schema": "rite.sigil.graph",
   "version": 1,
   "source_language": "cant",
-  "source_schema": { "name": "cant.graph", "version": "1" },
+  "source_schema": { "name": "cant.graph", "version": "2" },
   "entry": "n0",
   "exits": ["n4"],
   "nodes": [ … ],

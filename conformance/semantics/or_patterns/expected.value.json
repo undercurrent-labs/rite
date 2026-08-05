@@ -1,0 +1,9 @@
+{
+  "first_alt": "small",
+  "last_alt": "small",
+  "second_group": "medium",
+  "fallthrough": "large",
+  "strings": "letter",
+  "atoms_saturate": "bool",
+  "binding_in_alternatives": "boom"
+}

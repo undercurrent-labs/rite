@@ -1,0 +1,2 @@
+clean≔⟦ trim → ⊣⟦ count($) > 0 ⟧ ⟧
+["  a  ", ""] → ⋇ → clean → ⌁

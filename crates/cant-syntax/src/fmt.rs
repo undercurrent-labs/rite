@@ -243,8 +243,15 @@ impl Printer<'_> {
     }
 
     fn program(&mut self, program: &CantProgramAst) {
-        // The shebang, if there is one, is trivia at byte 0 and goes first.
-        self.flush_comments_before(program.span.start.as_usize(), 0);
+        // The shebang, if there is one, is trivia at byte 0 and goes first, with
+        // anything written above the preamble.
+        let start = program
+            .uses
+            .first()
+            .map(|u| u.span)
+            .or_else(|| program.defs.first().map(|d| d.span))
+            .unwrap_or(program.span);
+        self.flush_comments_before(start.start.as_usize(), 0);
         // `use` lines, one per line, before the flow — the only place the
         // grammar allows them. They have no glyph spelling, so both dialects
         // print them identically.
@@ -253,6 +260,29 @@ impl Printer<'_> {
             self.out.push_str(&import.name);
             self.out.push('\n');
         }
+        // Definitions, one per line, name against the brace. The body lays out
+        // like any other block, so a long one breaks the same way an orbit does.
+        for def in &program.defs {
+            self.flush_comments_before(def.span.start.as_usize(), 0);
+            let opener = format!("{}{}", def.name, self.op(K::DefineOpen));
+            let closer = self.op(K::BlockClose);
+            let inline = self.flow_inline(&def.flow);
+            // `+ 4` for the two spaces, the closer, and the separator after it.
+            let fits =
+                opener.chars().count() + inline.chars().count() + 4 <= self.options.max_width;
+            if self.options.compact || fits {
+                self.out.push_str(&format!("{opener} {inline} {closer}"));
+            } else {
+                let indent = self.options.indent_width;
+                let body = self.flow(&def.flow, indent, indent);
+                self.out
+                    .push_str(&format!("{opener}\n{}{body}\n{closer}", " ".repeat(indent)));
+            }
+            // A definition's braces end it, so compact output needs no line
+            // break: `clean:{ trim } [1] -> clean` is one legal line.
+            self.out.push(if self.options.compact { ' ' } else { '\n' });
+        }
+        self.flush_comments_before(program.flow.span.start.as_usize(), 0);
         let rendered = self.flow(&program.flow, 0, self.options.indent_width);
         self.out.push_str(&rendered);
     }
@@ -383,6 +413,12 @@ impl Printer<'_> {
                 self.flow_inline(body),
                 self.op(K::BlockClose)
             ),
+            StageKind::Rescue { handler } => format!(
+                "{} {} {}",
+                self.op(K::RescueOpen),
+                self.flow_inline(handler),
+                self.op(K::BlockClose)
+            ),
         };
         let mods = stage
             .modifiers
@@ -444,6 +480,14 @@ impl Printer<'_> {
                 pad,
                 self.op(K::BlockClose)
             ),
+            StageKind::Rescue { handler } => format!(
+                "{}\n{}{}\n{}{}",
+                self.op(K::RescueOpen),
+                body_pad,
+                self.flow(handler, body_indent, body_indent),
+                pad,
+                self.op(K::BlockClose)
+            ),
         };
 
         // Modifiers go under the closing brace, one per line: a `:max 4096`
@@ -458,7 +502,10 @@ impl Printer<'_> {
     }
 
     fn modifier(&self, m: &Modifier) -> String {
-        format!("{}{} {}", self.op(K::Colon), m.name, m.value.text)
+        match &m.value {
+            Some(value) => format!("{}{} {}", self.op(K::Colon), m.name, value.text),
+            None => format!("{}{}", self.op(K::Colon), m.name),
+        }
     }
 
     fn leaf(&self, leaf: &Leaf) -> String {

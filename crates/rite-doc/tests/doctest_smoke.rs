@@ -66,16 +66,13 @@ fn regenerating_the_bundle_in_place_keeps_skill_md() {
     let bundle = stage.path().join("skills/rite");
     std::fs::create_dir_all(&bundle).expect("create bundle dir");
     std::fs::write(bundle.join("SKILL.md"), &before).expect("seed the copy");
-    // `grammar/` is read relative to the cwd too; absent is fine (it falls back).
-    let _ = std::fs::create_dir_all(stage.path().join("grammar"));
+    // Inputs are anchored to the root argument; a missing one is an error, so
+    // the grammar files are staged too.
+    std::fs::create_dir_all(stage.path().join("grammar")).expect("grammar dir");
+    std::fs::write(stage.path().join("grammar/aliases.json"), "{}").expect("aliases");
+    std::fs::write(stage.path().join("grammar/rite.ebnf"), "(* test *)\n").expect("ebnf");
 
-    // `generate_agent_bundle` resolves its source relative to the cwd, which is why this
-    // has to chdir at all.
-    let prev = std::env::current_dir().expect("cwd");
-    std::env::set_current_dir(stage.path()).expect("chdir to the copy");
-    let result = rite_doc::generate_agent_bundle(std::path::Path::new("skills/rite"));
-    std::env::set_current_dir(prev).expect("restore cwd");
-    result.expect("generate bundle");
+    rite_doc::generate_agent_bundle(stage.path(), &bundle).expect("generate bundle");
 
     let after = std::fs::read_to_string(bundle.join("SKILL.md")).expect("read after");
     assert_eq!(before, after, "regenerating in place rewrote SKILL.md");

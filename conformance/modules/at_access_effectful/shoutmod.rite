@@ -1,0 +1,3 @@
+pub def! shout(msg) [[
+  do @console.println(msg)
+]]

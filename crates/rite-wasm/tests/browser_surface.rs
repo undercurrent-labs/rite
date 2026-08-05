@@ -149,21 +149,41 @@ async fn listen_is_virtualised_rather_than_binding_a_socket() {
     );
 }
 
-// ------------------------------------------------------------------- unimplemented API
+// ------------------------------------------------------------------- module files
 
 #[tokio::test]
-async fn supplying_files_is_an_error_not_a_silent_no_op() {
-    // Nothing has ever read `files`. Accepting them and running without them is the
-    // failure mode worth preventing: the script runs, looks fine, and ignores the input.
+async fn files_resolve_use_without_a_filesystem() {
+    let mut o = opts();
+    o.files
+        .insert("helper.rite".into(), "pub ◆ f() ⟦ ^ 41 ⟧\n".into());
+    let r = run("use helper\n^ @helper.f() + 1", o).await;
+    assert!(r.ok, "overlay module did not resolve: {:?}", r.error);
+    assert_eq!(r.value, serde_json::json!(42));
+}
+
+#[tokio::test]
+async fn files_keys_accept_module_names_and_paths() {
+    // `lib/helpers.rite` and `lib.helpers` are the same key after
+    // normalisation, and modules in the overlay can use each other.
+    let mut o = opts();
+    o.files.insert(
+        "lib/helpers.rite".into(),
+        "use base\npub ◆ triple(x) ⟦ ^ @base.add(x, x) + x ⟧\n".into(),
+    );
+    o.files
+        .insert("base".into(), "pub ◆ add(a, b) ⟦ ^ a + b ⟧\n".into());
+    let r = run("use lib.helpers\n^ triple(5)", o).await;
+    assert!(r.ok, "nested overlay imports failed: {:?}", r.error);
+    assert_eq!(r.value, serde_json::json!(15));
+}
+
+#[tokio::test]
+async fn a_missing_overlay_module_is_a_compile_error() {
     let mut o = opts();
     o.files
         .insert("helper.rite".into(), "pub ◆ f() ⟦ ^ 1 ⟧\n".into());
-    let r = run("1 + 1", o).await;
-    assert!(!r.ok, "files must be refused while unimplemented");
-    assert!(
-        r.error.unwrap_or_default().contains("files"),
-        "the error should name the field"
-    );
+    let r = run("use nosuch\n^ 1", o).await;
+    assert!(!r.ok, "an unresolved `use` must fail the compile");
 }
 
 // -------------------------------------------------------------------- non-run surfaces

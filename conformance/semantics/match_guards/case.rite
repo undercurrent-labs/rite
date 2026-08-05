@@ -1,0 +1,20 @@
+◆ classify(n) ⟦
+  ^ ~ n ⟦
+    x ? x < 0 → "negative"
+    0 → "zero"
+    x ? x % 2 = 0 → "even"
+    _ → "odd"
+  ⟧
+⟧
+
+^ ⟨
+  guard_wins: classify(0 - 4),
+  literal_before_guard: classify(0),
+  guard_sees_binding: classify(6),
+  fallthrough_on_falsy_guard: classify(7),
+  guarded_result: ~ ok(42) ⟦
+    ok v ? v > 40 → "big"
+    ok _ → "small"
+    err _ → "failed"
+  ⟧
+⟩

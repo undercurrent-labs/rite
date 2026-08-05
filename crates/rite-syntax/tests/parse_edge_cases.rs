@@ -665,3 +665,62 @@ fn an_empty_parameter_list_is_still_a_parameter_list() {
     let ascii = block_of("f <- [[ || 42 ]]\n");
     assert!(ascii.has_param_list);
 }
+
+#[test]
+fn import_alias_spellings() {
+    // `as` and `->` / `→` are the same alias clause.
+    for src in [
+        "use coolio as cool\n",
+        "use coolio -> cool\n",
+        "⊏ coolio → cool\n",
+        "use ./lib/helpers -> h\n",
+        "pub use coolio -> cool\n",
+    ] {
+        let (p, d, _) = parse_source("t.rite", src);
+        assert!(!d.has_errors(), "errors for `{src}`: {:?}", d.into_vec());
+        let program = p.expect("program");
+        let imp = program
+            .items
+            .iter()
+            .find_map(|i| match i {
+                rite_syntax::Item::Import(imp) => Some(imp),
+                _ => None,
+            })
+            .expect("import item");
+        assert_eq!(
+            imp.alias.as_ref().map(|a| a.name.as_str()),
+            Some(match src.contains("helpers") {
+                true => "h",
+                false => "cool",
+            }),
+            "no alias parsed from `{src}`"
+        );
+    }
+}
+
+#[test]
+fn import_arrow_alias_does_not_eat_a_following_pipeline() {
+    // The arrow directly after the module path is the alias; a pipeline on the
+    // next line still needs its input, so nothing here is ambiguous.
+    let (p, d, _) = parse_source("t.rite", "use coolio -> cool\n[1] -> sum\n");
+    assert!(!d.has_errors(), "{:?}", d.into_vec());
+    let program = p.expect("program");
+    assert_eq!(program.items.len(), 2);
+}
+
+#[test]
+fn match_guards_and_or_patterns() {
+    // Guards in both spellings, or-patterns, and the two combined.
+    for src in [
+        "x <- match 1 [[\n  1 | 2 -> \"a\"\n  _ -> \"b\"\n]]\n",
+        "x <- match 1 [[\n  n if n > 0 -> \"a\"\n  _ -> \"b\"\n]]\n",
+        "x ← ~ 1 ⟦\n  n ? n > 0 → \"a\"\n  1 | 2 ? 2 > 1 → \"c\"\n  _ → \"b\"\n⟧\n",
+    ] {
+        parse_ok(src);
+    }
+    // A guard is parsed below pipeline precedence: an arrow after the guard
+    // expression is the arm's own, so this parses as guard `n > 0`, body "a".
+    parse_ok("x <- match 1 [[\n  n if n > 0 -> \"a\"\n  _ -> \"b\"\n]]\n");
+    // An or-pattern needs a pattern after `|`.
+    parse_err("x <- match 1 [[\n  1 | -> \"a\"\n]]\n");
+}

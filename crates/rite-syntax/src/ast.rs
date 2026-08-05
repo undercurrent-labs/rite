@@ -113,6 +113,44 @@ pub enum Stmt {
     Assign(Assign),
     Expr(Expr),
     Return(ReturnStmt),
+    /// A statement sugar (`say`, `unless`, `for`, `while`, `loop`) kept in its
+    /// source shape so `rite fmt` can print it back. `lowered` is the semantic
+    /// truth: resolve and desugar walk only it, the formatter prints only
+    /// `form`. Before this, the parser rewrote the sugar away and `rite fmt`
+    /// printed the expansion, which is why `fmt --check` could not gate CI.
+    Sugared(SugaredStmt),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SugaredStmt {
+    pub form: SugarForm,
+    pub lowered: Box<Stmt>,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum SugarForm {
+    Say {
+        value: Expr,
+    },
+    Unless {
+        condition: Expr,
+        then_branch: Block,
+        else_branch: Option<Block>,
+    },
+    ForIn {
+        var: Ident,
+        iter: Expr,
+        body: Block,
+    },
+    While {
+        condition: Expr,
+        body: Block,
+    },
+    Loop {
+        count: Expr,
+        body: Block,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -355,6 +393,10 @@ pub struct MatchExpr {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MatchArm {
     pub pattern: Pattern,
+    /// `pattern if cond → body` — the arm matches only when `cond` is truthy.
+    /// Defaulted so IR embedded by older compiled binaries still deserialises.
+    #[serde(default)]
+    pub guard: Option<Expr>,
     pub body: Expr,
     pub span: Span,
 }
@@ -472,6 +514,16 @@ pub enum Pattern {
     List(ListPattern),
     Record(RecordPattern),
     Result(ResultPattern),
+    /// `1 | 2 | 3` — alternatives tried in order. Only at the top level of a
+    /// match arm; every alternative must bind the same names (checked in
+    /// resolve).
+    Or(OrPattern),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OrPattern {
+    pub alternatives: Vec<Pattern>,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

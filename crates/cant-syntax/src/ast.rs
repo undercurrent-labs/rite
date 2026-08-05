@@ -19,8 +19,25 @@ pub struct CantProgramAst {
     /// and Rite's module system does the rest (open question 1, answered P4).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub uses: Vec<UseDecl>,
+    /// `clean:{ trim -> upper }` — named flows, before the main flow.
+    ///
+    /// Recorded, not resolved. Which leaf is a *use* of one is `cant-sem`'s
+    /// question, and it answers it by splicing during lowering (ADR 0011).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub defs: Vec<FlowDef>,
     pub flow: Flow,
     pub span: Span,
+}
+
+/// `clean:{ trim -> upper }` — one named flow.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct FlowDef {
+    pub name: String,
+    /// Just the name, for a diagnostic that should point at it.
+    pub name_span: Span,
+    /// The whole definition, name through closing brace.
+    pub span: Span,
+    pub flow: Flow,
 }
 
 /// `use math` — one leading import of a Rite module.
@@ -65,6 +82,9 @@ pub enum StageKind {
     Fork { branches: Vec<Flow> },
     /// `~{ body }` — bounded breadth-first fixed point.
     Orbit { body: Flow },
+    /// `!{ handler }` — a failed emission goes into the handler, an `ok`
+    /// continues unwrapped.
+    Rescue { handler: Flow },
 }
 
 impl StageKind {
@@ -77,6 +97,7 @@ impl StageKind {
             StageKind::Ward { .. } => "ward",
             StageKind::Fork { .. } => "fork",
             StageKind::Orbit { .. } => "orbit",
+            StageKind::Rescue { .. } => "rescue",
         }
     }
 
@@ -107,7 +128,7 @@ pub struct Leaf {
     pub has_placeholder: bool,
 }
 
-/// `:name value`
+/// `:name value`, or `:name` alone.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Modifier {
     pub name: String,
@@ -115,7 +136,13 @@ pub struct Modifier {
     pub span: Span,
     /// Just `:name`, for a diagnostic that should point at the name.
     pub name_span: Span,
-    pub value: Leaf,
+    /// The value, for the modifiers that take one.
+    ///
+    /// `:max 1024` carries one and `:par` does not. Which names take a value is
+    /// validation's question, like which names exist at all: the parser records
+    /// what was written, and a `:max` with nothing after it is a missing value
+    /// rather than a second kind of modifier.
+    pub value: Option<Leaf>,
 }
 
 /// A span-free view of a program, for comparing two spellings of the same
@@ -127,15 +154,34 @@ pub struct Modifier {
 /// Rite's `parse_both_equivalent` does the same thing for the same reason.
 pub fn structure(program: &CantProgramAst) -> serde_json::Value {
     let flow = flow_structure(&program.flow);
-    if program.uses.is_empty() {
-        // The historical shape, so a program without imports compares as it
+    if program.uses.is_empty() && program.defs.is_empty() {
+        // The historical shape, so a program without a preamble compares as it
         // always did.
         return flow;
     }
-    serde_json::json!({
-        "uses": program.uses.iter().map(|u| u.name.clone()).collect::<Vec<_>>(),
-        "flow": flow,
-    })
+    let mut out = serde_json::Map::new();
+    if !program.uses.is_empty() {
+        out.insert(
+            "uses".into(),
+            program
+                .uses
+                .iter()
+                .map(|u| serde_json::Value::String(u.name.clone()))
+                .collect(),
+        );
+    }
+    if !program.defs.is_empty() {
+        out.insert(
+            "defs".into(),
+            program
+                .defs
+                .iter()
+                .map(|d| serde_json::json!({ "name": d.name, "flow": flow_structure(&d.flow) }))
+                .collect(),
+        );
+    }
+    out.insert("flow".into(), flow);
+    serde_json::Value::Object(out)
 }
 
 fn flow_structure(flow: &Flow) -> serde_json::Value {
@@ -152,6 +198,9 @@ fn stage_structure(stage: &Stage) -> serde_json::Value {
             "fork": branches.iter().map(flow_structure).collect::<Vec<_>>(),
         }),
         StageKind::Orbit { body } => serde_json::json!({"orbit": flow_structure(body)}),
+        StageKind::Rescue { handler } => {
+            serde_json::json!({"rescue": flow_structure(handler)})
+        }
     };
     if stage.modifiers.is_empty() {
         return kind;
@@ -159,7 +208,10 @@ fn stage_structure(stage: &Stage) -> serde_json::Value {
     serde_json::json!({
         "kind": kind,
         "modifiers": stage.modifiers.iter()
-            .map(|m| serde_json::json!({"name": m.name, "value": m.value.text}))
+            .map(|m| match &m.value {
+                Some(value) => serde_json::json!({"name": m.name, "value": value.text}),
+                None => serde_json::json!({"name": m.name}),
+            })
             .collect::<Vec<_>>(),
     })
 }

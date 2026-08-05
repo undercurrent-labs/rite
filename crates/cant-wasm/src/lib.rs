@@ -134,10 +134,11 @@ pub fn explain(source: &str) -> Value {
     let Some(graph) = analysis.graph.as_ref() else {
         return json!({ "ok": false, "text": "", "capabilities": [], "diagnostics": analysis.diagnostics.to_json() });
     };
-    let explanation = cant_sem::explain(graph);
+    let explanation = cant_sem::explain_with(graph, &analysis.definition_names());
     json!({
         "ok": !analysis.has_errors(),
         "text": cant_sem::explain::render(&explanation, false),
+        "definitions": explanation.definitions,
         "capabilities": explanation.capabilities,
         "effects": explanation.effects,
         "max_orbit_items": explanation.max_orbit_items,

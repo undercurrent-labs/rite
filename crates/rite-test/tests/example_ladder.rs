@@ -67,6 +67,12 @@ fn ladder_modules() {
     run_ok("examples/modules/main.rite");
 }
 #[test]
+fn ladder_modules_aliased() {
+    // The aliased entry was never executed by any test; the arrow alias and
+    // `@m.square` access now are.
+    run_ok("examples/modules/alias_main.rite");
+}
+#[test]
 fn ladder_hello() {
     run_ok("examples/hello/hello.rite");
 }

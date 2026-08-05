@@ -1,0 +1,1 @@
+["missing.txt"] -> * -> !@fs.read($) -> !{ unwrap_or(!@fs.read("fallback.txt"), $) } -> trim -> []

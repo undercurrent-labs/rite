@@ -9,7 +9,10 @@
 //!   where it is the empty list literal;
 //! * `:name value` is a modifier only immediately after a structural block's
 //!   closing brace — everywhere else `:` is Rite's atom prefix and belongs to the
-//!   leaf, which is why `?{ $.level = :error }` parses.
+//!   leaf, which is why `?{ $.level = :error }` parses;
+//! * `:{` opens a definition only after an identifier in the preamble;
+//!   everywhere else it belongs to the leaf, which is why `<< f:{ |x| x } >>`
+//!   parses.
 //!
 //! Everything the parser cannot see is left alone. A leaf is a run of tokens
 //! recorded as source text and a span; whether the names in it exist, whether
@@ -130,6 +133,10 @@ impl Parser<'_> {
         self.at(K::Eof)
     }
 
+    fn peek_kind(&self, ahead: usize) -> Option<K> {
+        self.tokens.get(self.pos + ahead).map(|t| t.kind)
+    }
+
     fn advance(&mut self) {
         if self.pos + 1 < self.tokens.len() {
             self.pos += 1;
@@ -186,7 +193,7 @@ impl Parser<'_> {
     // ---- grammar
 
     fn parse_program(&mut self) -> Option<CantProgramAst> {
-        let uses = self.parse_uses();
+        let (uses, defs) = self.parse_preamble();
         let flow = self.parse_flow();
 
         // Whatever is left over is one mistake, not many: reporting only the
@@ -222,40 +229,51 @@ impl Parser<'_> {
             } else {
                 Span::from_range(0, self.file.len())
             };
+            let help = if defs.is_empty() {
+                "a Cant program is a flow, for example `[1, 2, 3] -> * -> []`"
+            } else {
+                "a definition names a flow but does not run one; the flow comes last, \
+                 after the definitions"
+            };
             self.diagnostics.push(
                 CantDiagnostic::error(CANT_P001_EMPTY_PROGRAM, "this program has no stages")
                     .with_primary(self.source_span(span), "nothing to run")
-                    .with_help("a Cant program is a flow, for example `[1, 2, 3] -> * -> []`"),
+                    .with_help(help),
             );
             return None;
         }
         Some(CantProgramAst {
             span: flow.span,
             uses,
+            defs,
             flow,
         })
     }
 
-    /// Leading `use math` lines, before the flow begins.
+    /// Leading `use math` lines and `clean:{ … }` definitions, before the flow.
     ///
-    /// `use` is a Rite keyword, so no leaf can legitimately begin with it —
-    /// which is what makes the preamble unambiguous without the parser ever
-    /// seeing a newline. The module name is one identifier; resolution is
-    /// Rite's entirely.
-    fn parse_uses(&mut self) -> Vec<crate::ast::UseDecl> {
+    /// Both are unambiguous without the parser ever seeing a newline. `use` is a
+    /// Rite keyword, so no leaf can legitimately begin with it, and it takes one
+    /// identifier and stops; a definition is an identifier followed by `:{`, and
+    /// its braces say where it ends. They may be interleaved, and either may be
+    /// absent.
+    fn parse_preamble(&mut self) -> (Vec<crate::ast::UseDecl>, Vec<FlowDef>) {
         let mut uses = Vec::new();
-        while self.at(K::Ident) && self.current().text == "use" {
-            let use_span = self.current().span;
-            self.advance();
-            if self.at(K::Ident) && self.current().text != "use" {
-                let name = self.current().text.clone();
-                let end = self.current().span.end.as_usize();
+        let mut defs = Vec::new();
+        loop {
+            if self.at(K::Ident) && self.current().text == "use" {
+                let use_span = self.current().span;
                 self.advance();
-                uses.push(crate::ast::UseDecl {
-                    name,
-                    span: Span::from_range(use_span.start.as_usize(), end),
-                });
-            } else {
+                if self.at(K::Ident) && self.current().text != "use" {
+                    let name = self.current().text.clone();
+                    let end = self.current().span.end.as_usize();
+                    self.advance();
+                    uses.push(crate::ast::UseDecl {
+                        name,
+                        span: Span::from_range(use_span.start.as_usize(), end),
+                    });
+                    continue;
+                }
                 self.error(
                     CANT_P002_EXPECTED_STAGE,
                     "expected a module name after `use`",
@@ -264,8 +282,52 @@ impl Parser<'_> {
                 );
                 break;
             }
+            if self.at(K::Ident) && self.peek_kind(1) == Some(K::DefineOpen) {
+                // A definition that produced no flow is reported and dropped, so
+                // a use of its name falls through to being a leaf rather than
+                // cascading. Recovery has already consumed the block.
+                if let Some(def) = self.parse_definition() {
+                    defs.push(def);
+                }
+                continue;
+            }
+            break;
         }
-        uses
+        (uses, defs)
+    }
+
+    /// `clean:{ trim -> upper }` — a named flow, spliced wherever it is used.
+    fn parse_definition(&mut self) -> Option<FlowDef> {
+        let name = self.current().clone();
+        self.advance();
+        let opener = self.current().clone();
+        self.take_structural();
+
+        self.nesting += 1;
+        let flow = self.parse_flow();
+        self.nesting -= 1;
+
+        let close = self.expect_block_close(&opener);
+        if flow.stages.is_empty() {
+            self.diagnostics.push(
+                CantDiagnostic::error(
+                    CANT_P002_EXPECTED_STAGE,
+                    format!("the definition `{}` has no stages", name.text),
+                )
+                .with_primary(
+                    self.source_span(name.span.merge(close)),
+                    "a definition holds a flow",
+                )
+                .with_help("write it as `clean:{ trim -> upper }`"),
+            );
+            return None;
+        }
+        Some(FlowDef {
+            name: name.text.clone(),
+            name_span: name.span,
+            span: name.span.merge(close),
+            flow,
+        })
     }
 
     fn parse_flow(&mut self) -> Flow {
@@ -332,6 +394,27 @@ impl Parser<'_> {
         }
         if self.at_modifier() {
             return self.reject_orphan_modifier();
+        }
+        // `:{` opening a stage is a definition in the wrong place, or one with no
+        // name in front of it. No Rite expression begins with it, so saying so
+        // beats letting it through as leaf text and reporting `CANT-S004` from
+        // Rite's parser.
+        if self.at(K::DefineOpen) {
+            let span = self.current().span;
+            self.diagnostics.push(
+                CantDiagnostic::error(
+                    CANT_P002_EXPECTED_STAGE,
+                    "expected a stage, found the start of a definition",
+                )
+                .with_primary(self.source_span(span), "`:{` names a flow")
+                .with_help(
+                    "definitions go above the flow, with a name against the brace: \
+                     `clean:{ trim -> upper }`",
+                ),
+            );
+            self.advance();
+            self.skip_to_matching_close();
+            return None;
         }
 
         let run_start = self.pos;
@@ -405,6 +488,9 @@ impl Parser<'_> {
             },
             K::ForkOpen => StageKind::Fork {
                 branches: self.parse_fork_branches(),
+            },
+            K::RescueOpen => StageKind::Rescue {
+                handler: self.parse_flow(),
             },
             _ => StageKind::Orbit {
                 body: self.parse_flow(),
@@ -540,20 +626,19 @@ impl Parser<'_> {
             let _ = self.consume_leaf_run(&[K::Flow, K::Semi, K::BlockClose, K::Colon], true);
             let run = self.tokens[value_start..self.pos].to_vec();
 
+            // An empty run is `:par`, a modifier with no value. Whether *this*
+            // name is allowed to have none is validation's call — the parser
+            // knows no modifier names, and a table of them here would have to
+            // agree with the one in `cant-sem` forever.
             let name_span = colon.span.merge(name_token.span);
-            if run.is_empty() {
-                self.error(
-                    CANT_P010_MODIFIER_NEEDS_VALUE,
-                    format!("`:{}` needs a value", name_token.text),
-                    name_span,
-                    "expected a value after the modifier name",
-                );
-                continue;
-            }
-            let value = self.leaf_from(&run);
+            let value = (!run.is_empty()).then(|| self.leaf_from(&run));
+            let span = match &value {
+                Some(value) => name_span.merge(value.span),
+                None => name_span,
+            };
             stage.modifiers.push(Modifier {
                 name: name_token.text.clone(),
-                span: name_span.merge(value.span),
+                span,
                 name_span,
                 value,
             });
@@ -677,30 +762,42 @@ impl Parser<'_> {
         }
     }
 
-    /// `⋇` and `⌁` are glyph-only: they have no second meaning the way `*` and
-    /// `[]` do, so seeing one inside a leaf is always a mistake worth naming.
+    /// `⋇`, `⌁` and `≔⟦` are glyph-only: they have no second meaning the way
+    /// `*`, `[]` and `:{` do, so seeing one inside a leaf is always a mistake
+    /// worth naming.
     fn report_glyph_only_operators_in_leaf(&mut self, run: &[CantToken]) {
         for token in run {
             if token.spelling != Spelling::Glyph {
                 continue;
             }
-            let (name, ascii) = match token.kind {
-                K::Star => ("scatter", "*"),
-                K::Collect => ("collect", "[]"),
+            let (name, label, help) = match token.kind {
+                K::Star => (
+                    "scatter",
+                    "scatter has to be a stage of its own",
+                    "write `-> * ->` to scatter, or use the ASCII spelling if you meant an operator",
+                ),
+                K::Collect => (
+                    "collect",
+                    "collect has to be a stage of its own",
+                    "write `-> [] ->` to collect, or use the ASCII spelling if you meant an operator",
+                ),
+                K::DefineOpen => (
+                    "definition",
+                    "a definition names a flow, and is not part of an expression",
+                    "put it above the flow as `clean≔⟦ trim → upper ⟧`, or write `: {` with a space if you meant a Rite record field",
+                ),
                 _ => continue,
             };
             self.diagnostics.push(
                 CantDiagnostic::error(
                     CANT_P007_GLYPH_ONLY_OPERATOR_IN_LEAF,
-                    format!("`{}` is the {name} operator, and is not part of an expression", token.text),
+                    format!(
+                        "`{}` is the {name} operator, and is not part of an expression",
+                        token.text
+                    ),
                 )
-                .with_primary(
-                    self.source_span(token.span),
-                    format!("{name} has to be a stage of its own"),
-                )
-                .with_help(format!(
-                    "write `-> {ascii} ->` to {name}, or use the ASCII spelling if you meant an operator"
-                )),
+                .with_primary(self.source_span(token.span), label)
+                .with_help(help),
             );
         }
     }

@@ -22,7 +22,9 @@ pub mod manifest;
 pub mod parser;
 pub mod token;
 
-pub use ast::{structure, CantProgramAst, Flow, Leaf, Modifier, Stage, StageKind};
+pub use ast::{
+    structure, CantProgramAst, Flow, FlowDef, Leaf, Modifier, Stage, StageKind, UseDecl,
+};
 pub use diagnostic::{
     CantCategory, CantCode, CantDiagnostic, CantDiagnostics, RiteOrigin, ALL_CODES,
 };
@@ -38,7 +40,7 @@ use rite_core::{FileId, SourceFile, SourceMap};
 ///
 /// Separate from the crate version: the tooling can move without the language
 /// doing so, and `cant version` reports both.
-pub const CANT_LANGUAGE_VERSION: &str = "0";
+pub const CANT_LANGUAGE_VERSION: &str = "1";
 
 /// Parse a named source string, returning the result alongside a [`SourceMap`]
 /// that can render its diagnostics.

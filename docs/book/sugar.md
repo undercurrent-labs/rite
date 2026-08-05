@@ -97,6 +97,35 @@ loop 3 ⟦
 ⟧
 ```
 
+### No `break`, no `continue`
+
+Rite's loops are sugar: `for` lowers to `each`, `while` to a pair of closures.
+A `break` would be a non-local exit through a closure boundary, which is a
+construct the language does not have. The word is not reserved and never will
+match anything.
+
+Say what the loop should cover instead of escaping it midway:
+
+```rite
+// stop at the first refusal — the take_while half of a break
+1..100 → take_while ⟦ |n| n < 10 ⟧ → each ⟦ |n| ¶ n ⟧
+
+// skip elements — the continue half is keep/reject
+xs → reject ⟦ |n| n % 2 = 0 ⟧ → each ⟦ |n| ¶ n ⟧
+
+// find the first hit and stop scanning
+first_match ← xs → find ⟦ |n| n > 40 ⟧
+
+// stop a while loop by making its condition false
+while running and n < limit ⟦
+  n += 1
+⟧
+```
+
+`take_while`, `drop_while`, `keep`, `reject` and `find` all stop or skip
+without a jump, and compose with the rest of a pipeline where a `break` could
+not.
+
 ## Numbers and logic
 
 ```rite browser

@@ -1,6 +1,169 @@
 # Changelog
 
-## [Unreleased]
+## [0.10.0] — 2026-08-05
+
+The language grows in both directions. Rite: modules answer to `@`
+(`@cool.square(5)`, aliasable with `use math -> m`), match arms take guards
+and or-patterns, ten collection builtins land, the browser runs every
+capability it can, size ceilings cover external input, and `@mcp` gains the
+client half. Cant (0.3.0, language version 1): failures route through the
+rescue stage, flows get names, forks run parallel, and stage `?` finally does
+what the docs always said. One regression fixed before it shipped: locally
+compiled binaries had silently lost their native capabilities.
+
+Minor rather than patch, twice over: new syntax and capability surfaces on
+the Rite side, and one deliberate tightening — an import may no longer bind a
+capability namespace as its qualifier (`use fs` now asks for an alias), so
+`@fs.read` can never change meaning under an import. Cant's language version
+moves to 1 for the rescue stage, named flows, `:par`, and the `?` semantics
+fix.
+
+### Added
+
+- **Modules answer to `@`.** `use coolio` (or `use coolio as cool`) makes
+  `@coolio.square(5)` / `@cool.square(5)` qualified access to the module's
+  exports — same functions the bare `cool.square(5)` spelling calls, same
+  effect rules (`! @cool.fetch(url)` when the export is effectful). One
+  difference, and it is the point of the sigil: a local binding can shadow the
+  bare qualifier, `@cool` always means the module. Capability namespaces are
+  reserved — `use fs` is now an error asking for an alias, so an import can
+  never change what `@fs.read` does. In ASCII the formatter keeps `@` for
+  module access; `host.` stays for real capabilities.
+
+- **`use math -> m` aliases an import.** The arrow (glyph `→`) joins `as` as
+  the alias spelling: no statement can begin with an arrow, so after a module
+  path it is unambiguous. `rite fmt` prints `as` in ASCII and `→` in glyph.
+
+- **`@typo.anything` fails `rite check`.** An `@name` that is neither a
+  capability namespace nor an imported qualifier is `E042` with a span and the
+  `use` to add, instead of a runtime "unknown capability" with neither.
+
+- **`@mcp` gains the client half.** A script can now drive other MCP servers:
+  `! @mcp.connect(⟨command: "npx", args: […]⟩)` spawns one over stdio,
+  `⟨url: "https://…"⟩` speaks Streamable HTTP, and the handle answers
+  `tools`, `call_tool`, `resources`, `read_resource`, `prompts`,
+  `get_prompt`, `close`. Permissions are checked once, at connect — a
+  `command` spec needs `--allow process`, a `url` spec needs
+  `--allow net=<host>` — and every request through a handle is bounded by a
+  `timeout_ms` (default 30 s). Tested end to end against Rite's own
+  `@mcp.serve` over both transports, including a fallback for servers
+  speaking the previous protocol revision.
+
+- **Cant routes failures: the rescue stage.** `!{ handler }` (glyph
+  `↯⟦ … ⟧`) splits the emissions reaching it — `ok(v)` continues unwrapped,
+  an `err`'s payload enters the handler flow as `$`, and the handler's
+  emissions rejoin in place, so a handler can substitute, drop, or fan out.
+  `[f1, f2] -> * -> !@fs.read($) -> !{ "failed: " + str($.kind) } -> []`
+  collects results and failures alike. The graph schema moves to version 2
+  (`rescue` node and edge role); ADR 0010 records the design. Two new
+  diagnostics: a program cannot begin with a rescue (CANT-G016), and `?` on
+  the stage feeding a rescue is rejected (CANT-G017) — the `?` would remove
+  the failure the handler exists to route.
+
+- **Cant programs name their flows.** `clean:{ trim -> ?{ count($) > 0 } }`
+  (glyph `clean≔⟦ … ⟧`) defines a flow; a bare `clean` stage splices it in
+  place, so a pipeline reads as prose and reuse costs nothing at run time —
+  definitions are inlined at lowering, the graph schema is unchanged, and
+  effects are rechecked at every splice site. Forward references work,
+  recursion is refused (CANT-G020), as are duplicate names (G018), names
+  taken by a Rite builtin or import (G019), and definitions never used
+  (G021) — the usual cause of that last one is a typo at the use site. ADR
+  0011 records the design.
+
+- **Cant forks can run their branches concurrently.** `|{ a ; b ; c } :par`
+  (the first valueless modifier) runs branches through Rite's `parallel`,
+  joining results in branch order — the program's value and console output
+  stay deterministic; only effects that reach the world directly (files,
+  hosts) lose their ordering, and the docs' determinism section now says so
+  precisely. Branches lower through a named dispatcher so effect discipline
+  holds: an unmarked effectful branch still fails `cant check`, an ungranted
+  one still exits 5. Graph schema moves to v3 (`parallel` on Fork); ADR 0012
+  records the design. Modifier mistakes got their own codes (`:max` with no
+  value is now CANT-G022 at exit 4, retiring parse-time CANT-P010; a value
+  after `:par` is G023; `:par` on one branch is a warning, G024).
+
+- **Stage `?` now really ends the run.** The docs always said so; it actually
+  dropped the failed emission and carried on — `?` returned from the loop
+  closure a stage generates, not from the program. The expansion now checks
+  the result itself and fails the run with `CANT-R004`, the failure record in
+  the message. The postures line up: a bare call lets the `err` flow as a
+  value, `?` fails fast, a rescue routes.
+
+- **`parallel` has a concurrency ceiling.** At most 16 branches run at a
+  time; contexts are forked per window rather than all up front, so
+  `parallel` over a large list no longer pays one deep clone per element
+  before any work starts. Results still arrive in input order.
+
+- **Size ceilings now cover input, not just what a script builds.** With
+  `max_string_size` / `max_collection_size` configured, `@fs.read` (and
+  `read_bytes`, `lines`, `read_chunk`, `@http.file`) refuses an over-size file
+  before allocating for it, `@process.run` stops capturing at the ceiling and
+  kills the child, and `@db.query` stops collecting rows at the collection
+  ceiling. Outbound `@http` response bodies are read streaming to the string
+  ceiling or 64 MiB, whichever is lower — that one is a catchable `err`,
+  since the remote's size is not the script's bug; the rest are budget errors
+  like `range` over the same knobs.
+
+- **The browser runs more of the language.** The WASM build used to install no
+  capability host at all; it now carries every capability that needs nothing a
+  browser lacks — `@json`, `@csv`, `@crypto` (`random_bytes` included, via the
+  browser's own entropy), `@regex`, `@store`, `@random`, `@game` — from the
+  same implementations and descriptors the CLI uses (`rite-caps` gained a
+  `native` feature gating the host half). And `use` works there too:
+  `RunOptions.files` supplies modules in memory, keyed by module name or file
+  path, resolved before the filesystem — so Studio can run multi-file
+  programs. Host I/O (`@fs`, `@http`, `@db`, sockets, processes) still needs
+  the native runtime and still says so by name.
+
+- **`rite fmt` keeps statement sugar.** `say`, `unless`, `for … in`, `while`
+  and `loop` used to be formatted into their expansions (`! @console.println`,
+  `each` pipelines, `while_loop` closures); they now print back as written, in
+  both dialects. Semantics are unchanged — the parser still lowers them, the
+  formatter just remembers the spelling.
+
+- **Match arms take guards and or-patterns.** `x ? x < 0 → "negative"`
+  (ASCII `if`) matches only when the guard is truthy, with the pattern's
+  bindings in scope; a falsy guard sends the value to the next arm.
+  `1 | 2 | 3 → "small"` tries alternatives left to right; every alternative
+  must bind the same names, checked at compile time. `true | false` saturates
+  the boolean domain for the exhaustiveness warning; a guarded arm never
+  counts toward it.
+
+- **Ten collection builtins.** Records: `get(r, k)` / `get(r, k, fallback)`,
+  `has(r, k)`, `entries(r)`, `merge(a, b, …)` (the function form of record
+  `+`), and `update(r, k, f)` — the function sees `none` for an absent key, so
+  `update(r, k, { |v| (v ?? 0) + 1 })` counts from nothing. Lists:
+  `flat_map(xs, f)` (a list result splices, anything else stays one element),
+  `partition(xs, pred)` answering `⟨kept, rejected⟩` in one pass,
+  `take_while` / `drop_while`, and `window(xs, n)` — overlapping, step one,
+  where `chunk` does not overlap.
+
+### Fixed
+
+- **Locally-built compiled binaries keep their capabilities.** The crate
+  `rite build` generates asked for `rite-caps` with `default-features =
+  false` (to skip DuckDB for programs that never touch `@db`); after the
+  browser split made `native` a default feature too, that spelling stripped
+  the entire native host, so a compiled binary answered "capability @fs is
+  native-only" for every file read. The generated manifest now names
+  `features = ["native"]` explicitly, and `rite-caps` compiles with `native`
+  and without `duckdb`, which that spelling requires. Caught by the compiled
+  half of Cant's differential suite; all three execution paths agree again.
+
+- **`rite docs build` run from a subdirectory no longer clobbers the skill
+  bundle.** The generator read `skills/rite/SKILL.md` and `grammar/*.json`
+  relative to the current directory with silent stub fallbacks, so running it
+  anywhere but the checkout root replaced the real SKILL.md with a placeholder
+  and aliases.json with `{}`. Inputs are now anchored to the detected checkout
+  and a missing one is an error.
+
+- **A module's own qualified imports survive merging.** `use ./inner -> i`
+  inside a module, then `i.double(x)` in one of its functions, failed at the
+  entry with `undefined name 'i'` — the merge copied the function but not the
+  import context, so only flat (unqualified) cross-module calls worked. The
+  merge now carries its modules' qualifiers, scoped to the copied bodies:
+  `i.double` in the *entry* is still an undefined name, keeping a module's
+  imports private to it.
 
 ## [0.9.1] — 2026-08-04
 

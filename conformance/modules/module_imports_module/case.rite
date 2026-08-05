@@ -1,0 +1,3 @@
+use ./outer
+
+^ @outer.quad(3)

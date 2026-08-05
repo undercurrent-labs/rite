@@ -197,7 +197,8 @@ export function renderGraphSvg(graph: CantGraph): string {
     if (branches.length === 0) return head;
 
     // Each branch sits in its own cluster, side by side, in branch order —
-    // which is execution order, because fork is sequential left to right.
+    // the order emissions join in, whether or not the fork carries `:par` and
+    // runs its branches at the same time.
     const clusterW = branches.map((b) => b.body.w + CLUSTER_PAD * 2);
     const clusterH = Math.max(...branches.map((b) => b.body.h)) + CLUSTER_PAD * 2 + 8;
     const rowW = clusterW.reduce((a, b) => a + b, 0) + GAP_X * (branches.length - 1);

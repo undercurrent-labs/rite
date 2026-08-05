@@ -3784,7 +3784,7 @@
   ],
   "metadata": {
     "renderer_version": "0.1.0",
-    "graph_fingerprint": "f82ae6f527187c717fcbe7d2ccfff29c",
+    "graph_fingerprint": "c8c7236d2e381ac61c532dbf16d58594",
     "seed": 0,
     "tracery": "flowing",
     "node_count": 4,
@@ -3796,6 +3796,6 @@
       "scatter": 1,
       "source": 1
     },
-    "source_schema": "cant.graph@1"
+    "source_schema": "cant.graph@3"
   }
 }

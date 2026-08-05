@@ -83,7 +83,6 @@ The tokens are fine; the shape is not.
 | `CANT-P007` | A glyph-only operator (`⋇`, `⌁`) used inside a leaf expression. | The glyphs are always stages, never expression text. Use `*` or `[]` for multiplication or a list. |
 | `CANT-P008` | A `:name value` modifier that follows no structural form. | A modifier attaches to the ward, fork or orbit immediately on its left, with no arrow between. |
 | `CANT-P009` | A modifier `:` not followed by a name. | The colon must touch the name, which is what keeps `:` usable as Rite's atom prefix. |
-| `CANT-P010` | A modifier name not followed by a value. | `:max` needs its number. |
 | `CANT-P011` | A fork branch with no stages. | An extra `;`, or a leading one. |
 | `CANT-P012` | A ward predicate is one expression, not a flow. | `?{ a -> b }` is rejected. Close the ward and continue after it: `?{ a } -> b`. |
 | `CANT-P013` | Structural blocks nested past the supported depth. | Pull the inner part into a Rite module function and `use` it. |
@@ -103,12 +102,21 @@ The program parsed, but the flow it describes does not hold together.
 | `CANT-G007` | An orbit `:max` that is not a positive integer. | `:max 0` and `:max -1` bound nothing. |
 | `CANT-G008` | An orbit `:by` function that performs an effect. | Identity has to be reproducible for "already seen" to mean anything. Compute the key before the orbit. |
 | `CANT-G009` | A cycle that is not owned by an orbit. | Orbit is the only cyclic construct; there are no feedback edges to named nodes. |
-| `CANT-G010` | A `:name` the form it is attached to does not accept. | Check the spelling: a ward takes no modifiers, an orbit takes `:by` and `:max`. |
+| `CANT-G010` | A `:name` the form it is attached to does not accept. | Check the spelling: a ward takes no modifiers, an orbit takes `:by` and `:max`, and a fork takes `:par`. |
 | `CANT-G011` | The same modifier given twice on one form. | Keep the one you meant. |
 | `CANT-G012` | Two nodes in a deserialized graph share an identifier. | From a graph document, not from source. |
 | `CANT-G013` | A node no edge can reach from the entry. | From a graph document, not from source. |
 | `CANT-G014` | A ward predicate that performs an effect. | Cant has no ordering rules for effects inside a filter. Do the read in a stage before the ward. |
-| `CANT-G015` | A fork branch or orbit body with no nodes. | An empty `~{ }` or a branch that lowered to nothing. |
+| `CANT-G015` | A fork branch, orbit body or rescue handler with no nodes. | An empty `~{ }` or `!{ }`, or a branch that lowered to nothing. |
+| `CANT-G016` | A rescue used where nothing has been emitted yet. | A rescue routes a failure, and the first stage has not produced one. |
+| `CANT-G017` | A `?` immediately before a rescue. | `?` unwraps the `ok` and drops the failed emission, so the handler never runs. Drop the `?` and let the rescue take the `err`. |
+| `CANT-G018` | Two definitions share a name. | The first one is what gets spliced, so the second never runs. Rename or delete it. |
+| `CANT-G019` | A definition's name is a Rite builtin or an imported module. | `count` as a whole stage would be the flow and `count($)` inside a leaf would be the builtin. Name the flow something else. |
+| `CANT-G020` | A definition reaches itself. | A definition is spliced in where it is named, so a recursive one has no end. Write the repetition as an orbit. |
+| `CANT-G021` | A definition the program never uses. | Usually a typo at the use site, which became an ordinary Rite name. A definition is used by naming it as a whole stage. |
+| `CANT-G022` | A modifier that takes a value, written without one. | `:max` needs its number, `:by` its function. |
+| `CANT-G023` | A value written after a modifier that takes none, such as `:par`. | Write `:par` on its own; it configures the fork by being there. |
+| `CANT-G024` | `:par` on a fork with one branch, which has nothing to run alongside. | A warning. Add a branch, or drop the `:par`. |
 
 ## Semantic — `CANT-Sxxx`
 

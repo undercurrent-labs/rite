@@ -219,6 +219,112 @@ impl<'a> Evaluator<'a> {
         }
     }
 
+    /// `flat_map(xs, f)` — map, splicing a list result into the output.
+    /// A non-list result is kept as a single element, matching `flatten`'s
+    /// one-level behaviour.
+    pub(super) async fn builtin_flat_map(&mut self, args: Vec<Value>) -> Result<Value, EvalError> {
+        let mut it = args.into_iter();
+        let list = Self::hof_list("flat_map", it.next())?;
+        let f = Self::hof_fn("flat_map", it.next())?;
+        let mut out = im::Vector::new();
+        for item in list {
+            match self.call_value(f.clone(), vec![item]).await? {
+                Value::List(xs) => out.append(xs),
+                other => out.push_back(other),
+            }
+        }
+        Ok(Value::List(out))
+    }
+
+    /// `partition(xs, pred)` — one pass, both halves:
+    /// `⟨kept: […], rejected: […]⟩`.
+    pub(super) async fn builtin_partition(&mut self, args: Vec<Value>) -> Result<Value, EvalError> {
+        let mut it = args.into_iter();
+        let list = Self::hof_list("partition", it.next())?;
+        let f = Self::hof_fn("partition", it.next())?;
+        let mut kept = im::Vector::new();
+        let mut rejected = im::Vector::new();
+        for item in list {
+            let verdict = self.call_value(f.clone(), vec![item.clone()]).await?;
+            if verdict.is_truthy() {
+                kept.push_back(item);
+            } else {
+                rejected.push_back(item);
+            }
+        }
+        let mut rec = indexmap::IndexMap::new();
+        rec.insert(crate::value::Key::String("kept".into()), Value::List(kept));
+        rec.insert(
+            crate::value::Key::String("rejected".into()),
+            Value::List(rejected),
+        );
+        Ok(Value::Record(rec))
+    }
+
+    /// `take_while` stops at the first refusal; `drop_while` starts keeping at
+    /// the first refusal and keeps everything after it, unexamined.
+    pub(super) async fn builtin_take_drop_while(
+        &mut self,
+        args: Vec<Value>,
+        take: bool,
+    ) -> Result<Value, EvalError> {
+        let who = if take { "take_while" } else { "drop_while" };
+        let mut it = args.into_iter();
+        let list = Self::hof_list(who, it.next())?;
+        let f = Self::hof_fn(who, it.next())?;
+        let mut out = im::Vector::new();
+        let mut dropping = !take;
+        for item in list {
+            if take {
+                let verdict = self.call_value(f.clone(), vec![item.clone()]).await?;
+                if !verdict.is_truthy() {
+                    break;
+                }
+                out.push_back(item);
+            } else {
+                if dropping {
+                    let verdict = self.call_value(f.clone(), vec![item.clone()]).await?;
+                    if verdict.is_truthy() {
+                        continue;
+                    }
+                    dropping = false;
+                }
+                out.push_back(item);
+            }
+        }
+        Ok(Value::List(out))
+    }
+
+    /// `update(record, key, f)` — a new record with `f(current)` at `key`;
+    /// `f(none)` when the key is absent. The existing entry keeps its position
+    /// and key type; a new one appends with the key as given.
+    pub(super) async fn builtin_update(&mut self, args: Vec<Value>) -> Result<Value, EvalError> {
+        let mut it = args.into_iter();
+        let mut r = match it.next() {
+            Some(Value::Record(r)) => r,
+            other => {
+                return Err(EvalError::Message(format!(
+                    "update expects a record, got {}",
+                    other
+                        .map(|v| v.type_name().to_string())
+                        .unwrap_or_else(|| "none".into())
+                )))
+            }
+        };
+        let key = it.next().unwrap_or(Value::None);
+        let f = Self::hof_fn("update", it.next())?;
+        let candidates = crate::builtins::key_candidates(&key, &self.ctx.atoms)?;
+        let slot = candidates.iter().find(|k| r.contains_key(*k)).cloned();
+        let current = slot
+            .as_ref()
+            .and_then(|k| r.get(k).cloned())
+            .unwrap_or(Value::None);
+        let next = self.call_value(f, vec![current]).await?;
+        let target = slot.unwrap_or_else(|| candidates[0].clone());
+        r.insert(target, next);
+        Ok(Value::Record(r))
+    }
+
     pub(super) async fn builtin_find(&mut self, args: Vec<Value>) -> Result<Value, EvalError> {
         let mut it = args.into_iter();
         let list = Self::hof_list("find", it.next())?;
@@ -365,34 +471,52 @@ impl Evaluator<'_> {
         // One context per branch: the evaluator borrows the context mutably, so
         // sharing one would serialise them again. `fork` shares the host, the
         // budget and the atom table; only output is kept apart.
-        let mut branches: Vec<RuntimeContext> = (0..list.len()).map(|_| self.ctx.fork()).collect();
-
-        let futures: Vec<_> = list
-            .into_iter()
-            .zip(branches.iter_mut())
-            .map(|(item, branch)| {
-                let f = f.clone();
-                async move {
-                    Evaluator::new(branch)
-                        .call_value_public(f, vec![item])
-                        .await
-                }
-            })
-            .collect();
-
-        let results = futures::future::join_all(futures).await;
-
-        // Splice output back before reporting a failure, so what a branch printed
-        // before it failed is not lost.
-        for branch in branches {
-            self.ctx.absorb(branch);
-        }
-
+        //
+        // Windowed to 16 in flight: a fork deep-clones the environment, so an
+        // unbounded `parallel` over a large list paid len × clone up front and
+        // held every context at once. Each window's contexts are forked when
+        // the window starts and absorbed when it ends, so peak memory follows
+        // the ceiling while results keep input order.
+        const MAX_IN_FLIGHT: usize = 16;
+        let items: Vec<Value> = list.into_iter().collect();
         let mut out = im::Vector::new();
-        for r in results {
-            out.push_back(r?);
+        let mut failure: Option<EvalError> = None;
+        'windows: for window in items.chunks(MAX_IN_FLIGHT) {
+            let mut branches: Vec<RuntimeContext> =
+                (0..window.len()).map(|_| self.ctx.fork()).collect();
+            let futures: Vec<_> = window
+                .iter()
+                .cloned()
+                .zip(branches.iter_mut())
+                .map(|(item, branch)| {
+                    let f = f.clone();
+                    async move {
+                        Evaluator::new(branch)
+                            .call_value_public(f, vec![item])
+                            .await
+                    }
+                })
+                .collect();
+            let results = futures::future::join_all(futures).await;
+            // Splice output back before reporting a failure, so what a branch
+            // printed before it failed is not lost.
+            for branch in branches {
+                self.ctx.absorb(branch);
+            }
+            for r in results {
+                match r {
+                    Ok(v) => out.push_back(v),
+                    Err(e) => {
+                        failure = Some(e);
+                        break 'windows;
+                    }
+                }
+            }
         }
-        Ok(Value::List(out))
+        match failure {
+            Some(e) => Err(e),
+            None => Ok(Value::List(out)),
+        }
     }
 
     /// The key for one item, the way `group` reads keys: a string names a
