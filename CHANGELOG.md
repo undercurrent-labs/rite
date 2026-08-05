@@ -1,5 +1,7 @@
 # Changelog
 
+## [Unreleased]
+
 ## [0.9.0] — 2026-08-04
 
 The REPL becomes usable for more than one line at a time, and both languages
