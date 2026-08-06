@@ -172,8 +172,10 @@ impl McpCap {
                 "Call a tool on a connected server: `! @mcp.call_tool(c, \"add\", ⟨a: 2, b: 3⟩)`. \
                    Answers `ok(value)` — the structured result if the server sent one, \
                    otherwise the text of its content blocks. A tool that fails in band \
-                   (`isError`) is `err(⟨kind: \"mcp.tool_error\", tool, message⟩)` rather than \
-                   a raise, so the reason is readable and the call can be retried.",
+                   (`isError`) is `err(⟨kind: \"mcp.tool_error\", tool, message, data⟩)` rather \
+                   than a raise, so the reason is readable and the call can be retried. \
+                   `message` is the failure's text; `data` is its own fields, present only \
+                   when the server sent a structured failure.",
             arity: 3,
             effectful: true,
             permission: "",
@@ -875,8 +877,29 @@ fn coerce_result(v: Value, ctx: &RuntimeContext) -> Outcome {
     match v {
         // `^ err(e)` is the body saying the call failed — in band, so the model can
         // read the reason and correct itself, rather than as a transport error.
+        //
+        // The payload is shaped like any other return value, so a record arrives with
+        // its fields intact in `structuredContent` instead of being flattened to text.
+        // It used to be `to_display`ed and nothing else, so `^ err(⟨kind: "bad_input",
+        // message: "cannot divide by zero"⟩)` reached a client as the one string
+        // `⟨kind: bad_input, message: cannot divide by zero⟩` — every field gone, and
+        // `e.message` on the other side the whole record rendered.
         Value::Result(rite_runtime::value::ResultValue::Err(e)) => {
-            Outcome::error(e.to_display(&ctx.atoms))
+            let mut outcome = coerce_result((*e).clone(), ctx);
+            // An error record carries its reason in `message`, the convention every
+            // error record in this tree follows, and the protocol's content block is
+            // where a model reads that reason. Pretty-printed JSON of the whole record
+            // is worse at that job than the sentence inside it.
+            if let Value::Record(fields) = &*e {
+                if let Some(m) = fields
+                    .get(&Key::String("message".into()))
+                    .and_then(|v| v.as_str())
+                {
+                    outcome.text = m.to_string();
+                }
+            }
+            outcome.is_error = true;
+            outcome
         }
         // `^ ok(x)` is a success carrying `x`.
         Value::Result(rite_runtime::value::ResultValue::Ok(inner)) => coerce_result(*inner, ctx),

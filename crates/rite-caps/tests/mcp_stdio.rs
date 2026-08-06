@@ -234,6 +234,23 @@ async fn a_body_returning_err_is_an_in_band_tool_error() {
     assert!(content_text(&out[0]).contains("not today"));
 }
 
+/// A failure record keeps its fields.
+///
+/// `^ err(⟨kind: "nope", message: "not today"⟩)` used to be `to_display`ed into one
+/// string and sent as that and nothing else, so a client had a rendered record where
+/// the fields had been — and `e.message` on the other side was the whole thing.
+#[tokio::test]
+async fn an_error_record_travels_as_structured_content() {
+    let _g = mcp_test_lock().lock().unwrap_or_else(|e| e.into_inner());
+    let out = converse(&[call(1, "failing", json!({}))]).await;
+    let body = result(&out[0]);
+    assert_eq!(body["structuredContent"]["kind"], json!("nope"));
+    assert_eq!(body["structuredContent"]["message"], json!("not today"));
+    // The record's `message` is the content text, not the record pretty-printed: it is
+    // the line a model reads.
+    assert_eq!(content_text(&out[0]), "not today");
+}
+
 #[tokio::test]
 async fn an_unknown_tool_is_a_protocol_error() {
     let _g = mcp_test_lock().lock().unwrap_or_else(|e| e.into_inner());

@@ -687,7 +687,7 @@
     },
     {
       "arity": 3,
-      "docs": "Call a tool on a connected server: `! @mcp.call_tool(c, \"add\", ⟨a: 2, b: 3⟩)`. Answers `ok(value)` — the structured result if the server sent one, otherwise the text of its content blocks. A tool that fails in band (`isError`) is `err(⟨kind: \"mcp.tool_error\", tool, message⟩)` rather than a raise, so the reason is readable and the call can be retried.",
+      "docs": "Call a tool on a connected server: `! @mcp.call_tool(c, \"add\", ⟨a: 2, b: 3⟩)`. Answers `ok(value)` — the structured result if the server sent one, otherwise the text of its content blocks. A tool that fails in band (`isError`) is `err(⟨kind: \"mcp.tool_error\", tool, message, data⟩)` rather than a raise, so the reason is readable and the call can be retried. `message` is the failure's text; `data` is its own fields, present only when the server sent a structured failure.",
       "effectful": true,
       "name": "call_tool",
       "permission": ""

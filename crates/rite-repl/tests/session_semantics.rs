@@ -226,3 +226,88 @@ fn incomplete_input_waits_for_its_closing_delimiter() {
     assert!(is_complete("def f() [[ return 1 ]]"));
     assert!(is_complete("1 + 1"), "a plain expression is complete");
 }
+
+// ------------------------------------------------------------------- handle bindings
+
+/// A binding that holds a host handle is carried across inputs by value.
+///
+/// It has no literal form, so the prelude used to replay its source: `h ← ! @fs.open(f,
+/// #read)?` reopened the file before every later input, and three `@fs.read_line(h)` in
+/// a row each answered the *first* line. `@mcp.connect` had the same shape and a worse
+/// cost — a second server subprocess per line of the session.
+#[tokio::test]
+async fn a_handle_is_not_reacquired_on_every_input() {
+    let dir = std::path::PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("repl-handles");
+    std::fs::create_dir_all(&dir).expect("scratch dir");
+    let path = dir.join("lines.txt");
+    std::fs::write(&path, "alpha\nbeta\ngamma\n").expect("write fixture");
+
+    let mut s = session();
+    let opened = s
+        .eval(&format!(
+            r#"h ← ! @fs.open("{}", #read)?"#,
+            path.to_str().unwrap()
+        ))
+        .await;
+    assert!(opened.ok, "{:?}", opened.error);
+
+    for expected in ["alpha", "beta", "gamma"] {
+        let r = s.eval("! @fs.read_line(h)?").await;
+        assert!(r.ok, "{:?}", r.error);
+        assert_eq!(
+            r.display.as_deref(),
+            Some(expected),
+            "the handle was reopened rather than carried"
+        );
+    }
+}
+
+/// The handle table is the one part of the context that survives an input, so a handle
+/// opened on one line is still open on the next. `:reset` builds a new one, which is
+/// what closes everything the session held.
+#[tokio::test]
+async fn reset_releases_what_the_session_held() {
+    let dir = std::path::PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("repl-handles");
+    std::fs::create_dir_all(&dir).expect("scratch dir");
+    let path = dir.join("reset.txt");
+    std::fs::write(&path, "alpha\n").expect("write fixture");
+
+    let mut s = session();
+    assert!(
+        s.eval(&format!(
+            r#"h ← ! @fs.open("{}", #read)?"#,
+            path.to_str().unwrap()
+        ))
+        .await
+        .ok
+    );
+    s.reset();
+    let after = s.eval("h").await;
+    assert!(!after.ok, "the handle outlived :reset");
+}
+
+/// Rebinding the name runs the new expression: the seeded value stands in for a
+/// replayed definition, it does not outrank one the user typed.
+#[tokio::test]
+async fn redefining_a_handle_binding_opens_the_new_one() {
+    let dir = std::path::PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("repl-handles");
+    std::fs::create_dir_all(&dir).expect("scratch dir");
+    let first = dir.join("first.txt");
+    let second = dir.join("second.txt");
+    std::fs::write(&first, "one\n").expect("write fixture");
+    std::fs::write(&second, "two\n").expect("write fixture");
+
+    let mut s = session();
+    let open =
+        |p: &std::path::Path| format!(r#"h ← ! @fs.open("{}", #read)?"#, p.to_str().unwrap());
+    assert!(s.eval(&open(&first)).await.ok);
+    assert_eq!(
+        s.eval("! @fs.read_line(h)?").await.display.as_deref(),
+        Some("one")
+    );
+    assert!(s.eval(&open(&second)).await.ok);
+    assert_eq!(
+        s.eval("! @fs.read_line(h)?").await.display.as_deref(),
+        Some("two")
+    );
+}

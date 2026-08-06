@@ -37,6 +37,21 @@ pub async fn run_source(
 }
 
 pub async fn run_file(file: &SourceFile, ctx: &mut RuntimeContext) -> Result<Value, EvalError> {
+    run_file_with_bindings(file, ctx, &[]).await
+}
+
+/// [`run_file`], with names already bound to values the source does not produce.
+///
+/// Each `seed` name is defined in `ctx.env` and pre-declared for the resolver, so the
+/// source can use it without declaring it. For a host that keeps a session across
+/// several evaluations and holds values no literal can spell — a REPL and its open
+/// handles — this is how the value survives the next `run_file` rather than being
+/// re-derived by running the expression that made it a second time.
+pub async fn run_file_with_bindings(
+    file: &SourceFile,
+    ctx: &mut RuntimeContext,
+    seed: &[(String, Value)],
+) -> Result<Value, EvalError> {
     let path = file.path.clone();
     // `ctx.module_roots` is honoured whether or not the source has a path of
     // its own. It used to be consulted only in the first branch, so a host that
@@ -50,7 +65,9 @@ pub async fn run_file(file: &SourceFile, ctx: &mut RuntimeContext) -> Result<Val
         }
     }
     roots.extend(ctx.module_roots.iter().cloned());
-    let (ir, diags) = rite_sem::compile_to_ir_with_roots(file, path.as_deref(), &roots);
+    let names: Vec<String> = seed.iter().map(|(n, _)| n.clone()).collect();
+    let (ir, diags) =
+        rite_sem::compile_to_ir_with_predeclared(file, path.as_deref(), &roots, &names);
     if diags.has_errors() {
         return Err(EvalError::Compile(diags));
     }
@@ -58,6 +75,9 @@ pub async fn run_file(file: &SourceFile, ctx: &mut RuntimeContext) -> Result<Val
     // Preserve existing sources; ensure entry present for stack traces
     if ctx.sources.files().is_empty() {
         let _ = ctx.sources.add_file(&file.name, file.as_str());
+    }
+    for (name, value) in seed {
+        ctx.env.define_name(name, value.clone(), false);
     }
     eval_program(&ir, ctx).await
 }

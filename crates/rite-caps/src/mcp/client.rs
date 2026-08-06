@@ -296,11 +296,25 @@ async fn write_line(pipe: &mut StdioPipe, body: &Json) -> Result<(), String> {
     stdin.flush().await.map_err(|e| e.to_string())
 }
 
-/// Write one request and read until the matching id comes back.
+/// Write one request and read until the matching *response* comes back.
 ///
-/// Lines without that id are the server's notifications and are dropped.
-/// `notifications/progress` arrives on this stream ahead of the result it belongs to,
-/// and has nowhere to go in a call that answers a single value.
+/// Three things other than that response arrive on this stream, and each is skipped
+/// for its own reason:
+///
+/// - **Notifications.** `notifications/progress` arrives ahead of the result it
+///   belongs to, and has nowhere to go in a call that answers a single value.
+/// - **Requests from the server.** `sampling/createMessage`, `roots/list` and
+///   `elicitation/create` are the server calling *us*, and they are numbered in the
+///   server's own id space, which starts at 1 exactly as the client's does. Matching
+///   on the id alone therefore mistook a server request for the reply to the call in
+///   flight: `@mcp.call_tool` answered `ok("")` and every later call on the handle
+///   read the previous call's response. A request is told apart by carrying `method`,
+///   which no response ever does, and is answered `method not found` so the server is
+///   not left waiting on a client feature Rite does not implement.
+/// - **Anything that is not JSON.** Servers started through `npx` write banners and
+///   deprecation warnings to stdout, and one such line used to fail the connection.
+///   A line that does not begin with `{` is noise and is dropped; one that begins with
+///   `{` and will not parse is a corrupt protocol message and is still reported.
 async fn stdio_round_trip(
     pipe: &AsyncMutex<StdioPipe>,
     body: &Json,
@@ -310,10 +324,27 @@ async fn stdio_round_trip(
     write_line(&mut p, body).await?;
     loop {
         match p.lines.next_line().await {
-            Ok(Some(line)) if line.trim().is_empty() => continue,
             Ok(Some(line)) => {
-                let parsed: Json = serde_json::from_str(&line)
-                    .map_err(|e| format!("invalid JSON from server: {e} (in {line:?})"))?;
+                let text = line.trim();
+                if !text.starts_with('{') {
+                    continue;
+                }
+                let parsed: Json = serde_json::from_str(text)
+                    .map_err(|e| format!("invalid JSON from server: {e} (in {text:?})"))?;
+                if let Some(method) = parsed.get("method").and_then(|m| m.as_str()) {
+                    if let Some(request_id) = parsed.get("id") {
+                        let refusal = json!({
+                            "jsonrpc": "2.0",
+                            "id": request_id,
+                            "error": {
+                                "code": METHOD_NOT_FOUND,
+                                "message": format!("rite's mcp client does not implement `{method}`"),
+                            },
+                        });
+                        write_line(&mut p, &refusal).await?;
+                    }
+                    continue;
+                }
                 if parsed.get("id").and_then(|i| i.as_i64()) == Some(id) {
                     return Ok(parsed);
                 }
@@ -738,11 +769,18 @@ fn decode_prompt(result: &Json) -> Value {
 fn decode_tool_result(name: &str, result: &Json) -> Value {
     let blocks = blocks_of(result, "content");
     if result.get("isError").and_then(|e| e.as_bool()) == Some(true) {
-        return Value::err(Value::record(vec![
+        let mut fields = vec![
             (Key::String("kind".into()), Value::string("mcp.tool_error")),
             (Key::String("tool".into()), Value::string(name)),
             (Key::String("message".into()), content_value(blocks)),
-        ]));
+        ];
+        // The failure's own fields, when the server sent them. `kind` stays
+        // `mcp.tool_error` — it is what tells this apart from the three transport
+        // failures, and a tool's own `kind` would be answering a different question.
+        if let Some(data) = result.get("structuredContent").filter(|s| !s.is_null()) {
+            fields.push((Key::String("data".into()), Value::from_json(data)));
+        }
+        return Value::err(Value::record(fields));
     }
     match result.get("structuredContent") {
         Some(s) if !s.is_null() => Value::ok(Value::from_json(s)),

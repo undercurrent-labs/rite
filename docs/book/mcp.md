@@ -68,7 +68,7 @@ disagree with it.
 |---|---|
 | a string | that text |
 | a record or list | pretty JSON as text, **plus** `structuredContent` |
-| `err(…)` | the error text, with `isError: true` |
+| `err(…)` | the failure, with `isError: true` — a record keeps its fields |
 | `none` | empty content |
 
 A failing tool is a *successful* protocol response carrying `isError: true`. That is the
@@ -80,6 +80,10 @@ tool "lookup" "Find a user" |id: int| ⟦
   ^ err(⟨kind: "not_found", message: "no user " + str(id)⟩)
 ⟧
 ```
+
+An error record is shaped like any other return value, so its fields travel: the client
+reads `message` for the sentence and `data` for the rest. A record's `message` field is
+the content text, because that is the line a model reads and acts on.
 
 ## Resources and prompts
 
@@ -228,7 +232,7 @@ reason. Four kinds, told apart by `e.kind`:
 
 | `kind` | What happened |
 |---|---|
-| `mcp.tool_error` | the tool ran and reported failure — `⟨kind, tool, message⟩` |
+| `mcp.tool_error` | the tool ran and reported failure — `⟨kind, tool, message, data⟩` |
 | `mcp.error` | the server refused in JSON-RPC terms — `⟨kind, operation, code, message⟩` |
 | `mcp.transport` | the pipe or the socket — `⟨kind, operation, message⟩` |
 | `mcp.timeout` | no answer within `timeout_ms` — `⟨kind, operation, timeout_ms, message⟩` |
@@ -239,6 +243,12 @@ report ← ~ (! @mcp.call_tool(c, "divide", ⟨a: 1, b: 0⟩)) ⟦
   err e → "refused: " + e.message
 ⟧
 ```
+
+`data` carries the failing tool's own fields when it sent a structured failure, so a
+tool returning `err(⟨kind: "not_found", message: …⟩)` reaches the caller as
+`e.message` for the sentence and `e.data.kind` for the reason to branch on. `e.kind`
+stays `mcp.tool_error`: it says which of the four rows this is, not what the tool
+called its own failure.
 
 The first is the mirror of what a Rite tool returning `err(…)` produces. It is a value
 rather than a raise for the same reason it is on the serving side: a model can read the

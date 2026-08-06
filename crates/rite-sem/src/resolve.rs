@@ -466,6 +466,32 @@ pub fn resolve_with_qualifiers(
     merged_qualifiers: HashSet<String>,
     injected_functions: HashSet<String>,
 ) -> (ResolvedProgram, Diagnostics) {
+    resolve_with_qualifiers_and_predeclared(
+        program,
+        file,
+        merged_qualifiers,
+        injected_functions,
+        &[],
+    )
+}
+
+/// [`resolve_with_qualifiers`], with names the *host* has already bound.
+///
+/// `predeclared` names are defined in the global scope before the walk, so a use of
+/// one is not E020. Nothing declares them in the source, and nothing evaluates them:
+/// the host is promising it has put a value in the environment under that name.
+///
+/// The REPL is the caller. A binding that holds a host handle cannot be replayed as
+/// source — re-running `c ← ! @mcp.connect(…)` starts a second server, and
+/// `h ← ! @fs.open(…)` reopens the file at the top — and a handle has no literal to
+/// stand in for it, so the value is carried across lines and named here instead.
+pub fn resolve_with_qualifiers_and_predeclared(
+    program: &Program,
+    file: &SourceFile,
+    merged_qualifiers: HashSet<String>,
+    injected_functions: HashSet<String>,
+    predeclared: &[String],
+) -> (ResolvedProgram, Diagnostics) {
     // Diagnostics are attributed to `program.file`, which the parser stamped from
     // the same `SourceFile` the caller passes here. Catch a mismatched pair in
     // debug builds rather than reporting spans against the wrong file.
@@ -476,6 +502,9 @@ pub fn resolve_with_qualifiers(
     let mut r = Resolver::new();
     r.merged_qualifiers = merged_qualifiers;
     r.injected_functions = injected_functions;
+    for name in predeclared {
+        r.define(name, false, Span::DUMMY, program.file);
+    }
     r.resolve_program(program);
     r.infer_effects();
     let resolved = ResolvedProgram {

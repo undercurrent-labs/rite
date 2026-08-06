@@ -24,7 +24,18 @@ pub fn compile_to_ir_with_roots(
     entry_path: Option<&Path>,
     roots: &[PathBuf],
 ) -> (Option<ProgramIr>, Diagnostics) {
-    compile_to_ir_full(file, entry_path, roots, Default::default())
+    compile_to_ir_full(file, entry_path, roots, Default::default(), &[])
+}
+
+/// [`compile_to_ir_with_roots`], with names the host has already bound in the
+/// environment. See [`resolve::resolve_with_qualifiers_and_predeclared`].
+pub fn compile_to_ir_with_predeclared(
+    file: &SourceFile,
+    entry_path: Option<&Path>,
+    roots: &[PathBuf],
+    predeclared: &[String],
+) -> (Option<ProgramIr>, Diagnostics) {
+    compile_to_ir_full(file, entry_path, roots, Default::default(), predeclared)
 }
 
 /// [`compile_to_ir`], with modules supplied in memory instead of from disk.
@@ -36,7 +47,7 @@ pub fn compile_to_ir_with_files(
     file: &SourceFile,
     files: std::collections::HashMap<String, String>,
 ) -> (Option<ProgramIr>, Diagnostics) {
-    compile_to_ir_full(file, None, &[], files)
+    compile_to_ir_full(file, None, &[], files, &[])
 }
 
 fn compile_to_ir_full(
@@ -44,6 +55,7 @@ fn compile_to_ir_full(
     entry_path: Option<&Path>,
     roots: &[PathBuf],
     files: std::collections::HashMap<String, String>,
+    predeclared: &[String],
 ) -> (Option<ProgramIr>, Diagnostics) {
     let mut sources = SourceMap::new();
     // Keep entry text available for diagnostics in loader
@@ -62,8 +74,13 @@ fn compile_to_ir_full(
     let (graph, mut load_diags) = loader.into_graph();
     let merged = modules::merge_exports_into_entry(&mut ast, &graph, &mut load_diags);
 
-    let (resolved, rdiags) =
-        resolve::resolve_with_qualifiers(&ast, file, merged.qualifiers, merged.injected_functions);
+    let (resolved, rdiags) = resolve::resolve_with_qualifiers_and_predeclared(
+        &ast,
+        file,
+        merged.qualifiers,
+        merged.injected_functions,
+        predeclared,
+    );
     load_diags.extend(rdiags.into_vec());
     if load_diags.has_errors() {
         return (None, load_diags);

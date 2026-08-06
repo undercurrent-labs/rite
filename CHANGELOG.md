@@ -1,6 +1,58 @@
 # Changelog
 
-## [Unreleased]
+## [0.11.1] — 2026-08-06
+
+Four fixes to `@mcp`, found by pointing the client at servers that behave the
+way real ones do. Three of them cost a call its answer without saying so: a
+banner line on the server's stdout failed the connection outright, a request
+*from* the server was decoded as the reply to the call in flight, and a tool's
+failure record arrived as one rendered string with its fields gone.
+
+The fourth is the REPL. A binding that holds a handle was replayed as source
+before every input, so `@mcp.connect` started a server subprocess per line and
+`@fs.open` reopened its file — `@fs.read_line` answered the first line, three
+times running. `@db`, `@tcp` and `@udp` were affected the same way.
+
+### Fixed
+
+- **The MCP client survives a server that talks out of turn.** Two things a
+  real server does routinely used to break a connection:
+
+  A line on stdout that is not JSON failed the whole connection with
+  `mcp.transport: invalid JSON from server` — at `connect`, before a tool
+  could be called. Servers launched through `npx` announce themselves there.
+  A line that does not begin with `{` is now dropped as noise; one that does
+  and will not parse is still reported.
+
+  A JSON-RPC *request* from the server — `sampling/createMessage`,
+  `roots/list`, `elicitation/create` — was matched on its id alone. Server ids
+  start at 1 exactly as the client's do, so a request numbered with the
+  in-flight call's id was decoded as that call's reply: `@mcp.call_tool`
+  answered `ok("")` and every later call on the handle read the previous call's
+  result. A request carries `method`, which no response does, and is now told
+  apart by it and answered `method not found` rather than left waiting.
+
+- **A tool's failure record keeps its fields.** `^ err(⟨kind: "bad_input",
+  message: "cannot divide by zero"⟩)` was flattened to its rendered text and
+  sent as that alone, so a client saw the one string
+  `⟨kind: bad_input, message: cannot divide by zero⟩` — every field gone, and
+  `e.message` the whole record rather than the sentence in it. An error payload
+  is now shaped like any other return value: a record travels in
+  `structuredContent`, and its `message` field is the content text, because that
+  is the line a model reads. On the client, `@mcp.call_tool` gains `data` on the
+  failure it answers — `e.message` for the sentence, `e.data` for the tool's own
+  fields. `e.kind` stays `mcp.tool_error`, which says which of the four failures
+  this is rather than what the tool called it.
+
+- **A REPL binding that holds a handle stops reacquiring it.** The session
+  replays its definitions before every input, and a handle has no literal form
+  to replay in place of the expression that opened it. So
+  `c ← ! @mcp.connect(⟨command: "npx", …⟩)` started a fresh server subprocess
+  on every later line, and `h ← ! @fs.open(f, #read)?` reopened the file — three
+  `@fs.read_line(h)` in a row each answered the first line. The value is now
+  carried across the input instead, and the handle table is the one part of the
+  context that survives one. `:reset` still closes everything the session held.
+  `@mcp`, `@fs`, `@db`, `@tcp` and `@udp` were all affected.
 
 ## [0.11.0] — 2026-08-05
 

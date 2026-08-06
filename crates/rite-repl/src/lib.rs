@@ -16,7 +16,7 @@ pub use helper::{RiteHelper, META_COMMANDS};
 
 use rite_caps::{install_defaults, Permission, PermissionSet};
 use rite_core::SourceFile;
-use rite_runtime::{run_file, EvalError, ExecutionBudget, RuntimeContext, Value};
+use rite_runtime::{run_file_with_bindings, EvalError, ExecutionBudget, RuntimeContext, Value};
 use rustyline::error::ReadlineError;
 use std::io::IsTerminal;
 use std::path::PathBuf;
@@ -115,7 +115,13 @@ impl ReplSession {
         // Fresh env each eval; re-apply prelude + input so definitions resolve.
         // Capabilities stay installed via install_defaults after rebuild.
         let perms = self.perms.clone();
+        // The handle table outlives the context that opened it, alone among the
+        // context's parts. Everything a session has open — an MCP connection, a file,
+        // a socket — lives in it, and rebuilding it per input closed all of them
+        // between one line and the next. `:reset` still makes a fresh one.
+        let handles = Arc::clone(&self.ctx.handles);
         self.ctx = RuntimeContext::new();
+        self.ctx.handles = handles;
         self.ctx.budget.timeout = self.eval_timeout;
         self.ctx.budget.restart();
         self.ctx.module_roots = self.module_roots.clone();
@@ -138,8 +144,9 @@ impl ReplSession {
                 .position(|e| e.name.as_deref() == Some(name))
         });
         let combined = self.replay_with(replacing, source);
+        let seed = self.held_bindings(replacing);
         let sf = SourceFile::new(rite_core::FileId(0), "<repl>".to_string(), &combined);
-        let outcome = run_file(&sf, &mut self.ctx).await;
+        let outcome = run_file_with_bindings(&sf, &mut self.ctx, &seed).await;
         arm(&self.interrupt, None);
         // Cancelling raises `BudgetError::Cancelled`, which would print as
         // "budget exhausted" — true, and the wrong thing to say. Someone who
@@ -217,15 +224,45 @@ impl ReplSession {
         // `x ← 1` then `x ← 2` was a duplicate-binding error — and redefining a function
         // failed while the *old* body stayed live, which is worse than refusing outright.
         let name = defined_name(source);
+        // A binding holding a handle is carried by value rather than replayed. That
+        // needs the single name to seed it under, so a destructuring pattern — which
+        // `defined_name` reports as `None` — replays as before.
+        let held = match (&name, holds_handle(value)) {
+            (Some(_), true) => Some(value.clone()),
+            _ => None,
+        };
         let existing = name.as_deref().and_then(|n| {
             self.entries
                 .iter()
                 .position(|e| e.name.as_deref() == Some(n))
         });
         match existing {
-            Some(i) => self.entries[i].source = line,
-            None => self.entries.push(PreludeEntry { name, source: line }),
+            Some(i) => {
+                self.entries[i].source = line;
+                self.entries[i].held = held;
+            }
+            None => self.entries.push(PreludeEntry {
+                name,
+                source: line,
+                held,
+            }),
         }
+    }
+
+    /// The bindings seeded by value rather than replayed, in prelude order.
+    ///
+    /// `at` is the entry this input redefines, if any: its old value is left out, so
+    /// the handle it held has no reference keeping it open once the new source runs.
+    fn held_bindings(&self, at: Option<usize>) -> Vec<(String, Value)> {
+        self.entries
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| Some(*i) != at)
+            .filter_map(|(_, e)| match (&e.name, &e.held) {
+                (Some(name), Some(value)) => Some((name.clone(), value.clone())),
+                _ => None,
+            })
+            .collect()
     }
 
     /// The definitions replayed before each input.
@@ -244,7 +281,14 @@ impl ReplSession {
         let mut out = String::new();
         for (i, e) in self.entries.iter().enumerate() {
             let line = if Some(i) == at {
+                // Redefining a held entry: the new source runs and `held_bindings`
+                // stops seeding the old value, so the name stops reaching it. The
+                // handle table still owns it until `:reset` or the session ends,
+                // which is what `c ← connect()` twice does in a script too.
                 source.trim_end()
+            } else if e.held.is_some() {
+                // Seeded by value instead — see `holds_handle`.
+                continue;
             } else {
                 &e.source
             };
@@ -318,6 +362,34 @@ impl ReplSession {
 struct PreludeEntry {
     name: Option<String>,
     source: String,
+    /// The value this entry produced, when replaying its source would acquire a host
+    /// resource a second time. Set only for a binding holding a handle; see [`held`].
+    /// Present means the value is seeded into the next evaluation and the source is
+    /// not replayed — `source` is kept for `:prelude` to print.
+    held: Option<Value>,
+}
+
+/// Whether `value` holds a host handle anywhere inside it.
+///
+/// A handle names a resource the session has open — a spawned MCP server, an open
+/// file, a database or socket connection — and re-running the expression that
+/// produced it acquires a *second* one. `c ← ! @mcp.connect(⟨command: "npx", …⟩)`
+/// started a fresh server subprocess on every later line of the session, and
+/// `h ← ! @fs.open(f, #read)?` reopened the file, so three `@fs.read_line(h)` in a
+/// row each answered the first line. A handle has no literal form to replay in the
+/// expression's place, so the value itself is carried across the line instead.
+///
+/// Looks inside results, records and lists because `? ` is optional at the prompt:
+/// `c ← ! @mcp.connect(…)` without it binds `ok(handle)`.
+fn holds_handle(value: &Value) -> bool {
+    match value {
+        Value::Handle(_) => true,
+        Value::Result(rite_runtime::value::ResultValue::Ok(v))
+        | Value::Result(rite_runtime::value::ResultValue::Err(v)) => holds_handle(v),
+        Value::List(xs) => xs.iter().any(holds_handle),
+        Value::Record(fields) => fields.iter().any(|(_, v)| holds_handle(v)),
+        _ => false,
+    }
 }
 
 /// The one name `source` defines, or `None` if it defines none or several.
