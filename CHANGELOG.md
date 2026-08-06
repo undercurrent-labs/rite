@@ -1,5 +1,7 @@
 # Changelog
 
+## [Unreleased]
+
 ## [0.11.0] — 2026-08-05
 
 Protobuf lands as `@proto`: compile a `.proto` at run time — no `protoc`, no
