@@ -1,0 +1,13 @@
+// Rite has no unsigned 64-bit int. Answering a string past `i64::MAX` would make
+// the same field decode to a different Rite type depending on its magnitude, so
+// the decode fails loudly instead. The bytes below set `quota` (field 8) to
+// `u64::MAX`; the second pair sets it to 7, which fits.
+schema ← ! @proto.compile("syntax = \"proto3\";\npackage demo;\nenum Tier {{ FREE = 0; PRO = 1; }}\nmessage User {{\n  int64 id = 1;\n  string name = 2;\n  bytes token = 3;\n  Tier tier = 4;\n  repeated string tags = 5;\n  map<string, int32> counts = 6;\n  optional string nick = 7;\n  uint64 quota = 8;\n}}\n")?
+
+too_big ← @proto.decode(schema, "demo.User", from_hex("40ffffffffffffffffff01")?)
+fits ← @proto.decode(schema, "demo.User", from_hex("4007")?)
+
+ok_err ← is_err(too_big)
+ok_fits ← fits?.quota = 7
+
+ok_err ∧ ok_fits

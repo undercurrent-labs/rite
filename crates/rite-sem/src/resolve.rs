@@ -215,6 +215,17 @@ pub const HOST_EFFECTS: &[(&str, bool)] = &[
     ("store.get", false),
     ("store.set", true),
     ("store.delete", true),
+    // @proto — protobuf. Building a schema hands out a handle and so changes
+    // state the capability owns; `load_file` also reads the disk. Decoding and
+    // encoding are functions of the handle passed to them, and a pool never
+    // changes once built, so they are pure in the way `@json.decode` is.
+    ("proto.compile", true),
+    ("proto.compile_all", true),
+    ("proto.load_file", true),
+    ("proto.load_set", true),
+    ("proto.decode", false),
+    ("proto.encode", false),
+    ("proto.messages", false),
     // @db — an external database, including `query`.
     ("db.open", true),
     ("db.close", true),

@@ -1,0 +1,14 @@
+// A message encodes and decodes back to the same fields. `encode` and `decode`
+// carry no `!`: the schema arrives as an argument and a compiled pool never
+// changes, so both are functions of what they are given.
+schema ← ! @proto.compile("syntax = \"proto3\";\npackage demo;\nenum Tier {{ FREE = 0; PRO = 1; }}\nmessage User {{\n  int64 id = 1;\n  string name = 2;\n  bytes token = 3;\n  Tier tier = 4;\n  repeated string tags = 5;\n  map<string, int32> counts = 6;\n  optional string nick = 7;\n  uint64 quota = 8;\n}}\n")?
+
+body ← @proto.encode(schema, "demo.User", ⟨id: 7, name: "ada"⟩)?
+back ← @proto.decode(schema, "demo.User", body)?
+
+ok_id ← back.id = 7
+ok_name ← back.name = "ada"
+// Only the fields that were set: `encode` was given two, `decode` answers two.
+ok_shape ← len(keys(back)) = 2
+
+ok_id ∧ ok_name ∧ ok_shape

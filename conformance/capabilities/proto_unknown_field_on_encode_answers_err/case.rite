@@ -1,0 +1,14 @@
+// A record key that is not a field of the message is an error. Dropping it
+// silently would encode a valid-looking message with the data missing, which is
+// the failure a typo'd field name would otherwise produce.
+schema ← ! @proto.compile("syntax = \"proto3\";\npackage demo;\nenum Tier {{ FREE = 0; PRO = 1; }}\nmessage User {{\n  int64 id = 1;\n  string name = 2;\n  bytes token = 3;\n  Tier tier = 4;\n  repeated string tags = 5;\n  map<string, int32> counts = 6;\n  optional string nick = 7;\n  uint64 quota = 8;\n}}\n")?
+
+bad ← @proto.encode(schema, "demo.User", ⟨nmae: "ada"⟩)
+
+ok_err ← is_err(bad)
+ok_names_field ← ~ bad ⟦
+  err e → contains(e.message, "nmae")
+  _ → false
+⟧
+
+ok_err ∧ ok_names_field

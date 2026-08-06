@@ -1,0 +1,11 @@
+// A map field compiles to a synthetic `User.CountsEntry` message. It is a real
+// entry in the descriptor pool, and listing it would name a type nobody wrote.
+schema ← ! @proto.compile("syntax = \"proto3\";\npackage demo;\nenum Tier {{ FREE = 0; PRO = 1; }}\nmessage User {{\n  int64 id = 1;\n  string name = 2;\n  bytes token = 3;\n  Tier tier = 4;\n  repeated string tags = 5;\n  map<string, int32> counts = 6;\n  optional string nick = 7;\n  uint64 quota = 8;\n}}\n")?
+
+names ← @proto.messages(schema)?
+
+ok_lists_user ← contains(names, "demo.User")
+ok_hides_entry ← ¬ contains(names, "demo.User.CountsEntry")
+ok_only_one ← len(names) = 1
+
+ok_lists_user ∧ ok_hides_entry ∧ ok_only_one

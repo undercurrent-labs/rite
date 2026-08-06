@@ -38,7 +38,7 @@ getrandom = { version = "0.2", optional = true, features = ["js"] }
 
 [features]
 default = ["native"]
-native = ["rite-compiler", "rite-caps/native", "rite-caps/duckdb", "tokio"]
+native = ["rite-compiler", "rite-caps/native", "rite-caps/duckdb", "rite-caps/proto", "tokio"]
 wasm = ["wasm-bindgen", "serde-wasm-bindgen", "console_error_panic_hook", "getrandom"]
 
 [dev-dependencies]

@@ -20,20 +20,21 @@ This book is a linear path. You can stop after any chapter and experiment in [St
 12. [Effects and capabilities](effects.md) — `!` / `do`, permissions
 13. [Files, JSON, and CSV](files-json.md) — `@fs`, `@json`, `@csv`
 14. [Hashing and encoding](crypto.md) — `@crypto`, digests, HMAC, base64/hex
-15. [Databases](db.md) — `@db` (DuckDB), SQL, transactions
-16. [Network: HTTP services](http.md) — `@http.listen`, routes, middleware, client calls
-17. [Network: sockets](sockets.md) — `@udp` datagrams, `@tcp` streams, bytes on the wire
-18. [Model Context Protocol](mcp.md) — `@mcp.serve` and `@mcp.connect`: tools, resources, prompts
-19. [Environment](environment.md) — `@env`, `@clock`, `@random`, `@store`
-20. [Processes](processes.md) — `@process`, running commands, script arguments
-21. [Modules](modules.md) — `use`, `pub`, relative paths, aliases
-22. [Compiling to Rust](compiling.md) — `rite build`, IR, parity
-23. [Text RPG](rpg.md) — `@game` tutorial
-24. [Embedding](embedding.md) — `RiteEngine` from Rust
-25. [Browser & Studio](browser.md) — hosted site, WASM limits
-26. [Agents & the skill bundle](agents.md) — skill install, self-update, VS Code extension
-27. [Testing](testing.md) — `◆ test`, `expect`, `rite test`
-28. [Contributing tests](contributing-tests.md) — suite map, HTTP I/O capture, PR checklist
+15. [Protocol buffers](proto.md) — `@proto`, schemas, wire format, presence
+16. [Databases](db.md) — `@db` (DuckDB), SQL, transactions
+17. [Network: HTTP services](http.md) — `@http.listen`, routes, middleware, client calls
+18. [Network: sockets](sockets.md) — `@udp` datagrams, `@tcp` streams, bytes on the wire
+19. [Model Context Protocol](mcp.md) — `@mcp.serve` and `@mcp.connect`: tools, resources, prompts
+20. [Environment](environment.md) — `@env`, `@clock`, `@random`, `@store`
+21. [Processes](processes.md) — `@process`, running commands, script arguments
+22. [Modules](modules.md) — `use`, `pub`, relative paths, aliases
+23. [Compiling to Rust](compiling.md) — `rite build`, IR, parity
+24. [Text RPG](rpg.md) — `@game` tutorial
+25. [Embedding](embedding.md) — `RiteEngine` from Rust
+26. [Browser & Studio](browser.md) — hosted site, WASM limits
+27. [Agents & the skill bundle](agents.md) — skill install, self-update, VS Code extension
+28. [Testing](testing.md) — `◆ test`, `expect`, `rite test`
+29. [Contributing tests](contributing-tests.md) — suite map, HTTP I/O capture, PR checklist
 
 ## Where each capability is covered
 
@@ -43,6 +44,7 @@ This book is a linear path. You can stop after any chapter and experiment in [St
 | `@fs` | [Files, JSON, and CSV](files-json.md) | denied |
 | `@json` · `@csv` | [Files, JSON, and CSV](files-json.md) | — |
 | `@crypto` | [Hashing and encoding](crypto.md) | — (`random_bytes` needs `random`) |
+| `@proto` | [Protocol buffers](proto.md) | — (`load_file` needs `fs:read`) |
 | `@db` | [Databases](db.md) | denied |
 | `@http` | [Network: HTTP services](http.md) | denied |
 | `@udp` · `@tcp` | [Network: sockets](sockets.md) | denied |

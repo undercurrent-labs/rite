@@ -1,0 +1,27 @@
+//! Protobuf: compile a schema, encode a message, read it back
+
+schema ← ! @proto.load_file("examples/13-proto/user.proto")?
+! @console.println(@proto.messages(schema)?)
+
+// Encode. Enums take an atom; repeated fields take a list; maps take a record.
+body ← @proto.encode(schema, "demo.User", ⟨
+  id: 7,
+  name: "ada",
+  tier: #PRO,
+  tags: ["founder", "admin"],
+  counts: ⟨logins: 12⟩
+⟩)?
+! @console.println("wire bytes: " + to_hex(body))
+
+// Decode. The enum comes back as an atom, so it matches like a literal.
+user ← @proto.decode(schema, "demo.User", body)?
+standing ← ~ user.tier ⟦
+  #PRO → "a paying customer"
+  #FREE → "on the free tier"
+  _ → "unclassified"
+⟧
+! @console.println(user.name + " is " + standing)
+
+// Only the fields the message set are present: `nickname` was never assigned.
+! @console.println("nickname: " + str(user.nickname))
+! @console.println("fields set: " + str(len(keys(user))))

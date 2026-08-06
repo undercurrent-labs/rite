@@ -29,6 +29,7 @@ pub mod mcp;
 pub mod permissions;
 #[cfg(feature = "native")]
 pub mod process;
+pub mod proto;
 pub mod random;
 pub mod regex;
 pub mod registry;

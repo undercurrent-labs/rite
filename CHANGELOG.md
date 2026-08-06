@@ -2,6 +2,32 @@
 
 ## [Unreleased]
 
+### Added
+
+- **`@proto` — protobuf, schema-driven.** Compile a `.proto` (or load a
+  `FileDescriptorSet` from `protoc`) into a schema handle, then decode and
+  encode messages by name:
+
+  ```
+  schema ← ! @proto.load_file("api/user.proto")?
+  user   ← @proto.decode(schema, "demo.User", body)?
+  body   ← @proto.encode(schema, "demo.User", ⟨id: 7, name: "ada"⟩)?
+  ```
+
+  No `protoc` needed and no C dependency: the `.proto` compiler is pure Rust.
+  Building a handle takes `!`; `decode` and `encode` do not, because the
+  schema arrives as an argument and a compiled schema never changes.
+
+  Enums decode to atoms, so `user.tier = #PRO` and a `#PRO` match arm both
+  work. `bytes` fields map to Rite's byte type. Repeated fields are lists,
+  maps are records, and a message decodes to **only the fields it set** — an
+  unset proto3 scalar is absent rather than zero. A record key that is not a
+  field of the message is an `err`, not a silent drop.
+
+  Native by default: the browser build omits it, because the schema compiler
+  and reflection would add about a megabyte to a bundle under one. See
+  [Protocol buffers](docs/book/proto.md) and `examples/13-proto/`.
+
 ### Fixed
 
 - **Atoms encode as their name, not an interner index.**

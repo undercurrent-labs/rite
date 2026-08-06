@@ -1,0 +1,12 @@
+// A schema that does not parse is data, not a crash: `@proto.compile` answers
+// `err` with the parser's own message, so `?` and the usual postures apply.
+bad ← ! @proto.compile("syntax = \"proto3\"; message {{")
+
+ok_err ← is_err(bad)
+// The error carries the same ⟨kind, message⟩ shape the other capabilities use.
+ok_kind ← ~ bad ⟦
+  err e → e.kind = "proto.compile"
+  _ → false
+⟧
+
+ok_err ∧ ok_kind

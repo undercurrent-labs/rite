@@ -1,0 +1,11 @@
+// Bytes that are not a valid encoding of the named message answer `err`, as does
+// a message name the schema does not define.
+schema ← ! @proto.compile("syntax = \"proto3\";\npackage demo;\nenum Tier {{ FREE = 0; PRO = 1; }}\nmessage User {{\n  int64 id = 1;\n  string name = 2;\n  bytes token = 3;\n  Tier tier = 4;\n  repeated string tags = 5;\n  map<string, int32> counts = 6;\n  optional string nick = 7;\n  uint64 quota = 8;\n}}\n")?
+
+garbage ← @proto.decode(schema, "demo.User", from_hex("ffffff")?)
+missing ← @proto.decode(schema, "demo.Nope", from_hex("")?)
+
+ok_garbage ← is_err(garbage)
+ok_missing ← is_err(missing)
+
+ok_garbage ∧ ok_missing

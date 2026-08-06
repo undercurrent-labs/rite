@@ -18,6 +18,7 @@ use crate::mcp::McpCap;
 use crate::permissions::PermissionSet;
 #[cfg(feature = "native")]
 use crate::process::ProcessCap;
+use crate::proto::ProtoCap;
 use crate::random::RandomCap;
 use crate::regex::RegexCap;
 #[cfg(feature = "native")]
@@ -81,6 +82,7 @@ pub struct HostCapabilities {
     pub sys: SysCap,
     #[cfg(feature = "native")]
     pub process: ProcessCap,
+    pub proto: ProtoCap,
     pub random: Arc<RwLock<RandomCap>>,
     #[cfg(feature = "native")]
     pub http: HttpCap,
@@ -116,6 +118,7 @@ impl HostCapabilities {
             sys: SysCap,
             #[cfg(feature = "native")]
             process: ProcessCap,
+            proto: ProtoCap::new(),
             random: Arc::new(RwLock::new(RandomCap::from_entropy())),
             #[cfg(feature = "native")]
             http: HttpCap::new(),
@@ -171,6 +174,7 @@ impl HostCapabilities {
         out.push(("store", StoreCap::DESCRIPTORS));
         #[cfg(feature = "native")]
         out.push(("db", DbCap::DESCRIPTORS));
+        out.push(("proto", ProtoCap::DESCRIPTORS));
         out
     }
 }
@@ -262,6 +266,9 @@ impl CapabilityHost for HostCapabilities {
                 let mut store = self.store.write();
                 store.call(method, args, &ctx.atoms)
             }
+            "proto" => self
+                .proto
+                .call(method, args, &self.perms, &ctx.atoms, ctx.budget.limits()),
             #[cfg(feature = "native")]
             "db" => {
                 let db = self.db.read();

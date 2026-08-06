@@ -758,6 +758,57 @@
       "permission": "process"
     }
   ],
+  "proto": [
+    {
+      "arity": 1,
+      "docs": "Compile `.proto` source text into a schema handle. Answers `ok(handle)`, or `err` naming the line that failed to parse.",
+      "effectful": true,
+      "name": "compile",
+      "permission": ""
+    },
+    {
+      "arity": 1,
+      "docs": "Compile several `.proto` sources that import each other, as a record of file name to source. Answers `ok(handle)`.",
+      "effectful": true,
+      "name": "compile_all",
+      "permission": ""
+    },
+    {
+      "arity": 1,
+      "docs": "Read and compile a `.proto` file, resolving its imports from the containing directory. Answers `ok(handle)`.",
+      "effectful": true,
+      "name": "load_file",
+      "permission": "fs:read"
+    },
+    {
+      "arity": 1,
+      "docs": "Build a schema handle from an encoded `FileDescriptorSet` (`protoc --descriptor_set_out`). Answers `ok(handle)`.",
+      "effectful": true,
+      "name": "load_set",
+      "permission": ""
+    },
+    {
+      "arity": 3,
+      "docs": "Decode bytes as the named message. Answers `ok(record)` holding only the fields the message actually set.",
+      "effectful": false,
+      "name": "decode",
+      "permission": ""
+    },
+    {
+      "arity": 3,
+      "docs": "Encode a record as the named message. Answers `ok(bytes)`, or `err` for a key that is not a field of that message.",
+      "effectful": false,
+      "name": "encode",
+      "permission": ""
+    },
+    {
+      "arity": 1,
+      "docs": "Every message type the schema defines, as a list of fully-qualified names.",
+      "effectful": false,
+      "name": "messages",
+      "permission": ""
+    }
+  ],
   "random": [
     {
       "arity": 2,

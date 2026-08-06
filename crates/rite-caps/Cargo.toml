@@ -21,6 +21,13 @@ parking_lot = { workspace = true }
 regex = { workspace = true }
 csv = "1"
 
+# @proto. Pure Rust: protox compiles `.proto` with no protoc and no C, and both
+# build for wasm32. They are optional because they cost 1.1 MB there, against a
+# 962 KB bundle — measured, see the module docs in src/proto.rs.
+prost = { version = "0.14", optional = true }
+prost-reflect = { version = "0.16", default-features = false, optional = true }
+protox = { version = "0.9", optional = true }
+
 # Native host only. Everything here is a socket, a subprocess, a clock or a
 # filesystem, none of which exist on wasm32 — see the `native` feature.
 tokio = { workspace = true, optional = true }
@@ -52,7 +59,7 @@ reqwest = { workspace = true, optional = true }
 getrandom = { version = "0.2", features = ["js"] }
 
 [features]
-default = ["native", "duckdb"]
+default = ["native", "duckdb", "proto"]
 # The native host: filesystem, clock, environment, subprocesses, sockets, HTTP,
 # MCP and the database. Off for wasm32, which leaves the capabilities that are
 # pure value transforms — @json, @csv, @crypto, @regex, @store, plus @random and
@@ -77,6 +84,9 @@ native = [
 ]
 # Native DuckDB host for @db (off on wasm / when linking is undesirable).
 duckdb = ["native", "dep:duckdb"]
+# @proto. Deliberately does NOT imply `native`: protobuf needs no host, so this
+# can be switched on for the browser build without dragging the rest in.
+proto = ["dep:prost", "dep:prost-reflect", "dep:protox"]
 
 [dependencies.duckdb]
 version = "1.10505.0"

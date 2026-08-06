@@ -1,0 +1,20 @@
+// proto3 does not put an unset scalar on the wire, so there is no way to tell
+// "unset" from "set to zero" after the fact. The record holds only the fields the
+// message actually set: an empty message decodes to an empty record, not to one
+// full of zeroes.
+schema ← ! @proto.compile("syntax = \"proto3\";\npackage demo;\nenum Tier {{ FREE = 0; PRO = 1; }}\nmessage User {{\n  int64 id = 1;\n  string name = 2;\n  bytes token = 3;\n  Tier tier = 4;\n  repeated string tags = 5;\n  map<string, int32> counts = 6;\n  optional string nick = 7;\n  uint64 quota = 8;\n}}\n")?
+
+empty ← @proto.encode(schema, "demo.User", ⟨⟩)?
+back ← @proto.decode(schema, "demo.User", empty)?
+
+// Nothing was set, so nothing is on the wire.
+ok_empty_bytes ← len(empty) = 0
+ok_empty_record ← len(keys(back)) = 0
+// A field set to its default is likewise absent: proto3 elides it.
+zero ← @proto.encode(schema, "demo.User", ⟨id: 0⟩)?
+ok_zero_elided ← len(zero) = 0
+// An explicitly `optional` field is different — it carries presence.
+nick ← @proto.encode(schema, "demo.User", ⟨nick: ""⟩)?
+ok_optional_kept ← len(nick) > 0
+
+ok_empty_bytes ∧ ok_empty_record ∧ ok_zero_elided ∧ ok_optional_kept

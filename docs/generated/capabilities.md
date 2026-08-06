@@ -1166,3 +1166,61 @@ ROLLBACK the current transaction.
 - effectful: true
 - permission: db
 
+## @proto
+
+### compile
+
+Compile `.proto` source text into a schema handle. Answers `ok(handle)`, or `err` naming the line that failed to parse.
+
+- arity: 1
+- effectful: true
+- permission: 
+
+### compile_all
+
+Compile several `.proto` sources that import each other, as a record of file name to source. Answers `ok(handle)`.
+
+- arity: 1
+- effectful: true
+- permission: 
+
+### load_file
+
+Read and compile a `.proto` file, resolving its imports from the containing directory. Answers `ok(handle)`.
+
+- arity: 1
+- effectful: true
+- permission: fs:read
+
+### load_set
+
+Build a schema handle from an encoded `FileDescriptorSet` (`protoc --descriptor_set_out`). Answers `ok(handle)`.
+
+- arity: 1
+- effectful: true
+- permission: 
+
+### decode
+
+Decode bytes as the named message. Answers `ok(record)` holding only the fields the message actually set.
+
+- arity: 3
+- effectful: false
+- permission: 
+
+### encode
+
+Encode a record as the named message. Answers `ok(bytes)`, or `err` for a key that is not a field of that message.
+
+- arity: 3
+- effectful: false
+- permission: 
+
+### messages
+
+Every message type the schema defines, as a list of fully-qualified names.
+
+- arity: 1
+- effectful: false
+- permission: 
+

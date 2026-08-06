@@ -209,6 +209,20 @@ Tracks implementation status for the Rite language and V1 tooling. Detailed desi
     construct escapes effect discipline only because it is not a `Call` — an accident of
     shape rather than a decision. The new one checks explicitly. Aligning `@http.listen`
     would break every existing script, so the two differ for now.
+17. **`@proto` is native by build, not by nature.** `protox` and `prost-reflect` are
+    pure Rust and do compile for wasm32 — checked, not assumed. They are behind a
+    `proto` feature (on by default, off for the browser) because of size: measured
+    against a serde_json-only baseline in a release `cdylib` with the workspace
+    profile, `prost-reflect` alone costs +676 KB and adding the `.proto` compiler
+    costs +1.1 MB, against a 962 KB `rite_wasm_bg.wasm`. The feature deliberately
+    does not imply `native`, so switching it on for the browser is one word in
+    `rite-wasm/Cargo.toml` if that trade ever changes.
+
+    Three limits inside it, all documented in `docs/book/proto.md`: unknown fields
+    are dropped on a decode/encode round trip; the well-known types (`Timestamp`,
+    `Any`, `Struct`) decode as plain messages; and a `uint64` past `i64::MAX`
+    answers `err`, because Rite has no unsigned 64-bit type and a magnitude-
+    dependent result type is worse than a refusal.
 
 #### P2 — Explicitly V2
 

@@ -1,0 +1,18 @@
+// A protobuf enum answers a Rite atom, so it matches and compares like one
+// written in the source. The interner keys on the name, which is why an atom the
+// program never spells still equals `#PRO` and still matches a `#PRO` arm.
+schema ← ! @proto.compile("syntax = \"proto3\";\npackage demo;\nenum Tier {{ FREE = 0; PRO = 1; }}\nmessage User {{\n  int64 id = 1;\n  string name = 2;\n  bytes token = 3;\n  Tier tier = 4;\n  repeated string tags = 5;\n  map<string, int32> counts = 6;\n  optional string nick = 7;\n  uint64 quota = 8;\n}}\n")?
+
+body ← @proto.encode(schema, "demo.User", ⟨tier: #PRO⟩)?
+back ← @proto.decode(schema, "demo.User", body)?
+
+ok_eq ← back.tier = #PRO
+ok_match ← ~ back.tier ⟦
+  #FREE → false
+  #PRO → true
+  _ → false
+⟧
+// A name that is not a variant is an error rather than a silent zero.
+ok_reject ← is_err(@proto.encode(schema, "demo.User", ⟨tier: #GOLD⟩))
+
+ok_eq ∧ ok_match ∧ ok_reject

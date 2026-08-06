@@ -1,0 +1,4 @@
+// Compiling a schema held in a string touches nothing, but reading one off disk
+// is a file read like any other: protox resolves imports through a resolver, and
+// the disk-reading one is only reachable from here. The refusal names the grant.
+! @proto.load_file("demo.proto")?

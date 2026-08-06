@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+package demo;
+
+enum Tier {
+  TIER_UNSPECIFIED = 0;
+  FREE = 1;
+  PRO = 2;
+}
+
+message User {
+  int64 id = 1;
+  string name = 2;
+  Tier tier = 3;
+  repeated string tags = 4;
+  map<string, int32> counts = 5;
+  optional string nickname = 6;
+}
