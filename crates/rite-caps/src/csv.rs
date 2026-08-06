@@ -3,7 +3,7 @@
 use crate::permissions::PermissionSet;
 use crate::registry::NativeFunctionDescriptor;
 use indexmap::IndexMap;
-use rite_runtime::{EvalError, Key, Value};
+use rite_runtime::{AtomInterner, EvalError, Key, Value};
 use std::io::Cursor;
 use std::path::PathBuf;
 
@@ -94,6 +94,7 @@ impl CsvCap {
         method: &str,
         args: Vec<Value>,
         perms: &PermissionSet,
+        atoms: &AtomInterner,
     ) -> Result<Value, EvalError> {
         match method {
             "decode" => {
@@ -109,7 +110,7 @@ impl CsvCap {
                 // written and holds nothing.
                 let rows = crate::args::required("csv.encode", &args, 0)?.clone();
                 let opts = CsvOptions::from_value(args.get(1));
-                match encode_csv(&rows, &opts) {
+                match encode_csv(&rows, &opts, atoms) {
                     Ok(s) => Ok(Value::string(s)),
                     Err(e) => Ok(Value::err(Value::string(e))),
                 }
@@ -136,7 +137,7 @@ impl CsvCap {
                 let path = perms.check_fs_write(&path).map_err(EvalError::Permission)?;
                 let rows = crate::args::required("csv.write", &args, 1)?.clone();
                 let opts = CsvOptions::from_value(args.get(2));
-                match encode_csv(&rows, &opts) {
+                match encode_csv(&rows, &opts, atoms) {
                     Ok(text) => match std::fs::write(&path, text) {
                         Ok(()) => Ok(Value::ok(Value::None)),
                         Err(e) => Ok(Value::err(Value::string(e.to_string()))),
@@ -216,7 +217,7 @@ fn decode_csv(text: &str, opts: &CsvOptions) -> Value {
     Value::ok(Value::list(rows))
 }
 
-fn encode_csv(rows: &Value, opts: &CsvOptions) -> Result<String, String> {
+fn encode_csv(rows: &Value, opts: &CsvOptions, atoms: &AtomInterner) -> Result<String, String> {
     let Value::List(items) = rows else {
         return Err("csv.encode expects a list of records or lists".into());
     };
@@ -264,7 +265,7 @@ fn encode_csv(rows: &Value, opts: &CsvOptions) -> Result<String, String> {
                         let cell = r
                             .get(&Key::String(h.clone()))
                             .or_else(|| r.get(&Key::Atom(h.clone())))
-                            .map(value_to_csv_field)
+                            .map(|c| value_to_csv_field(c, atoms))
                             .unwrap_or_default();
                         fields.push(cell);
                     }
@@ -276,7 +277,8 @@ fn encode_csv(rows: &Value, opts: &CsvOptions) -> Result<String, String> {
                     let Value::List(cells) = item else {
                         return Err("csv.encode mixed row types; expected lists".into());
                     };
-                    let fields: Vec<String> = cells.iter().map(value_to_csv_field).collect();
+                    let fields: Vec<String> =
+                        cells.iter().map(|c| value_to_csv_field(c, atoms)).collect();
                     writer.write_record(&fields).map_err(|e| e.to_string())?;
                 }
             }
@@ -293,15 +295,20 @@ fn encode_csv(rows: &Value, opts: &CsvOptions) -> Result<String, String> {
     String::from_utf8(buf).map_err(|e| e.to_string())
 }
 
-fn value_to_csv_field(v: &Value) -> String {
+fn value_to_csv_field(v: &Value, atoms: &AtomInterner) -> String {
     match v {
         Value::None => String::new(),
         Value::Bool(b) => b.to_string(),
         Value::Int(n) => n.to_string(),
         Value::Float(f) => f.to_string(),
         Value::String(s) => s.to_string(),
-        Value::Atom(id) => format!("atom:{}", id.0),
-        other => format!("{}", other),
+        // The atom's name, bare, as `@json.encode` writes it. This wrote the
+        // interner index (`atom:0`) into the cell, so a column of atoms landed
+        // on disk as numbers that changed between runs.
+        Value::Atom(id) => atoms.name(*id),
+        // `Display` cannot reach the interner either, so a list or record
+        // holding an atom had the same bug one level down.
+        other => other.to_display(atoms),
     }
 }
 
@@ -333,7 +340,7 @@ mod tests {
             (Key::String("a".into()), Value::string("1")),
             (Key::String("b".into()), Value::string("x,y")),
         ])]);
-        let s = encode_csv(&rows, &CsvOptions::default()).unwrap();
+        let s = encode_csv(&rows, &CsvOptions::default(), &AtomInterner::new()).unwrap();
         let decoded = decode_csv(&s, &CsvOptions::default());
         match decoded {
             Value::Result(rite_runtime::ResultValue::Ok(list)) => {

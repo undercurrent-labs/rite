@@ -2,6 +2,23 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **Atoms encode as their name, not an interner index.**
+  `@json.encode(⟨tier: #PRO⟩)` answered `{"tier":"atom:0"}` and
+  `@csv.encode` put `atom:0` in the cell, because the dispatcher called
+  those two capabilities without the atom interner and their serializers
+  had no way to resolve a name. `@store` had it in its keys, where the
+  index also collided with whatever else interned first. All three now
+  take the interner.
+
+  Atoms encode bare in both formats — `#PRO` becomes `"PRO"`, matching
+  `Value::to_json` — and `@store` keys keep the `#` so `#PRO` and `"PRO"`
+  stay two keys. **If you were parsing `atom:N` out of encoded output,
+  that spelling is gone.** `str`, `@fs.write` and `@console.println` are
+  unchanged; they were fixed in an earlier pass, which is how the
+  encoders came to be the ones left behind.
+
 ## [0.10.0] — 2026-08-05
 
 The language grows in both directions. Rite: modules answer to `@`

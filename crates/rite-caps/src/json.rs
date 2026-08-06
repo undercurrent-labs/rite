@@ -1,6 +1,6 @@
 use crate::permissions::PermissionSet;
 use crate::registry::NativeFunctionDescriptor;
-use rite_runtime::{EvalError, Key, Value};
+use rite_runtime::{AtomInterner, EvalError, Key, Value};
 use std::path::PathBuf;
 
 pub struct JsonCap;
@@ -49,6 +49,7 @@ impl JsonCap {
         method: &str,
         args: Vec<Value>,
         perms: &PermissionSet,
+        atoms: &AtomInterner,
     ) -> Result<Value, EvalError> {
         match method {
             "decode" => {
@@ -65,16 +66,15 @@ impl JsonCap {
                 }
             }
             "encode" => {
-                // Atoms will show as numbers without interner; use display path.
                 // Required: a missing argument used to encode as `"null"`, which is
                 // valid JSON and not what the caller meant to write.
                 let v = crate::args::required("json.encode", &args, 0)?.clone();
-                let json = value_to_json_string(&v, false);
+                let json = value_to_json_string(&v, false, atoms);
                 Ok(Value::string(json))
             }
             "encode_pretty" => {
                 let v = crate::args::required("json.encode_pretty", &args, 0)?.clone();
-                Ok(Value::string(value_to_json_string(&v, true)))
+                Ok(Value::string(value_to_json_string(&v, true, atoms)))
             }
             "read" => {
                 let path = args
@@ -99,7 +99,7 @@ impl JsonCap {
                     .ok_or_else(|| EvalError::Message("json.write expects path".into()))?;
                 let path = perms.check_fs_write(&path).map_err(EvalError::Permission)?;
                 let v = args.get(1).cloned().unwrap_or(Value::None);
-                let text = value_to_json_string(&v, true);
+                let text = value_to_json_string(&v, true, atoms);
                 match std::fs::write(&path, text) {
                     Ok(()) => Ok(Value::ok(Value::None)),
                     Err(e) => Ok(Value::err(Value::string(e.to_string()))),
@@ -110,8 +110,8 @@ impl JsonCap {
     }
 }
 
-fn value_to_json_string(v: &Value, pretty: bool) -> String {
-    let j = value_to_serde(v);
+fn value_to_json_string(v: &Value, pretty: bool, atoms: &AtomInterner) -> String {
+    let j = value_to_serde(v, atoms);
     if pretty {
         serde_json::to_string_pretty(&j).unwrap_or_else(|_| "null".into())
     } else {
@@ -119,27 +119,34 @@ fn value_to_json_string(v: &Value, pretty: bool) -> String {
     }
 }
 
-fn value_to_serde(v: &Value) -> serde_json::Value {
+fn value_to_serde(v: &Value, atoms: &AtomInterner) -> serde_json::Value {
     match v {
         Value::None => serde_json::Value::Null,
         Value::Bool(b) => serde_json::json!(b),
         Value::Int(n) => serde_json::json!(n),
         Value::Float(f) => serde_json::json!(f),
         Value::String(s) => serde_json::json!(s.as_ref()),
-        Value::Atom(id) => serde_json::json!(format!("atom:{}", id.0)),
-        Value::List(xs) => serde_json::Value::Array(xs.iter().map(value_to_serde).collect()),
+        // The atom's name, not its interner index. `#ok` encoded as `"atom:0"`
+        // until the dispatcher started passing the interner: the index is
+        // per-run, so the same program could write a different file twice.
+        // Bare, without the `#`, matching `Value::to_json` — in JSON an atom is
+        // a string, and `@json.decode` reads it back as one either way.
+        Value::Atom(id) => serde_json::json!(atoms.name(*id)),
+        Value::List(xs) => {
+            serde_json::Value::Array(xs.iter().map(|x| value_to_serde(x, atoms)).collect())
+        }
         Value::Record(r) => {
             let mut map = serde_json::Map::new();
             for (k, v) in r {
-                map.insert(k.as_str(), value_to_serde(v));
+                map.insert(k.as_str(), value_to_serde(v, atoms));
             }
             serde_json::Value::Object(map)
         }
         Value::Result(rite_runtime::ResultValue::Ok(v)) => {
-            serde_json::json!({"ok": value_to_serde(v)})
+            serde_json::json!({"ok": value_to_serde(v, atoms)})
         }
         Value::Result(rite_runtime::ResultValue::Err(v)) => {
-            serde_json::json!({"err": value_to_serde(v)})
+            serde_json::json!({"err": value_to_serde(v, atoms)})
         }
         other => serde_json::json!(format!("<{}>", other.type_name())),
     }

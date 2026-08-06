@@ -218,8 +218,8 @@ impl CapabilityHost for HostCapabilities {
             "console" => self.console.call(method, args, &self.perms, ctx).await,
             #[cfg(feature = "native")]
             "fs" => self.fs.call(method, args, &self.perms, ctx).await,
-            "json" => self.json.call(method, args, &self.perms).await,
-            "csv" => self.csv.call(method, args, &self.perms).await,
+            "json" => self.json.call(method, args, &self.perms, &ctx.atoms).await,
+            "csv" => self.csv.call(method, args, &self.perms, &ctx.atoms).await,
             // Pure value transforms, apart from `random_bytes` — nothing to await.
             "crypto" => self.crypto.call(method, args, &self.perms),
             #[cfg(feature = "native")]
@@ -260,7 +260,7 @@ impl CapabilityHost for HostCapabilities {
             }
             "store" => {
                 let mut store = self.store.write();
-                store.call(method, args)
+                store.call(method, args, &ctx.atoms)
             }
             #[cfg(feature = "native")]
             "db" => {

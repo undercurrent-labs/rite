@@ -187,8 +187,9 @@ async fn a_record_result_carries_structured_content() {
     let out = converse(&[call(1, "describe", json!({"who": "ada"}))]).await;
     let r = result(&out[0]);
     assert_eq!(r["structuredContent"]["name"], "ada");
-    // An atom must reach the wire as its name. The private converter in `@json`
-    // renders it as `atom:7`, which would be unreadable to a client.
+    // An atom must reach the wire as its name. This goes through
+    // `Value::to_json`, which has the interner; `@json`'s own converter did not
+    // and rendered `atom:7` until it was given one.
     assert_eq!(
         r["structuredContent"]["status"], "ok",
         "an atom leaked as its interner index"

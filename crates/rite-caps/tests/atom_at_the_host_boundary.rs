@@ -4,6 +4,12 @@
 //! was fixed in the builtins (`str`, `join`, `panic`) but the capabilities had their own
 //! copies of the same mistake — and `@fs.write` is the worst place for it, because the
 //! wrong bytes land on the user's disk rather than on a screen where someone might notice.
+//!
+//! The encoders were missed in that pass and kept the bug for four releases:
+//! `@json.encode(⟨tier: #PRO⟩)` answered `{"tier":"atom:0"}` and `@csv.encode` put
+//! `atom:0` in the cell, because the dispatcher called them without the interner.
+//! `@store` had it in its keys, where the index also collided with whatever else
+//! interned first.
 
 use rite_caps::{install_defaults, PermissionSet};
 use rite_runtime::{run_source, RuntimeContext};
@@ -70,4 +76,71 @@ async fn a_non_atom_value_is_unaffected() {
     let src = format!("! @fs.write(r\"{}\", \"plain text\")?\n", path.display());
     run(&src).await;
     assert_eq!(std::fs::read_to_string(&path).expect("read"), "plain text");
+}
+
+/// An atom encodes as its name, bare — in JSON it is a string, and `@json.decode`
+/// reads it back as one. `Value::to_json` already chose that spelling.
+#[tokio::test]
+async fn json_encode_writes_the_atom_name() {
+    let (out, _) = run(r#"@json.encode(⟨tier: #PRO, id: 7⟩)"#).await;
+    assert_eq!(out, r#"{"id":7,"tier":"PRO"}"#, "got {out:?}");
+    assert!(!out.contains("atom:"), "encoded an interner index: {out:?}");
+}
+
+/// Recursion, not just the top level: the bug survived one level down because
+/// `value_to_serde` recursed into a copy of itself that had no interner either.
+#[tokio::test]
+async fn json_encode_reaches_nested_atoms() {
+    let (out, _) = run(r#"@json.encode(⟨nested: [⟨s: #ok⟩], list: [#a, #b]⟩)"#).await;
+    assert_eq!(
+        out, r#"{"list":["a","b"],"nested":[{"s":"ok"}]}"#,
+        "got {out:?}"
+    );
+}
+
+#[tokio::test]
+async fn json_encode_pretty_writes_the_atom_name() {
+    let (out, _) = run(r#"@json.encode_pretty(⟨tier: #PRO⟩)"#).await;
+    assert!(out.contains(r#""PRO""#), "got {out:?}");
+    assert!(!out.contains("atom:"), "encoded an interner index: {out:?}");
+}
+
+/// The CSV cell is the `@fs.write` case with an extra layer: it lands on disk.
+#[tokio::test]
+async fn csv_encode_writes_the_atom_name() {
+    let (out, _) = run(r#"@csv.encode([⟨tier: #PRO⟩, ⟨tier: #FREE⟩])"#).await;
+    assert_eq!(out, "tier\nPRO\nFREE\n", "got {out:?}");
+}
+
+/// Two atoms with different names must not collapse, which an index-based
+/// spelling would only get right by luck.
+#[tokio::test]
+async fn distinct_atoms_stay_distinct_through_json() {
+    let (out, _) = run(r#"@json.encode([#alpha, #beta, #alpha])"#).await;
+    assert_eq!(out, r#"["alpha","beta","alpha"]"#, "got {out:?}");
+}
+
+/// `#PRO` and `"PRO"` are different keys. The `#` prefix is what keeps them
+/// apart now that the key is the name rather than an index.
+#[tokio::test]
+async fn store_keys_separate_atoms_from_strings() {
+    let src = concat!(
+        "! @store.set(\"ns\", #PRO, 1)\n",
+        "! @store.set(\"ns\", \"PRO\", 2)\n",
+        "^ [@store.get(\"ns\", #PRO), @store.get(\"ns\", \"PRO\")]\n"
+    );
+    let (out, _) = run(src).await;
+    assert_eq!(
+        out, "[ok(1), ok(2)]",
+        "atom and string keys collided: {out:?}"
+    );
+}
+
+/// The key survives a round trip rather than merely being written: an index-based
+/// key happened to do this too, which is why it went unnoticed for so long.
+#[tokio::test]
+async fn store_round_trips_an_atom_key() {
+    let src = "! @store.set(\"ns\", #tier, #PRO)\n^ @store.get(\"ns\", #tier)\n";
+    let (out, _) = run(src).await;
+    assert_eq!(out, "ok(#PRO)", "got {out:?}");
 }

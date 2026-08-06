@@ -1,6 +1,6 @@
 use crate::registry::NativeFunctionDescriptor;
 use indexmap::IndexMap;
-use rite_runtime::{EvalError, Key, Value};
+use rite_runtime::{AtomInterner, EvalError, Key, Value};
 use std::collections::HashMap;
 
 pub struct StoreCap {
@@ -38,11 +38,16 @@ impl StoreCap {
         },
     ];
 
-    pub fn call(&mut self, method: &str, args: Vec<Value>) -> Result<Value, EvalError> {
+    pub fn call(
+        &mut self,
+        method: &str,
+        args: Vec<Value>,
+        atoms: &AtomInterner,
+    ) -> Result<Value, EvalError> {
         match method {
             "get" => {
-                let ns = key_str(args.first())?;
-                let key = key_str(args.get(1))?;
+                let ns = key_str(args.first(), atoms)?;
+                let key = key_str(args.get(1), atoms)?;
                 let val = self
                     .namespaces
                     .get(&ns)
@@ -52,15 +57,15 @@ impl StoreCap {
                 Ok(Value::ok(val))
             }
             "set" => {
-                let ns = key_str(args.first())?;
-                let key = key_str(args.get(1))?;
+                let ns = key_str(args.first(), atoms)?;
+                let key = key_str(args.get(1), atoms)?;
                 let val = args.get(2).cloned().unwrap_or(Value::None);
                 self.namespaces.entry(ns).or_default().insert(key, val);
                 Ok(Value::ok(Value::None))
             }
             "delete" => {
-                let ns = key_str(args.first())?;
-                let key = key_str(args.get(1))?;
+                let ns = key_str(args.first(), atoms)?;
+                let key = key_str(args.get(1), atoms)?;
                 if let Some(m) = self.namespaces.get_mut(&ns) {
                     m.shift_remove(&key);
                 }
@@ -71,11 +76,17 @@ impl StoreCap {
     }
 }
 
-fn key_str(v: Option<&Value>) -> Result<String, EvalError> {
+/// A namespace or key, as the string this store indexes by.
+///
+/// Atoms keep their `#` so they cannot collide with the string of the same
+/// name: `@store.set("PRO", 1)` and `@store.set(#PRO, 2)` are two keys. They
+/// used to render as the interner index (`atom:0`), which collided with
+/// whatever else happened to intern first and changed between runs.
+fn key_str(v: Option<&Value>, atoms: &AtomInterner) -> Result<String, EvalError> {
     match v {
         Some(Value::String(s)) => Ok(s.to_string()),
-        Some(Value::Atom(id)) => Ok(format!("atom:{}", id.0)),
-        Some(other) => Ok(format!("{}", other)),
+        Some(Value::Atom(id)) => Ok(format!("#{}", atoms.name(*id))),
+        Some(other) => Ok(other.to_display(atoms)),
         None => Err(EvalError::Message("store expects key".into())),
     }
 }
