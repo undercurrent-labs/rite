@@ -1,6 +1,17 @@
 # Changelog
 
-## [Unreleased]
+## [0.11.0] — 2026-08-05
+
+Protobuf lands as `@proto`: compile a `.proto` at run time — no `protoc`, no
+build step — and encode or decode messages against it. Enums arrive as atoms,
+so a decoded field matches like a literal; a message decodes to only the fields
+it set, so unset and zero stay distinguishable.
+
+One breaking fix alongside it. `@json.encode` and `@csv.encode` had been writing
+atoms as their interner index (`atom:0`) rather than their name, which meant the
+wrong text in a file and a value that changed between runs. Minor rather than
+patch for that reason: encoded output changes for anyone whose records hold
+atoms.
 
 ### Added
 
