@@ -229,6 +229,15 @@ fn incomplete_input_waits_for_its_closing_delimiter() {
 
 // ------------------------------------------------------------------- handle bindings
 
+/// A path as Rite source can spell it.
+///
+/// `\` is an escape in a Rite string, so a Windows path interpolated raw is a string
+/// full of invalid ones — `D:\a\rite` opens with `\a`. Forward slashes are accepted by
+/// the Windows APIs underneath `@fs`, so the separator is swapped rather than escaped.
+fn rite_path(path: &std::path::Path) -> String {
+    path.to_str().expect("utf-8 path").replace('\\', "/")
+}
+
 /// A binding that holds a host handle is carried across inputs by value.
 ///
 /// It has no literal form, so the prelude used to replay its source: `h ← ! @fs.open(f,
@@ -246,7 +255,7 @@ async fn a_handle_is_not_reacquired_on_every_input() {
     let opened = s
         .eval(&format!(
             r#"h ← ! @fs.open("{}", #read)?"#,
-            path.to_str().unwrap()
+            rite_path(&path)
         ))
         .await;
     assert!(opened.ok, "{:?}", opened.error);
@@ -276,7 +285,7 @@ async fn reset_releases_what_the_session_held() {
     assert!(
         s.eval(&format!(
             r#"h ← ! @fs.open("{}", #read)?"#,
-            path.to_str().unwrap()
+            rite_path(&path)
         ))
         .await
         .ok
@@ -298,8 +307,7 @@ async fn redefining_a_handle_binding_opens_the_new_one() {
     std::fs::write(&second, "two\n").expect("write fixture");
 
     let mut s = session();
-    let open =
-        |p: &std::path::Path| format!(r#"h ← ! @fs.open("{}", #read)?"#, p.to_str().unwrap());
+    let open = |p: &std::path::Path| format!(r#"h ← ! @fs.open("{}", #read)?"#, rite_path(p));
     assert!(s.eval(&open(&first)).await.ok);
     assert_eq!(
         s.eval("! @fs.read_line(h)?").await.display.as_deref(),

@@ -38,6 +38,16 @@ fn write(dir: &Path, name: &str, source: &str) -> PathBuf {
     path
 }
 
+/// A path as Rite source can spell it.
+///
+/// `\` is an escape in a Rite string, so a path interpolated raw into `{RITE}` or
+/// `{SERVER}` is a string full of invalid ones on Windows — `D:\a\rite` opens with
+/// `\a`. Forward slashes are accepted by the Windows APIs underneath both `@fs` and
+/// `CreateProcess`, so the separator is swapped rather than escaped.
+fn rite_path(path: &Path) -> String {
+    path.to_str().expect("utf-8 path").replace('\\', "/")
+}
+
 /// Run a client script and return its stdout, failing loudly with stderr attached.
 ///
 /// `name` is per test: cargo runs these in parallel threads of one process, and two
@@ -59,8 +69,8 @@ fn run_client_against(name: &str, server_source: &str, source: &str, allow: &[&s
         &dir,
         name,
         &source
-            .replace("{RITE}", RITE)
-            .replace("{SERVER}", server.to_str().unwrap()),
+            .replace("{RITE}", &rite_path(Path::new(RITE)))
+            .replace("{SERVER}", &rite_path(&server)),
     );
 
     let mut cmd = Command::new(RITE);
@@ -226,8 +236,9 @@ fn a_stdio_connect_without_the_process_grant_exits_5() {
         &dir,
         "denied.rite",
         &format!(
-            r#"! @mcp.connect(⟨command: "{RITE}", args: ["run", "{}"]⟩)?"#,
-            server.to_str().unwrap()
+            r#"! @mcp.connect(⟨command: "{}", args: ["run", "{}"]⟩)?"#,
+            rite_path(Path::new(RITE)),
+            rite_path(&server)
         ),
     );
 
