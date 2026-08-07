@@ -1,5 +1,7 @@
 # Changelog
 
+## [Unreleased]
+
 ## [0.11.1] — 2026-08-06
 
 Four fixes to `@mcp`, found by pointing the client at servers that behave the
