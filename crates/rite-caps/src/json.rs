@@ -13,6 +13,7 @@ impl JsonCap {
             arity: 1,
             effectful: false,
             permission: "",
+            returns_result: true,
         },
         NativeFunctionDescriptor {
             name: "encode",
@@ -20,6 +21,7 @@ impl JsonCap {
             arity: 1,
             effectful: false,
             permission: "",
+            returns_result: false,
         },
         NativeFunctionDescriptor {
             name: "encode_pretty",
@@ -27,6 +29,7 @@ impl JsonCap {
             arity: 1,
             effectful: false,
             permission: "",
+            returns_result: false,
         },
         NativeFunctionDescriptor {
             name: "read",
@@ -34,6 +37,7 @@ impl JsonCap {
             arity: 1,
             effectful: true,
             permission: "fs:read",
+            returns_result: true,
         },
         NativeFunctionDescriptor {
             name: "write",
@@ -41,6 +45,7 @@ impl JsonCap {
             arity: 2,
             effectful: true,
             permission: "fs:write",
+            returns_result: true,
         },
     ];
 

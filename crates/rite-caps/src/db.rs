@@ -69,6 +69,7 @@ impl DbCap {
             arity: 0,
             effectful: true,
             permission: "db",
+            returns_result: true,
         },
         NativeFunctionDescriptor {
             name: "close",
@@ -76,6 +77,7 @@ impl DbCap {
             arity: 1,
             effectful: true,
             permission: "db",
+            returns_result: true,
         },
         NativeFunctionDescriptor {
             name: "exec",
@@ -83,6 +85,7 @@ impl DbCap {
             arity: 2,
             effectful: true,
             permission: "db",
+            returns_result: true,
         },
         NativeFunctionDescriptor {
             name: "query",
@@ -90,6 +93,7 @@ impl DbCap {
             arity: 2,
             effectful: true,
             permission: "db",
+            returns_result: true,
         },
         NativeFunctionDescriptor {
             name: "prepare",
@@ -97,6 +101,7 @@ impl DbCap {
             arity: 2,
             effectful: true,
             permission: "db",
+            returns_result: true,
         },
         NativeFunctionDescriptor {
             name: "query_prepared",
@@ -104,6 +109,7 @@ impl DbCap {
             arity: 1,
             effectful: true,
             permission: "db",
+            returns_result: true,
         },
         NativeFunctionDescriptor {
             name: "exec_prepared",
@@ -111,6 +117,7 @@ impl DbCap {
             arity: 1,
             effectful: true,
             permission: "db",
+            returns_result: true,
         },
         NativeFunctionDescriptor {
             name: "close_stmt",
@@ -118,6 +125,7 @@ impl DbCap {
             arity: 1,
             effectful: true,
             permission: "db",
+            returns_result: true,
         },
         NativeFunctionDescriptor {
             name: "begin",
@@ -125,6 +133,7 @@ impl DbCap {
             arity: 1,
             effectful: true,
             permission: "db",
+            returns_result: true,
         },
         NativeFunctionDescriptor {
             name: "commit",
@@ -132,6 +141,7 @@ impl DbCap {
             arity: 1,
             effectful: true,
             permission: "db",
+            returns_result: true,
         },
         NativeFunctionDescriptor {
             name: "rollback",
@@ -139,6 +149,7 @@ impl DbCap {
             arity: 1,
             effectful: true,
             permission: "db",
+            returns_result: true,
         },
     ];
 

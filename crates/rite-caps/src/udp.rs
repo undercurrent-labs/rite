@@ -80,6 +80,7 @@ impl UdpCap {
             arity: 1,
             effectful: true,
             permission: "net",
+            returns_result: true,
         },
         NativeFunctionDescriptor {
             name: "local_addr",
@@ -87,6 +88,7 @@ impl UdpCap {
             arity: 1,
             effectful: true,
             permission: "net",
+            returns_result: true,
         },
         NativeFunctionDescriptor {
             name: "send_to",
@@ -94,6 +96,7 @@ impl UdpCap {
             arity: 3,
             effectful: true,
             permission: "net",
+            returns_result: true,
         },
         NativeFunctionDescriptor {
             name: "recv_from",
@@ -101,6 +104,7 @@ impl UdpCap {
             arity: 2,
             effectful: true,
             permission: "net",
+            returns_result: true,
         },
         NativeFunctionDescriptor {
             name: "close",
@@ -108,6 +112,7 @@ impl UdpCap {
             arity: 1,
             effectful: true,
             permission: "net",
+            returns_result: true,
         },
     ];
 

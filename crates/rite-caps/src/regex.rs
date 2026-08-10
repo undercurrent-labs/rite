@@ -36,6 +36,7 @@ impl RegexCap {
             arity: 2,
             effectful: false,
             permission: "",
+            returns_result: true,
         },
         NativeFunctionDescriptor {
             name: "find",
@@ -43,6 +44,7 @@ impl RegexCap {
             arity: 2,
             effectful: false,
             permission: "",
+            returns_result: true,
         },
         NativeFunctionDescriptor {
             name: "find_all",
@@ -50,6 +52,7 @@ impl RegexCap {
             arity: 2,
             effectful: false,
             permission: "",
+            returns_result: true,
         },
         NativeFunctionDescriptor {
             name: "captures",
@@ -57,6 +60,7 @@ impl RegexCap {
             arity: 2,
             effectful: false,
             permission: "",
+            returns_result: true,
         },
         NativeFunctionDescriptor {
             name: "replace",
@@ -64,6 +68,7 @@ impl RegexCap {
             arity: 3,
             effectful: false,
             permission: "",
+            returns_result: true,
         },
         NativeFunctionDescriptor {
             name: "split",
@@ -71,6 +76,7 @@ impl RegexCap {
             arity: 2,
             effectful: false,
             permission: "",
+            returns_result: true,
         },
     ];
 

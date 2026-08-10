@@ -108,7 +108,7 @@ async fn json_encode_pretty_writes_the_atom_name() {
 /// The CSV cell is the `@fs.write` case with an extra layer: it lands on disk.
 #[tokio::test]
 async fn csv_encode_writes_the_atom_name() {
-    let (out, _) = run(r#"@csv.encode([⟨tier: #PRO⟩, ⟨tier: #FREE⟩])"#).await;
+    let (out, _) = run(r#"@csv.encode([⟨tier: #PRO⟩, ⟨tier: #FREE⟩])?"#).await;
     assert_eq!(out, "tier\nPRO\nFREE\n", "got {out:?}");
 }
 

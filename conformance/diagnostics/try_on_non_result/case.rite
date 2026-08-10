@@ -1,0 +1,2 @@
+// @fs.exists answers a bool; ? on it passed check and died at runtime.
+present <- do @fs.exists("/tmp")?

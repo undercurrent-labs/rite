@@ -71,6 +71,7 @@ impl ProtoCap {
             arity: 1,
             effectful: true,
             permission: "",
+            returns_result: true,
         },
         NativeFunctionDescriptor {
             name: "compile_all",
@@ -78,6 +79,7 @@ impl ProtoCap {
             arity: 1,
             effectful: true,
             permission: "",
+            returns_result: true,
         },
         NativeFunctionDescriptor {
             name: "load_file",
@@ -85,6 +87,7 @@ impl ProtoCap {
             arity: 1,
             effectful: true,
             permission: "fs:read",
+            returns_result: true,
         },
         NativeFunctionDescriptor {
             name: "load_set",
@@ -92,6 +95,7 @@ impl ProtoCap {
             arity: 1,
             effectful: true,
             permission: "",
+            returns_result: true,
         },
         NativeFunctionDescriptor {
             name: "decode",
@@ -99,6 +103,7 @@ impl ProtoCap {
             arity: 3,
             effectful: false,
             permission: "",
+            returns_result: true,
         },
         NativeFunctionDescriptor {
             name: "encode",
@@ -106,6 +111,7 @@ impl ProtoCap {
             arity: 3,
             effectful: false,
             permission: "",
+            returns_result: true,
         },
         NativeFunctionDescriptor {
             name: "messages",
@@ -113,6 +119,7 @@ impl ProtoCap {
             arity: 1,
             effectful: false,
             permission: "",
+            returns_result: true,
         },
     ];
 

@@ -65,6 +65,7 @@ impl CsvCap {
             arity: 1,
             effectful: false,
             permission: "",
+            returns_result: true,
         },
         NativeFunctionDescriptor {
             name: "encode",
@@ -72,6 +73,7 @@ impl CsvCap {
             arity: 1,
             effectful: false,
             permission: "",
+            returns_result: true,
         },
         NativeFunctionDescriptor {
             name: "read",
@@ -79,6 +81,7 @@ impl CsvCap {
             arity: 1,
             effectful: true,
             permission: "fs:read",
+            returns_result: true,
         },
         NativeFunctionDescriptor {
             name: "write",
@@ -86,6 +89,7 @@ impl CsvCap {
             arity: 2,
             effectful: true,
             permission: "fs:write",
+            returns_result: true,
         },
     ];
 
@@ -110,8 +114,12 @@ impl CsvCap {
                 // written and holds nothing.
                 let rows = crate::args::required("csv.encode", &args, 0)?.clone();
                 let opts = CsvOptions::from_value(args.get(1));
+                // Both arms are results. Success used to be a bare string while
+                // failure was err(...), so `@csv.encode(rows)?` unwrapped fine
+                // exactly when the rows were malformed and failed when they
+                // were not. `csv.write` already wraps both arms.
                 match encode_csv(&rows, &opts, atoms) {
-                    Ok(s) => Ok(Value::string(s)),
+                    Ok(s) => Ok(Value::ok(Value::string(s))),
                     Err(e) => Ok(Value::err(Value::string(e))),
                 }
             }

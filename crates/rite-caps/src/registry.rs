@@ -43,6 +43,11 @@ pub struct NativeFunctionDescriptor {
     pub arity: usize,
     pub effectful: bool,
     pub permission: &'static str,
+    /// The success value is a `Value::Result`, so postfix `?` applies to the
+    /// call. `rite check` rejects `?` on a call whose descriptor says false
+    /// (E017). Cross-validated against `HOST_EFFECTS`' third column by
+    /// `tests/effect_parity.rs`, the same way `effectful` is.
+    pub returns_result: bool,
 }
 
 pub trait Capability: Send + Sync {

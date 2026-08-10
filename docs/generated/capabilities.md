@@ -8,6 +8,7 @@ Write a value to stdout without a trailing newline.
 
 - arity: 1
 - effectful: true
+- answers a result (`?` applies): false
 - permission: console
 
 ### println
@@ -16,6 +17,7 @@ Write a value to stdout with a trailing newline.
 
 - arity: 1
 - effectful: true
+- answers a result (`?` applies): false
 - permission: console
 
 ### warn
@@ -24,6 +26,7 @@ Write a warning to stderr.
 
 - arity: 1
 - effectful: true
+- answers a result (`?` applies): false
 - permission: console
 
 ### error
@@ -32,6 +35,7 @@ Write an error to stderr.
 
 - arity: 1
 - effectful: true
+- answers a result (`?` applies): false
 - permission: console
 
 ### inspect
@@ -40,6 +44,7 @@ Write a debug representation to stdout.
 
 - arity: 1
 - effectful: true
+- answers a result (`?` applies): false
 - permission: console
 
 ### read_line
@@ -48,6 +53,7 @@ Read one line from stdin, after writing the optional prompt without a trailing n
 
 - arity: 1
 - effectful: true
+- answers a result (`?` applies): false
 - permission: console
 
 ## @fs
@@ -58,6 +64,7 @@ Read a UTF-8 text file.
 
 - arity: 1
 - effectful: true
+- answers a result (`?` applies): true
 - permission: fs:read
 
 ### read_bytes
@@ -66,6 +73,7 @@ Read a file as bytes.
 
 - arity: 1
 - effectful: true
+- answers a result (`?` applies): true
 - permission: fs:read
 
 ### write
@@ -74,6 +82,7 @@ Write text to a file.
 
 - arity: 2
 - effectful: true
+- answers a result (`?` applies): true
 - permission: fs:write
 
 ### append
@@ -82,6 +91,7 @@ Append text to a file.
 
 - arity: 2
 - effectful: true
+- answers a result (`?` applies): true
 - permission: fs:write
 
 ### lines
@@ -90,6 +100,7 @@ Read file lines as a list of strings.
 
 - arity: 1
 - effectful: true
+- answers a result (`?` applies): true
 - permission: fs:read
 
 ### open
@@ -98,6 +109,7 @@ Open a file and answer a handle: `! @fs.open(path, #read)?`. Modes are `#read`, 
 
 - arity: 2
 - effectful: true
+- answers a result (`?` applies): true
 - permission: fs:read
 
 ### read_chunk
@@ -106,6 +118,7 @@ Read up to `n` bytes from an open handle, answering `ok(bytes)`. Fewer than `n` 
 
 - arity: 2
 - effectful: true
+- answers a result (`?` applies): true
 - permission: 
 
 ### read_line
@@ -114,6 +127,7 @@ Read one line from an open handle, without its line ending. Answers `ok(none)` a
 
 - arity: 1
 - effectful: true
+- answers a result (`?` applies): true
 - permission: 
 
 ### write_chunk
@@ -122,6 +136,7 @@ Write text or bytes to a handle opened `#write` or `#append`, answering `ok(coun
 
 - arity: 2
 - effectful: true
+- answers a result (`?` applies): true
 - permission: 
 
 ### seek
@@ -130,6 +145,7 @@ Move an open handle to a byte offset from the start of the file, answering `ok(p
 
 - arity: 2
 - effectful: true
+- answers a result (`?` applies): true
 - permission: 
 
 ### flush
@@ -138,6 +154,7 @@ Push a write handle's buffered bytes to the file. `@fs.close` flushes too; this 
 
 - arity: 1
 - effectful: true
+- answers a result (`?` applies): true
 - permission: 
 
 ### close
@@ -146,6 +163,7 @@ Close an open handle, flushing it first. Closing one that is already closed is `
 
 - arity: 1
 - effectful: true
+- answers a result (`?` applies): true
 - permission: 
 
 ### exists
@@ -154,6 +172,7 @@ Check whether a path exists.
 
 - arity: 1
 - effectful: true
+- answers a result (`?` applies): false
 - permission: fs:read
 
 ### metadata
@@ -162,6 +181,7 @@ Return a file metadata record: `len`, `is_file`, `is_dir`, `is_symlink`, and `mt
 
 - arity: 1
 - effectful: true
+- answers a result (`?` applies): true
 - permission: fs:read
 
 ### glob
@@ -170,6 +190,7 @@ Expand a glob pattern to matching paths. The pattern must point inside a granted
 
 - arity: 1
 - effectful: true
+- answers a result (`?` applies): true
 - permission: fs:read
 
 ### mkdir
@@ -178,6 +199,7 @@ Create a directory.
 
 - arity: 1
 - effectful: true
+- answers a result (`?` applies): true
 - permission: fs:write
 
 ### remove
@@ -186,6 +208,7 @@ Remove a file, or a directory and everything inside it. Recursive and irreversib
 
 - arity: 1
 - effectful: true
+- answers a result (`?` applies): true
 - permission: fs:write
 
 ### copy
@@ -194,6 +217,7 @@ Copy a file.
 
 - arity: 2
 - effectful: true
+- answers a result (`?` applies): true
 - permission: fs:write
 
 ### move
@@ -202,6 +226,7 @@ Move/rename a file.
 
 - arity: 2
 - effectful: true
+- answers a result (`?` applies): true
 - permission: fs:write
 
 ## @json
@@ -212,6 +237,7 @@ Parse a JSON string into a Rite value.
 
 - arity: 1
 - effectful: false
+- answers a result (`?` applies): true
 - permission: 
 
 ### encode
@@ -220,6 +246,7 @@ Serialize a value to compact JSON.
 
 - arity: 1
 - effectful: false
+- answers a result (`?` applies): false
 - permission: 
 
 ### encode_pretty
@@ -228,6 +255,7 @@ Serialize a value to pretty JSON.
 
 - arity: 1
 - effectful: false
+- answers a result (`?` applies): false
 - permission: 
 
 ### read
@@ -236,6 +264,7 @@ Read and parse a JSON file.
 
 - arity: 1
 - effectful: true
+- answers a result (`?` applies): true
 - permission: fs:read
 
 ### write
@@ -244,6 +273,7 @@ Write a value as JSON to a file.
 
 - arity: 2
 - effectful: true
+- answers a result (`?` applies): true
 - permission: fs:write
 
 ## @csv
@@ -254,6 +284,7 @@ Parse a CSV string into a list of records (ok/err). Options: headers (default tr
 
 - arity: 1
 - effectful: false
+- answers a result (`?` applies): true
 - permission: 
 
 ### encode
@@ -262,6 +293,7 @@ Serialize a list of records (or list of lists) to a CSV string.
 
 - arity: 1
 - effectful: false
+- answers a result (`?` applies): true
 - permission: 
 
 ### read
@@ -270,6 +302,7 @@ Read and parse a CSV file into a list of records.
 
 - arity: 1
 - effectful: true
+- answers a result (`?` applies): true
 - permission: fs:read
 
 ### write
@@ -278,6 +311,7 @@ Write a list of records as CSV to a file.
 
 - arity: 2
 - effectful: true
+- answers a result (`?` applies): true
 - permission: fs:write
 
 ## @crypto
@@ -288,6 +322,7 @@ SHA-256 digest of a string, as lowercase hex.
 
 - arity: 1
 - effectful: false
+- answers a result (`?` applies): false
 - permission: 
 
 ### sha512
@@ -296,6 +331,7 @@ SHA-512 digest of a string, as lowercase hex.
 
 - arity: 1
 - effectful: false
+- answers a result (`?` applies): false
 - permission: 
 
 ### hmac_sha256
@@ -304,6 +340,7 @@ HMAC-SHA-256 of a message under a key, as lowercase hex.
 
 - arity: 2
 - effectful: false
+- answers a result (`?` applies): false
 - permission: 
 
 ### random_bytes
@@ -312,6 +349,7 @@ n cryptographically secure random bytes, as lowercase hex.
 
 - arity: 1
 - effectful: true
+- answers a result (`?` applies): false
 - permission: random
 
 ### constant_time_eq
@@ -320,6 +358,7 @@ Compare two strings in time independent of their contents.
 
 - arity: 2
 - effectful: false
+- answers a result (`?` applies): false
 - permission: 
 
 ### base64_encode
@@ -328,6 +367,7 @@ Encode a string as standard base64 (RFC 4648, padded).
 
 - arity: 1
 - effectful: false
+- answers a result (`?` applies): false
 - permission: 
 
 ### base64_decode
@@ -336,6 +376,7 @@ Decode standard base64 to a string. Answers a Result.
 
 - arity: 1
 - effectful: false
+- answers a result (`?` applies): true
 - permission: 
 
 ### hex_encode
@@ -344,6 +385,7 @@ Encode a string as lowercase hex.
 
 - arity: 1
 - effectful: false
+- answers a result (`?` applies): false
 - permission: 
 
 ### hex_decode
@@ -352,6 +394,7 @@ Decode hex to a string. Answers a Result.
 
 - arity: 1
 - effectful: false
+- answers a result (`?` applies): true
 - permission: 
 
 ## @clock
@@ -362,6 +405,7 @@ Current UTC timestamp as ISO-8601 string.
 
 - arity: 0
 - effectful: true
+- answers a result (`?` applies): false
 - permission: clock
 
 ### parse
@@ -370,6 +414,7 @@ Parse an ISO-8601 timestamp.
 
 - arity: 1
 - effectful: false
+- answers a result (`?` applies): true
 - permission: clock
 
 ### format
@@ -378,6 +423,7 @@ Format an RFC3339 timestamp with a strftime pattern, e.g. `%Y-%m-%d`. Answers `o
 
 - arity: 2
 - effectful: false
+- answers a result (`?` applies): true
 - permission: clock
 
 ### sleep
@@ -386,6 +432,7 @@ Sleep for a duration in milliseconds.
 
 - arity: 1
 - effectful: true
+- answers a result (`?` applies): false
 - permission: clock
 
 ### add
@@ -394,6 +441,7 @@ Shift an RFC3339 timestamp by a duration, which takes the same forms as `@clock.
 
 - arity: 2
 - effectful: false
+- answers a result (`?` applies): true
 - permission: clock
 
 ### diff
@@ -402,6 +450,7 @@ Milliseconds from `b` to `a`, i.e. `a - b`. Positive when `a` is later. Answers 
 
 - arity: 2
 - effectful: false
+- answers a result (`?` applies): true
 - permission: clock
 
 ### duration
@@ -410,6 +459,7 @@ Normalize a duration to whole milliseconds. Accepts an integer or float of milli
 
 - arity: 1
 - effectful: false
+- answers a result (`?` applies): true
 - permission: clock
 
 ## @stdin
@@ -420,6 +470,7 @@ The whole of standard input as one string, read to EOF on first use and cached. 
 
 - arity: 0
 - effectful: true
+- answers a result (`?` applies): false
 - permission: stdin
 
 ### lines
@@ -428,6 +479,7 @@ Standard input as a list of lines, without their terminators. An empty input is 
 
 - arity: 0
 - effectful: true
+- answers a result (`?` applies): false
 - permission: stdin
 
 ## @regex
@@ -438,6 +490,7 @@ Whether the pattern matches anywhere in the text. Answers `ok(bool)`, or `err` f
 
 - arity: 2
 - effectful: false
+- answers a result (`?` applies): true
 - permission: 
 
 ### find
@@ -446,6 +499,7 @@ The first match of the pattern in the text, as `ok(string)` — `ok(none)` when 
 
 - arity: 2
 - effectful: false
+- answers a result (`?` applies): true
 - permission: 
 
 ### find_all
@@ -454,6 +508,7 @@ Every non-overlapping match, in order, as `ok(list)`.
 
 - arity: 2
 - effectful: false
+- answers a result (`?` applies): true
 - permission: 
 
 ### captures
@@ -462,6 +517,7 @@ The first match's groups as `ok(list)` — the whole match first, then each grou
 
 - arity: 2
 - effectful: false
+- answers a result (`?` applies): true
 - permission: 
 
 ### replace
@@ -470,6 +526,7 @@ Every match replaced. `$1`, `$2`, `${name}` in the replacement refer to capture 
 
 - arity: 3
 - effectful: false
+- answers a result (`?` applies): true
 - permission: 
 
 ### split
@@ -478,6 +535,7 @@ The text split around every match of the pattern, as `ok(list)`.
 
 - arity: 2
 - effectful: false
+- answers a result (`?` applies): true
 - permission: 
 
 ## @env
@@ -488,6 +546,7 @@ Get an environment variable or none.
 
 - arity: 1
 - effectful: true
+- answers a result (`?` applies): false
 - permission: env
 
 ### require
@@ -496,6 +555,7 @@ Get a required environment variable as result.
 
 - arity: 1
 - effectful: true
+- answers a result (`?` applies): true
 - permission: env
 
 ### all
@@ -504,6 +564,7 @@ Return the environment variables this script may read, as a record. With `--allo
 
 - arity: 0
 - effectful: true
+- answers a result (`?` applies): false
 - permission: env
 
 ### set
@@ -512,6 +573,7 @@ Set an environment variable for this run. Needs `--allow env:write` (or `env:wri
 
 - arity: 2
 - effectful: true
+- answers a result (`?` applies): false
 - permission: env:write
 
 ## @sys
@@ -522,6 +584,7 @@ The process's current working directory, as a string. Effectful: it is where rel
 
 - arity: 0
 - effectful: true
+- answers a result (`?` applies): false
 - permission: sys
 
 ### home
@@ -530,6 +593,7 @@ The invoking user's home directory, or `none` when the platform does not say. Re
 
 - arity: 0
 - effectful: true
+- answers a result (`?` applies): false
 - permission: sys
 
 ### temp_dir
@@ -538,6 +602,7 @@ The directory the platform offers for temporary files, as a string. Nothing is c
 
 - arity: 0
 - effectful: true
+- answers a result (`?` applies): false
 - permission: sys
 
 ### os
@@ -546,6 +611,7 @@ The operating system this is running on: `linux`, `macos`, `windows`, `wasm`, an
 
 - arity: 0
 - effectful: true
+- answers a result (`?` applies): false
 - permission: sys
 
 ### arch
@@ -554,6 +620,7 @@ The processor architecture: `x86_64`, `aarch64`, `wasm32`, and so on. `std::env:
 
 - arity: 0
 - effectful: true
+- answers a result (`?` applies): false
 - permission: sys
 
 ### pid
@@ -562,6 +629,7 @@ This process's identifier, as an integer. Native only.
 
 - arity: 0
 - effectful: true
+- answers a result (`?` applies): false
 - permission: sys
 
 ### hostname
@@ -570,6 +638,7 @@ The machine's hostname, or `none` when it cannot be determined. Native only.
 
 - arity: 0
 - effectful: true
+- answers a result (`?` applies): false
 - permission: sys
 
 ## @process
@@ -580,6 +649,7 @@ Run a command with an argument list (no shell). Answers `ok(⟨status, stdout, s
 
 - arity: 3
 - effectful: true
+- answers a result (`?` applies): true
 - permission: process
 
 ### args
@@ -588,6 +658,7 @@ Arguments passed to this script after `--`, as a list of strings. Needs no permi
 
 - arity: 0
 - effectful: true
+- answers a result (`?` applies): false
 - permission: 
 
 ### exit
@@ -596,6 +667,7 @@ End the run immediately with a chosen exit status, 0–255. Nothing after the ca
 
 - arity: 1
 - effectful: true
+- answers a result (`?` applies): false
 - permission: 
 
 ### which
@@ -604,6 +676,7 @@ Locate an executable on PATH. Reads the PATH environment variable and probes the
 
 - arity: 1
 - effectful: true
+- answers a result (`?` applies): true
 - permission: process
 
 ## @random
@@ -614,6 +687,7 @@ Random integer in [min, max].
 
 - arity: 2
 - effectful: true
+- answers a result (`?` applies): false
 - permission: random
 
 ### float
@@ -622,6 +696,7 @@ Random float in [0, 1).
 
 - arity: 0
 - effectful: true
+- answers a result (`?` applies): false
 - permission: random
 
 ### choose
@@ -630,6 +705,7 @@ Choose a random element from a list.
 
 - arity: 1
 - effectful: true
+- answers a result (`?` applies): false
 - permission: random
 
 ### shuffle
@@ -638,6 +714,7 @@ Return a shuffled copy of a list.
 
 - arity: 1
 - effectful: true
+- answers a result (`?` applies): false
 - permission: random
 
 ### uuid
@@ -646,6 +723,7 @@ Generate a UUID v4 string.
 
 - arity: 0
 - effectful: true
+- answers a result (`?` applies): false
 - permission: random
 
 ### seed
@@ -654,6 +732,7 @@ Reseed the RNG for deterministic sequences.
 
 - arity: 1
 - effectful: true
+- answers a result (`?` applies): false
 - permission: random
 
 ## @http
@@ -664,6 +743,7 @@ Start an HTTP server and block until shutdown. Loopback (127.0.0.0/8, ::1, local
 
 - arity: 2
 - effectful: true
+- answers a result (`?` applies): false
 - permission: net
 
 ### get
@@ -672,6 +752,7 @@ GET a URL. Returns ok(response) or err(record). Needs --allow net=<host>.
 
 - arity: 1
 - effectful: true
+- answers a result (`?` applies): true
 - permission: net
 
 ### post
@@ -680,6 +761,7 @@ POST a body to a URL. A record body is sent as JSON, a string as-is. Needs --all
 
 - arity: 2
 - effectful: true
+- answers a result (`?` applies): true
 - permission: net
 
 ### request
@@ -688,6 +770,7 @@ Send a request described by a record: <<method, url, headers, body, timeout_ms>>
 
 - arity: 1
 - effectful: true
+- answers a result (`?` applies): true
 - permission: net
 
 ### response
@@ -696,6 +779,7 @@ Build an explicit response record `⟨status, body, headers⟩`. Body and header
 
 - arity: 3
 - effectful: false
+- answers a result (`?` applies): false
 - permission: 
 
 ### file
@@ -704,6 +788,7 @@ Read a file under `root` and build a response for it, with `content-type` from t
 
 - arity: 2
 - effectful: true
+- answers a result (`?` applies): true
 - permission: fs
 
 ### log
@@ -712,6 +797,7 @@ Middleware: log each request as `rite: METHOD path status duration` to stderr. E
 
 - arity: 0
 - effectful: false
+- answers a result (`?` applies): false
 - permission: 
 
 ### recover
@@ -720,6 +806,7 @@ Middleware: convert handler panics/errors into JSON 500 responses. Enable with `
 
 - arity: 0
 - effectful: false
+- answers a result (`?` applies): false
 - permission: 
 
 ## @mcp
@@ -730,6 +817,7 @@ Serve the Model Context Protocol and block until shutdown. Takes a server name, 
 
 - arity: 2
 - effectful: true
+- answers a result (`?` applies): false
 - permission: net
 
 ### progress
@@ -738,6 +826,7 @@ Report progress from inside a tool body: `! @mcp.progress(0.5, "halfway")`. Send
 
 - arity: 2
 - effectful: true
+- answers a result (`?` applies): false
 - permission: 
 
 ### log
@@ -746,6 +835,7 @@ Middleware marker: `use @mcp.log` inside an `@mcp.serve` block writes one struct
 
 - arity: 0
 - effectful: false
+- answers a result (`?` applies): false
 - permission: 
 
 ### tool_schema
@@ -754,6 +844,7 @@ The JSON Schema a function would be published with, derived from its declared pa
 
 - arity: 1
 - effectful: false
+- answers a result (`?` applies): false
 - permission: 
 
 ### connect
@@ -762,6 +853,7 @@ Open a connection to another MCP server and return `ok(handle)`. The spec is a r
 
 - arity: 1
 - effectful: true
+- answers a result (`?` applies): true
 - permission: process
 
 ### tools
@@ -770,6 +862,7 @@ What a connected server offers: `ok([⟨name, description, input_schema⟩])`. `
 
 - arity: 1
 - effectful: true
+- answers a result (`?` applies): true
 - permission: 
 
 ### call_tool
@@ -778,6 +871,7 @@ Call a tool on a connected server: `! @mcp.call_tool(c, "add", ⟨a: 2, b: 3⟩)
 
 - arity: 3
 - effectful: true
+- answers a result (`?` applies): true
 - permission: 
 
 ### resources
@@ -786,6 +880,7 @@ What a connected server publishes: `ok([⟨uri, name, description⟩])`.
 
 - arity: 1
 - effectful: true
+- answers a result (`?` applies): true
 - permission: 
 
 ### read_resource
@@ -794,6 +889,7 @@ Read one resource by URI: `! @mcp.read_resource(c, "config://app")`. Answers `ok
 
 - arity: 2
 - effectful: true
+- answers a result (`?` applies): true
 - permission: 
 
 ### prompts
@@ -802,6 +898,7 @@ What prompts a connected server offers: `ok([⟨name, description, arguments⟩]
 
 - arity: 1
 - effectful: true
+- answers a result (`?` applies): true
 - permission: 
 
 ### get_prompt
@@ -810,6 +907,7 @@ Render a prompt: `! @mcp.get_prompt(c, "review", ⟨code: src⟩)`. Answers `ok(
 
 - arity: 3
 - effectful: true
+- answers a result (`?` applies): true
 - permission: 
 
 ### close
@@ -818,6 +916,7 @@ Close a connection handle. Under stdio the server is sent EOF and then stopped. 
 
 - arity: 1
 - effectful: true
+- answers a result (`?` applies): true
 - permission: 
 
 ## @udp
@@ -828,6 +927,7 @@ Bind a UDP socket and return ok(handle). Loopback (127.0.0.0/8, ::1, localhost) 
 
 - arity: 1
 - effectful: true
+- answers a result (`?` applies): true
 - permission: net
 
 ### local_addr
@@ -836,6 +936,7 @@ The address a socket is actually bound to, as "host:port". Returns ok(string).
 
 - arity: 1
 - effectful: true
+- answers a result (`?` applies): true
 - permission: net
 
 ### send_to
@@ -844,6 +945,7 @@ Send one datagram to "host:port". The payload is a string (sent as UTF-8) or a b
 
 - arity: 3
 - effectful: true
+- answers a result (`?` applies): true
 - permission: net
 
 ### recv_from
@@ -852,6 +954,7 @@ Wait up to timeout_ms (default 1000) for one datagram. Returns ok(⟨from, data,
 
 - arity: 2
 - effectful: true
+- answers a result (`?` applies): true
 - permission: net
 
 ### close
@@ -860,6 +963,7 @@ Close a socket handle. Closing an unknown or already-closed handle answers ok(no
 
 - arity: 1
 - effectful: true
+- answers a result (`?` applies): true
 - permission: net
 
 ## @tcp
@@ -870,6 +974,7 @@ Open a TCP connection to "host:port" and return ok(handle). Needs --allow net=<h
 
 - arity: 1
 - effectful: true
+- answers a result (`?` applies): true
 - permission: net
 
 ### send
@@ -878,6 +983,7 @@ Write the whole payload to a connection. The payload is a string (sent as UTF-8)
 
 - arity: 2
 - effectful: true
+- answers a result (`?` applies): true
 - permission: net
 
 ### recv
@@ -886,6 +992,7 @@ Read up to max_bytes (default 65536), waiting at most timeout_ms (default 1000).
 
 - arity: 3
 - effectful: true
+- answers a result (`?` applies): true
 - permission: net
 
 ### peer_addr
@@ -894,6 +1001,7 @@ The address at the other end of a connection, as "host:port". Returns ok(string)
 
 - arity: 1
 - effectful: true
+- answers a result (`?` applies): true
 - permission: net
 
 ### local_addr
@@ -902,6 +1010,7 @@ This end of a connection, as "host:port". Returns ok(string). Useful on a client
 
 - arity: 1
 - effectful: true
+- answers a result (`?` applies): true
 - permission: net
 
 ### close
@@ -910,6 +1019,7 @@ Close a connection handle. Closing an unknown or already-closed handle answers o
 
 - arity: 1
 - effectful: true
+- answers a result (`?` applies): true
 - permission: net
 
 ### listen
@@ -918,6 +1028,7 @@ Accept TCP connections and run a block per connection: `! @tcp.listen "127.0.0.1
 
 - arity: 2
 - effectful: true
+- answers a result (`?` applies): false
 - permission: net
 
 ## @game
@@ -928,6 +1039,7 @@ Register an item entity.
 
 - arity: 2
 - effectful: true
+- answers a result (`?` applies): false
 - permission: 
 
 ### register_room
@@ -936,6 +1048,7 @@ Register a room entity.
 
 - arity: 2
 - effectful: true
+- answers a result (`?` applies): false
 - permission: 
 
 ### register_world
@@ -944,6 +1057,7 @@ Register world metadata.
 
 - arity: 2
 - effectful: true
+- answers a result (`?` applies): false
 - permission: 
 
 ### say
@@ -952,6 +1066,7 @@ Emit a narrative message.
 
 - arity: 1
 - effectful: true
+- answers a result (`?` applies): false
 - permission: 
 
 ### reveal
@@ -960,6 +1075,7 @@ Reveal a room or flag.
 
 - arity: 1
 - effectful: true
+- answers a result (`?` applies): false
 - permission: 
 
 ### go
@@ -968,6 +1084,7 @@ Move through an exit.
 
 - arity: 1
 - effectful: true
+- answers a result (`?` applies): false
 - permission: 
 
 ### take
@@ -976,6 +1093,7 @@ Add item to inventory.
 
 - arity: 1
 - effectful: true
+- answers a result (`?` applies): false
 - permission: 
 
 ### drop
@@ -984,6 +1102,7 @@ Remove item from inventory.
 
 - arity: 1
 - effectful: true
+- answers a result (`?` applies): false
 - permission: 
 
 ### look
@@ -992,6 +1111,7 @@ Describe current room.
 
 - arity: 0
 - effectful: false
+- answers a result (`?` applies): false
 - permission: 
 
 ### inventory
@@ -1000,6 +1120,7 @@ List inventory item ids.
 
 - arity: 0
 - effectful: false
+- answers a result (`?` applies): false
 - permission: 
 
 ### save
@@ -1008,6 +1129,7 @@ Serialize game state to JSON string.
 
 - arity: 0
 - effectful: false
+- answers a result (`?` applies): true
 - permission: 
 
 ### load
@@ -1016,6 +1138,7 @@ Load game state from JSON string.
 
 - arity: 1
 - effectful: true
+- answers a result (`?` applies): true
 - permission: 
 
 ### start
@@ -1024,6 +1147,7 @@ Start game at a room.
 
 - arity: 1
 - effectful: true
+- answers a result (`?` applies): false
 - permission: 
 
 ### command
@@ -1032,6 +1156,7 @@ Parse and run a player command.
 
 - arity: 1
 - effectful: true
+- answers a result (`?` applies): false
 - permission: 
 
 ### messages
@@ -1040,6 +1165,7 @@ Drain pending narrative messages.
 
 - arity: 0
 - effectful: false
+- answers a result (`?` applies): false
 - permission: 
 
 ### state
@@ -1048,6 +1174,7 @@ Return current game state record.
 
 - arity: 0
 - effectful: false
+- answers a result (`?` applies): false
 - permission: 
 
 ## @store
@@ -1058,6 +1185,7 @@ Get a value from an in-memory namespace.
 
 - arity: 2
 - effectful: false
+- answers a result (`?` applies): true
 - permission: 
 
 ### set
@@ -1066,6 +1194,7 @@ Set a value in an in-memory namespace.
 
 - arity: 3
 - effectful: true
+- answers a result (`?` applies): true
 - permission: 
 
 ### delete
@@ -1074,6 +1203,7 @@ Delete a key from a namespace.
 
 - arity: 2
 - effectful: true
+- answers a result (`?` applies): true
 - permission: 
 
 ## @db
@@ -1084,6 +1214,7 @@ Open a DuckDB connection. Path omitted or ":memory:" → in-memory. Needs --allo
 
 - arity: 0
 - effectful: true
+- answers a result (`?` applies): true
 - permission: db
 
 ### close
@@ -1092,6 +1223,7 @@ Close a database connection handle.
 
 - arity: 1
 - effectful: true
+- answers a result (`?` applies): true
 - permission: db
 
 ### exec
@@ -1100,6 +1232,7 @@ Execute SQL that does not return rows (DDL/DML). Optional params list.
 
 - arity: 2
 - effectful: true
+- answers a result (`?` applies): true
 - permission: db
 
 ### query
@@ -1108,6 +1241,7 @@ Run a SQL query and return ok(list of records). Optional params list.
 
 - arity: 2
 - effectful: true
+- answers a result (`?` applies): true
 - permission: db
 
 ### prepare
@@ -1116,6 +1250,7 @@ Prepare a SQL statement; returns a statement handle.
 
 - arity: 2
 - effectful: true
+- answers a result (`?` applies): true
 - permission: db
 
 ### query_prepared
@@ -1124,6 +1259,7 @@ Execute a prepared statement as a query. Optional params list.
 
 - arity: 1
 - effectful: true
+- answers a result (`?` applies): true
 - permission: db
 
 ### exec_prepared
@@ -1132,6 +1268,7 @@ Execute a prepared statement without returning rows. Optional params list.
 
 - arity: 1
 - effectful: true
+- answers a result (`?` applies): true
 - permission: db
 
 ### close_stmt
@@ -1140,6 +1277,7 @@ Drop a prepared statement handle.
 
 - arity: 1
 - effectful: true
+- answers a result (`?` applies): true
 - permission: db
 
 ### begin
@@ -1148,6 +1286,7 @@ BEGIN a transaction on the connection.
 
 - arity: 1
 - effectful: true
+- answers a result (`?` applies): true
 - permission: db
 
 ### commit
@@ -1156,6 +1295,7 @@ COMMIT the current transaction.
 
 - arity: 1
 - effectful: true
+- answers a result (`?` applies): true
 - permission: db
 
 ### rollback
@@ -1164,6 +1304,7 @@ ROLLBACK the current transaction.
 
 - arity: 1
 - effectful: true
+- answers a result (`?` applies): true
 - permission: db
 
 ## @proto
@@ -1174,6 +1315,7 @@ Compile `.proto` source text into a schema handle. Answers `ok(handle)`, or `err
 
 - arity: 1
 - effectful: true
+- answers a result (`?` applies): true
 - permission: 
 
 ### compile_all
@@ -1182,6 +1324,7 @@ Compile several `.proto` sources that import each other, as a record of file nam
 
 - arity: 1
 - effectful: true
+- answers a result (`?` applies): true
 - permission: 
 
 ### load_file
@@ -1190,6 +1333,7 @@ Read and compile a `.proto` file, resolving its imports from the containing dire
 
 - arity: 1
 - effectful: true
+- answers a result (`?` applies): true
 - permission: fs:read
 
 ### load_set
@@ -1198,6 +1342,7 @@ Build a schema handle from an encoded `FileDescriptorSet` (`protoc --descriptor_
 
 - arity: 1
 - effectful: true
+- answers a result (`?` applies): true
 - permission: 
 
 ### decode
@@ -1206,6 +1351,7 @@ Decode bytes as the named message. Answers `ok(record)` holding only the fields 
 
 - arity: 3
 - effectful: false
+- answers a result (`?` applies): true
 - permission: 
 
 ### encode
@@ -1214,6 +1360,7 @@ Encode a record as the named message. Answers `ok(bytes)`, or `err` for a key th
 
 - arity: 3
 - effectful: false
+- answers a result (`?` applies): true
 - permission: 
 
 ### messages
@@ -1222,5 +1369,6 @@ Every message type the schema defines, as a list of fully-qualified names.
 
 - arity: 1
 - effectful: false
+- answers a result (`?` applies): true
 - permission: 
 

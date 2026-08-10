@@ -36,6 +36,7 @@ impl RandomCap {
             arity: 2,
             effectful: true,
             permission: "random",
+            returns_result: false,
         },
         NativeFunctionDescriptor {
             name: "float",
@@ -43,6 +44,7 @@ impl RandomCap {
             arity: 0,
             effectful: true,
             permission: "random",
+            returns_result: false,
         },
         NativeFunctionDescriptor {
             name: "choose",
@@ -50,6 +52,7 @@ impl RandomCap {
             arity: 1,
             effectful: true,
             permission: "random",
+            returns_result: false,
         },
         NativeFunctionDescriptor {
             name: "shuffle",
@@ -57,6 +60,7 @@ impl RandomCap {
             arity: 1,
             effectful: true,
             permission: "random",
+            returns_result: false,
         },
         NativeFunctionDescriptor {
             name: "uuid",
@@ -64,6 +68,7 @@ impl RandomCap {
             arity: 0,
             effectful: true,
             permission: "random",
+            returns_result: false,
         },
         NativeFunctionDescriptor {
             name: "seed",
@@ -71,6 +76,7 @@ impl RandomCap {
             arity: 1,
             effectful: true,
             permission: "random",
+            returns_result: false,
         },
     ];
 

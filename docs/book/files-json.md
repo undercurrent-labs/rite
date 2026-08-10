@@ -277,7 +277,7 @@ rows ← [
   ⟨name: "Ada", age: "36"⟩,
   ⟨name: "Bob", age: "42"⟩
 ]
-text ← @csv.encode(rows)
+text ← @csv.encode(rows)?
 ! @console.println(text)
 
 decoded ← @csv.decode(text)?
@@ -287,7 +287,7 @@ decoded ← @csv.decode(text)?
 | Call | Meaning |
 |------|---------|
 | `@csv.decode(text, opts?)` | Parse CSV → `ok(list<record>)` / `err(...)` |
-| `@csv.encode(rows, opts?)` | Serialize list of records (or list of lists) → string |
+| `@csv.encode(rows, opts?)` | Serialize list of records (or list of lists) → `ok(string)` / `err(...)` |
 | `@csv.read(path, opts?)` | Read file + decode (needs `fs:read`) |
 | `@csv.write(path, rows, opts?)` | Encode + write file (needs `fs:write`) |
 

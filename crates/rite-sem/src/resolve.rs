@@ -42,202 +42,205 @@ use std::collections::{HashMap, HashSet};
 /// read can observe them, but reading it is like reading a mutable binding,
 /// which needs no marker. Hence `@game.look` and `@store.get` are pure here
 /// while `@game.go` and `@store.set` are not.
-pub const HOST_EFFECTS: &[(&str, bool)] = &[
+/// Columns: path, effectful (needs `!`), returns a result value (so `?`
+/// applies). Cross-validated against the capability descriptors in both
+/// directions by `crates/rite-caps/tests/effect_parity.rs`.
+pub const HOST_EFFECTS: &[(&str, bool, bool)] = &[
     // @stdin — the process's own input. Reads are effects.
-    ("stdin.read", true),
-    ("stdin.lines", true),
+    ("stdin.read", true, false),
+    ("stdin.lines", true, false),
     // @console — the terminal.
-    ("console.print", true),
-    ("console.println", true),
-    ("console.warn", true),
-    ("console.error", true),
-    ("console.inspect", true),
-    ("console.read_line", true),
+    ("console.print", true, false),
+    ("console.println", true, false),
+    ("console.warn", true, false),
+    ("console.error", true, false),
+    ("console.inspect", true, false),
+    ("console.read_line", true, false),
     // @fs — the filesystem. Reads observe it; writes change it.
-    ("fs.read", true),
-    ("fs.read_bytes", true),
-    ("fs.write", true),
-    ("fs.append", true),
-    ("fs.lines", true),
-    ("fs.exists", true),
-    ("fs.metadata", true),
-    ("fs.glob", true),
-    ("fs.mkdir", true),
-    ("fs.remove", true),
-    ("fs.copy", true),
-    ("fs.move", true),
+    ("fs.read", true, true),
+    ("fs.read_bytes", true, true),
+    ("fs.write", true, true),
+    ("fs.append", true, true),
+    ("fs.lines", true, true),
+    ("fs.exists", true, false),
+    ("fs.metadata", true, true),
+    ("fs.glob", true, true),
+    ("fs.mkdir", true, true),
+    ("fs.remove", true, true),
+    ("fs.copy", true, true),
+    ("fs.move", true, true),
     // Open handles. Every one touches the file behind the handle — even `close`,
     // which flushes — so every one takes a marker.
-    ("fs.open", true),
-    ("fs.read_chunk", true),
-    ("fs.read_line", true),
-    ("fs.write_chunk", true),
-    ("fs.seek", true),
-    ("fs.flush", true),
-    ("fs.close", true),
+    ("fs.open", true, true),
+    ("fs.read_chunk", true, true),
+    ("fs.read_line", true, true),
+    ("fs.write_chunk", true, true),
+    ("fs.seek", true, true),
+    ("fs.flush", true, true),
+    ("fs.close", true, true),
     // @json — encode/decode are pure string transforms; read/write touch disk.
     // @regex — pure text transforms; a pattern is data.
-    ("regex.is_match", false),
-    ("regex.find", false),
-    ("regex.find_all", false),
-    ("regex.captures", false),
-    ("regex.replace", false),
-    ("regex.split", false),
-    ("json.decode", false),
-    ("json.encode", false),
-    ("json.encode_pretty", false),
-    ("json.read", true),
-    ("json.write", true),
+    ("regex.is_match", false, true),
+    ("regex.find", false, true),
+    ("regex.find_all", false, true),
+    ("regex.captures", false, true),
+    ("regex.replace", false, true),
+    ("regex.split", false, true),
+    ("json.decode", false, true),
+    ("json.encode", false, false),
+    ("json.encode_pretty", false, false),
+    ("json.read", true, true),
+    ("json.write", true, true),
     // @csv — as @json.
-    ("csv.decode", false),
-    ("csv.encode", false),
-    ("csv.read", true),
-    ("csv.write", true),
+    ("csv.decode", false, true),
+    ("csv.encode", false, true),
+    ("csv.read", true, true),
+    ("csv.write", true, true),
     // @crypto — value transforms. A digest, an HMAC and an encoding are functions
     // of their arguments alone: the same input gives the same answer on every run
     // and nothing outside the program is touched, so they take no marker. Only
     // `random_bytes` reads the OS entropy pool, which is state outside the program
     // and different every call — effectful for the same reason `@clock.now` is.
-    ("crypto.sha256", false),
-    ("crypto.sha512", false),
-    ("crypto.hmac_sha256", false),
-    ("crypto.random_bytes", true),
-    ("crypto.constant_time_eq", false),
-    ("crypto.base64_encode", false),
-    ("crypto.base64_decode", false),
-    ("crypto.hex_encode", false),
-    ("crypto.hex_decode", false),
+    ("crypto.sha256", false, false),
+    ("crypto.sha512", false, false),
+    ("crypto.hmac_sha256", false, false),
+    ("crypto.random_bytes", true, false),
+    ("crypto.constant_time_eq", false, false),
+    ("crypto.base64_encode", false, false),
+    ("crypto.base64_decode", false, true),
+    ("crypto.hex_encode", false, false),
+    ("crypto.hex_decode", false, true),
     // @clock — `now`/`sleep` consult the wall clock; the rest are value math.
-    ("clock.now", true),
-    ("clock.parse", false),
-    ("clock.format", false),
-    ("clock.add", false),
-    ("clock.diff", false),
-    ("clock.sleep", true),
-    ("clock.duration", false),
+    ("clock.now", true, false),
+    ("clock.parse", false, true),
+    ("clock.format", false, true),
+    ("clock.add", false, true),
+    ("clock.diff", false, true),
+    ("clock.sleep", true, false),
+    ("clock.duration", false, true),
     // @env — the process environment.
-    ("env.get", true),
-    ("env.require", true),
-    ("env.all", true),
-    ("env.set", true),
+    ("env.get", true, false),
+    ("env.require", true, true),
+    ("env.all", true, false),
+    ("env.set", true, false),
     // @sys — ambient facts about the process and the machine. All effectful:
     // none of them is constant for the life of a run, and a pure function that
     // answers differently on the second call is worse than an effectful one.
-    ("sys.cwd", true),
-    ("sys.home", true),
-    ("sys.temp_dir", true),
-    ("sys.os", true),
-    ("sys.arch", true),
-    ("sys.pid", true),
-    ("sys.hostname", true),
+    ("sys.cwd", true, false),
+    ("sys.home", true, false),
+    ("sys.temp_dir", true, false),
+    ("sys.os", true, false),
+    ("sys.arch", true, false),
+    ("sys.pid", true, false),
+    ("sys.hostname", true, false),
     // @process — subprocesses. `which` probes PATH and the filesystem.
-    ("process.run", true),
-    ("process.which", true),
+    ("process.run", true, true),
+    ("process.which", true, true),
     // `args` observes what the invoker typed — outside the program, and different
     // between runs, so it takes a marker for the same reason `@clock.now` does.
-    ("process.args", true),
+    ("process.args", true, false),
     // `exit` ends the process. Nothing is more effectful than that.
-    ("process.exit", true),
+    ("process.exit", true, false),
     // @random — the entropy source (`seed` mutates it).
-    ("random.int", true),
-    ("random.float", true),
-    ("random.choose", true),
-    ("random.shuffle", true),
-    ("random.uuid", true),
-    ("random.seed", true),
+    ("random.int", true, false),
+    ("random.float", true, false),
+    ("random.choose", true, false),
+    ("random.shuffle", true, false),
+    ("random.uuid", true, false),
+    ("random.seed", true, false),
     // @http — `listen` binds a socket. The others build values: `response`
     // is a record constructor, `log`/`recover` are middleware markers named
     // in `use @http.log` rather than called for their effect.
-    ("http.listen", true),
+    ("http.listen", true, false),
     // Outbound requests reach the network.
-    ("http.get", true),
-    ("http.post", true),
-    ("http.request", true),
-    ("http.response", false),
-    ("http.file", true),
-    ("http.log", false),
-    ("http.recover", false),
+    ("http.get", true, true),
+    ("http.post", true, true),
+    ("http.request", true, true),
+    ("http.response", false, false),
+    ("http.file", true, true),
+    ("http.log", false, false),
+    ("http.recover", false, false),
     // @mcp — `serve` claims a transport (stdin/stdout, or a socket) and then runs
     // script bodies for whoever is on the other end. `progress` writes a notification
     // onto that transport. `log` is a marker named in `use @mcp.log`, and
     // `tool_schema` is a pure derivation from a function's declared types.
-    ("mcp.serve", true),
-    ("mcp.progress", true),
-    ("mcp.log", false),
-    ("mcp.tool_schema", false),
+    ("mcp.serve", true, false),
+    ("mcp.progress", true, false),
+    ("mcp.log", false, false),
+    ("mcp.tool_schema", false, false),
     // The client half. `connect` starts a subprocess or reaches a host; every call
     // that takes its handle asks another program a question and reads the answer,
     // which is an observation of state outside this one.
-    ("mcp.connect", true),
-    ("mcp.tools", true),
-    ("mcp.call_tool", true),
-    ("mcp.resources", true),
-    ("mcp.read_resource", true),
-    ("mcp.prompts", true),
-    ("mcp.get_prompt", true),
-    ("mcp.close", true),
+    ("mcp.connect", true, true),
+    ("mcp.tools", true, true),
+    ("mcp.call_tool", true, true),
+    ("mcp.resources", true, true),
+    ("mcp.read_resource", true, true),
+    ("mcp.prompts", true, true),
+    ("mcp.get_prompt", true, true),
+    ("mcp.close", true, true),
     // @udp — datagram sockets. Every one of these touches the socket: `bind` claims
     // a port, `local_addr` asks the OS which one it got, and the two transfers move
     // bytes on and off the wire.
-    ("udp.bind", true),
-    ("udp.local_addr", true),
-    ("udp.send_to", true),
-    ("udp.recv_from", true),
-    ("udp.close", true),
+    ("udp.bind", true, true),
+    ("udp.local_addr", true, true),
+    ("udp.send_to", true, true),
+    ("udp.recv_from", true, true),
+    ("udp.close", true, true),
     // @tcp — byte streams. `connect` dials out, `listen` claims a port and then
     // serves, and the two transfers move bytes on and off the wire. `close` releases
     // a file descriptor. There is nothing pure here.
-    ("tcp.connect", true),
-    ("tcp.send", true),
-    ("tcp.recv", true),
-    ("tcp.peer_addr", true),
-    ("tcp.local_addr", true),
-    ("tcp.close", true),
-    ("tcp.listen", true),
+    ("tcp.connect", true, true),
+    ("tcp.send", true, true),
+    ("tcp.recv", true, true),
+    ("tcp.peer_addr", true, true),
+    ("tcp.local_addr", true, true),
+    ("tcp.close", true, true),
+    ("tcp.listen", true, false),
     // @game — in-process world state: writes marked, reads not.
-    ("game.register_item", true),
-    ("game.register_room", true),
-    ("game.register_world", true),
-    ("game.say", true),
-    ("game.reveal", true),
-    ("game.go", true),
-    ("game.take", true),
-    ("game.drop", true),
-    ("game.look", false),
-    ("game.inventory", false),
-    ("game.save", false),
-    ("game.load", true),
-    ("game.start", true),
-    ("game.command", true),
-    ("game.messages", false),
-    ("game.state", false),
+    ("game.register_item", true, false),
+    ("game.register_room", true, false),
+    ("game.register_world", true, false),
+    ("game.say", true, false),
+    ("game.reveal", true, false),
+    ("game.go", true, false),
+    ("game.take", true, false),
+    ("game.drop", true, false),
+    ("game.look", false, false),
+    ("game.inventory", false, false),
+    ("game.save", false, true),
+    ("game.load", true, true),
+    ("game.start", true, false),
+    ("game.command", true, false),
+    ("game.messages", false, false),
+    ("game.state", false, false),
     // @store — in-process key/value state: writes marked, reads not.
-    ("store.get", false),
-    ("store.set", true),
-    ("store.delete", true),
+    ("store.get", false, true),
+    ("store.set", true, true),
+    ("store.delete", true, true),
     // @proto — protobuf. Building a schema hands out a handle and so changes
     // state the capability owns; `load_file` also reads the disk. Decoding and
     // encoding are functions of the handle passed to them, and a pool never
     // changes once built, so they are pure in the way `@json.decode` is.
-    ("proto.compile", true),
-    ("proto.compile_all", true),
-    ("proto.load_file", true),
-    ("proto.load_set", true),
-    ("proto.decode", false),
-    ("proto.encode", false),
-    ("proto.messages", false),
+    ("proto.compile", true, true),
+    ("proto.compile_all", true, true),
+    ("proto.load_file", true, true),
+    ("proto.load_set", true, true),
+    ("proto.decode", false, true),
+    ("proto.encode", false, true),
+    ("proto.messages", false, true),
     // @db — an external database, including `query`.
-    ("db.open", true),
-    ("db.close", true),
-    ("db.exec", true),
-    ("db.query", true),
-    ("db.prepare", true),
-    ("db.query_prepared", true),
-    ("db.exec_prepared", true),
-    ("db.close_stmt", true),
-    ("db.begin", true),
-    ("db.commit", true),
-    ("db.rollback", true),
+    ("db.open", true, true),
+    ("db.close", true, true),
+    ("db.exec", true, true),
+    ("db.query", true, true),
+    ("db.prepare", true, true),
+    ("db.query_prepared", true, true),
+    ("db.exec_prepared", true, true),
+    ("db.close_stmt", true, true),
+    ("db.begin", true, true),
+    ("db.commit", true, true),
+    ("db.rollback", true, true),
 ];
 
 /// Pure builtins predefined in every scope. Single list — `Resolver::new`
@@ -1229,7 +1232,10 @@ impl Resolver {
                 self.resolve_expr(&i.index, file, false);
             }
             // `?` unwraps the result of the very call the `!` marks.
-            Expr::Try(t) => self.resolve_expr(&t.expr, file, in_effect),
+            Expr::Try(t) => {
+                self.check_try_target(&t.expr, file);
+                self.resolve_expr(&t.expr, file, in_effect)
+            }
             Expr::Coalesce(c) => {
                 // `x ?? fallback`: `x` is the subject, the fallback is not.
                 self.resolve_expr(&c.left, file, in_effect);
@@ -1516,6 +1522,58 @@ impl Resolver {
 
     /// `true` when module `qualifier` exports `field`; otherwise pushes the
     /// E020 "module has no public …" diagnostic naming the real exports.
+    /// E017 when `?` is applied to a host call the table says never answers a
+    /// result. `@fs.exists(p)?` and `@clock.sleep(ms)?` both read as right —
+    /// the neighbouring calls all need `?` — and both used to pass `rite
+    /// check` and die on the line's first execution.
+    ///
+    /// Only capability calls are checked: the builtin surface is where a
+    /// caller cannot know the shape without the documentation. A path whose
+    /// head is a module qualifier is skipped (module functions may answer
+    /// anything), and an unknown path is left for the E042 check.
+    fn check_try_target(&mut self, expr: &Expr, file: rite_core::FileId) {
+        // Strip the transparent wrappers `?` sees through: `! call?`,
+        // `(call)?`.
+        let mut inner = expr;
+        loop {
+            match inner {
+                Expr::Group(g) => inner = &g.expr,
+                Expr::Unary(u) if u.op == UnaryOp::Effect => inner = &u.expr,
+                _ => break,
+            }
+        }
+        let cap = match inner {
+            Expr::Call(c) => match c.callee.as_ref() {
+                Expr::Capability(cap) => cap,
+                _ => return,
+            },
+            // A bare capability reference is invoked (see `Expr::Capability`
+            // below), so `@clock.now?` is the same mistake as `@clock.now()?`.
+            Expr::Capability(cap) => cap,
+            _ => return,
+        };
+        if self.at_module_qualifier(&cap.path) {
+            return;
+        }
+        let path = cap.path.join(".");
+        if host_returns_result(&path) == Some(false) {
+            self.diagnostics.push(
+                simple_error(
+                    rite_core::E017_TRY_ON_NON_RESULT,
+                    format!("`?` on `@{}`, which never answers a result", path),
+                    file,
+                    cap.span,
+                    "this call answers a plain value",
+                )
+                .with_help(format!(
+                    "drop the `?` — the return shape is in the capability \
+                     reference (`rite describe capability {}`)",
+                    cap.path.first().map(String::as_str).unwrap_or("")
+                )),
+            );
+        }
+    }
+
     fn check_module_export(
         &mut self,
         qualifier: &str,
@@ -1616,9 +1674,19 @@ impl Resolver {
 pub fn is_effectful(path: &str) -> bool {
     HOST_EFFECTS
         .iter()
-        .find(|(name, _)| *name == path)
-        .map(|(_, effectful)| *effectful)
+        .find(|(name, _, _)| *name == path)
+        .map(|(_, effectful, _)| *effectful)
         .unwrap_or(false)
+}
+
+/// Whether `@path` answers a result value, so postfix `?` applies to it.
+/// `None` for a path the table does not know (a module access, a typo the
+/// E042 check reports separately).
+pub fn host_returns_result(path: &str) -> Option<bool> {
+    HOST_EFFECTS
+        .iter()
+        .find(|(name, _, _)| *name == path)
+        .map(|(_, _, returns_result)| *returns_result)
 }
 
 /// Every capability namespace (`fs`, `http`, …), derived from [`HOST_EFFECTS`].
@@ -1631,7 +1699,7 @@ pub fn capability_namespaces() -> &'static HashSet<&'static str> {
     SET.get_or_init(|| {
         HOST_EFFECTS
             .iter()
-            .filter_map(|(path, _)| path.split('.').next())
+            .filter_map(|(path, _, _)| path.split('.').next())
             .collect()
     })
 }
@@ -1808,14 +1876,14 @@ mod tests {
     #[test]
     fn effect_table_has_no_duplicate_entries() {
         let mut seen = std::collections::HashSet::new();
-        for (path, _) in HOST_EFFECTS {
+        for (path, _, _) in HOST_EFFECTS {
             assert!(seen.insert(*path), "duplicate HOST_EFFECTS entry {}", path);
         }
     }
 
     #[test]
     fn effect_table_paths_are_cap_dot_function() {
-        for (path, _) in HOST_EFFECTS {
+        for (path, _, _) in HOST_EFFECTS {
             assert_eq!(
                 path.split('.').count(),
                 2,

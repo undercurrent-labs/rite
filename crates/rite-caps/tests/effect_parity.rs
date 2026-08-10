@@ -17,7 +17,7 @@
 //! that also needs `docs/` and `examples/` updated.
 
 use rite_caps::{HostCapabilities, PermissionSet};
-use rite_sem::resolve::{is_effectful, HOST_EFFECTS};
+use rite_sem::resolve::{host_returns_result, is_effectful, HOST_EFFECTS};
 use std::collections::BTreeMap;
 
 /// Every `("cap.fn", effectful)` pair the host actually registers.
@@ -43,7 +43,7 @@ fn every_descriptor_is_classified_by_the_resolver() {
     let mut missing = Vec::new();
     let mut disagree = Vec::new();
 
-    let table: BTreeMap<&str, bool> = HOST_EFFECTS.iter().copied().collect();
+    let table: BTreeMap<&str, bool> = HOST_EFFECTS.iter().map(|(p, e, _)| (*p, *e)).collect();
     for (path, effectful) in &descriptors {
         match table.get(path.as_str()) {
             None => missing.push(format!(
@@ -79,7 +79,7 @@ fn table_has_no_entries_for_functions_the_host_does_not_have() {
     let descriptors = descriptor_effects();
     let stale: Vec<&str> = HOST_EFFECTS
         .iter()
-        .map(|(path, _)| *path)
+        .map(|(path, _, _)| *path)
         .filter(|path| !descriptors.contains_key(*path))
         .collect();
     assert!(
@@ -94,7 +94,7 @@ fn table_has_no_entries_for_functions_the_host_does_not_have() {
 /// so the two assertions above really do cover what E021 does.
 #[test]
 fn is_effectful_agrees_with_the_table() {
-    for (path, effectful) in HOST_EFFECTS {
+    for (path, effectful, _) in HOST_EFFECTS {
         assert_eq!(
             is_effectful(path),
             *effectful,
@@ -137,4 +137,41 @@ fn previously_unenforced_capabilities_are_effectful() {
             path
         );
     }
+}
+
+/// Same two-directional contract as `effectful`, for the third column: the
+/// descriptors' `returns_result` and the table must agree, or E017 lies.
+#[test]
+fn returns_result_agrees_between_descriptors_and_table() {
+    let host = HostCapabilities::with_defaults(PermissionSet::default_secure());
+    let table: BTreeMap<&str, bool> = HOST_EFFECTS.iter().map(|(p, _, r)| (*p, *r)).collect();
+    let mut disagree = Vec::new();
+    for (cap, descriptors) in host.all_descriptors() {
+        for d in descriptors {
+            let path = format!("{}.{}", cap, d.name);
+            match table.get(path.as_str()) {
+                Some(&classified) if classified != d.returns_result => disagree.push(format!(
+                    "  @{}: descriptor says returns_result: {}, HOST_EFFECTS says {}",
+                    path, d.returns_result, classified
+                )),
+                // A descriptor missing from the table entirely is already
+                // reported by `every_descriptor_is_classified_by_the_resolver`.
+                _ => {}
+            }
+        }
+    }
+    assert!(
+        disagree.is_empty(),
+        "descriptor `returns_result:` flags disagree with HOST_EFFECTS:\n{}",
+        disagree.join("\n")
+    );
+    for (path, _, returns_result) in HOST_EFFECTS {
+        assert_eq!(
+            host_returns_result(path),
+            Some(*returns_result),
+            "host_returns_result(\"{}\") disagrees with its own table entry",
+            path
+        );
+    }
+    assert_eq!(host_returns_result("totally_unknown.thing"), None);
 }

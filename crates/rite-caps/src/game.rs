@@ -58,6 +58,7 @@ impl GameCap {
             arity: 2,
             effectful: true,
             permission: "",
+            returns_result: false,
         },
         NativeFunctionDescriptor {
             name: "register_room",
@@ -65,6 +66,7 @@ impl GameCap {
             arity: 2,
             effectful: true,
             permission: "",
+            returns_result: false,
         },
         NativeFunctionDescriptor {
             name: "register_world",
@@ -72,6 +74,7 @@ impl GameCap {
             arity: 2,
             effectful: true,
             permission: "",
+            returns_result: false,
         },
         NativeFunctionDescriptor {
             name: "say",
@@ -79,6 +82,7 @@ impl GameCap {
             arity: 1,
             effectful: true,
             permission: "",
+            returns_result: false,
         },
         NativeFunctionDescriptor {
             name: "reveal",
@@ -86,6 +90,7 @@ impl GameCap {
             arity: 1,
             effectful: true,
             permission: "",
+            returns_result: false,
         },
         NativeFunctionDescriptor {
             name: "go",
@@ -93,6 +98,7 @@ impl GameCap {
             arity: 1,
             effectful: true,
             permission: "",
+            returns_result: false,
         },
         NativeFunctionDescriptor {
             name: "take",
@@ -100,6 +106,7 @@ impl GameCap {
             arity: 1,
             effectful: true,
             permission: "",
+            returns_result: false,
         },
         NativeFunctionDescriptor {
             name: "drop",
@@ -107,6 +114,7 @@ impl GameCap {
             arity: 1,
             effectful: true,
             permission: "",
+            returns_result: false,
         },
         NativeFunctionDescriptor {
             name: "look",
@@ -114,6 +122,7 @@ impl GameCap {
             arity: 0,
             effectful: false,
             permission: "",
+            returns_result: false,
         },
         NativeFunctionDescriptor {
             name: "inventory",
@@ -121,6 +130,7 @@ impl GameCap {
             arity: 0,
             effectful: false,
             permission: "",
+            returns_result: false,
         },
         NativeFunctionDescriptor {
             name: "save",
@@ -128,6 +138,7 @@ impl GameCap {
             arity: 0,
             effectful: false,
             permission: "",
+            returns_result: true,
         },
         NativeFunctionDescriptor {
             name: "load",
@@ -135,6 +146,7 @@ impl GameCap {
             arity: 1,
             effectful: true,
             permission: "",
+            returns_result: true,
         },
         NativeFunctionDescriptor {
             name: "start",
@@ -142,6 +154,7 @@ impl GameCap {
             arity: 1,
             effectful: true,
             permission: "",
+            returns_result: false,
         },
         NativeFunctionDescriptor {
             name: "command",
@@ -149,6 +162,7 @@ impl GameCap {
             arity: 1,
             effectful: true,
             permission: "",
+            returns_result: false,
         },
         NativeFunctionDescriptor {
             name: "messages",
@@ -156,6 +170,7 @@ impl GameCap {
             arity: 0,
             effectful: false,
             permission: "",
+            returns_result: false,
         },
         NativeFunctionDescriptor {
             name: "state",
@@ -163,6 +178,7 @@ impl GameCap {
             arity: 0,
             effectful: false,
             permission: "",
+            returns_result: false,
         },
     ];
 

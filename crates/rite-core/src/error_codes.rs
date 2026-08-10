@@ -51,6 +51,15 @@ pub const E015_PIPELINE_RESULT_OPERAND: ErrorCode = ErrorCode(15);
 /// interpreter and the compiler backend disagreed about. `?` goes on the result:
 /// `(xs → f(a))?`.
 pub const E016_TRY_ON_PIPELINE_STAGE: ErrorCode = ErrorCode(16);
+/// `?` on a host call that never answers a result: `! @fs.exists(p)?`.
+///
+/// `@fs.exists` answers a bool and `@clock.sleep` answers none, but both are
+/// effectful, so the `!` is right and the `?` looks right beside it. The
+/// mistake used to pass `rite check` and die on the first execution of the
+/// line — in the reported case, a poller's idle branch that only ran once the
+/// queue went quiet in production. Every host function's return shape is in
+/// `HOST_EFFECTS`, so this is checkable statically.
+pub const E017_TRY_ON_NON_RESULT: ErrorCode = ErrorCode(17);
 
 // Resolve
 pub const E020_UNDEFINED_NAME: ErrorCode = ErrorCode(20);

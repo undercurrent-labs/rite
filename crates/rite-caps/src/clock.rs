@@ -29,6 +29,7 @@ impl ClockCap {
             arity: 0,
             effectful: true,
             permission: "clock",
+            returns_result: false,
         },
         NativeFunctionDescriptor {
             name: "parse",
@@ -36,6 +37,7 @@ impl ClockCap {
             arity: 1,
             effectful: false,
             permission: "clock",
+            returns_result: true,
         },
         NativeFunctionDescriptor {
             name: "format",
@@ -43,6 +45,7 @@ impl ClockCap {
             arity: 2,
             effectful: false,
             permission: "clock",
+            returns_result: true,
         },
         NativeFunctionDescriptor {
             name: "sleep",
@@ -50,6 +53,7 @@ impl ClockCap {
             arity: 1,
             effectful: true,
             permission: "clock",
+            returns_result: false,
         },
         NativeFunctionDescriptor {
             name: "add",
@@ -57,6 +61,7 @@ impl ClockCap {
             arity: 2,
             effectful: false,
             permission: "clock",
+            returns_result: true,
         },
         NativeFunctionDescriptor {
             name: "diff",
@@ -64,6 +69,7 @@ impl ClockCap {
             arity: 2,
             effectful: false,
             permission: "clock",
+            returns_result: true,
         },
         NativeFunctionDescriptor {
             name: "duration",
@@ -71,6 +77,7 @@ impl ClockCap {
             arity: 1,
             effectful: false,
             permission: "clock",
+            returns_result: true,
         },
     ];
 

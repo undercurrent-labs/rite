@@ -21,6 +21,7 @@ impl StoreCap {
             arity: 2,
             effectful: false,
             permission: "",
+            returns_result: true,
         },
         NativeFunctionDescriptor {
             name: "set",
@@ -28,6 +29,7 @@ impl StoreCap {
             arity: 3,
             effectful: true,
             permission: "",
+            returns_result: true,
         },
         NativeFunctionDescriptor {
             name: "delete",
@@ -35,6 +37,7 @@ impl StoreCap {
             arity: 2,
             effectful: true,
             permission: "",
+            returns_result: true,
         },
     ];
 

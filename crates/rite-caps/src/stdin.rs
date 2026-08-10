@@ -49,6 +49,7 @@ impl StdinCap {
             arity: 0,
             effectful: true,
             permission: "stdin",
+            returns_result: false,
         },
         NativeFunctionDescriptor {
             name: "lines",
@@ -56,6 +57,7 @@ impl StdinCap {
             arity: 0,
             effectful: true,
             permission: "stdin",
+            returns_result: false,
         },
     ];
 

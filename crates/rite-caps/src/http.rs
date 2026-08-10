@@ -105,6 +105,7 @@ impl HttpCap {
             arity: 2,
             effectful: true,
             permission: "net",
+            returns_result: false,
         },
         NativeFunctionDescriptor {
             name: "get",
@@ -112,6 +113,7 @@ impl HttpCap {
             arity: 1,
             effectful: true,
             permission: "net",
+            returns_result: true,
         },
         NativeFunctionDescriptor {
             name: "post",
@@ -119,6 +121,7 @@ impl HttpCap {
             arity: 2,
             effectful: true,
             permission: "net",
+            returns_result: true,
         },
         NativeFunctionDescriptor {
             name: "request",
@@ -126,6 +129,7 @@ impl HttpCap {
             arity: 1,
             effectful: true,
             permission: "net",
+            returns_result: true,
         },
         NativeFunctionDescriptor {
             name: "response",
@@ -133,6 +137,7 @@ impl HttpCap {
             arity: 3,
             effectful: false,
             permission: "",
+            returns_result: false,
         },
         NativeFunctionDescriptor {
             name: "file",
@@ -140,6 +145,7 @@ impl HttpCap {
             arity: 2,
             effectful: true,
             permission: "fs",
+            returns_result: true,
         },
         NativeFunctionDescriptor {
             name: "log",
@@ -147,6 +153,7 @@ impl HttpCap {
             arity: 0,
             effectful: false,
             permission: "",
+            returns_result: false,
         },
         NativeFunctionDescriptor {
             name: "recover",
@@ -154,6 +161,7 @@ impl HttpCap {
             arity: 0,
             effectful: false,
             permission: "",
+            returns_result: false,
         },
     ];
 

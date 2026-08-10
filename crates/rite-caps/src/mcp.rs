@@ -113,6 +113,7 @@ impl McpCap {
             arity: 2,
             effectful: true,
             permission: "net",
+            returns_result: false,
         },
         NativeFunctionDescriptor {
             name: "progress",
@@ -123,6 +124,7 @@ impl McpCap {
             arity: 2,
             effectful: true,
             permission: "",
+            returns_result: false,
         },
         NativeFunctionDescriptor {
             name: "log",
@@ -133,6 +135,7 @@ impl McpCap {
             arity: 0,
             effectful: false,
             permission: "",
+            returns_result: false,
         },
         NativeFunctionDescriptor {
             name: "tool_schema",
@@ -142,6 +145,7 @@ impl McpCap {
             arity: 1,
             effectful: false,
             permission: "",
+            returns_result: false,
         },
         NativeFunctionDescriptor {
             name: "connect",
@@ -157,6 +161,7 @@ impl McpCap {
             arity: 1,
             effectful: true,
             permission: "process",
+            returns_result: true,
         },
         NativeFunctionDescriptor {
             name: "tools",
@@ -165,6 +170,7 @@ impl McpCap {
             arity: 1,
             effectful: true,
             permission: "",
+            returns_result: true,
         },
         NativeFunctionDescriptor {
             name: "call_tool",
@@ -179,6 +185,7 @@ impl McpCap {
             arity: 3,
             effectful: true,
             permission: "",
+            returns_result: true,
         },
         NativeFunctionDescriptor {
             name: "resources",
@@ -186,6 +193,7 @@ impl McpCap {
             arity: 1,
             effectful: true,
             permission: "",
+            returns_result: true,
         },
         NativeFunctionDescriptor {
             name: "read_resource",
@@ -195,6 +203,7 @@ impl McpCap {
             arity: 2,
             effectful: true,
             permission: "",
+            returns_result: true,
         },
         NativeFunctionDescriptor {
             name: "prompts",
@@ -204,6 +213,7 @@ impl McpCap {
             arity: 1,
             effectful: true,
             permission: "",
+            returns_result: true,
         },
         NativeFunctionDescriptor {
             name: "get_prompt",
@@ -212,6 +222,7 @@ impl McpCap {
             arity: 3,
             effectful: true,
             permission: "",
+            returns_result: true,
         },
         NativeFunctionDescriptor {
             name: "close",
@@ -221,6 +232,7 @@ impl McpCap {
             arity: 1,
             effectful: true,
             permission: "",
+            returns_result: true,
         },
     ];
 

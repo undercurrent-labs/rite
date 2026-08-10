@@ -41,6 +41,7 @@ impl EnvCap {
             arity: 1,
             effectful: true,
             permission: "env",
+            returns_result: false,
         },
         NativeFunctionDescriptor {
             name: "require",
@@ -48,6 +49,7 @@ impl EnvCap {
             arity: 1,
             effectful: true,
             permission: "env",
+            returns_result: true,
         },
         NativeFunctionDescriptor {
             name: "all",
@@ -55,6 +57,7 @@ impl EnvCap {
             arity: 0,
             effectful: true,
             permission: "env",
+            returns_result: false,
         },
         NativeFunctionDescriptor {
             name: "set",
@@ -62,6 +65,7 @@ impl EnvCap {
             arity: 2,
             effectful: true,
             permission: "env:write",
+            returns_result: false,
         },
     ];
 

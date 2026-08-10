@@ -32,6 +32,7 @@ impl SysCap {
             arity: 0,
             effectful: true,
             permission: "sys",
+            returns_result: false,
         },
         NativeFunctionDescriptor {
             name: "home",
@@ -39,6 +40,7 @@ impl SysCap {
             arity: 0,
             effectful: true,
             permission: "sys",
+            returns_result: false,
         },
         NativeFunctionDescriptor {
             name: "temp_dir",
@@ -46,6 +48,7 @@ impl SysCap {
             arity: 0,
             effectful: true,
             permission: "sys",
+            returns_result: false,
         },
         NativeFunctionDescriptor {
             name: "os",
@@ -53,6 +56,7 @@ impl SysCap {
             arity: 0,
             effectful: true,
             permission: "sys",
+            returns_result: false,
         },
         NativeFunctionDescriptor {
             name: "arch",
@@ -60,6 +64,7 @@ impl SysCap {
             arity: 0,
             effectful: true,
             permission: "sys",
+            returns_result: false,
         },
         NativeFunctionDescriptor {
             name: "pid",
@@ -67,6 +72,7 @@ impl SysCap {
             arity: 0,
             effectful: true,
             permission: "sys",
+            returns_result: false,
         },
         NativeFunctionDescriptor {
             name: "hostname",
@@ -74,6 +80,7 @@ impl SysCap {
             arity: 0,
             effectful: true,
             permission: "sys",
+            returns_result: false,
         },
     ];
 

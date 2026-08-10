@@ -180,6 +180,7 @@ impl TcpCap {
             arity: 1,
             effectful: true,
             permission: "net",
+            returns_result: true,
         },
         NativeFunctionDescriptor {
             name: "send",
@@ -187,6 +188,7 @@ impl TcpCap {
             arity: 2,
             effectful: true,
             permission: "net",
+            returns_result: true,
         },
         NativeFunctionDescriptor {
             name: "recv",
@@ -194,6 +196,7 @@ impl TcpCap {
             arity: 3,
             effectful: true,
             permission: "net",
+            returns_result: true,
         },
         NativeFunctionDescriptor {
             name: "peer_addr",
@@ -201,6 +204,7 @@ impl TcpCap {
             arity: 1,
             effectful: true,
             permission: "net",
+            returns_result: true,
         },
         NativeFunctionDescriptor {
             name: "local_addr",
@@ -208,6 +212,7 @@ impl TcpCap {
             arity: 1,
             effectful: true,
             permission: "net",
+            returns_result: true,
         },
         NativeFunctionDescriptor {
             name: "close",
@@ -215,6 +220,7 @@ impl TcpCap {
             arity: 1,
             effectful: true,
             permission: "net",
+            returns_result: true,
         },
         NativeFunctionDescriptor {
             name: "listen",
@@ -222,6 +228,7 @@ impl TcpCap {
             arity: 2,
             effectful: true,
             permission: "net",
+            returns_result: false,
         },
     ];
 

@@ -13,6 +13,7 @@ impl ProcessCap {
             arity: 3,
             effectful: true,
             permission: "process",
+            returns_result: true,
         },
         NativeFunctionDescriptor {
             name: "args",
@@ -20,6 +21,7 @@ impl ProcessCap {
             arity: 0,
             effectful: true,
             permission: "",
+            returns_result: false,
         },
         NativeFunctionDescriptor {
             name: "exit",
@@ -27,6 +29,7 @@ impl ProcessCap {
             arity: 1,
             effectful: true,
             permission: "",
+            returns_result: false,
         },
         NativeFunctionDescriptor {
             name: "which",
@@ -34,6 +37,7 @@ impl ProcessCap {
             arity: 1,
             effectful: true,
             permission: "process",
+            returns_result: true,
         },
     ];
 

@@ -40,6 +40,7 @@ impl CryptoCap {
             arity: 1,
             effectful: false,
             permission: "",
+            returns_result: false,
         },
         NativeFunctionDescriptor {
             name: "sha512",
@@ -47,6 +48,7 @@ impl CryptoCap {
             arity: 1,
             effectful: false,
             permission: "",
+            returns_result: false,
         },
         NativeFunctionDescriptor {
             name: "hmac_sha256",
@@ -54,6 +56,7 @@ impl CryptoCap {
             arity: 2,
             effectful: false,
             permission: "",
+            returns_result: false,
         },
         NativeFunctionDescriptor {
             name: "random_bytes",
@@ -61,6 +64,7 @@ impl CryptoCap {
             arity: 1,
             effectful: true,
             permission: "random",
+            returns_result: false,
         },
         NativeFunctionDescriptor {
             name: "constant_time_eq",
@@ -68,6 +72,7 @@ impl CryptoCap {
             arity: 2,
             effectful: false,
             permission: "",
+            returns_result: false,
         },
         NativeFunctionDescriptor {
             name: "base64_encode",
@@ -75,6 +80,7 @@ impl CryptoCap {
             arity: 1,
             effectful: false,
             permission: "",
+            returns_result: false,
         },
         NativeFunctionDescriptor {
             name: "base64_decode",
@@ -82,6 +88,7 @@ impl CryptoCap {
             arity: 1,
             effectful: false,
             permission: "",
+            returns_result: true,
         },
         NativeFunctionDescriptor {
             name: "hex_encode",
@@ -89,6 +96,7 @@ impl CryptoCap {
             arity: 1,
             effectful: false,
             permission: "",
+            returns_result: false,
         },
         NativeFunctionDescriptor {
             name: "hex_decode",
@@ -96,6 +104,7 @@ impl CryptoCap {
             arity: 1,
             effectful: false,
             permission: "",
+            returns_result: true,
         },
     ];
 

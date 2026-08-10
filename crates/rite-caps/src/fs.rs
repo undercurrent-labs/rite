@@ -13,6 +13,7 @@ impl FsCap {
             arity: 1,
             effectful: true,
             permission: "fs:read",
+            returns_result: true,
         },
         NativeFunctionDescriptor {
             name: "read_bytes",
@@ -20,6 +21,7 @@ impl FsCap {
             arity: 1,
             effectful: true,
             permission: "fs:read",
+            returns_result: true,
         },
         NativeFunctionDescriptor {
             name: "write",
@@ -27,6 +29,7 @@ impl FsCap {
             arity: 2,
             effectful: true,
             permission: "fs:write",
+            returns_result: true,
         },
         NativeFunctionDescriptor {
             name: "append",
@@ -34,6 +37,7 @@ impl FsCap {
             arity: 2,
             effectful: true,
             permission: "fs:write",
+            returns_result: true,
         },
         NativeFunctionDescriptor {
             name: "lines",
@@ -41,6 +45,7 @@ impl FsCap {
             arity: 1,
             effectful: true,
             permission: "fs:read",
+            returns_result: true,
         },
         NativeFunctionDescriptor {
             name: "open",
@@ -48,6 +53,7 @@ impl FsCap {
             arity: 2,
             effectful: true,
             permission: "fs:read",
+            returns_result: true,
         },
         NativeFunctionDescriptor {
             name: "read_chunk",
@@ -55,6 +61,7 @@ impl FsCap {
             arity: 2,
             effectful: true,
             permission: "",
+            returns_result: true,
         },
         NativeFunctionDescriptor {
             name: "read_line",
@@ -62,6 +69,7 @@ impl FsCap {
             arity: 1,
             effectful: true,
             permission: "",
+            returns_result: true,
         },
         NativeFunctionDescriptor {
             name: "write_chunk",
@@ -69,6 +77,7 @@ impl FsCap {
             arity: 2,
             effectful: true,
             permission: "",
+            returns_result: true,
         },
         NativeFunctionDescriptor {
             name: "seek",
@@ -76,6 +85,7 @@ impl FsCap {
             arity: 2,
             effectful: true,
             permission: "",
+            returns_result: true,
         },
         NativeFunctionDescriptor {
             name: "flush",
@@ -83,6 +93,7 @@ impl FsCap {
             arity: 1,
             effectful: true,
             permission: "",
+            returns_result: true,
         },
         NativeFunctionDescriptor {
             name: "close",
@@ -90,6 +101,7 @@ impl FsCap {
             arity: 1,
             effectful: true,
             permission: "",
+            returns_result: true,
         },
         NativeFunctionDescriptor {
             name: "exists",
@@ -97,6 +109,7 @@ impl FsCap {
             arity: 1,
             effectful: true,
             permission: "fs:read",
+            returns_result: false,
         },
         NativeFunctionDescriptor {
             name: "metadata",
@@ -104,6 +117,7 @@ impl FsCap {
             arity: 1,
             effectful: true,
             permission: "fs:read",
+            returns_result: true,
         },
         NativeFunctionDescriptor {
             name: "glob",
@@ -111,6 +125,7 @@ impl FsCap {
             arity: 1,
             effectful: true,
             permission: "fs:read",
+            returns_result: true,
         },
         NativeFunctionDescriptor {
             name: "mkdir",
@@ -118,6 +133,7 @@ impl FsCap {
             arity: 1,
             effectful: true,
             permission: "fs:write",
+            returns_result: true,
         },
         NativeFunctionDescriptor {
             name: "remove",
@@ -125,6 +141,7 @@ impl FsCap {
             arity: 1,
             effectful: true,
             permission: "fs:write",
+            returns_result: true,
         },
         NativeFunctionDescriptor {
             name: "copy",
@@ -132,6 +149,7 @@ impl FsCap {
             arity: 2,
             effectful: true,
             permission: "fs:write",
+            returns_result: true,
         },
         NativeFunctionDescriptor {
             name: "move",
@@ -139,6 +157,7 @@ impl FsCap {
             arity: 2,
             effectful: true,
             permission: "fs:write",
+            returns_result: true,
         },
     ];
 

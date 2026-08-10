@@ -12,6 +12,7 @@ impl ConsoleCap {
             arity: 1,
             effectful: true,
             permission: "console",
+            returns_result: false,
         },
         NativeFunctionDescriptor {
             name: "println",
@@ -19,6 +20,7 @@ impl ConsoleCap {
             arity: 1,
             effectful: true,
             permission: "console",
+            returns_result: false,
         },
         NativeFunctionDescriptor {
             name: "warn",
@@ -26,6 +28,7 @@ impl ConsoleCap {
             arity: 1,
             effectful: true,
             permission: "console",
+            returns_result: false,
         },
         NativeFunctionDescriptor {
             name: "error",
@@ -33,6 +36,7 @@ impl ConsoleCap {
             arity: 1,
             effectful: true,
             permission: "console",
+            returns_result: false,
         },
         NativeFunctionDescriptor {
             name: "inspect",
@@ -40,6 +44,7 @@ impl ConsoleCap {
             arity: 1,
             effectful: true,
             permission: "console",
+            returns_result: false,
         },
         NativeFunctionDescriptor {
             name: "read_line",
@@ -47,6 +52,7 @@ impl ConsoleCap {
             arity: 1,
             effectful: true,
             permission: "console",
+            returns_result: false,
         },
     ];
 

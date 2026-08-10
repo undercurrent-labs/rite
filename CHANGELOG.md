@@ -13,7 +13,23 @@
   local, and binaries compiled before this release keep the behaviour they
   were built with.
 
+### Added
+
+- **`rite check` rejects `?` on a host call that never answers a result
+  (`E017`).** `! @fs.exists(p)?` and `! @clock.sleep(ms)?` passed check and
+  died on the line's first execution — in the field report, a poller's idle
+  branch that only ran once the queue went quiet in production. The return
+  shape of all 148 host functions is now a third column in `HOST_EFFECTS`,
+  carried on every capability descriptor and cross-validated in both
+  directions like `effectful`. The check caught one stray `?` in the repo's
+  own conformance fixtures.
+
 ### Fixed
+
+- **`@csv.encode` answers `ok(string)`.** Success was a bare string while
+  failure was `err(…)`, so `@csv.encode(rows)?` unwrapped fine exactly when
+  the rows were malformed and failed when they were not. It now matches
+  `@csv.write`, which always wrapped both arms.
 
 - **A module's own names resolve within the module.** Copies merged into the
   entry now call their siblings — private helpers included — through mangled

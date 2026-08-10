@@ -63,6 +63,8 @@ pub struct FnDoc {
     pub arity: usize,
     pub effectful: bool,
     pub permission: String,
+    /// The call answers a `Value::Result`, so postfix `?` applies to it.
+    pub returns_result: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -280,6 +282,7 @@ pub fn generate(path: Option<&Path>, out: &Path) -> anyhow::Result<()> {
                 arity: d.arity,
                 effectful: d.effectful,
                 permission: d.permission.to_string(),
+                returns_result: d.returns_result,
             });
             search.push(SearchEntry {
                 title: format!("@{}.{}", name, d.name),
@@ -405,8 +408,8 @@ pub fn generate(path: Option<&Path>, out: &Path) -> anyhow::Result<()> {
             for f in &cap.functions {
                 c.push_str(&format!("### {}\n\n{}\n\n", f.name, f.docs));
                 c.push_str(&format!(
-                    "- arity: {}\n- effectful: {}\n- permission: {}\n\n",
-                    f.arity, f.effectful, f.permission
+                    "- arity: {}\n- effectful: {}\n- answers a result (`?` applies): {}\n- permission: {}\n\n",
+                    f.arity, f.effectful, f.returns_result, f.permission
                 ));
             }
         }
