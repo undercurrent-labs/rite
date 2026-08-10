@@ -989,7 +989,7 @@ impl Parser {
             if let Some(item) = self.parse_item_or_stmt() {
                 body.push(item);
             } else {
-                self.advance();
+                self.error_discarded_token();
             }
         }
 
@@ -1260,7 +1260,7 @@ impl Parser {
             if let Some(item) = self.parse_item_or_stmt() {
                 body.push(item);
             } else {
-                self.advance();
+                self.error_discarded_token();
             }
         }
 

@@ -1,0 +1,2 @@
+ok <- true
+do @console.println(str(ok))

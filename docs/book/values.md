@@ -65,8 +65,7 @@ Atoms are lightweight symbolic values — great for statuses, enums, and match t
 
 ```rite
 status ← #ok
-# same idea in ASCII:
-// status <- :ok
+// same idea in ASCII: status <- :ok
 ```
 
 Compare with `=` / `!=`. Match on them with `~` / `match` (next chapters).

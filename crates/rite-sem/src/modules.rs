@@ -9,6 +9,288 @@ use rite_syntax::{parse_file, ImportDecl, Item, Program};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
+/// Rewrites a copied module function's bare references to that module's own
+/// top-level functions into their mangled `qualifier__name` spellings.
+///
+/// The merge used to leave copied bodies untouched, so a copy of
+/// `helper.outer` still called `inner` by its bare name and depended on the
+/// entry's flat scope holding it. Two failures came from that: a private
+/// sibling was never injected at all, so `helper.outer` calling a private
+/// `inner` was E020 in every importer; and an entry-file binding named
+/// `inner` replaced the injected function, failing later with
+/// `cannot call value of type int` at a call site in another module. After
+/// the rewrite, a module's own names resolve within that module no matter
+/// what its importers declare.
+///
+/// A locally bound name is never rewritten, so a parameter or binding named
+/// like a sibling function keeps shadowing it inside the module, the same as
+/// before the copy. The scope rules mirror `Resolver`: block params bind,
+/// nested `def`s pre-declare in their block, a binding's pattern binds after
+/// its value is walked, and match-arm patterns bind over the guard and body.
+struct InternalRefRewriter<'a> {
+    qualifier: &'a str,
+    module_fns: &'a HashSet<String>,
+    scopes: Vec<HashSet<String>>,
+}
+
+impl<'a> InternalRefRewriter<'a> {
+    fn new(qualifier: &'a str, module_fns: &'a HashSet<String>) -> Self {
+        Self {
+            qualifier,
+            module_fns,
+            scopes: vec![HashSet::new()],
+        }
+    }
+
+    fn bound(&self, name: &str) -> bool {
+        self.scopes.iter().any(|s| s.contains(name))
+    }
+
+    fn define(&mut self, name: &str) {
+        if let Some(scope) = self.scopes.last_mut() {
+            scope.insert(name.to_string());
+        }
+    }
+
+    fn rewrite_fn(&mut self, f: &mut rite_syntax::FunctionDecl) {
+        self.scopes.push(HashSet::new());
+        for p in &f.params {
+            self.define(&p.name.name);
+        }
+        self.rewrite_block_body(&mut f.body);
+        self.scopes.pop();
+    }
+
+    fn rewrite_block(&mut self, block: &mut rite_syntax::Block) {
+        self.scopes.push(HashSet::new());
+        for p in &block.params {
+            self.define(&p.name.name);
+        }
+        self.rewrite_block_body(block);
+        self.scopes.pop();
+    }
+
+    /// The body walk minus the scope push, for callers that bind their own
+    /// parameters first (function decls, routes, mcp declarations).
+    fn rewrite_block_body(&mut self, block: &mut rite_syntax::Block) {
+        // Nested `def`s bind in the enclosing block, visible to earlier
+        // statements — same pre-declaration the resolver does.
+        for item in &block.body {
+            if let Item::Function(f) = item {
+                self.define(&f.name.name);
+            }
+        }
+        for item in &mut block.body {
+            self.rewrite_item(item);
+        }
+    }
+
+    fn rewrite_item(&mut self, item: &mut Item) {
+        match item {
+            Item::Function(f) => self.rewrite_fn(f),
+            Item::Statement(s) => self.rewrite_stmt(s),
+            Item::Test(t) => self.rewrite_block(&mut t.body),
+            Item::Event(e) => self.rewrite_block(&mut e.body),
+            Item::Data(_) | Item::Import(_) => {}
+        }
+    }
+
+    fn rewrite_stmt(&mut self, stmt: &mut rite_syntax::Stmt) {
+        use rite_syntax::{Stmt, SugarForm};
+        match stmt {
+            Stmt::Binding(b) => {
+                self.rewrite_expr(&mut b.value);
+                let mut names = Vec::new();
+                pattern_names(&b.pattern, &mut names);
+                for n in names {
+                    self.define(&n);
+                }
+            }
+            Stmt::Assign(a) => self.rewrite_expr(&mut a.value),
+            Stmt::Expr(e) => self.rewrite_expr(e),
+            Stmt::Return(r) => {
+                if let Some(v) = &mut r.value {
+                    self.rewrite_expr(v);
+                }
+            }
+            Stmt::Sugared(s) => {
+                // `lowered` is the semantic truth; the source `form` is only
+                // printed by the formatter, which never sees injected copies.
+                // Both are rewritten so they cannot disagree.
+                match &mut s.form {
+                    SugarForm::Say { value } => self.rewrite_expr(value),
+                    SugarForm::Unless {
+                        condition,
+                        then_branch,
+                        else_branch,
+                    } => {
+                        self.rewrite_expr(condition);
+                        self.rewrite_block(then_branch);
+                        if let Some(b) = else_branch {
+                            self.rewrite_block(b);
+                        }
+                    }
+                    SugarForm::ForIn { var, iter, body } => {
+                        self.rewrite_expr(iter);
+                        self.scopes.push(HashSet::new());
+                        let var = var.name.clone();
+                        self.define(&var);
+                        self.rewrite_block_body(body);
+                        self.scopes.pop();
+                    }
+                    SugarForm::While { condition, body } => {
+                        self.rewrite_expr(condition);
+                        self.rewrite_block(body);
+                    }
+                    SugarForm::Loop { count, body } => {
+                        self.rewrite_expr(count);
+                        self.rewrite_block(body);
+                    }
+                }
+                self.rewrite_stmt(&mut s.lowered);
+            }
+        }
+    }
+
+    fn rewrite_expr(&mut self, expr: &mut rite_syntax::Expr) {
+        use rite_syntax::Expr;
+        match expr {
+            Expr::Ident(i) => {
+                if !i.name.starts_with("__")
+                    && !self.bound(&i.name)
+                    && self.module_fns.contains(&i.name)
+                {
+                    i.name = format!("{}__{}", self.qualifier, i.name);
+                }
+            }
+            Expr::List(l) => {
+                for e in &mut l.elements {
+                    self.rewrite_expr(e);
+                }
+            }
+            Expr::Record(r) => {
+                for entry in &mut r.entries {
+                    self.rewrite_expr(&mut entry.value);
+                }
+            }
+            Expr::Binary(b) => {
+                self.rewrite_expr(&mut b.left);
+                self.rewrite_expr(&mut b.right);
+            }
+            Expr::Unary(u) => self.rewrite_expr(&mut u.expr),
+            Expr::Call(c) => {
+                self.rewrite_expr(&mut c.callee);
+                for a in &mut c.args {
+                    self.rewrite_expr(a);
+                }
+            }
+            Expr::Member(m) => self.rewrite_expr(&mut m.object),
+            Expr::Index(i) => {
+                self.rewrite_expr(&mut i.object);
+                self.rewrite_expr(&mut i.index);
+            }
+            Expr::Pipeline(p) => {
+                self.rewrite_expr(&mut p.input);
+                for s in &mut p.stages {
+                    self.rewrite_expr(s);
+                }
+            }
+            Expr::If(i) => {
+                self.rewrite_expr(&mut i.condition);
+                self.rewrite_block(&mut i.then_branch);
+                if let Some(b) = &mut i.else_branch {
+                    self.rewrite_block(b);
+                }
+            }
+            Expr::Match(m) => {
+                self.rewrite_expr(&mut m.scrutinee);
+                for arm in &mut m.arms {
+                    self.scopes.push(HashSet::new());
+                    let mut names = Vec::new();
+                    pattern_names(&arm.pattern, &mut names);
+                    for n in names {
+                        self.define(&n);
+                    }
+                    if let Some(g) = &mut arm.guard {
+                        self.rewrite_expr(g);
+                    }
+                    self.rewrite_expr(&mut arm.body);
+                    self.scopes.pop();
+                }
+            }
+            Expr::Block(b) => self.rewrite_block(b),
+            Expr::Try(t) => self.rewrite_expr(&mut t.expr),
+            Expr::Group(g) => self.rewrite_expr(&mut g.expr),
+            Expr::Coalesce(c) => {
+                self.rewrite_expr(&mut c.left);
+                self.rewrite_expr(&mut c.right);
+            }
+            Expr::HttpListen(h) => {
+                self.rewrite_expr(&mut h.addr);
+                self.rewrite_block(&mut h.body);
+            }
+            Expr::Route(r) => {
+                self.scopes.push(HashSet::new());
+                for p in &r.params {
+                    self.define(&p.name.name);
+                }
+                self.rewrite_block_body(&mut r.body);
+                self.scopes.pop();
+            }
+            Expr::McpServe(m) => {
+                self.rewrite_expr(&mut m.config);
+                self.rewrite_block(&mut m.body);
+            }
+            Expr::McpDecl(d) => {
+                self.scopes.push(HashSet::new());
+                for p in &d.params {
+                    self.define(&p.name.name);
+                }
+                self.rewrite_block_body(&mut d.body);
+                self.scopes.pop();
+            }
+            Expr::Literal(_) | Expr::Atom(_) | Expr::Capability(_) | Expr::Placeholder(_) => {}
+        }
+    }
+}
+
+/// Every name a pattern binds, in source order.
+fn pattern_names(pattern: &rite_syntax::Pattern, out: &mut Vec<String>) {
+    use rite_syntax::Pattern;
+    match pattern {
+        Pattern::Ident(i) => out.push(i.name.clone()),
+        Pattern::List(l) => {
+            for p in &l.elements {
+                pattern_names(p, out);
+            }
+            if let Some(rest) = &l.rest {
+                pattern_names(rest, out);
+            }
+        }
+        Pattern::Record(r) => {
+            for f in &r.fields {
+                match &f.pattern {
+                    Some(p) => pattern_names(p, out),
+                    None => out.push(f.name.name.clone()),
+                }
+            }
+        }
+        Pattern::Result(r) => {
+            if let Some(p) = &r.binding {
+                pattern_names(p, out);
+            }
+        }
+        Pattern::Or(o) => {
+            // Every alternative must bind the same names (checked in resolve),
+            // so the first is as good as any.
+            if let Some(first) = o.alternatives.first() {
+                pattern_names(first, out);
+            }
+        }
+        Pattern::Atom(_) | Pattern::Literal(_) | Pattern::Wildcard(_) => {}
+    }
+}
+
 /// One resolved `use` in the entry module: (alias, module name, its exports, is_pub).
 type ImportBinding = (Option<String>, String, HashMap<String, FunctionMeta>, bool);
 
@@ -441,6 +723,7 @@ pub fn merge_exports_into_entry(
         })
         .collect();
     let mut injected_functions: HashSet<String> = HashSet::new();
+    let mut private_injected: HashSet<String> = HashSet::new();
 
     // Which module put each unqualified name in scope, so a clash can name both.
     let mut flat_origin: HashMap<String, String> = HashMap::new();
@@ -465,15 +748,37 @@ pub fn merge_exports_into_entry(
             .clone()
             .unwrap_or_else(|| key.rsplit('.').next().unwrap_or(key.as_str()).to_string());
 
+        // Every copied body gets its intra-module references rewritten to the
+        // mangled spelling, so a copy resolves its own siblings no matter what
+        // the entry declares. See [`InternalRefRewriter`].
+        let module_fns: HashSet<String> = mod_ast
+            .program
+            .items
+            .iter()
+            .filter_map(|i| match i {
+                Item::Function(f) => Some(f.name.name.clone()),
+                _ => None,
+            })
+            .collect();
+
         for item in &mod_ast.program.items {
             let Item::Function(f) = item else { continue };
+
+            let mangled_name = format!("{}__{}", qualifier, f.name.name);
+            let mut qualified = f.clone();
+            qualified.name.name = mangled_name.clone();
+            InternalRefRewriter::new(&qualifier, &module_fns).rewrite_fn(&mut qualified);
+            // A private function is injected under the mangled name alone: its
+            // public siblings call it, nothing else may. Before this it was not
+            // injected at all, and a module whose export called a private helper
+            // was E020 `undefined name` in every importer, reported at an
+            // unrelated span in the entry.
+            inject(entry, qualified, false);
+
             if !f.is_pub {
+                private_injected.insert(mangled_name);
                 continue;
             }
-
-            let mut qualified = f.clone();
-            qualified.name.name = format!("{}__{}", qualifier, f.name.name);
-            inject(entry, qualified, false);
 
             // The unqualified name is only injected for a plain `use`; an alias
             // deliberately keeps the module's names behind its qualifier.
@@ -498,9 +803,36 @@ pub fn merge_exports_into_entry(
                         );
                     }
                     Some(_) => {}
+                    None if crate::resolve::BUILTIN_NAMES.contains(&f.name.name.as_str()) => {
+                        // An export named after a builtin would replace that
+                        // builtin at every bare call site in the entry,
+                        // including ones written before the `use`. The
+                        // qualified copy is already injected, so the module
+                        // stays usable — only the bare name is refused.
+                        diagnostics.push(
+                            simple_error(
+                                E022_DUPLICATE_BINDING,
+                                format!(
+                                    "`{}` exported by `{}` shadows the builtin of the same name",
+                                    f.name.name, key
+                                ),
+                                entry.file,
+                                f.name.span,
+                                "importing this unqualified would replace the builtin",
+                            )
+                            .with_help(format!(
+                                "import it as `use {} as …` and call it qualified, or rename \
+                                 the export — the reserved names are listed in the builtin \
+                                 reference (docs/generated/builtins.md)",
+                                key
+                            )),
+                        );
+                    }
                     None => {
                         flat_origin.insert(f.name.name.clone(), key.clone());
-                        inject(entry, f.clone(), *is_pub_reexport);
+                        let mut bare = f.clone();
+                        InternalRefRewriter::new(&qualifier, &module_fns).rewrite_fn(&mut bare);
+                        inject(entry, bare, *is_pub_reexport);
                     }
                 }
             }
@@ -552,6 +884,8 @@ pub fn merge_exports_into_entry(
     MergedImports {
         qualifiers,
         injected_functions,
+        private_injected,
+        injected_origin: flat_origin,
     }
 }
 
@@ -560,6 +894,11 @@ pub fn merge_exports_into_entry(
 pub struct MergedImports {
     pub qualifiers: HashSet<String>,
     pub injected_functions: HashSet<String>,
+    /// Mangled names of injected private-function copies — reachable from the
+    /// module's own rewritten bodies, refused as qualified access.
+    pub private_injected: HashSet<String>,
+    /// Which module supplied each injected *bare* name, for diagnostics.
+    pub injected_origin: HashMap<String, String>,
 }
 
 fn find_pub_function(graph: &ModuleGraph, name: &str) -> Option<rite_syntax::FunctionDecl> {

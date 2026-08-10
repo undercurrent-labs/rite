@@ -1,1 +1,1 @@
-[[1, 2]] -> * -> |{ count($) ; * }:par -> []
+[ [1, 2] ] -> * -> |{ count($) ; fail("branch down") }:par -> []

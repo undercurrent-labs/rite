@@ -76,8 +76,10 @@ difference between "the server broke" and "the model passed the wrong thing and 
 again" — only the second is useful to the caller.
 
 ```rite native_only
-tool "lookup" "Find a user" |id: int| ⟦
-  ^ err(⟨kind: "not_found", message: "no user " + str(id)⟩)
+! @mcp.serve "users" ⟦
+  tool "lookup" "Find a user" |id: int| ⟦
+    ^ err(⟨kind: "not_found", message: "no user " + str(id)⟩)
+  ⟧
 ⟧
 ```
 

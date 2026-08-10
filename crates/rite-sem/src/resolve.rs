@@ -404,6 +404,12 @@ pub struct Resolver {
     merged_qualifiers: HashSet<String>,
     /// Names of the function copies `merge_exports_into_entry` injected.
     injected_functions: HashSet<String>,
+    /// Mangled names of injected copies of *private* module functions. They
+    /// exist so a module's own exports can call them; qualified access from the
+    /// entry (`helper.secret`) is refused against this set.
+    private_injected: HashSet<String>,
+    /// Which module each injected *bare* name came from, for diagnostics.
+    injected_origin: HashMap<String, String>,
     /// Walking the body of an injected copy (or a function nested in one).
     in_injected_fn: bool,
     /// The function whose body is being walked; `None` at top level.
@@ -471,6 +477,8 @@ pub fn resolve_with_qualifiers(
         file,
         merged_qualifiers,
         injected_functions,
+        HashSet::new(),
+        HashMap::new(),
         &[],
     )
 }
@@ -490,6 +498,8 @@ pub fn resolve_with_qualifiers_and_predeclared(
     file: &SourceFile,
     merged_qualifiers: HashSet<String>,
     injected_functions: HashSet<String>,
+    private_injected: HashSet<String>,
+    injected_origin: HashMap<String, String>,
     predeclared: &[String],
 ) -> (ResolvedProgram, Diagnostics) {
     // Diagnostics are attributed to `program.file`, which the parser stamped from
@@ -502,6 +512,8 @@ pub fn resolve_with_qualifiers_and_predeclared(
     let mut r = Resolver::new();
     r.merged_qualifiers = merged_qualifiers;
     r.injected_functions = injected_functions;
+    r.private_injected = private_injected;
+    r.injected_origin = injected_origin;
     for name in predeclared {
         r.define(name, false, Span::DUMMY, program.file);
     }
@@ -534,6 +546,8 @@ impl Resolver {
             import_qualifiers: HashSet::new(),
             merged_qualifiers: HashSet::new(),
             injected_functions: HashSet::new(),
+            private_injected: HashSet::new(),
+            injected_origin: HashMap::new(),
             in_injected_fn: false,
             current_fn: None,
             file_for_effects: rite_core::FileId(0),
@@ -1375,6 +1389,35 @@ impl Resolver {
         if name == "_" {
             return;
         }
+        // A top-level binding named like an imported function replaces that
+        // function for every bare call in the file. scry-core hit this twice
+        // (`pending`, `keep`); the failure surfaced as `cannot call value of
+        // type int` at whichever call site ran next, forty lines from the
+        // binding. The DUMMY-span guard keeps host-predeclared REPL names out.
+        if self.scopes.len() == 1 && span != Span::DUMMY && self.injected_functions.contains(name) {
+            let origin = self
+                .injected_origin
+                .get(name)
+                .map(|m| format!("module `{}`", m))
+                .unwrap_or_else(|| "an imported module".to_string());
+            self.diagnostics.push(
+                simple_error(
+                    E022_DUPLICATE_BINDING,
+                    format!(
+                        "top-level binding `{}` collides with a function imported from {}",
+                        name, origin
+                    ),
+                    file,
+                    span,
+                    "this binding would replace the imported function",
+                )
+                .with_help(format!(
+                    "rename the binding, or keep the module behind a qualifier with `use … as …`; \
+                     calls to `{}` after this line would find this value instead of the function",
+                    name
+                )),
+            );
+        }
         let local = LocalId(self.next_local);
         self.next_local += 1;
         let scope = self.scopes.last_mut().unwrap();
@@ -1481,12 +1524,16 @@ impl Resolver {
         file: rite_core::FileId,
     ) -> bool {
         let mangled = format!("{}__{}", qualifier, field);
-        if self.functions.contains_key(&mangled) {
+        // A private function's copy is injected under the mangled name so its
+        // public siblings can call it; that must not make it reachable as
+        // `helper.secret` from the entry.
+        if self.functions.contains_key(&mangled) && !self.private_injected.contains(&mangled) {
             return true;
         }
         let mut exports: Vec<&str> = self
             .functions
             .keys()
+            .filter(|k| !self.private_injected.contains(*k))
             .filter_map(|k| k.strip_prefix(&format!("{}__", qualifier)))
             .collect();
         exports.sort_unstable();

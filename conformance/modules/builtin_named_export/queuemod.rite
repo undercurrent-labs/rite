@@ -1,0 +1,3 @@
+pub def entries() [[
+  return [1, 2]
+]]

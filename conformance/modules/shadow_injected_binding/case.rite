@@ -1,0 +1,4 @@
+use ./helpermod
+
+inner <- 99
+^ helpermod.outer()

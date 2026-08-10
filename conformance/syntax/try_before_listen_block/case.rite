@@ -1,0 +1,10 @@
+// `x ← ! @cap(…)?` immediately before a listen form: the `?` is postfix try,
+// not a prefix if whose body is the server block. Checked, not run — the
+// server would block. A parse is enough to pin the shape.
+def! wire() [[
+  c <- do @db.open(":memory:")?
+  @http.listen "127.0.0.1:0" [[
+    GET "/a" |req| [[ return 200 <<v: 1>> ]]
+  ]]
+]]
+^ 7

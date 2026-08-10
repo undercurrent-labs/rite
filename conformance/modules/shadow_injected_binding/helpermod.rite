@@ -1,0 +1,7 @@
+pub def inner() [[
+  return 7
+]]
+
+pub def outer() [[
+  return inner() + 1
+]]

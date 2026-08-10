@@ -61,6 +61,22 @@ The runtime resolves `use math` to `math.rite` next to the entry file (and confi
    never re-exported; use `pub use` for that.
 7. Prefer **acyclic** graphs: leaves = pure helpers, root = main/server.
 
+## A module's own names are its own
+
+A module's functions call each other — private helpers included — no matter
+what the importing file declares. A binding named `double` in the entry does
+not change what `math.square` does internally.
+
+Two collisions are errors at `rite check` rather than surprises at runtime:
+
+- **A top-level binding named like an imported function** (`E022`). The binding
+  would replace the function for every bare call after it in the file. Rename
+  the binding, or keep the module behind a qualifier with `use … as …`.
+- **An export named like a builtin** (`E022`). Importing it unqualified would
+  replace `entries`, `find`, `get`, … at every bare call site. Rename the
+  export, or import the module with an alias and call it qualified. The
+  reserved names are the [builtin reference](reference/builtins.md).
+
 ## The `@` qualifier
 
 `@m.square(12)` is qualified module access through the sigil. It calls the same

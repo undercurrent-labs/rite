@@ -6,7 +6,7 @@ use super::support::pattern_span;
 use super::*;
 use crate::ast::*;
 use crate::token::TokenKind;
-use rite_core::Span;
+use rite_core::{simple_error, Span};
 
 impl Parser {
     pub(super) fn parse_program(&mut self) -> Program {
@@ -21,8 +21,7 @@ impl Parser {
             if let Some(item) = self.parse_item_or_stmt() {
                 items.push(item);
             } else {
-                // recovery: skip token
-                self.advance();
+                self.error_discarded_token();
             }
         }
         let end = self.prev_span();
@@ -313,6 +312,37 @@ impl Parser {
         self.pos = checkpoint;
         self.diagnostics.rewind(diag_checkpoint);
 
+        // `ok ← v` used to parse as no statement at all: `ok` lexes as the
+        // result constructor rather than an Ident, the binding heuristic never
+        // fired, and recovery discarded the `←` — leaving `ok` and `v` as two
+        // bare expression statements that ran clean and bound nothing.
+        if matches!(
+            self.peek_kind(),
+            TokenKind::Ok | TokenKind::Err | TokenKind::Some | TokenKind::None
+        ) && matches!(
+            self.tokens.get(self.pos + 1).map(|t| t.kind),
+            Some(TokenKind::Bind) | Some(TokenKind::BindMut)
+        ) {
+            let tok = self.advance();
+            let word = tok.text.clone();
+            self.advance(); // the bind operator
+            let value = self.parse_expression();
+            self.diagnostics.push(
+                simple_error(
+                    rite_core::E013_INVALID_SYNTAX,
+                    format!("`{}` cannot be a binding name", word),
+                    self.file,
+                    tok.span,
+                    "this is a result constructor, not an identifier",
+                )
+                .with_help("choose another name for the binding"),
+            );
+            if self.check(TokenKind::Semicolon) {
+                self.advance();
+            }
+            return Some(Stmt::Expr(value));
+        }
+
         // assignment: ident := or op-assign += -= *= /= %=
         if self.check(TokenKind::Ident) && self.pos + 1 < self.tokens.len() {
             let next = self.tokens[self.pos + 1].kind;
@@ -599,6 +629,13 @@ impl Parser {
         // Only simple patterns for binding left-hand side at statement level
         if self.check(TokenKind::Ident) {
             return Some(Pattern::Ident(self.parse_ident()));
+        }
+        // `_ ← effectful()` — evaluate and discard. Before recovery reported
+        // discarded tokens, this "worked" by accident: the `_` and `←` were
+        // both silently thrown away and the value ran as a bare expression.
+        if self.check(TokenKind::Underscore) {
+            let span = self.advance().span;
+            return Some(Pattern::Wildcard(span));
         }
         if self.check(TokenKind::LBracket) {
             return Some(self.parse_list_pattern());

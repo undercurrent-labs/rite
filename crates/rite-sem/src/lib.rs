@@ -79,6 +79,8 @@ fn compile_to_ir_full(
         file,
         merged.qualifiers,
         merged.injected_functions,
+        merged.private_injected,
+        merged.injected_origin,
         predeclared,
     );
     load_diags.extend(rdiags.into_vec());

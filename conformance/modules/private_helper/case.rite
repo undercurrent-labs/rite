@@ -1,0 +1,6 @@
+use ./helpermod
+
+^ <<
+  qualified: helpermod.outer(2),
+  bare: outer(3)
+>>

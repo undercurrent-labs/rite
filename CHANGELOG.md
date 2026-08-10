@@ -2,6 +2,36 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **A module's own names resolve within the module.** Copies merged into the
+  entry now call their siblings — private helpers included — through mangled
+  names, so a binding in the importing file cannot change what an imported
+  function does internally. Three failures from the scry-core field report fall
+  out of this: a public export calling a private helper was `E020 undefined
+  name` in every importer, a top-level `pending ← …` broke `queue.pending`
+  with `cannot call value of type int` reported forty lines away, and an
+  aliased import (`use m as x`) broke its module's internal calls outright.
+  Private functions stay private: `helper.secret()` from the entry is still
+  refused.
+
+- **Two shadowing traps are now check-time errors (`E022`).** A top-level
+  binding named like an imported function, and an export named like a builtin
+  (`entries`, `keep`, …) imported unqualified — both used to silently replace
+  the function they collided with.
+
+- **Parser recovery reports what it discards (`E010`).** `[["a", "b"]]` lexes
+  `[[` as a block open, and the comma inside was thrown away without a
+  diagnostic, so `@json.encode([["a", "b"]])` answered `"b"`. In the field
+  report this wrote `{null:null}` into a Certificate Transparency checkpoint
+  file. The comma case names the `[ [ … ] ]` spelling in its help; `ok ← true`
+  (which parsed as two bare statements, the `←` discarded) now says `ok`
+  cannot be a binding name.
+
+- **`?` before a listen block parses as try.** `c ← ! @db.open(p)?` directly
+  above `@http.listen "addr" ⟦ … ⟧` was misread as a prefix `if` whose body
+  was the server block, failing with "expected block, found end of file".
+
 ## [0.11.1] — 2026-08-06
 
 Four fixes to `@mcp`, found by pointing the client at servers that behave the

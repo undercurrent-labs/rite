@@ -282,6 +282,31 @@ impl Parser {
                     depth_brace -= 1;
                     saw_expr = true;
                 }
+                // A listen/serve statement carries its own trailing block, the
+                // same trap as `while` above: `c ← ! @db.open(p)?` followed by
+                // `@http.listen "addr" ⟦ … ⟧` scanned forward to the server
+                // block's `⟦` and read the `?` as a prefix if, failing with
+                // "expected block, found end of file" at the wrong line. This
+                // is precisely the shape of a service that opens its resources
+                // before listening. An ordinary capability call stays a valid
+                // condition opener (`? @fs.exists(p)? ⟦ … ⟧`), so only the
+                // three block-carrying forms stop the scan.
+                TokenKind::Host if at_top => {
+                    let ns = self.tokens.get(i + 1).map(|t| t.text.as_str());
+                    let is_dot = self.tokens.get(i + 2).map(|t| t.kind) == Some(TokenKind::Dot);
+                    let method = self.tokens.get(i + 3).map(|t| t.text.as_str());
+                    if is_dot
+                        && matches!(
+                            (ns, method),
+                            (Some("http"), Some("listen"))
+                                | (Some("tcp"), Some("listen"))
+                                | (Some("mcp"), Some("serve"))
+                        )
+                    {
+                        return false;
+                    }
+                    saw_expr = true;
+                }
                 _ => saw_expr = true,
             }
             i += 1;
@@ -432,6 +457,33 @@ impl Parser {
             span,
             format!("found {}", self.peek_kind()),
         ));
+    }
+
+    /// Report the token statement recovery is about to discard, then discard it.
+    ///
+    /// Every statement loop used to `advance()` past an unparseable token with
+    /// no diagnostic. That silence is how `[["a", "b"]]` became a two-statement
+    /// block evaluating to `"b"` (the `[[` lexes as a block open and the comma
+    /// was thrown away), and how it wrote `{null:null}` into a checkpoint file
+    /// in production. The comma case names that trap in its help.
+    pub(super) fn error_discarded_token(&mut self) {
+        let span = self.current_span();
+        let kind = self.peek_kind();
+        let mut d = simple_error(
+            rite_core::E010_UNEXPECTED_TOKEN,
+            format!("unexpected {} in statement position", kind),
+            self.file,
+            span,
+            "this token does not start a statement",
+        );
+        if kind == TokenKind::Comma {
+            d = d.with_help(
+                "`[[` opens a block, not a nested list — a comma cannot appear \
+                 between a block's statements; for a list of lists write `[ [ … ] ]`",
+            );
+        }
+        self.diagnostics.push(d);
+        self.advance();
     }
 }
 

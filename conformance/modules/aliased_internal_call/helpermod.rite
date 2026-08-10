@@ -1,0 +1,7 @@
+def secret(x) [[
+  return x + 10
+]]
+
+pub def outer(x) [[
+  return secret(x) * 2
+]]
