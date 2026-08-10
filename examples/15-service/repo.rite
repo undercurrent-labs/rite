@@ -1,0 +1,24 @@
+//! Storage. The connection is a parameter, so the service holds exactly one
+//! and every handler writes through it.
+//!
+//! Not named `store`: capability namespaces are reserved as import qualifiers,
+//! so `use store` is `error[E022]`.
+
+pub ◆! init_schema(conn) ⟦
+  ! @db.exec(conn, "CREATE TABLE IF NOT EXISTS findings(host VARCHAR, ttl INTEGER)")?
+⟧
+
+/// `RETURNING *` answers the row it just wrote, with its real column names —
+/// so an insert needs no follow-up select to learn what it stored.
+pub ◆! record_finding(conn, f) ⟦
+  rows ← ! @db.query(
+    conn,
+    "INSERT INTO findings VALUES (?, ?) RETURNING *",
+    [f.host, f.ttl]
+  )?
+  ^ first(rows)
+⟧
+
+pub ◆! recent_findings(conn) ⟦
+  ^ ! @db.query(conn, "SELECT host, ttl FROM findings ORDER BY host")?
+⟧

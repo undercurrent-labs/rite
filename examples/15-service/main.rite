@@ -1,0 +1,58 @@
+//! The service: one database connection, opened before `listen` and shared by
+//! every handler, with collectors fanned out through `parallel`.
+//!
+//! Run it:
+//!
+//!   rite run examples/15-service/main.rite \
+//!     --allow db=. --allow process --allow net=127.0.0.1
+//!
+//!   curl -sS 127.0.0.1:8080/scan/a.example
+//!   curl -sS 127.0.0.1:8080/scan-all
+//!   curl -sS 127.0.0.1:8080/findings
+
+use ./collectors
+use ./repo
+use ./work
+
+// Opened once, here. Handlers share this connection: a DuckDB file is
+// single-writer, and a connection per request is how you corrupt one.
+conn ← ! @db.open("findings.duckdb")?
+! repo.init_schema(conn)
+
+! @console.println("scanning through one shared connection")
+
+@http.listen "127.0.0.1:8080" ⟦
+  use @http.log
+  use @http.recover
+  // A custom middleware no longer serializes the server: these requests
+  // overlap.
+  use { |req, next| next(req) }
+
+  GET "/scan/:host" |req| ⟦
+    f ← ! collectors.probe_host(req.path.host)
+    saved ← ! repo.record_finding(conn, f)
+    ^ 200 ⟨saved: saved⟩
+  ⟧
+
+  GET "/scan-all" ⟦
+    found ← ! collectors.probe_all(["a.example", "b.example", "c.example"])
+    ∀ f ∈ found ⟦
+      ! repo.record_finding(conn, f)
+    ⟧
+    ^ 200 ⟨scanned: count(found)⟩
+  ⟧
+
+  GET "/findings" ⟦
+    rows ← ! repo.recent_findings(conn)
+    ^ 200 ⟨findings: rows⟩
+  ⟧
+
+  GET "/queue" ⟦
+    items ← [⟨id: 1, ready: false⟩, ⟨id: 2, ready: true⟩]
+    ^ 200 ⟨
+      first_ready: work.first_ready(items),
+      pending: work.pending_only(items),
+      attempts: work.attempts_until_ready(["busy", "busy", "done", "busy"])
+    ⟩
+  ⟧
+⟧

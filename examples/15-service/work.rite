@@ -1,0 +1,34 @@
+//! The queue's control flow: retry until settled, and scan for the first hit.
+
+/// Retry until the work reports something other than "busy".
+///
+/// The field report's version of this carried a `settled` flag tested at the
+/// top of every pass, because a loop could not be left early — and it kept
+/// running no-op iterations after it had succeeded. `break` ends it.
+pub ◆ attempts_until_ready(outcomes) ⟦
+  used ↢ 0
+  ∀ outcome ∈ outcomes ⟦
+    used := used + 1
+    ? outcome != "busy" ⟦ ∎ ⟧
+  ⟧
+  ^ used
+⟧
+
+/// `^` inside a loop returns from this function, not from the loop body — the
+/// fall-through used to answer `none` for a list that plainly contained a hit.
+pub ◆ first_ready(items) ⟦
+  ∀ item ∈ items ⟦
+    ? item.ready ⟦ ^ item ⟧
+  ⟧
+  ^ none
+⟧
+
+/// `continue` skips the ones already handled.
+pub ◆ pending_only(items) ⟦
+  out ↢ []
+  ∀ item ∈ items ⟦
+    ? item.ready ⟦ ⟳ ⟧
+    out := concat(out, [item])
+  ⟧
+  ^ out
+⟧

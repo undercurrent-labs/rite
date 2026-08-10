@@ -1,0 +1,25 @@
+//! Collectors: shell out to a command, then parse the answer with a regex.
+//!
+//! The shape the scry-core field report used for `dig` / `openssl` / `whois`,
+//! reduced to `echo` so the example needs no network.
+
+/// Private to this module. A public export calling a private sibling is the
+/// case that used to fail with `undefined name` in every importing file.
+◆ first_number(text) ⟦
+  // A raw string: in an ordinary literal `\d` is `error[E006]` and a `{2,3}`
+  // quantifier reads as an interpolation hole.
+  hit ← @regex.find(text, r"\d+")?
+  ^ hit ?? "0"
+⟧
+
+/// One host, one subprocess, one parsed answer.
+pub ◆! probe_host(host) ⟦
+  r ← ! @process.run("sh", ["-c", "echo " + host + " ttl=64"], ⟨⟩)?
+  ^ ⟨host: host, ttl: parse_int(first_number(r.stdout))?⟩
+⟧
+
+/// Every host at once. `parallel` is the in-language fan-out the report
+/// reached for a shell script to get.
+pub ◆! probe_all(hosts) ⟦
+  ^ ! parallel(hosts, probe_host)
+⟧
