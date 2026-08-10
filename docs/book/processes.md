@@ -61,6 +61,21 @@ genuinely want a pipeline you have to ask for a shell yourself:
 Doing that hands the shell a string to parse, so it is back on you to make sure
 nothing untrusted is interpolated into it.
 
+### Several commands at once
+
+`@process.run` waits for its child. To run commands concurrently, put the call in
+a function and fan out with [`parallel`](collections.md#doing-the-slow-parts-together):
+
+```rite native_only
+◆! resolve(host) ⟦
+  ^ ! @process.run("dig", ["+short", host], ⟨⟩)?
+⟧
+
+answers ← ! parallel(["a.example", "b.example", "c.example"], resolve)
+```
+
+The three `dig` processes run together; results come back in input order.
+
 ### A command that fails is not an error
 
 ```rite native_only

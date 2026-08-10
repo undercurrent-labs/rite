@@ -512,13 +512,19 @@ impl<'a> Lexer<'a> {
                         continue;
                     }
                     other => {
-                        self.diagnostics.push(simple_error(
-                            E006_INVALID_ESCAPE,
-                            format!("invalid escape \\{}", other as char),
-                            self.file,
-                            Span::from_range(self.pos - 1, self.pos + 1),
-                            "unknown escape sequence",
-                        ));
+                        self.diagnostics.push(
+                            simple_error(
+                                E006_INVALID_ESCAPE,
+                                format!("invalid escape \\{}", other as char),
+                                self.file,
+                                Span::from_range(self.pos - 1, self.pos + 1),
+                                "unknown escape sequence",
+                            )
+                            .with_help(
+                                "a raw string r\"…\" takes every character literally, \
+                                 including \\ and {",
+                            ),
+                        );
                         text.push(other as char);
                     }
                 }

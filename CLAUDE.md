@@ -161,4 +161,4 @@ worse, which is how this happened.
 
 ## Docs
 
-`IMPLEMENTATION.md` is the honest status page — known gaps (WASM host I/O, aliased imports, formatter sugar fidelity, no CST/incremental relex) and the benchmark baseline live there; read it before assuming a feature is complete. User docs are `docs/book/`; `docs/generated/` is `rite doc` output and gitignored. Internal design notes are deliberately not in this tree.
+`IMPLEMENTATION.md` is the honest status page — known gaps (WASM host I/O, aliased imports, formatter sugar fidelity, no CST/incremental relex) and the benchmark baseline live there; read it before assuming a feature is complete. User docs are `docs/book/`; `docs/generated/` is `rite doc` output — mostly gitignored, but `cli.md`, `capabilities.md` and `builtins.md` are tracked and covered by the regeneration guard. Internal design notes are deliberately not in this tree.

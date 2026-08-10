@@ -33,7 +33,21 @@ import_decl      = "use" module_path [ ( "as" | "->" ) identifier ] ;
 statement        = binding
                  | expression
                  | return_expr
-                 | assignment ;
+                 | assignment
+                 | say_stmt
+                 | unless_stmt
+                 | for_stmt
+                 | while_stmt
+                 | loop_stmt ;
+
+(* Statement sugar. Each lowers in the parser itself — `for` to `iter → each`,
+   `while` to a pair of closures, `loop n` to `range(0, n) → each` — see
+   docs/book/sugar.md. *)
+say_stmt         = say_kw expression ;
+unless_stmt      = unless_kw expression block [ ( ":" | "else" ) block ] ;
+for_stmt         = for_kw identifier in_kw expression block ;
+while_stmt       = "while" expression block ;
+loop_stmt        = "loop" expression block ;
 
 binding          = pattern ( bind_op | mutable_bind_op ) expression ;
 assignment       = identifier ":=" expression ;
@@ -134,7 +148,10 @@ result_pattern   = ( "ok" | "err" | "some" | "none" ) [ pattern ] ;
 
 return_expr      = return_kw [ expression ] ;
 
-literal          = number | string_literal | "true" | "false" | "none" ;
+literal          = number | string_literal | raw_string | "true" | "false" | "none" ;
+(* `r"…"` — no escapes, no interpolation, every character literal. There is no
+   `r#"…"#` form, so a raw string cannot contain a double quote. *)
+raw_string       = 'r"' { any_char_except_quote } '"' ;
 atom             = atom_kw identifier { "." identifier } ;
 placeholder      = "$" ;
 
@@ -162,3 +179,6 @@ record_open      = "⟨" | "<<" ;
 record_close     = "⟩" | ">>" ;
 in_kw            = "∈" | "in" ;
 not_in_kw        = "∉" | "not" "in" ;
+say_kw           = "¶" | "say" ;
+unless_kw        = "¿" | "unless" ;
+for_kw           = "∀" | "for" ;

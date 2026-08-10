@@ -131,6 +131,14 @@ Tracks implementation status for the Rite language and V1 tooling. Detailed desi
    mixed. Gating needs a decision about whether those spellings are canonical
    per-file or per-construct, not more formatter fidelity.
 9. **Incremental relexing / CST** — no rowan green tree; recovery is best-effort parse.  
+10. **`parallel` is the whole concurrency story.** It fans one function out over a
+    list with a fixed in-flight window of 16 and joins before returning. Missing:
+    a spawn/await handle for fire-now-collect-later, a configurable window, and
+    running two *different* functions concurrently. All three would build on
+    `RuntimeContext::fork()`, which already Arc-shares capabilities, handles and
+    budget across branches. The scry-core field report reached for a bash fan-out
+    because it did not find `parallel`; the book now cross-links it from the
+    process and HTTP chapters.
 12. **Resource limits cover external input.** `max_collection_size` and
     `max_string_size` bound what a script builds (`range`, `repeat`, `concat`)
     *and* what it takes in: `@fs.read`/`read_bytes`/`lines` check the file's

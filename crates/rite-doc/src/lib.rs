@@ -232,6 +232,37 @@ fn collect_rite(root: &Path, out: &mut Vec<std::path::PathBuf>) {
     }
 }
 
+/// The builtin-name reference, written from `BUILTIN_NAMES` itself.
+///
+/// This list doubles as the reserved-name list for module authors: a module
+/// export with one of these names shadows the builtin for every importer, so
+/// the page exists to be checked before naming an export. Names only — the
+/// resolver's list carries no docs or arity.
+pub fn builtins_markdown() -> String {
+    let mut names: Vec<&str> = rite_sem::resolve::BUILTIN_NAMES.to_vec();
+    names.sort_unstable();
+    let mut out = String::from("# Builtin functions\n\n");
+    out.push_str(&format!(
+        "The {} bare names the language resolves without any `@capability` \
+         prefix, generated from the resolver's own list.\n\n\
+         Treat them as reserved when naming a module export: an exported \
+         function with one of these names replaces the builtin for every file \
+         that imports the module. A local binding inside one function is fine; \
+         an export is not.\n\n",
+        names.len()
+    ));
+    let effectful: &[&str] = rite_sem::resolve::EFFECTFUL_BUILTINS;
+    for name in names {
+        if effectful.contains(&name) {
+            out.push_str(&format!("- `{name}` (effectful)\n"));
+        } else {
+            out.push_str(&format!("- `{name}`\n"));
+        }
+    }
+    out.push('\n');
+    out
+}
+
 pub fn generate(path: Option<&Path>, out: &Path) -> anyhow::Result<()> {
     std::fs::create_dir_all(out)?;
     std::fs::create_dir_all(out.join("html"))?;
@@ -381,6 +412,7 @@ pub fn generate(path: Option<&Path>, out: &Path) -> anyhow::Result<()> {
         }
         c
     })?;
+    std::fs::write(out.join("builtins.md"), builtins_markdown())?;
 
     // HTML site
     let mut html = String::from(

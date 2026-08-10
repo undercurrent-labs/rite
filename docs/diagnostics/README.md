@@ -2,6 +2,7 @@
 
 | Code | Page |
 |------|------|
+| E006 | [Invalid escape](E006.md) |
 | E015 | [Pipeline result as an operand](E015.md) |
 | E016 | [`?` on a pipeline stage](E016.md) |
 | E020 | [Undefined name](E020.md) |

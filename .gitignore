@@ -11,6 +11,7 @@
 # tracked and CI checks they are current.
 /docs/generated/*
 !/docs/generated/capabilities.md
+!/docs/generated/builtins.md
 !/docs/generated/cli.md
 /dist
 

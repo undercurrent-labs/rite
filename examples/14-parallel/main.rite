@@ -1,0 +1,14 @@
+◆! probe(host) ⟦
+  r ← ! @process.run("sh", ["-c", "sleep 0.3; echo " + host], ⟨⟩)?
+  ^ trim(r.stdout)
+⟧
+
+◆! main() ⟦
+  hosts ← ["a.example", "b.example", "c.example"]
+  before ← ! @clock.now()
+  answers ← ! parallel(hosts, probe)
+  after ← ! @clock.now()
+  elapsed ← @clock.diff(after, before)?
+  ! @console.println(str(answers))
+  ! @console.println("three 300ms commands, under 900ms total: " + str(elapsed < 900))
+⟧

@@ -16,25 +16,26 @@ This book is a linear path. You can stop after any chapter and experiment in [St
 8. [Collections](collections.md) — list & record ops in depth
 9. [Pattern matching](matching.md) — `~` / `match`, destructure
 10. [Results and errors](results.md) — `ok` / `err`, `?`, match
-11. [Syntax sugar](sugar.md) — ranges, for/while, say, compose, op-assign, …
-12. [Effects and capabilities](effects.md) — `!` / `do`, permissions
-13. [Files, JSON, and CSV](files-json.md) — `@fs`, `@json`, `@csv`
-14. [Hashing and encoding](crypto.md) — `@crypto`, digests, HMAC, base64/hex
-15. [Protocol buffers](proto.md) — `@proto`, schemas, wire format, presence
-16. [Databases](db.md) — `@db` (DuckDB), SQL, transactions
-17. [Network: HTTP services](http.md) — `@http.listen`, routes, middleware, client calls
-18. [Network: sockets](sockets.md) — `@udp` datagrams, `@tcp` streams, bytes on the wire
-19. [Model Context Protocol](mcp.md) — `@mcp.serve` and `@mcp.connect`: tools, resources, prompts
-20. [Environment](environment.md) — `@env`, `@clock`, `@random`, `@store`
-21. [Processes](processes.md) — `@process`, running commands, script arguments
-22. [Modules](modules.md) — `use`, `pub`, relative paths, aliases
-23. [Compiling to Rust](compiling.md) — `rite build`, IR, parity
-24. [Text RPG](rpg.md) — `@game` tutorial
-25. [Embedding](embedding.md) — `RiteEngine` from Rust
-26. [Browser & Studio](browser.md) — hosted site, WASM limits
-27. [Agents & the skill bundle](agents.md) — skill install, self-update, VS Code extension
-28. [Testing](testing.md) — `◆ test`, `expect`, `rite test`
-29. [Contributing tests](contributing-tests.md) — suite map, HTTP I/O capture, PR checklist
+11. [Text patterns](regex.md) — `@regex`, raw strings, capture groups
+12. [Syntax sugar](sugar.md) — ranges, for/while, say, compose, op-assign, …
+13. [Effects and capabilities](effects.md) — `!` / `do`, permissions
+14. [Files, JSON, and CSV](files-json.md) — `@fs`, `@json`, `@csv`
+15. [Hashing and encoding](crypto.md) — `@crypto`, digests, HMAC, base64/hex
+16. [Protocol buffers](proto.md) — `@proto`, schemas, wire format, presence
+17. [Databases](db.md) — `@db` (DuckDB), SQL, transactions
+18. [Network: HTTP services](http.md) — `@http.listen`, routes, middleware, client calls
+19. [Network: sockets](sockets.md) — `@udp` datagrams, `@tcp` streams, bytes on the wire
+20. [Model Context Protocol](mcp.md) — `@mcp.serve` and `@mcp.connect`: tools, resources, prompts
+21. [Environment](environment.md) — `@env`, `@clock`, `@random`, `@store`
+22. [Processes](processes.md) — `@process`, running commands, script arguments
+23. [Modules](modules.md) — `use`, `pub`, relative paths, aliases
+24. [Compiling to Rust](compiling.md) — `rite build`, IR, parity
+25. [Text RPG](rpg.md) — `@game` tutorial
+26. [Embedding](embedding.md) — `RiteEngine` from Rust
+27. [Browser & Studio](browser.md) — hosted site, WASM limits
+28. [Agents & the skill bundle](agents.md) — skill install, self-update, VS Code extension
+29. [Testing](testing.md) — `◆ test`, `expect`, `rite test`
+30. [Contributing tests](contributing-tests.md) — suite map, HTTP I/O capture, PR checklist
 
 ## Where each capability is covered
 
@@ -44,6 +45,7 @@ This book is a linear path. You can stop after any chapter and experiment in [St
 | `@fs` | [Files, JSON, and CSV](files-json.md) | denied |
 | `@json` · `@csv` | [Files, JSON, and CSV](files-json.md) | — |
 | `@crypto` | [Hashing and encoding](crypto.md) | — (`random_bytes` needs `random`) |
+| `@regex` | [Text patterns](regex.md) | — |
 | `@proto` | [Protocol buffers](proto.md) | — (`load_file` needs `fs:read`) |
 | `@db` | [Databases](db.md) | denied |
 | `@http` | [Network: HTTP services](http.md) | denied |
@@ -90,6 +92,9 @@ flag that is not there:
 
 - [Capability reference](reference/capabilities.md) — every `@host` function, its
   arity, whether it is effectful, and the permission it needs
+- [Builtin functions](reference/builtins.md) — every bare name the language
+  resolves without a `@capability` prefix; treat these as reserved when naming
+  a module export
 - [CLI reference](reference/cli.md) — every subcommand, argument and flag
 
 Rebuild them, plus the agent bundle, with:

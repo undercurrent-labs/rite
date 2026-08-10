@@ -110,6 +110,10 @@ A doubled brace means the same thing: `{{` produces one `{`, so `"{{ mustache }}
 text `{ mustache }`. `rite fmt` prints the doubled spelling, so a `\{` you wrote comes
 back as `{{`; both mean a literal brace and both re-read identically.
 
+Any other backslash sequence is `error[E006]`. Before spelling a pattern around the
+escape table — `[.]` for a dot, `\{` for every brace — see the raw string form below:
+`r"…"` turns all of this off.
+
 ```rite browser
 ! @console.println("literal \{name} stays as written")
 ```
@@ -129,6 +133,10 @@ a regex, a Windows path, a template:
 pattern ← r"\d+"
 tpl ← r"{name} is not substituted here"
 ```
+
+Regexes are the case that matters most: in an ordinary string a quantifier like
+`{2,3}` reads as an interpolation hole and `\d` is an invalid escape. Patterns and
+the `@regex` capability get their own chapter, [Text patterns](regex.md).
 
 ### Working on strings
 

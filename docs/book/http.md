@@ -439,6 +439,19 @@ change which host is checked.
 Not available in the browser (hosted Studio): there is no socket layer there, so these
 return a capability error, the same as `@db`.
 
+### Several requests at once
+
+The calls block one at a time; to issue requests concurrently, fan out with
+[`parallel`](collections.md#doing-the-slow-parts-together):
+
+```rite native_only
+◆! fetch_one(url) ⟦
+  ^ ! @http.get(url)?
+⟧
+
+pages ← ! parallel(urls, fetch_one)
+```
+
 ## Next
 
 [Network: sockets](sockets.md) — the raw `@udp` and `@tcp` layer under all of this ·

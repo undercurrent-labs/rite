@@ -21,6 +21,7 @@ export const DOC_CHAPTERS: DocChapter[] = [
   { slug: "collections", title: "Collections", file: "collections.md" },
   { slug: "matching", title: "Pattern matching", file: "matching.md" },
   { slug: "results", title: "Results and errors", file: "results.md" },
+  { slug: "regex", title: "Text patterns", file: "regex.md" },
   { slug: "sugar", title: "Syntax sugar", file: "sugar.md" },
   { slug: "effects", title: "Effects and capabilities", file: "effects.md" },
   { slug: "files-json", title: "Files, JSON, and CSV", file: "files-json.md" },
@@ -46,13 +47,14 @@ export const DOC_CHAPTERS: DocChapter[] = [
  * Generated reference pages, published alongside the book.
  *
  * Listed explicitly rather than globbed: `rite docs build` also writes a dozen
- * one-paragraph placeholders, and only these two are real documents. They are
- * regenerated from the capability registry and from clap's command tree, so
- * they cannot drift from the implementation — CI regenerates and fails if
- * either changed.
+ * one-paragraph placeholders, and only these three are real documents. They are
+ * regenerated from the capability registry, the resolver's builtin list, and
+ * clap's command tree, so they cannot drift from the implementation — CI
+ * regenerates and fails if any changed.
  */
 export const REFERENCE_PAGES: DocChapter[] = [
   { slug: "capabilities", title: "Capability reference", file: "capabilities.md" },
+  { slug: "builtins", title: "Builtin functions", file: "builtins.md" },
   { slug: "cli", title: "CLI reference", file: "cli.md" },
 ];
 
@@ -66,7 +68,7 @@ const rawModules = import.meta.glob("../../../../docs/book/*.md", {
   import: "default",
 }) as Record<string, () => Promise<string>>;
 
-const referenceModules = import.meta.glob("../../../../docs/generated/{capabilities,cli}.md", {
+const referenceModules = import.meta.glob("../../../../docs/generated/{capabilities,builtins,cli}.md", {
   query: "?raw",
   import: "default",
 }) as Record<string, () => Promise<string>>;
