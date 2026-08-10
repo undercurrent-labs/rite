@@ -265,6 +265,29 @@ The API route keeps answering as itself: it is specific, so it is matched first.
 
 Declaration order is **outer-first** (first `use` runs first). Built-ins and custom closures share the same chain.
 
+### Sharing state with handlers
+
+Handlers share the capability host and open handles of the script that called
+`listen`. Open a `@db` connection or seed a `@store` namespace before
+`@http.listen`, and every handler uses that same connection and store —
+concurrent requests included, so one database connection serves the whole
+server instead of one writer per request:
+
+```rite native_only
+conn ← ! @db.open("app.duckdb")?
+@http.listen "127.0.0.1:4040" ⟦
+  GET "/items" ⟦
+    rows ← ! @db.query(conn, "SELECT * FROM items")?
+    ^ 200 ⟨items: rows⟩
+  ⟧
+⟧
+```
+
+Requests run concurrently — including through custom middleware — and each
+gets its own console buffer and budget. What persists across requests is the
+module scope (top-level bindings), the capability host (`@db`, `@store`,
+`@env` overlays) and the handle table.
+
 Handler `! @console.println(...)` writes to the **server process stdout** (flushed after each request). That is separate from the access log on stderr.
 
 ```rite browser

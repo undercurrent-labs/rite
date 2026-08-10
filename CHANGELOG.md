@@ -24,7 +24,34 @@
   directions like `effectful`. The check caught one stray `?` in the repo's
   own conformance fixtures.
 
+### Changed
+
+- **Handlers share the listen-time capability host and handle table.** A
+  `@db` connection opened before `@http.listen` now works inside every
+  handler, and `@store` state is server-scoped rather than rebuilt empty per
+  request. Each request used to get a fresh host, which is why the field
+  report's service ran one single-writer DuckDB connection per request and
+  corrupted its database three times. Same fix in `@tcp.listen` connection
+  handlers and `@mcp.serve` bodies. Per-request isolation keeps what it
+  should: console buffers, environment frames, budget counters.
+
 ### Fixed
+
+- **One custom middleware no longer serializes the whole server.** Any
+  `use { |req, next| … }` took a server-wide mutex per request, guarding a
+  continuation map that had already been made per-request — four concurrent
+  1-second handlers took 4 seconds. Measured back to ~1 second after removal.
+
+- **Handler errors report `file:line:col`, once.** The per-request context had
+  no source map, so a traceback printed `fn at span 2403..2802`; and
+  `with_stack` appended a fresh traceback at every unwinding call level, so
+  the same error arrived four times in one response, each copy a frame
+  shorter. Handlers now carry the listen-time sources, and the first (deepest)
+  traceback wins.
+
+- **`--timeout` and `--max-steps` reach handlers.** Every request silently ran
+  under the default budget; each now runs under the listen-time limits with
+  its own fresh counters.
 
 - **`@csv.encode` answers `ok(string)`.** Success was a bare string while
   failure was `err(…)`, so `@csv.encode(rows)?` unwrapped fine exactly when

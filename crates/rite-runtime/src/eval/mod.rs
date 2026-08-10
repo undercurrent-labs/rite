@@ -142,7 +142,15 @@ impl EvalError {
         if trace.is_empty() {
             return self;
         }
+        // `call_block` calls this at every level as the error unwinds, so an
+        // error raised four calls deep collected four tracebacks on one
+        // message, each a frame shorter than the last — a handler's 500 body
+        // carried all of them. The first (deepest, fullest) trace wins.
+        let already_traced = |m: &str| m.contains("\nstack traceback:");
         match self {
+            EvalError::Message(m) if already_traced(&m) => EvalError::Message(m),
+            EvalError::Panic(m) if already_traced(&m) => EvalError::Panic(m),
+            EvalError::Capability(m) if already_traced(&m) => EvalError::Capability(m),
             EvalError::Message(m) => EvalError::Message(format!("{}{}", m, trace)),
             EvalError::Panic(m) => EvalError::Panic(format!("{}{}", m, trace)),
             EvalError::Capability(m) => EvalError::Capability(format!("{}{}", m, trace)),

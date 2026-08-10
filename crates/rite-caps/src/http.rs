@@ -18,7 +18,7 @@ use std::collections::HashMap;
 use std::convert::Infallible;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
-use tokio::sync::{oneshot, Mutex as AsyncMutex};
+use tokio::sync::oneshot;
 
 pub struct HttpCap {
     pub last_addr: Mutex<Option<String>>,
@@ -39,13 +39,47 @@ pub struct ServerState {
     pub perms: PermissionSet,
     /// Middleware from `use @http.log` / `use { |req, next| … }`.
     pub middleware: Vec<HttpMiddleware>,
-    pub lock: Arc<AsyncMutex<()>>,
     /// Module scope captured when `@http.listen` ran, so handlers can see
     /// top-level bindings (`config ← …`) and not just function names. Cloning an
     /// `Environment` shares its frames, so this is a handful of `Arc` bumps —
     /// and it means module state persists across requests, which is what a
     /// server with a top-level cache or counter should do.
     pub module_env: rite_runtime::Environment,
+    /// The capability host and handle table from the context that ran
+    /// `@http.listen`, shared by every request the way `RuntimeContext::fork`
+    /// shares them across `parallel` branches. Each request used to build a
+    /// fresh host via `install_defaults`, so a `@db` connection or `@store`
+    /// entry created before `listen` indexed into an empty table inside a
+    /// handler — "db connection closed or invalid" — and the field report's
+    /// service opened a new single-writer DuckDB connection per request,
+    /// corrupting the file under concurrent writes.
+    pub capabilities: Arc<dyn rite_runtime::CapabilityHost>,
+    pub handles: Arc<rite_runtime::HandleTable>,
+    /// Sources from listen time, so a handler error reports `file:line:col`
+    /// instead of `fn at span 2403..2802`.
+    pub sources: rite_core::SourceMap,
+    /// The listen-time budget's limits. Each request runs under a fresh clone
+    /// (own step counter and wall clock), so `--timeout`/`--max-steps` reach
+    /// handlers instead of every request silently getting the defaults.
+    pub budget: rite_runtime::ExecutionBudget,
+}
+
+/// A fresh per-request context sharing the server's host state.
+///
+/// Per-request: console buffers, environment frame stack, budget counters.
+/// Server-scoped: capability host, handle table, sources, permission flags.
+fn per_request_context(state: &ServerState) -> RuntimeContext {
+    let mut ctx = RuntimeContext::new();
+    ctx.capabilities = state.capabilities.clone();
+    ctx.handles = state.handles.clone();
+    ctx.allow_all = state.perms.allow_all;
+    ctx.console_allowed = state.perms.allow_all || state.perms.console;
+    ctx.sources = state.sources.clone();
+    let mut budget = state.budget.clone();
+    budget.restart();
+    ctx.budget = budget;
+    install_module_scope(&mut ctx, &state.module_env, &state.functions);
+    ctx
 }
 
 /// Build a server from what the evaluator staged on the context.
@@ -84,10 +118,13 @@ fn server_state_from(
                 other => other.clone(),
             })
             .collect(),
-        lock: Arc::new(AsyncMutex::new(())),
         // Module scope as it stood when `@http.listen` ran, so handlers resolve the
         // top-level bindings and functions they were written next to.
         module_env: ctx.env.clone(),
+        capabilities: ctx.capabilities.clone(),
+        handles: ctx.handles.clone(),
+        sources: ctx.sources.clone(),
+        budget: ctx.budget.clone(),
     }
 }
 
@@ -424,8 +461,11 @@ impl HttpCap {
             functions: ctx.functions.clone(),
             perms: perms.clone(),
             middleware: vec![],
-            lock: Arc::new(AsyncMutex::new(())),
             module_env: ctx.env.clone(),
+            capabilities: ctx.capabilities.clone(),
+            handles: ctx.handles.clone(),
+            sources: ctx.sources.clone(),
+            budget: ctx.budget.clone(),
         };
         self.serve(addr_str, state, perms).await
     }
@@ -717,26 +757,15 @@ async fn dispatch_rite(state: ServerState, idx: usize, req: Request<Body>) -> Re
         .collect();
     let t0 = std::time::Instant::now();
 
-    // Custom (closure) middleware is driven through process-global state: the
-    // `next()` invoker hook installed by `set_http_next_invoker` plus the
-    // continuation map, which the outermost layer *clears* when it unwinds
-    // (`run_middleware_chain`, index == 0). Two overlapping requests would wipe
-    // each other's continuations, so those requests are serialized behind this
-    // mutex — one custom-middleware request at a time.
-    //
-    // Nothing else in the handler path is shared: each request builds its own
-    // RuntimeContext and its own capability host below, and named middleware
-    // (`use @http.log`, `use @http.recover`) is just a flag. So plain handlers
-    // and named-middleware handlers skip the mutex and run concurrently.
-    let _guard = if customs.is_empty() {
-        None
-    } else {
-        Some(state.lock.lock().await)
-    };
-
-    let mut ctx = RuntimeContext::new();
-    crate::install_defaults(&mut ctx, state.perms.clone());
-    install_module_scope(&mut ctx, &state.module_env, &state.functions);
+    // No serialization here: continuations are per-request (`new_continuations`
+    // below), the `next` invoker lives on this request's own context, and host
+    // state is shared through internally-locked capability objects. A
+    // server-wide mutex used to serialize every request the moment any custom
+    // middleware existed — one `use { |req, next| … }` capped the whole server
+    // at sequential throughput (the field report measured 4 concurrent
+    // 1-second handlers taking 4 seconds), guarding a continuation map that
+    // had already been made per-request.
+    let mut ctx = per_request_context(&state);
 
     let param = route.param_name.clone().unwrap_or_else(|| "req".into());
     let result = run_middleware_chain(
@@ -865,6 +894,10 @@ fn run_middleware_chain<'a>(
                 // handler reached through `next()` resolves the same names as one
                 // reached directly.
                 module_env: ctx.env.clone(),
+                capabilities: ctx.capabilities.clone(),
+                handles: ctx.handles.clone(),
+                sources: ctx.sources.clone(),
+                budget: ctx.budget.clone(),
             };
             conts.lock().insert(next_id, cont);
         }
@@ -902,6 +935,12 @@ struct NextContinuation {
     perms: PermissionSet,
     functions: HashMap<String, FunctionEntry>,
     module_env: rite_runtime::Environment,
+    /// Shared server state, so the context built for the continuation matches
+    /// the one the request started in — same host, handles, sources, limits.
+    capabilities: Arc<dyn rite_runtime::CapabilityHost>,
+    handles: Arc<rite_runtime::HandleTable>,
+    sources: rite_core::SourceMap,
+    budget: rite_runtime::ExecutionBudget,
 }
 
 /// Give a per-request context the module scope captured at listen time.
@@ -963,8 +1002,14 @@ fn next_invoker(conts: Continuations) -> rite_runtime::HttpNextInvoker {
                 .ok_or_else(|| EvalError::Message("middleware next() already used".into()))?;
             let req = args.into_iter().next().unwrap_or(Value::None);
             let mut inner = RuntimeContext::new();
-            crate::install_defaults(&mut inner, cont.perms.clone());
+            inner.capabilities = cont.capabilities.clone();
+            inner.handles = cont.handles.clone();
             inner.allow_all = cont.perms.allow_all;
+            inner.console_allowed = cont.perms.allow_all || cont.perms.console;
+            inner.sources = cont.sources.clone();
+            // The continuation runs on the request's budget, counters included:
+            // `next()` continues the same request rather than starting a new one.
+            inner.budget = cont.budget.clone();
             install_module_scope(&mut inner, &cont.module_env, &cont.functions);
             let result = run_middleware_chain(
                 &mut inner,

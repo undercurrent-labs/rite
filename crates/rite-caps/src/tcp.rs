@@ -417,8 +417,17 @@ impl TcpCap {
         // captured once at listen time. Cloning an `Environment` shares its frames,
         // so this is a handful of `Arc` bumps per connection, and module state
         // persists across connections — a top-level counter counts every one.
-        let module_env = ctx.env.clone();
-        let functions = ctx.functions.clone();
+        // The capability host and handle table are the listen-time context's own,
+        // shared exactly as `@http.listen` shares them: a `@db` connection opened
+        // before `listen` works inside a connection handler.
+        let scope = ConnScope {
+            module_env: ctx.env.clone(),
+            functions: ctx.functions.clone(),
+            capabilities: ctx.capabilities.clone(),
+            handles: ctx.handles.clone(),
+            sources: ctx.sources.clone(),
+            budget: ctx.budget.clone(),
+        };
 
         loop {
             tokio::select! {
@@ -429,10 +438,9 @@ impl TcpCap {
                     // accepted socket: a slow handler must not stop the next accept.
                     let handler = handler.clone();
                     let perms = perms.clone();
-                    let module_env = module_env.clone();
-                    let functions = functions.clone();
+                    let scope = scope.clone();
                     tokio::spawn(async move {
-                        serve_conn(stream, handler, perms, module_env, functions).await;
+                        serve_conn(stream, handler, perms, scope).await;
                     });
                 }
             }
@@ -453,22 +461,39 @@ impl TcpCap {
     }
 }
 
+/// The listen-time state every connection handler runs against — the
+/// `@tcp` twin of `@http`'s `ServerState`.
+#[cfg(not(target_arch = "wasm32"))]
+#[derive(Clone)]
+struct ConnScope {
+    module_env: rite_runtime::Environment,
+    functions: HashMap<String, rite_runtime::FunctionEntry>,
+    capabilities: std::sync::Arc<dyn rite_runtime::CapabilityHost>,
+    handles: std::sync::Arc<rite_runtime::HandleTable>,
+    sources: rite_core::SourceMap,
+    budget: rite_runtime::ExecutionBudget,
+}
+
 /// Run one connection's handler block, then close the connection.
 ///
-/// The block gets its own `RuntimeContext` and its own capability host — the
-/// isolation an `@http` request handler gets — plus the module scope captured at
-/// listen time, so it resolves top-level bindings and functions.
+/// The block gets its own `RuntimeContext` — own console buffers, own budget
+/// counters — over the server's shared capability host, handle table and
+/// module scope, so it resolves top-level bindings and functions and can use
+/// host state opened before `listen`.
 #[cfg(not(target_arch = "wasm32"))]
 async fn serve_conn(
     stream: TcpStream,
     handler: rite_runtime::Closure,
     perms: PermissionSet,
-    module_env: rite_runtime::Environment,
-    functions: HashMap<String, rite_runtime::FunctionEntry>,
+    scope: ConnScope,
 ) {
     let mut ctx = RuntimeContext::new();
-    crate::install_defaults(&mut ctx, perms);
-    crate::http::install_module_scope(&mut ctx, &module_env, &functions);
+    ctx.capabilities = scope.capabilities;
+    ctx.handles = scope.handles;
+    ctx.allow_all = perms.allow_all;
+    ctx.console_allowed = perms.allow_all || perms.console;
+    ctx.sources = scope.sources;
+    crate::http::install_module_scope(&mut ctx, &scope.module_env, &scope.functions);
     // Registered on the *handler's* context, so the connection is reachable from
     // the block it is passed to and is dropped, closing the socket, when that
     // block's context goes, which is what the explicit `unregister` below used to
@@ -480,10 +505,13 @@ async fn serve_conn(
             return;
         }
     };
-    // A connection is not a request. The default budget gives a script 60 seconds of
-    // wall clock, which would kill an open-but-idle session on its next step — so the
-    // clock is lifted here while the step, depth and size ceilings stay in place.
-    ctx.budget.timeout = None;
+    // A connection is not a request. A wall clock would kill an open-but-idle
+    // session on its next step, so it is lifted while the listen-time step,
+    // depth and size ceilings stay in place with fresh counters.
+    let mut budget = scope.budget;
+    budget.restart();
+    budget.timeout = None;
+    ctx.budget = budget;
 
     let conn = Value::Handle(HostHandle {
         kind: HANDLE_KIND.into(),
@@ -507,12 +535,9 @@ async fn serve_conn(
             e => crate::http::emit_process_stderr(&format!("rite: tcp handler error: {e}\n")),
         }
     }
-    // The connection's lifetime is the block's. Closing here is what allows the
-    // shape without connection-lifetime rules the language cannot express.
-    //
-    // Dropping `ctx` would close it anyway now that the table lives there, but say
-    // so explicitly: the socket should go when the handler returns, not whenever
-    // the context happens to be dropped.
+    // The connection's lifetime is the block's. This close is load-bearing:
+    // the handle table is shared with the listen-time context now, so dropping
+    // this handler's `ctx` no longer drops the socket.
     ctx.handles.close(id);
 }
 

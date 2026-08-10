@@ -348,6 +348,13 @@ pub(crate) struct McpServerState {
     module_env: rite_runtime::Environment,
     functions: HashMap<String, FunctionEntry>,
     log: bool,
+    /// The serve-time context's host state, shared by every declaration body
+    /// the way `@http.listen` shares it per request — a `@db` connection
+    /// opened before `@mcp.serve` works inside a tool.
+    capabilities: Arc<dyn rite_runtime::CapabilityHost>,
+    handles: Arc<rite_runtime::HandleTable>,
+    sources: rite_core::SourceMap,
+    budget: rite_runtime::ExecutionBudget,
 }
 
 impl McpServerState {
@@ -837,7 +844,14 @@ async fn run_decl(
     notify: &rite_runtime::eval::McpNotifier,
 ) -> Result<Outcome, RunFailure> {
     let mut ctx = RuntimeContext::new();
-    crate::install_defaults(&mut ctx, state.perms.clone());
+    ctx.capabilities = state.capabilities.clone();
+    ctx.handles = state.handles.clone();
+    ctx.allow_all = state.perms.allow_all;
+    ctx.console_allowed = state.perms.allow_all || state.perms.console;
+    ctx.sources = state.sources.clone();
+    let mut budget = state.budget.clone();
+    budget.restart();
+    ctx.budget = budget;
     crate::http::install_module_scope(&mut ctx, &state.module_env, &state.functions);
     ctx.mcp_notify = Some(notify.clone());
     if state.config.transport == McpTransport::Stdio {
@@ -1002,6 +1016,10 @@ async fn serve(perms: &PermissionSet, ctx: &RuntimeContext) -> Result<Value, Eva
         module_env: ctx.env.clone(),
         functions: ctx.functions.clone(),
         log,
+        capabilities: ctx.capabilities.clone(),
+        handles: ctx.handles.clone(),
+        sources: ctx.sources.clone(),
+        budget: ctx.budget.clone(),
     };
 
     match config.transport {
