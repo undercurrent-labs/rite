@@ -92,8 +92,12 @@ n ← 3
 ! @console.println("hi {name}, you have {n}")
 ```
 
-A record field works too — `"{user.name}"`. Anything more involved is clearer built with
-`+` and `str(…)`.
+A record field works too — `"{user.name}"`. That is the whole grammar of a
+hole: a name or a dotted field path. Anything else — a call, an expression, a
+regex quantifier that happens to use braces — is `error[E020]` at `rite
+check`, with the fix in the message: bind the value first, build the string
+with `+` and `str(…)`, or use a [raw string](#three-kinds-of-string-literal)
+when the braces are literal.
 
 ### Escapes
 

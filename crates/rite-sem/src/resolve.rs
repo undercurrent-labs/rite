@@ -1286,7 +1286,72 @@ impl Resolver {
             }
             // Parentheses are transparent.
             Expr::Group(g) => self.resolve_expr(&g.expr, file, in_effect),
-            Expr::Literal(_) | Expr::Atom(_) | Expr::Placeholder(_) => {}
+            Expr::Literal(lit) => self.check_interpolation_holes(lit, file),
+            Expr::Atom(_) | Expr::Placeholder(_) => {}
+        }
+    }
+
+    /// Reject interpolation holes that are not a dotted name path.
+    ///
+    /// A hole is expanded in desugar — after this walk — by splitting its text
+    /// on `.` and fabricating a `Global`, so `"{twice(21)}"` built a global
+    /// literally named `twice(21)` and died at runtime with ``undefined name
+    /// `twice(21)` ``, a message that reads as a typo rather than a language
+    /// limit. The same trap caught regex quantifiers: `"{2,3}"` is a hole
+    /// named `2,3`. Both are now said plainly at check time.
+    ///
+    /// The scan mirrors `desugar_interpolation`'s brace rules: doubled braces
+    /// are literal (raw strings arrive with every brace doubled), a lone `}`
+    /// is literal, an unmatched `{` is literal.
+    fn check_interpolation_holes(&mut self, lit: &rite_syntax::Literal, file: rite_core::FileId) {
+        let rite_syntax::LitKind::String(s) = &lit.kind else {
+            return;
+        };
+        let mut rest = s.as_str();
+        while let Some(start) = rest.find(['{', '}']) {
+            let brace = rest.as_bytes()[start];
+            let after = &rest[start + 1..];
+            if after.as_bytes().first() == Some(&brace) {
+                rest = &after[1..];
+                continue;
+            }
+            if brace == b'}' {
+                rest = after;
+                continue;
+            }
+            let Some(end) = after.find('}') else {
+                rest = after;
+                continue;
+            };
+            let hole = after[..end].trim();
+            // What desugar's `parse_interp_expr` can actually expand: an
+            // empty hole (renders as nothing), an atom, or a dotted name
+            // path — its own trim included.
+            let body = hole.strip_prefix('#').unwrap_or(hole);
+            let is_path = hole.is_empty()
+                || (!body.is_empty()
+                    && body.split('.').all(|part| {
+                        let mut chars = part.chars();
+                        matches!(chars.next(), Some(c) if c.is_alphabetic() || c == '_')
+                            && chars.all(|c| c.is_alphanumeric() || c == '_')
+                    }));
+            if !is_path {
+                self.diagnostics.push(
+                    simple_error(
+                        E020_UNDEFINED_NAME,
+                        format!("`{{{hole}}}` does not interpolate — a hole takes a name or a field path"),
+                        file,
+                        lit.span,
+                        "only `{name}` and `{name.field}` are expanded",
+                    )
+                    .with_help(
+                        "bind the value first (`v ← twice(21)` then `\"{v}\"`), build the \
+                         string with `+` and `str(…)`, or use a raw string r\"…\" if the \
+                         braces are literal",
+                    ),
+                );
+            }
+            rest = &after[end + 1..];
         }
     }
 

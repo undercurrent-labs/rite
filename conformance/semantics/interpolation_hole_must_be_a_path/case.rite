@@ -1,0 +1,2 @@
+def twice(n) [[ return n * 2 ]]
+do @console.println("value {twice(21)}")

@@ -24,6 +24,13 @@
   directions like `effectful`. The check caught one stray `?` in the repo's
   own conformance fixtures.
 
+- **A non-path interpolation hole is a check-time error (`E020`).** A hole is
+  a name or a dotted field path, nothing else — but `"{twice(21)}"` used to
+  pass check and die at runtime with ``undefined name `twice(21)` ``, which
+  reads as a typo rather than a language limit, and `"{2,3}"` in a regex was
+  a hole named `2,3`. The error states the rule and the three ways out (bind
+  first, `+`/`str()`, raw string).
+
 ### Changed
 
 - **Handlers share the listen-time capability host and handle table.** A

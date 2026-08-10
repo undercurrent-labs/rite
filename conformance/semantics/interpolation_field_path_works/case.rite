@@ -1,0 +1,2 @@
+u <- <<name: "Aura", meta: <<tier: "pro">>>>
+^ "hi {u.name}, tier {u.meta.tier}"
