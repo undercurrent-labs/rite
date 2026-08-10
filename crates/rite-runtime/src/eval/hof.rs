@@ -24,7 +24,12 @@ impl<'a> Evaluator<'a> {
             if !c.is_truthy() {
                 break;
             }
-            let _ = self.call_value(body.clone(), vec![Value::None]).await?;
+            match self.call_value(body.clone(), vec![Value::None]).await {
+                Ok(_) => {}
+                Err(EvalError::Break) => break,
+                Err(EvalError::Continue) => continue,
+                Err(e) => return Err(e),
+            }
         }
         Ok(Value::None)
     }
@@ -179,7 +184,15 @@ impl<'a> Evaluator<'a> {
         let list = Self::hof_list("each", it.next())?;
         let f = Self::hof_fn("each", it.next())?;
         for item in list {
-            let _ = self.call_value(f.clone(), vec![item]).await?;
+            // `break` ends the iteration, `continue` moves to the next item.
+            // A `^` from a loop-sugar body arrives as `Return` and keeps
+            // propagating — it belongs to the enclosing function.
+            match self.call_value(f.clone(), vec![item]).await {
+                Ok(_) => {}
+                Err(EvalError::Break) => break,
+                Err(EvalError::Continue) => continue,
+                Err(e) => return Err(e),
+            }
         }
         Ok(Value::None)
     }

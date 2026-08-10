@@ -15,6 +15,14 @@
 
 ### Added
 
+- **`break` and `continue`.** `break` / `∎` ends the innermost `for` / `while`
+  / `loop`; `continue` / `⟳` skips to the next iteration. The absence was a
+  documented design decision, and the field report showed its cost: five
+  retry loops carrying a flag tested at the top of every body, one of them
+  running eleven no-op iterations after succeeding. A closure boundary is
+  still a wall — `break` inside `each ⟦ |x| … ⟧` has no loop to target and is
+  an error at `rite check` (`E013`), as is `break` outside any loop.
+
 - **`rite check` rejects `?` on a host call that never answers a result
   (`E017`).** `! @fs.exists(p)?` and `! @clock.sleep(ms)?` passed check and
   died on the line's first execution — in the field report, a poller's idle

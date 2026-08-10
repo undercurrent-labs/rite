@@ -32,6 +32,8 @@
       "note": "Input-only sugar. `f ∘ g` is parsed as `compose(f, g)`, and both dialects format to the call form — there is no bare-word `compose` operator."
     },
     "forall": { "ascii": "for", "glyph": "∀", "token": "ForAll" },
-    "unless": { "ascii": "unless", "glyph": "¿", "token": "Unless" }
+    "unless": { "ascii": "unless", "glyph": "¿", "token": "Unless" },
+    "break": { "ascii": "break", "glyph": "∎", "token": "Break" },
+    "continue": { "ascii": "continue", "glyph": "⟳", "token": "Continue" }
   }
 }

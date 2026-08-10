@@ -375,6 +375,8 @@ impl<'a> Lexer<'a> {
             ("∀", TokenKind::ForAll),
             ("¿", TokenKind::Unless),
             ("¶", TokenKind::Paragraph),
+            ("∎", TokenKind::Break),
+            ("⟳", TokenKind::Continue),
             ("✓", TokenKind::OkMark),
             ("✗", TokenKind::ErrMark),
             ("∘", TokenKind::Compose),

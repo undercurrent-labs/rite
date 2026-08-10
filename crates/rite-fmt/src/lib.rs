@@ -884,6 +884,12 @@ impl<'a> Formatter<'a> {
                     self.out.push(' ');
                     self.block(body);
                 }
+                rite_syntax::SugarForm::Break => {
+                    self.out.push_str(&self.glyph("∎", "break"));
+                }
+                rite_syntax::SugarForm::Continue => {
+                    self.out.push_str(&self.glyph("⟳", "continue"));
+                }
             },
             Stmt::Binding(b) => {
                 self.pattern(&b.pattern);

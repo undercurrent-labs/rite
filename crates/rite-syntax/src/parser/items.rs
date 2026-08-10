@@ -446,6 +446,36 @@ impl Parser {
             }));
         }
 
+        // break / ∎ and continue / ⟳ — control-flow signals the loop drivers
+        // intercept. Lowered to internal native calls so the IR needs no new
+        // node and the compiled path dispatches them exactly as interpreted.
+        if self.check(TokenKind::Break) || self.check(TokenKind::Continue) {
+            let is_break = self.check(TokenKind::Break);
+            let span = self.advance().span;
+            if self.check(TokenKind::Semicolon) {
+                self.advance();
+            }
+            let name = if is_break { "__break" } else { "__continue" };
+            let lowered = Stmt::Expr(Expr::Call(CallExpr {
+                callee: Box::new(Expr::Ident(Ident {
+                    name: name.into(),
+                    span,
+                })),
+                args: vec![],
+                span,
+                trailing_block: false,
+            }));
+            return Some(Stmt::Sugared(SugaredStmt {
+                form: if is_break {
+                    SugarForm::Break
+                } else {
+                    SugarForm::Continue
+                },
+                lowered: Box::new(lowered),
+                span,
+            }));
+        }
+
         // while cond ⟦ … ⟧ — desugar to recursive local helper via special form
         if self.check(TokenKind::While) {
             return Some(self.parse_while_stmt());

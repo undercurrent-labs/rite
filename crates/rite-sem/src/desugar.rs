@@ -367,6 +367,22 @@ impl Desugar {
                             }
                         }
                     }
+                    SugarForm::Break | SugarForm::Continue => {
+                        // The `__break`/`__continue` call the parser lowered to
+                        // becomes a native call, which the loop drivers
+                        // intercept — interpreted and compiled dispatch alike.
+                        let name = if matches!(s.form, SugarForm::Break) {
+                            "__break"
+                        } else {
+                            "__continue"
+                        };
+                        ir = ExprIr::NativeCall {
+                            name: name.into(),
+                            args: vec![],
+                            effect: EffectKind::Pure,
+                            span: s.span,
+                        };
+                    }
                     SugarForm::Say { .. } | SugarForm::Unless { .. } => {}
                 }
                 ir

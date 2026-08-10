@@ -40,6 +40,8 @@ pub enum TokenKind {
     Unless,
     While,
     Loop,
+    Break,
+    Continue,
     Say,
     Xor,
     Compose,   // ∘
@@ -226,6 +228,8 @@ pub fn keyword_or_ident(text: &str) -> TokenKind {
         "unless" => TokenKind::Unless,
         "while" => TokenKind::While,
         "loop" => TokenKind::Loop,
+        "break" => TokenKind::Break,
+        "continue" => TokenKind::Continue,
         "say" => TokenKind::Say,
         "xor" => TokenKind::Xor,
         "GET" => TokenKind::Get,

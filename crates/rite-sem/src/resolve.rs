@@ -433,6 +433,11 @@ pub struct Resolver {
     /// over nothing has to be judged by, since whether a *particular* call is
     /// effectful is exactly what this analysis cannot always say.
     call_sites_seen: usize,
+    /// How many for/while/loop bodies enclose the current statement. A
+    /// closure or function body resets it: `break` cannot cross either
+    /// boundary, and saying so at check time beats a stray control signal at
+    /// runtime.
+    loop_depth: usize,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -558,6 +563,7 @@ impl Resolver {
             effects_seen: 0,
             call_edges: HashMap::new(),
             call_sites_seen: 0,
+            loop_depth: 0,
         };
         // Predefine pure builtins
         for name in BUILTIN_NAMES {
@@ -698,7 +704,9 @@ impl Resolver {
         for p in &f.params {
             self.define(&p.name.name, false, p.span, file);
         }
+        let saved_depth = std::mem::take(&mut self.loop_depth);
         self.resolve_block(&f.body, file);
+        self.loop_depth = saved_depth;
         self.pop_scope();
         self.in_injected_fn = was_injected;
         self.current_fn = outer;
@@ -815,9 +823,60 @@ impl Resolver {
 
     fn resolve_stmt(&mut self, stmt: &Stmt, file: rite_core::FileId) {
         match stmt {
-            // The sugar's `lowered` form is the semantic truth; the source
-            // spelling exists for the formatter alone.
-            Stmt::Sugared(s) => self.resolve_stmt(&s.lowered, file),
+            // For `say`/`unless` the lowered form is resolved as the semantic
+            // truth. The loops are resolved from their *source* shape instead:
+            // the lowering wraps the body in a closure, and the resolver must
+            // know the body is a loop body — that is what lets `break` and
+            // `continue` be checked, and it sees exactly the same statements.
+            Stmt::Sugared(s) => match &s.form {
+                rite_syntax::SugarForm::ForIn { var, iter, body } => {
+                    self.resolve_expr(iter, file, false);
+                    self.push_scope();
+                    self.define(&var.name, false, var.span, file);
+                    self.loop_depth += 1;
+                    self.resolve_block(body, file);
+                    self.loop_depth -= 1;
+                    self.pop_scope();
+                }
+                rite_syntax::SugarForm::While { condition, body } => {
+                    self.resolve_expr(condition, file, false);
+                    self.loop_depth += 1;
+                    self.resolve_block(body, file);
+                    self.loop_depth -= 1;
+                }
+                rite_syntax::SugarForm::Loop { count, body } => {
+                    self.resolve_expr(count, file, false);
+                    self.loop_depth += 1;
+                    self.resolve_block(body, file);
+                    self.loop_depth -= 1;
+                }
+                rite_syntax::SugarForm::Break | rite_syntax::SugarForm::Continue => {
+                    if self.loop_depth == 0 {
+                        let word = if matches!(s.form, rite_syntax::SugarForm::Break) {
+                            "break"
+                        } else {
+                            "continue"
+                        };
+                        self.diagnostics.push(
+                            simple_error(
+                                rite_core::E013_INVALID_SYNTAX,
+                                format!("`{}` outside a loop", word),
+                                file,
+                                s.span,
+                                "no enclosing for/while/loop body",
+                            )
+                            .with_help(
+                                "a closure boundary resets this: a `break` inside \
+                                 `each ⟦ |x| … ⟧` has no loop to target — use \
+                                 take_while/find, or a for/while/loop",
+                            ),
+                        );
+                    }
+                }
+                rite_syntax::SugarForm::Say { .. } | rite_syntax::SugarForm::Unless { .. } => {
+                    self.resolve_stmt(&s.lowered, file)
+                }
+            },
             Stmt::Binding(b) => {
                 // Snapshot around the walk: for a lambda, the difference says whether
                 // its *body* performs a host effect, which is the only way to know for
@@ -1200,7 +1259,19 @@ impl Resolver {
                     );
                 }
             }
-            Expr::Block(b) => self.resolve_block(b, file),
+            Expr::Block(b) => {
+                // A `|…|` block is a closure: `break` inside one has no loop
+                // to target, however the closure is used.
+                let saved_depth = if b.has_param_list {
+                    Some(std::mem::take(&mut self.loop_depth))
+                } else {
+                    None
+                };
+                self.resolve_block(b, file);
+                if let Some(d) = saved_depth {
+                    self.loop_depth = d;
+                }
+            }
             Expr::List(l) => {
                 for e in &l.elements {
                     self.resolve_expr(e, file, false);

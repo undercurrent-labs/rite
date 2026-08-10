@@ -38,7 +38,9 @@ statement        = binding
                  | unless_stmt
                  | for_stmt
                  | while_stmt
-                 | loop_stmt ;
+                 | loop_stmt
+                 | break_stmt
+                 | continue_stmt ;
 
 (* Statement sugar. Each lowers in the parser itself — `for` to `iter → each`,
    `while` to a pair of closures, `loop n` to `range(0, n) → each` — see
@@ -48,6 +50,10 @@ unless_stmt      = unless_kw expression block [ ( ":" | "else" ) block ] ;
 for_stmt         = for_kw identifier in_kw expression block ;
 while_stmt       = "while" expression block ;
 loop_stmt        = "loop" expression block ;
+(* Statements only inside a for/while/loop body; a closure boundary resets
+   that, checked at resolve time. *)
+break_stmt       = break_kw ;
+continue_stmt    = continue_kw ;
 
 binding          = pattern ( bind_op | mutable_bind_op ) expression ;
 assignment       = identifier ":=" expression ;
@@ -182,3 +188,5 @@ not_in_kw        = "∉" | "not" "in" ;
 say_kw           = "¶" | "say" ;
 unless_kw        = "¿" | "unless" ;
 for_kw           = "∀" | "for" ;
+break_kw         = "∎" | "break" ;
+continue_kw      = "⟳" | "continue" ;

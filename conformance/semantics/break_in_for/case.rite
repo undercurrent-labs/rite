@@ -1,0 +1,6 @@
+n <~ 0
+for attempt in 1 ‥ 12 [[
+  n := n + 1
+  ? attempt = 3 [[ break ]]
+]]
+^ n

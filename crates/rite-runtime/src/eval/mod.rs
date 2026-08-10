@@ -91,6 +91,13 @@ pub enum EvalError {
     /// `std::process::exit` so that an embedder hosting `RiteEngine` sees a variant
     /// it can decide about, instead of having its own process killed by a guest.
     Exit(u8),
+    /// `break` — control-flow signal a loop driver (`each`, `while_loop`)
+    /// intercepts. Escaping to the top means it had no loop to target, which
+    /// the resolver rejects at check time; reaching a user as an error is the
+    /// direct-IR case only.
+    Break,
+    /// `continue` — same contract as [`EvalError::Break`].
+    Continue,
 }
 
 impl std::fmt::Display for EvalError {
@@ -104,6 +111,8 @@ impl std::fmt::Display for EvalError {
             EvalError::Budget(b) => write!(f, "{}", b),
             EvalError::Return(_) => write!(f, "return"),
             EvalError::Exit(c) => write!(f, "exit {}", c),
+            EvalError::Break => write!(f, "`break` outside a loop"),
+            EvalError::Continue => write!(f, "`continue` outside a loop"),
         }
     }
 }
@@ -133,7 +142,9 @@ impl EvalError {
             EvalError::Message(_)
             | EvalError::Panic(_)
             | EvalError::Capability(_)
-            | EvalError::Return(_) => 1,
+            | EvalError::Return(_)
+            | EvalError::Break
+            | EvalError::Continue => 1,
         }
     }
 

@@ -151,6 +151,10 @@ pub enum SugarForm {
         count: Expr,
         body: Block,
     },
+    /// `break` / `∎` — end the innermost enclosing loop.
+    Break,
+    /// `continue` / `⟳` — skip to the loop's next iteration.
+    Continue,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

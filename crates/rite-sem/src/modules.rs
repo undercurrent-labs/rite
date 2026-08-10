@@ -146,6 +146,7 @@ impl<'a> InternalRefRewriter<'a> {
                         self.rewrite_expr(count);
                         self.rewrite_block(body);
                     }
+                    SugarForm::Break | SugarForm::Continue => {}
                 }
                 self.rewrite_stmt(&mut s.lowered);
             }

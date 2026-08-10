@@ -75,6 +75,8 @@ in the generated [capability reference](reference/capabilities.md).
 | `!` | `do` | Effectful statement |
 | `@` | `host.` | Host capability |
 | `⊏` | `use` | Import / middleware plug-in |
+| `∎` | `break` | End the innermost loop |
+| `⟳` | `continue` | Next loop iteration |
 | `#atom` | `:atom` | Atom / symbol |
 | `⟦ ⟧` | `[[ ]]` | Block |
 | `⟨ ⟩` | `<< >>` | Record |

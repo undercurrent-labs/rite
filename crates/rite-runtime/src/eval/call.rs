@@ -226,6 +226,11 @@ impl<'a> Evaluator<'a> {
             "parallel" => self.builtin_parallel(args).await,
             "import" => Ok(Value::None), // module loading handled at higher layer
             "while_loop" => self.builtin_while_loop(args).await,
+            // The loop-control signals `break`/`continue` lower to. Raised
+            // here, intercepted by `builtin_each`/`builtin_while_loop`; the
+            // resolver has already refused any use with no loop to target.
+            "__break" => Err(EvalError::Break),
+            "__continue" => Err(EvalError::Continue),
             "compose" => self.builtin_compose(args).await,
             "and_then" => self.builtin_and_then(args).await,
             "print" | "println" => {

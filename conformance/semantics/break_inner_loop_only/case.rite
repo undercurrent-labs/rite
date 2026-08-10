@@ -1,0 +1,8 @@
+hits <~ 0
+for x in [1, 2, 3] [[
+  for y in [10, 20, 30] [[
+    ? y = 20 [[ break ]]
+    hits := hits + 1
+  ]]
+]]
+^ hits

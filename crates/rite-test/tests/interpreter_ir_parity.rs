@@ -280,6 +280,42 @@ sum_doubled([1, 2, 3])",
 }
 
 #[test]
+fn break_and_continue() {
+    parity(
+        "loop-control",
+        &[
+            "n ↢ 0
+∀ attempt ∈ 1 ‥ 12 ⟦
+  n := n + 1
+  ? attempt = 3 ⟦ ∎ ⟧
+⟧
+n",
+            "evens ↢ []
+for n in 1 ‥ 10 ⟦
+  ? n % 2 = 1 ⟦ continue ⟧
+  evens := concat(evens, [n])
+⟧
+evens",
+            "c ↢ 0
+while true ⟦
+  c := c + 1
+  ? c = 5 ⟦ break ⟧
+⟧
+c",
+            // Inner loop only; the outer keeps iterating.
+            "hits ↢ 0
+for x in [1, 2, 3] ⟦
+  for y in [10, 20, 30] ⟦
+    ? y = 20 ⟦ break ⟧
+    hits := hits + 1
+  ⟧
+⟧
+hits",
+        ],
+    );
+}
+
+#[test]
 fn conditionals_and_truthiness() {
     parity(
         "conditionals",

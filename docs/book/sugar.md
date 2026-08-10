@@ -122,31 +122,48 @@ it. A closure you write yourself keeps its own `^`: in
 `xs → each ⟦ |x| ^ x * 2 ⟧` the return ends that closure's call, not the
 function around it.
 
-### No `break`, no `continue`
+### `break` and `continue`
 
-A `break` would be a non-local exit through a closure boundary, and the word is
-not reserved. Use `^` to leave the function entirely, or say what the loop
-should cover instead of escaping it midway:
+`break` / `∎` ends the innermost enclosing loop; `continue` / `⟳` skips to its
+next iteration:
+
+```rite browser
+n ↢ 0
+∀ attempt ∈ 1 ‥ 12 ⟦
+  n := n + 1
+  ? attempt = 3 ⟦ ∎ ⟧
+⟧
+! @console.println(str(n))
+
+evens ↢ []
+for x in 1 ‥ 10 ⟦
+  ? x % 2 = 1 ⟦ continue ⟧
+  evens := concat(evens, [x])
+⟧
+! @console.println(str(evens))
+```
+
+```text
+3
+[2, 4, 6, 8, 10]
+```
+
+Both work in `for`, `while` and `loop`, and a `break` in a nested loop ends
+only the inner one. They are statements of the loop *sugar*: a closure
+boundary is a wall, so a `break` inside `each ⟦ |x| … ⟧` has no loop to
+target and is an error at `rite check`.
+
+The pipeline forms often say it better anyway — `take_while`, `drop_while`,
+`keep`, `reject` and `find` stop or skip without a jump and compose with the
+rest of a pipeline:
 
 ```rite
 // stop at the first refusal — the take_while half of a break
 1..100 → take_while ⟦ |n| n < 10 ⟧ → each ⟦ |n| ¶ n ⟧
 
-// skip elements — the continue half is keep/reject
-xs → reject ⟦ |n| n % 2 = 0 ⟧ → each ⟦ |n| ¶ n ⟧
-
 // find the first hit and stop scanning
 first_match ← xs → find ⟦ |n| n > 40 ⟧
-
-// stop a while loop by making its condition false
-while running and n < limit ⟦
-  n += 1
-⟧
 ```
-
-`take_while`, `drop_while`, `keep`, `reject` and `find` all stop or skip
-without a jump, and compose with the rest of a pipeline where a `break` could
-not.
 
 ## Numbers and logic
 
