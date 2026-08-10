@@ -42,11 +42,11 @@ Lex, parse, resolve, and effect-check without executing
 
 | Argument | Meaning |
 |---|---|
-| `<file>` | Script to check |
+| `<files>` | Scripts or directories to check; no arguments means `.` |
 
 | Flag | Meaning |
 |---|---|
-| `--json-errors` | Report diagnostics as JSON on stderr instead of rendered text |
+| `--json-errors` | Report diagnostics as JSON on stdout instead of rendered text |
 
 ## `rite convert`
 
@@ -284,8 +284,8 @@ Arguments after `--` are readable with `! @process.args`.
 | `--allow` | Grant a permission, e.g. `fs:read=./data` or `net=api.example.com` |
 | `--allow-all` | Grant every permission — trusted scripts only |
 | `--deny` | Revoke a permission that is allowed by default (console, clock, random) |
-| `--timeout` | Wall-clock limit for the run, e.g. `30s` or `5m` |
-| `--max-steps` | Stop after this many evaluation steps |
+| `--timeout` | Wall-clock limit for the run, e.g. `30s`, `5m`, `12h`; `none` (the default) runs unbounded |
+| `--max-steps` | Stop after this many evaluation steps; `0` (the default) runs unbounded |
 | `--module-root` | Also search this directory for `use` imports (repeatable) |
 | `--env-file` | Load `KEY=VALUE` pairs from a file into this run's environment |
 | `--trace` | Print an execution summary (steps, elapsed) and stack traces to stderr |

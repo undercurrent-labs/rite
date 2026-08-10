@@ -35,6 +35,28 @@
   handlers and `@mcp.serve` bodies. Per-request isolation keeps what it
   should: console buffers, environment frames, budget counters.
 
+- **`rite run` and compiled binaries run unbounded by default.** The embedded
+  defaults — a 60-second wall clock, a 10-million-step budget, and an
+  undocumented 1M-iteration `while` guard — killed daemons hours in, looking
+  like a crash from outside; none appeared in `--help`. A CLI run executes
+  the user's own script, not a sandbox. `--timeout` / `--max-steps` opt back
+  in (`none` / `0` spell the default explicitly), the size and depth ceilings
+  stay, and embedded/WASM contexts keep their bounded defaults.
+
+- **`rite check` takes several files or directories.** `rite check *.rite`
+  and `rite check src/` both work; no arguments means `.`; the worst exit
+  class wins across files; `--json-errors` is always an array of
+  `{file, diagnostics}`.
+
+- **`--timeout` understands `12h` and `1d`**, and its error names the unknown
+  unit instead of claiming the digits were bad. The REPL's `:timeout`
+  inherits both.
+
+- **`--allow net` says what it needs.** The bare word is still refused —
+  network scope is never implied — but the error now names `net=<host>` and
+  `net=*` instead of "unknown permission spec". An empty `net=` is refused
+  too; it used to parse as a grant matching nothing.
+
 ### Fixed
 
 - **One custom middleware no longer serializes the whole server.** Any

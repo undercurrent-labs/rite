@@ -49,6 +49,44 @@ fn check_ok_and_fail() {
     assert!(!out.status.success());
 }
 
+/// `rite check *.rite` — several files in one invocation, worst exit wins.
+/// Every project used to end up with a shell loop around single-file check.
+#[test]
+fn check_takes_several_files_and_worst_exit_wins() {
+    let ok = write_temp("multi_ok", "1 + 2\n");
+    let ok2 = write_temp("multi_ok2", "3 + 4\n");
+    let out = run_rite(&["check", ok.to_str().unwrap(), ok2.to_str().unwrap()]);
+    assert!(
+        out.status.success(),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.contains("ok") && stdout.contains("multi_ok2"),
+        "per-file ok lines missing: {stdout}"
+    );
+
+    // One clean file plus one resolve failure: the failure's class (4) is the
+    // exit, and the clean file still reports ok.
+    let bad = write_temp("multi_bad", "undefined_name_here\n");
+    let out = run_rite(&["check", ok.to_str().unwrap(), bad.to_str().unwrap()]);
+    assert_eq!(out.status.code(), Some(4), "worst exit should win");
+
+    // `--json-errors` is always an array of {file, diagnostics}.
+    let out = run_rite(&[
+        "check",
+        "--json-errors",
+        ok.to_str().unwrap(),
+        bad.to_str().unwrap(),
+    ]);
+    let parsed: serde_json::Value =
+        serde_json::from_slice(&out.stdout).expect("json-errors output parses");
+    let arr = parsed.as_array().expect("array of per-file entries");
+    assert_eq!(arr.len(), 2);
+    assert!(arr[0].get("file").is_some() && arr[0].get("diagnostics").is_some());
+}
+
 #[test]
 fn run_prints_value_and_stdout() {
     let f = write_temp(

@@ -105,15 +105,32 @@ impl RuntimeOptions {
     }
 
     /// Build the execution budget, leaving anything unset at its default.
+    ///
+    /// The CLI default is **no wall clock and no step cap**: a CLI run
+    /// executes the user's own script, not a sandbox, and the embedded 60s /
+    /// 10M-step defaults killed the field report's daemon mid-queue after
+    /// hours, looking like a crash from outside. Embedders constructing
+    /// `RuntimeContext::new()` directly keep the bounded defaults. The size
+    /// and depth ceilings stay: they guard memory, not patience.
     pub fn budget(&self) -> Result<ExecutionBudget, String> {
         let mut budget = ExecutionBudget::new();
+        budget.timeout = None;
+        budget.max_steps = u64::MAX;
         if let Some(text) = &self.timeout {
-            budget = budget.with_timeout(
-                parse_duration(text).map_err(|e| format!("invalid --timeout {text:?}: {e}"))?,
-            );
+            // `--timeout none` / `0` spell the default explicitly, so a script
+            // wrapping the CLI can always pass the flag.
+            if text != "none" && text != "0" {
+                budget = budget.with_timeout(
+                    parse_duration(text).map_err(|e| format!("invalid --timeout {text:?}: {e}"))?,
+                );
+            }
         }
         if let Some(n) = self.max_steps {
-            budget = budget.with_max_steps(n);
+            // `--max-steps 0` means unlimited; a literal cap of zero would
+            // fail on the first step and has no use.
+            if n > 0 {
+                budget = budget.with_max_steps(n);
+            }
         }
         if let Some(n) = self.max_call_depth {
             budget.max_call_depth = n;
@@ -128,38 +145,35 @@ impl RuntimeOptions {
     }
 }
 
-/// Parse `500ms`, `30s`, `5m`, or a bare number of seconds.
+/// Parse `500ms`, `30s`, `5m`, `12h`, `1d`, or a bare number of seconds.
 ///
 /// Was private in `rite-cli`. Public because every tool that takes a timeout
 /// needs the same spellings, and because an embedder configuring a budget from
 /// its own config file wants them too.
+///
+/// `@clock.duration` (rite-caps/src/clock.rs) parses the same units with two
+/// deliberate differences: a bare number there is *milliseconds*, and
+/// fractions are accepted. A flag and a value function serve different hands.
 pub fn parse_duration(s: &str) -> Result<Duration, String> {
     let t = s.trim();
-    let invalid = |unit: &str| format!("expected a number{unit} (e.g. 500ms, 30s, 5m)");
-    if let Some(ms) = t.strip_suffix("ms") {
-        return ms
-            .trim()
-            .parse()
-            .map(Duration::from_millis)
-            .map_err(|_| invalid(" of milliseconds"));
+    // Split trailing unit letters from the number, so `12h` reports an
+    // unknown *unit* by name rather than pretending the digits were bad —
+    // the old message for `12h` was "expected a number of seconds (e.g.
+    // 500ms, 30s, 5m)", which contradicts its own examples.
+    let split = t.len() - t.bytes().rev().take_while(u8::is_ascii_alphabetic).count();
+    let (num, unit) = t.split_at(split);
+    let n: u64 = num
+        .trim()
+        .parse()
+        .map_err(|_| "expected a number with an optional unit (e.g. 30s, 5m, 12h)".to_string())?;
+    match unit {
+        "ms" => Ok(Duration::from_millis(n)),
+        "" | "s" => Ok(Duration::from_secs(n)),
+        "m" => Ok(Duration::from_secs(n * 60)),
+        "h" => Ok(Duration::from_secs(n * 3600)),
+        "d" => Ok(Duration::from_secs(n * 86_400)),
+        other => Err(format!("unknown unit `{other}` — use ms, s, m, h or d")),
     }
-    if let Some(sec) = t.strip_suffix('s') {
-        return sec
-            .trim()
-            .parse()
-            .map(Duration::from_secs)
-            .map_err(|_| invalid(" of seconds"));
-    }
-    if let Some(m) = t.strip_suffix('m') {
-        return m
-            .trim()
-            .parse::<u64>()
-            .map(|n| Duration::from_secs(n * 60))
-            .map_err(|_| invalid(" of minutes"));
-    }
-    t.parse::<u64>()
-        .map(Duration::from_secs)
-        .map_err(|_| invalid(" of seconds"))
 }
 
 /// Parse a `.env` file: `KEY=VALUE`, one per line.
@@ -349,13 +363,15 @@ mod tests {
         assert_eq!(parse_duration("500ms"), Ok(Duration::from_millis(500)));
         assert_eq!(parse_duration("30s"), Ok(Duration::from_secs(30)));
         assert_eq!(parse_duration("5m"), Ok(Duration::from_secs(300)));
+        assert_eq!(parse_duration("12h"), Ok(Duration::from_secs(43_200)));
+        assert_eq!(parse_duration("1d"), Ok(Duration::from_secs(86_400)));
         assert_eq!(parse_duration("7"), Ok(Duration::from_secs(7)));
         assert_eq!(parse_duration(" 7 "), Ok(Duration::from_secs(7)));
     }
 
     #[test]
     fn rejects_garbage_instead_of_ignoring_it() {
-        for bad in ["", "abc", "1h", "-5s", "1.5s", "ms", "s"] {
+        for bad in ["", "abc", "1w", "-5s", "1.5s", "ms", "s"] {
             assert!(parse_duration(bad).is_err(), "{bad:?} should not parse");
         }
     }

@@ -14,15 +14,12 @@ impl<'a> Evaluator<'a> {
         let mut it = args.into_iter();
         let pred = it.next().unwrap_or(Value::None);
         let body = it.next().unwrap_or(Value::None);
-        let mut steps = 0u64;
         loop {
+            // The budget is the only loop bound. A hardcoded 1M-iteration
+            // guard used to sit here too — a second limit no flag controlled
+            // and no documentation mentioned, which killed a `while true`
+            // poller after 1M iterations however generous the budget was.
             self.ctx.budget.tick()?;
-            steps += 1;
-            if steps > 1_000_000 {
-                return Err(EvalError::Message(
-                    "while loop exceeded iteration guard".into(),
-                ));
-            }
             let c = self.call_value(pred.clone(), vec![Value::None]).await?;
             if !c.is_truthy() {
                 break;

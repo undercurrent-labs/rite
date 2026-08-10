@@ -178,6 +178,13 @@ fn generate_main_rs(file: &Path, perms: &PermissionSet, build_cwd: &Path) -> Str
     let body = r#"#[tokio::main]
 async fn main() {
     let mut ctx = RuntimeContext::new();
+    // Same default as `rite run`: a binary someone compiled and executes is
+    // their own program, not a sandboxed guest — no wall clock, no step cap.
+    // A daemon built before this carried the embedded 60s/10M defaults and
+    // died mid-queue with `budget exceeded` hours in. The size and depth
+    // ceilings stay; they guard memory, not patience.
+    ctx.budget.timeout = None;
+    ctx.budget.max_steps = u64::MAX;
     install_defaults(&mut ctx, rite_perms());
     // A compiled binary is invoked directly, so its own argv *is* the script's
     // arguments — no `--` separator to strip. Read with `! @process.args`.

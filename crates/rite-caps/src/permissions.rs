@@ -80,7 +80,25 @@ impl Permission {
             return Ok(Permission::FsWrite(p));
         }
         if let Some(rest) = spec.strip_prefix("net=") {
+            // `--allow net=` (empty host) used to parse as a grant matching
+            // nothing — accepted silently, allowing nothing.
+            if rest.is_empty() {
+                return Err(
+                    "`net=` needs a host: `net=<host>` for one host, `net=*` for all".into(),
+                );
+            }
             return Ok(Permission::Net(rest.to_string()));
+        }
+        // Bare `net` stays an error — network scope is the one grant that is
+        // never implied — but the error must say the word is known and
+        // incomplete. "unknown permission spec: net" sent the field-report
+        // author hunting for a different capability name.
+        if spec == "net" {
+            return Err(
+                "`net` needs a scope: `net=<host>` for one host, `net=*` for all hosts \
+                 (or use --allow-all)"
+                    .into(),
+            );
         }
         if spec == "sys" {
             return Ok(Permission::Sys);

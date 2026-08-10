@@ -1002,9 +1002,13 @@ mod tests {
         assert_eq!(s.budget.timeout, Some(Duration::from_secs(30)));
         set_timeout("off", &mut s);
         assert_eq!(s.budget.timeout, None);
+        // Hour spellings parse now that the shared parser knows h/d.
+        set_timeout("1h", &mut s);
+        assert_eq!(s.budget.timeout, Some(Duration::from_secs(3600)));
         // A spelling the duration parser refuses leaves the setting alone
         // rather than silently choosing something.
-        set_timeout("1h", &mut s);
+        set_timeout("off", &mut s);
+        set_timeout("1fortnight", &mut s);
         assert_eq!(s.budget.timeout, None);
     }
 

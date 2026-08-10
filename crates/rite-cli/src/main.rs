@@ -55,10 +55,13 @@ enum Commands {
         /// Revoke a permission that is allowed by default (console, clock, random)
         #[arg(long = "deny", value_name = "PERM")]
         deny: Vec<String>,
-        /// Wall-clock limit for the run, e.g. `30s` or `5m`
+        /// Wall-clock limit for the run, e.g. `30s`, `5m`, `12h`; `none` (the default) runs unbounded
+        ///
+        /// Independent of `--max-steps` — whichever limit is hit first ends
+        /// the run with exit code 8.
         #[arg(long)]
         timeout: Option<String>,
-        /// Stop after this many evaluation steps
+        /// Stop after this many evaluation steps; `0` (the default) runs unbounded
         #[arg(long = "max-steps")]
         max_steps: Option<u64>,
         /// Also search this directory for `use` imports (repeatable)
@@ -105,9 +108,12 @@ enum Commands {
     },
     /// Lex, parse, resolve, and effect-check without executing
     Check {
-        /// Script to check
-        file: PathBuf,
-        /// Report diagnostics as JSON on stderr instead of rendered text
+        /// Scripts or directories to check; no arguments means `.`
+        files: Vec<PathBuf>,
+        /// Report diagnostics as JSON on stdout instead of rendered text
+        ///
+        /// Always an array of `{file, diagnostics}`, one entry per checked
+        /// file, even for a single file.
         #[arg(long = "json-errors")]
         json_errors: bool,
     },
@@ -808,22 +814,74 @@ async fn run(cli: Cli) -> anyhow::Result<ExitCode> {
         }
         Commands::Docs { cmd } => docs_cmd::run(cmd).await,
         Commands::Describe { target } => run_describe(target),
-        Commands::Check { file, json_errors } => {
-            // Path-aware compile: `compile_to_ir` has no notion of where the file lives,
-            // so `use math` could not be resolved and `rite check` reported E026 on
-            // scripts that `rite run` executes fine. `compile_path` resolves imports
-            // relative to the script, matching the runtime.
-            let (ir, diags, sources) = rite_sem::compile_path(&file);
-            if json_errors {
-                println!("{}", serde_json::to_string_pretty(&diags.to_json())?);
-            } else if !diags.is_empty() {
-                eprint!("{}", diags.render_all(&sources));
-            }
-            if diags.has_errors() {
-                Ok(ExitCode::from(diags.rejection_exit_code()))
+        Commands::Check { files, json_errors } => {
+            // `check *.rite` and `check src/` both work: the shell expands the
+            // glob into several arguments, and a directory is walked the way
+            // `fmt` walks one. Checking is read-only, so no-arguments defaults
+            // to `.` — the destructive-default concern that makes `fmt` refuse
+            // does not apply.
+            let roots = if files.is_empty() {
+                vec![PathBuf::from(".")]
             } else {
+                files
+            };
+            let mut targets: Vec<PathBuf> = Vec::new();
+            for root in &roots {
+                match util::collect_rite_files(root) {
+                    Ok(found) => targets.extend(found),
+                    Err(e) => {
+                        eprintln!("rite check: {e}");
+                        return Ok(ExitCode::from(2));
+                    }
+                }
+            }
+            if targets.is_empty() {
+                eprintln!("rite check: no .rite files found");
+                return Ok(ExitCode::from(2));
+            }
+            // Worst exit wins across files, so one parse failure (3) among
+            // resolve failures (4) still reports the resolve class the caller
+            // has to fix everywhere — and success only when every file is
+            // clean.
+            let mut worst: u8 = 0;
+            let mut failed = 0usize;
+            let mut json_out = Vec::new();
+            let many = targets.len() > 1;
+            for file in &targets {
+                // Path-aware compile: `compile_to_ir` has no notion of where the
+                // file lives, so `use math` could not be resolved and `rite check`
+                // reported E026 on scripts that `rite run` executes fine.
+                // `compile_path` resolves imports relative to the script,
+                // matching the runtime.
+                let (ir, diags, sources) = rite_sem::compile_path(file);
                 let _ = ir;
-                println!("ok");
+                if json_errors {
+                    json_out.push(serde_json::json!({
+                        "file": file.display().to_string(),
+                        "diagnostics": diags.to_json(),
+                    }));
+                } else if !diags.is_empty() {
+                    eprint!("{}", diags.render_all(&sources));
+                }
+                if diags.has_errors() {
+                    failed += 1;
+                    worst = worst.max(diags.rejection_exit_code());
+                } else if !json_errors && many {
+                    println!("ok {}", file.display());
+                }
+            }
+            if json_errors {
+                println!("{}", serde_json::to_string_pretty(&json_out)?);
+            }
+            if worst > 0 {
+                if !json_errors && many {
+                    eprintln!("rite check: {failed} of {} files failed", targets.len());
+                }
+                Ok(ExitCode::from(worst))
+            } else {
+                if !json_errors && !many {
+                    println!("ok");
+                }
                 Ok(ExitCode::SUCCESS)
             }
         }
@@ -1324,13 +1382,15 @@ mod duration_tests {
         assert_eq!(parse_duration("500ms"), Ok(Duration::from_millis(500)));
         assert_eq!(parse_duration("30s"), Ok(Duration::from_secs(30)));
         assert_eq!(parse_duration("5m"), Ok(Duration::from_secs(300)));
+        assert_eq!(parse_duration("12h"), Ok(Duration::from_secs(43_200)));
+        assert_eq!(parse_duration("1d"), Ok(Duration::from_secs(86_400)));
         assert_eq!(parse_duration("7"), Ok(Duration::from_secs(7)));
         assert_eq!(parse_duration(" 7 "), Ok(Duration::from_secs(7)));
     }
 
     #[test]
     fn rejects_garbage_instead_of_ignoring_it() {
-        for bad in ["", "abc", "1h", "-5s", "1.5s", "ms", "s"] {
+        for bad in ["", "abc", "1w", "-5s", "1.5s", "ms", "s"] {
             assert!(parse_duration(bad).is_err(), "{bad:?} should not parse");
         }
     }
