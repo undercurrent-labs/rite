@@ -53,6 +53,30 @@
   under the default budget; each now runs under the listen-time limits with
   its own fresh counters.
 
+- **`@http.request` honours `timeout_ms`.** The field was documented and never
+  read; every request ran under a hardcoded 30-second client timeout, so a
+  `timeout_ms: 300000` request died at 30s reported as a generic network
+  error. An expiry is now `err(⟨kind: "http.timeout", …⟩)`, and outbound
+  requests share one client instead of rebuilding the connection pool per
+  call.
+
+- **`INSERT … RETURNING *` keeps its column names.** `DESCRIBE` rejects an
+  INSERT, and the silent fallback named the columns `col0`, `col1`, … — the
+  names are now read off the statement once the first row has stepped it.
+
+- **`@db.open` validates its options.** Every key except `path` was silently
+  dropped — `access_mode: "READ_ONLY"` included, so a "read-only" handle
+  executed `CREATE TABLE`. Unknown keys are errors (the `@process.run` rule),
+  `access_mode` maps onto DuckDB's own, and a second open of a file the
+  script already holds is refused naming the handle that holds it — DuckDB's
+  file lock is per process, so this was two writers on a single-writer file.
+
+- **DuckDB's JSON extension is statically linked.** It autoloaded from the
+  home directory at runtime, which the sandbox rightly blocks — so `JSON`
+  columns and functions failed only at first query. Built in, they need no
+  filesystem access and the sandbox stays exactly as hard; external extension
+  loading is still refused. ICU stays out (it needs the cmake build).
+
 - **`@csv.encode` answers `ok(string)`.** Success was a bare string while
   failure was `err(…)`, so `@csv.encode(rows)?` unwrapped fine exactly when
   the rows were malformed and failed when they were not. It now matches

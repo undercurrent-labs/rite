@@ -285,3 +285,57 @@ rows ← ! @db.query(conn, "SELECT count(*) AS n FROM read_csv('{}', header=true
     .expect("allow_all should keep external access");
     assert!(out.contains("n: "), "expected a row count, got {out}");
 }
+
+/// The JSON extension is statically linked (`duckdb/json` composes with the
+/// plain bundled build), so JSON functions and column types work *inside* the
+/// hardened sandbox — no filesystem autoload involved. Before this the
+/// sandbox blocked the autoload and every JSON query failed only at runtime,
+/// which silently removed a large part of what an analytical database is for.
+#[tokio::test]
+async fn json_extension_works_under_the_sandbox() {
+    let out = run_with(
+        db_memory_only(),
+        r#"
+conn ← ! @db.open()?
+rows ← ! @db.query(conn, "SELECT json_extract('{{\"v\": 3}}', '$.v') AS v")?
+^ rows
+"#,
+    )
+    .await
+    .expect("json function under sandbox");
+    assert!(
+        out.contains('3'),
+        "json_extract failed under sandbox: {out}"
+    );
+
+    // JSON column types too, not just scalar functions.
+    let out = run_with(
+        db_memory_only(),
+        r#"
+conn ← ! @db.open()?
+! @db.exec(conn, "CREATE TABLE t(doc JSON)")?
+! @db.exec(conn, "INSERT INTO t VALUES ('{{\"a\": 1}}')")?
+rows ← ! @db.query(conn, "SELECT doc FROM t")?
+^ rows
+"#,
+    )
+    .await
+    .expect("JSON column type under sandbox");
+    assert!(out.contains('a'), "JSON column failed under sandbox: {out}");
+
+    // Loading anything *external* stays refused: static linking must not have
+    // loosened the sandbox.
+    let err = run_with(
+        db_memory_only(),
+        r#"
+conn ← ! @db.open()?
+^ ! @db.query(conn, "LOAD icu")?
+"#,
+    )
+    .await
+    .expect("LOAD answers err(), not a raise");
+    assert!(
+        err.contains("err("),
+        "external extension load not refused: {err}"
+    );
+}

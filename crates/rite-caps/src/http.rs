@@ -233,13 +233,14 @@ impl HttpCap {
             }
             "get" => {
                 let url = string_arg(&args, 0, "http.get expects a url string")?;
-                self.fetch("GET", &url, None, &Value::None, perms, ctx)
+                self.fetch("GET", &url, None, &Value::None, None, perms, ctx)
                     .await
             }
             "post" => {
                 let url = string_arg(&args, 0, "http.post expects a url string")?;
                 let body = args.get(1).cloned().unwrap_or(Value::None);
-                self.fetch("POST", &url, None, &body, perms, ctx).await
+                self.fetch("POST", &url, None, &body, None, perms, ctx)
+                    .await
             }
             "request" => {
                 let Some(Value::Record(spec)) = args.first() else {
@@ -262,7 +263,21 @@ impl HttpCap {
                     .unwrap_or_else(|| "GET".into());
                 let headers = field("headers");
                 let body = field("body").unwrap_or(Value::None);
-                self.fetch(&method, &url, headers.as_ref(), &body, perms, ctx)
+                // Documented in the descriptor since the beginning; never read
+                // until now, so every request was capped at the 30s default and
+                // a 300000ms timeout died at 30s as a generic network error.
+                let timeout = match field("timeout_ms") {
+                    None | Some(Value::None) => None,
+                    Some(v) => match v.as_int() {
+                        Some(ms) if ms > 0 => Some(std::time::Duration::from_millis(ms as u64)),
+                        _ => {
+                            return Err(EvalError::Message(
+                                "http.request: `timeout_ms` must be a positive integer".into(),
+                            ))
+                        }
+                    },
+                };
+                self.fetch(&method, &url, headers.as_ref(), &body, timeout, perms, ctx)
                     .await
             }
             "response" => {
@@ -310,12 +325,14 @@ impl HttpCap {
     /// results, and `body` as bytes. The call itself returns `ok(response)` or
     /// `err(⟨kind, message⟩)`, like `@fs.read`, so `? ` unwraps it.
     #[cfg(not(target_arch = "wasm32"))]
+    #[allow(clippy::too_many_arguments)]
     async fn fetch(
         &self,
         method: &str,
         url: &str,
         headers: Option<&Value>,
         body: &Value,
+        timeout: Option<std::time::Duration>,
         perms: &PermissionSet,
         ctx: &RuntimeContext,
     ) -> Result<Value, EvalError> {
@@ -326,14 +343,14 @@ impl HttpCap {
 
         let verb = reqwest::Method::from_bytes(method.as_bytes())
             .map_err(|_| EvalError::Message(format!("http: bad method `{method}`")))?;
-        let client = match reqwest::Client::builder()
-            .timeout(std::time::Duration::from_secs(30))
-            .build()
-        {
-            Ok(c) => c,
-            Err(e) => return Ok(net_err("http.client", url, &e.to_string())),
-        };
-        let mut req = client.request(verb, url);
+        // One client for the process: a client per call rebuilt the connection
+        // pool every request. The timeout is per request, not on the client,
+        // so `timeout_ms` can exceed the 30s default.
+        static CLIENT: std::sync::OnceLock<reqwest::Client> = std::sync::OnceLock::new();
+        let client = CLIENT.get_or_init(reqwest::Client::new);
+        let mut req = client
+            .request(verb, url)
+            .timeout(timeout.unwrap_or(std::time::Duration::from_secs(30)));
 
         if let Some(Value::Record(hs)) = headers {
             for (k, v) in hs {
@@ -359,6 +376,9 @@ impl HttpCap {
 
         let resp = match req.send().await {
             Ok(r) => r,
+            // A timeout gets its own kind: "expired after the time you set"
+            // and "the network refused" call for different fixes.
+            Err(e) if e.is_timeout() => return Ok(net_err("http.timeout", url, &e.to_string())),
             Err(e) => return Ok(net_err("http.request", url, &e.to_string())),
         };
         let status = resp.status().as_u16() as i64;

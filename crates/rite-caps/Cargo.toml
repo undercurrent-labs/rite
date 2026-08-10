@@ -91,7 +91,12 @@ proto = ["dep:prost", "dep:prost-reflect", "dep:protox"]
 [dependencies.duckdb]
 version = "1.10505.0"
 optional = true
-features = ["bundled"]
+# `json` is statically linked (it composes with plain `bundled`), so JSON
+# functions and column types work inside the sandbox — a runtime-loaded
+# extension needs the filesystem access `harden_connection` turns off. `icu`
+# is not: it requires `bundled-cmake`, which drags in parquet and a cmake
+# build.
+features = ["bundled", "json"]
 
 [dev-dependencies]
 tempfile = { workspace = true }

@@ -453,7 +453,10 @@ Deliberately the same shape a handler receives, so both directions of HTTP read 
 
 The call itself returns a result, like `@fs.read`: a refused connection, DNS failure or
 timeout comes back as `err(⟨kind: "net.error", …⟩)` rather than ending the script, so
-you can match on it. Requests time out after 30 seconds.
+you can match on it. Requests time out after 30 seconds by default;
+`@http.request` takes a `timeout_ms` field to change that, and an expiry comes
+back as `err(⟨kind: "http.timeout", …⟩)` so it can be told apart from a
+refused connection.
 
 Permission is checked **per host**, and the host is parsed from the URL — a grant for
 `example.com` does not open `evil.example`, and credentials or a port in the URL do not

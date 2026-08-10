@@ -29,6 +29,23 @@ conn ← ! @db.open()?              // in-memory
 
 `open` / `exec` / `query` / … return **`ok` / `err`** results (use `?` or match).
 
+`open` also takes a record — `path` plus an `access_mode` of `READ_ONLY`,
+`READ_WRITE` or `AUTOMATIC`. An unknown option key is an error, not a default:
+
+```rite
+conn ← ! @db.open(⟨path: "./data/app.duckdb", access_mode: "READ_ONLY"⟩)?
+```
+
+**One file, one handle.** A DuckDB file is single-writer, and its own lock is
+per *process* — so a second `@db.open` of a file this script already holds is
+refused with the handle that holds it named. Share the handle (handlers under
+`@http.listen` already share the script's connections) or close it first.
+Another *process* opening the file is refused by DuckDB itself.
+
+The JSON extension is built in and works under the sandbox — `JSON` columns,
+`json_extract`, the lot. ICU is not (no `TIMESTAMPTZ` arithmetic); loading
+external extensions is part of what the sandbox turns off.
+
 ## Exec and query
 
 ```rite browser

@@ -40,6 +40,12 @@ struct DbInner {
     #[cfg(all(feature = "duckdb", not(target_arch = "wasm32")))]
     /// stmt_id → (conn_id, sql)
     stmts: HashMap<u64, (u64, String)>,
+    #[cfg(all(feature = "duckdb", not(target_arch = "wasm32")))]
+    /// conn_id → canonical file path, for the double-open check. DuckDB's file
+    /// lock is per *process*, so two `@db.open` calls on one file in one
+    /// script both succeeded — two writers on a single-writer file, which is
+    /// the corruption path the cross-process lock exists to prevent.
+    open_paths: HashMap<u64, PathBuf>,
 }
 
 pub struct DbCap {
@@ -58,6 +64,8 @@ impl DbCap {
                 conns: HashMap::new(),
                 #[cfg(all(feature = "duckdb", not(target_arch = "wasm32")))]
                 stmts: HashMap::new(),
+                #[cfg(all(feature = "duckdb", not(target_arch = "wasm32")))]
+                open_paths: HashMap::new(),
             }),
         }
     }
@@ -202,34 +210,55 @@ impl DbCap {
     fn open(&self, args: Vec<Value>, perms: &PermissionSet) -> Result<Value, EvalError> {
         perms.check_db_open().map_err(EvalError::Permission)?;
         let path_arg = args.first();
-        let conn = match path_arg {
-            None | Some(Value::None) => Connection::open_in_memory()
-                .map_err(|e| EvalError::Capability(format!("db.open: {}", e)))?,
-            Some(Value::String(s)) if s.is_empty() || s.as_ref() == ":memory:" => {
-                Connection::open_in_memory()
-                    .map_err(|e| EvalError::Capability(format!("db.open: {}", e)))?
-            }
-            Some(Value::String(s)) => {
-                let path = PathBuf::from(s.as_ref());
-                let path = perms.check_db_path(&path).map_err(EvalError::Permission)?;
-                Connection::open(&path)
-                    .map_err(|e| EvalError::Capability(format!("db.open: {}", e)))?
-            }
+        // (path spelling, access mode). An unknown option key is an error, not
+        // a default — same rule as `@process.run`, and for the same reason: a
+        // typo'd `acess_mode` must not be indistinguishable from omitting it.
+        // Before this the record arm read `path` and silently dropped every
+        // other key, `access_mode: "READ_ONLY"` included, so a "read-only"
+        // handle happily executed CREATE TABLE.
+        let (path_spec, access_mode) = match path_arg {
+            None | Some(Value::None) => (String::new(), None),
+            Some(Value::String(s)) => (s.to_string(), None),
             Some(Value::Record(r)) => {
-                let path = r
-                    .get(&Key::String("path".into()))
-                    .or_else(|| r.get(&Key::Atom("path".into())))
-                    .and_then(|v| v.as_str())
-                    .unwrap_or(":memory:");
-                if path.is_empty() || path == ":memory:" {
-                    Connection::open_in_memory()
-                        .map_err(|e| EvalError::Capability(format!("db.open: {}", e)))?
-                } else {
-                    let p = PathBuf::from(path);
-                    let p = perms.check_db_path(&p).map_err(EvalError::Permission)?;
-                    Connection::open(&p)
-                        .map_err(|e| EvalError::Capability(format!("db.open: {}", e)))?
+                let mut path = String::new();
+                let mut mode = None;
+                for (k, v) in r.iter() {
+                    let key = match k {
+                        Key::String(s) => s.as_str(),
+                        Key::Atom(a) => a.as_str(),
+                        other => {
+                            return Err(EvalError::Message(format!(
+                                "db.open: unsupported option key {other:?}"
+                            )))
+                        }
+                    };
+                    match key {
+                        "path" => {
+                            path = v.as_str().unwrap_or_default().to_string();
+                        }
+                        "access_mode" => {
+                            let m = v.as_str().unwrap_or_default();
+                            mode = Some(match m {
+                                "READ_ONLY" | "read_only" => duckdb::AccessMode::ReadOnly,
+                                "READ_WRITE" | "read_write" => duckdb::AccessMode::ReadWrite,
+                                "AUTOMATIC" | "automatic" => duckdb::AccessMode::Automatic,
+                                other => {
+                                    return Err(EvalError::Message(format!(
+                                        "db.open: unknown access_mode `{other}` — use \
+                                         READ_ONLY, READ_WRITE or AUTOMATIC"
+                                    )))
+                                }
+                            });
+                        }
+                        other => {
+                            return Err(EvalError::Message(format!(
+                                "db.open: unknown option `{other}` (supported: path, \
+                                 access_mode)"
+                            )));
+                        }
+                    }
                 }
+                (path, mode)
             }
             other => {
                 return Err(EvalError::Message(format!(
@@ -238,13 +267,73 @@ impl DbCap {
                 )));
             }
         };
+
+        let in_memory = path_spec.is_empty() || path_spec == ":memory:";
+        if in_memory && matches!(access_mode, Some(duckdb::AccessMode::ReadOnly)) {
+            return Err(EvalError::Message(
+                "db.open: an in-memory database cannot be READ_ONLY".into(),
+            ));
+        }
+
+        let open_file = |p: &std::path::Path| -> Result<Connection, EvalError> {
+            match access_mode {
+                None => Connection::open(p)
+                    .map_err(|e| EvalError::Capability(format!("db.open: {}", e))),
+                Some(ref mode) => {
+                    let mode = match mode {
+                        duckdb::AccessMode::ReadOnly => duckdb::AccessMode::ReadOnly,
+                        duckdb::AccessMode::ReadWrite => duckdb::AccessMode::ReadWrite,
+                        duckdb::AccessMode::Automatic => duckdb::AccessMode::Automatic,
+                    };
+                    let config = duckdb::Config::default()
+                        .access_mode(mode)
+                        .map_err(|e| EvalError::Capability(format!("db.open: {}", e)))?;
+                    Connection::open_with_flags(p, config)
+                        .map_err(|e| EvalError::Capability(format!("db.open: {}", e)))
+                }
+            }
+        };
+
+        let (conn, canonical) = if in_memory {
+            (
+                Connection::open_in_memory()
+                    .map_err(|e| EvalError::Capability(format!("db.open: {}", e)))?,
+                None,
+            )
+        } else {
+            let p = PathBuf::from(&path_spec);
+            let p = perms.check_db_path(&p).map_err(EvalError::Permission)?;
+            // DuckDB's file lock is per process; a second open of the same
+            // file inside this script would be a second writer.
+            let canonical = p.canonicalize().unwrap_or_else(|_| p.clone());
+            if let Some((held, _)) = self
+                .inner
+                .lock()
+                .open_paths
+                .iter()
+                .find(|(_, held)| **held == canonical)
+            {
+                return Err(EvalError::Message(format!(
+                    "db.open: `{}` is already open in this script (handle db.conn:{held}) \
+                     — share that handle, or close it first",
+                    path_spec,
+                )));
+            }
+            (open_file(&p)?, Some(canonical))
+        };
         // A script controls arbitrary SQL, and DuckDB's SQL surface is a second
         // filesystem/network host (read_csv, COPY TO, ATTACH, INSTALL/LOAD, httpfs).
         // Constrain it to the granted permissions before the handle escapes — fail
         // closed if the sandbox cannot be applied.
         harden_connection(&conn, perms)?;
         let id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
-        self.inner.lock().conns.insert(id, conn);
+        {
+            let mut inner = self.inner.lock();
+            inner.conns.insert(id, conn);
+            if let Some(c) = canonical {
+                inner.open_paths.insert(id, c);
+            }
+        }
         Ok(Value::ok(Value::Handle(HostHandle {
             kind: "db.conn".into(),
             id,
@@ -256,6 +345,7 @@ impl DbCap {
         let id = handle_id(args.first(), "db.conn")?;
         let mut inner = self.inner.lock();
         inner.conns.remove(&id);
+        inner.open_paths.remove(&id);
         inner.stmts.retain(|_, (cid, _)| *cid != id);
         Ok(Value::ok(Value::None))
     }
@@ -563,8 +653,9 @@ fn query_rows(
     max_rows: usize,
 ) -> Result<Vec<Value>, QueryError> {
     // DuckDB panics on column_count/column_name until the statement is stepped.
-    // Prefer DESCRIBE for unbound SQL; otherwise infer width from the first row.
-    let names = resolve_column_names(conn, sql, params.len());
+    // Prefer DESCRIBE for unbound SQL; otherwise read the names off the
+    // statement once the first row has stepped it.
+    let mut names = resolve_column_names(conn, sql, params.len());
 
     let mut stmt = conn
         .prepare(sql)
@@ -579,19 +670,32 @@ fn query_rows(
         if out.len() >= max_rows {
             return Err(QueryError::OverLimit(max_rows));
         }
+        if names.is_empty() {
+            // DESCRIBE rejects anything but a bare query — `INSERT … RETURNING *`
+            // came back nameless and its columns were reported as col0/col1,
+            // which is why the field report's service followed every insert
+            // with a select. The first `rows.next()` above has stepped the
+            // statement, so reading the names is safe now.
+            names = row.as_ref().column_names();
+        }
         let n = match width {
             Some(n) => n,
             None => {
-                // Probe columns until get fails (DuckDB has no pre-execute column_count).
-                let mut c = 0usize;
-                while row_value(row, c).is_ok() {
-                    c += 1;
-                    if c > 256 {
-                        break;
+                if !names.is_empty() {
+                    width = Some(names.len());
+                    names.len()
+                } else {
+                    // Probe columns until get fails (DuckDB has no pre-execute column_count).
+                    let mut c = 0usize;
+                    while row_value(row, c).is_ok() {
+                        c += 1;
+                        if c > 256 {
+                            break;
+                        }
                     }
+                    width = Some(c);
+                    c
                 }
-                width = Some(c);
-                c
             }
         };
         let mut rec = IndexMap::new();
