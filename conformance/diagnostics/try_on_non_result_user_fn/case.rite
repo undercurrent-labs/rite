@@ -1,0 +1,5 @@
+// Every exit answers a plain record, so `?` can only fail at runtime.
+def wrap(x) [[
+  return <<host: x>>
+]]
+saved <- wrap(1)?

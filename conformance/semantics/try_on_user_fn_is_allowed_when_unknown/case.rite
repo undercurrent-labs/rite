@@ -1,0 +1,12 @@
+// A function that answers a result is fine, and one whose answer the analysis
+// cannot pin down — here a returned parameter — is left alone rather than
+// refused.
+def real_result(x) [[
+  return ok(x)
+]]
+def passthru(x) [[
+  return x
+]]
+a <- real_result(1)?
+b <- passthru(ok(2))?
+^ [a, b]

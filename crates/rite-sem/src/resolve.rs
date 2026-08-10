@@ -378,6 +378,189 @@ pub struct ResolvedProgram {
     pub injected_functions: HashSet<String>,
 }
 
+/// What a function answers, as far as the analysis can tell.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ReturnShape {
+    /// `ok(…)` / `err(…)`, or a host call that answers one.
+    Result,
+    /// A plain value: a literal, a record, arithmetic, `none`.
+    NotResult,
+}
+
+/// One way out of a function body.
+#[derive(Debug, Clone)]
+enum ExitSource {
+    Known(ReturnShape),
+    /// The exit is a call to another function in this program, whose own shape
+    /// is not known yet.
+    Call(String),
+    /// Not classifiable — a parameter, a field, a pipeline. Poisons the
+    /// function, which is what keeps the check from refusing valid code.
+    Unknown,
+}
+
+/// Every exit of a function body: explicit `^`, plus the tail expression.
+///
+/// `^` inside a `for` / `while` / `loop` body leaves the *function* (the loop
+/// sugar passes it through), so those bodies are walked. A closure written with
+/// `|…|`, and an HTTP/MCP handler body, are boundaries: a `^` there belongs to
+/// them, so they are not.
+fn collect_block_exits(block: &Block, out: &mut Vec<ExitSource>) {
+    for (i, item) in block.body.iter().enumerate() {
+        let last = i + 1 == block.body.len();
+        match item {
+            // A nested `def` owns its own returns.
+            Item::Function(_) => {}
+            Item::Statement(stmt) => collect_stmt_exits(stmt, last, out),
+            _ => {}
+        }
+    }
+}
+
+fn collect_stmt_exits(stmt: &Stmt, is_tail: bool, out: &mut Vec<ExitSource>) {
+    match stmt {
+        Stmt::Return(r) => out.push(match &r.value {
+            // A bare `^` answers `none`.
+            None => ExitSource::Known(ReturnShape::NotResult),
+            Some(e) => shape_of(e),
+        }),
+        Stmt::Expr(e) => {
+            collect_nested_returns(e, out);
+            if is_tail {
+                out.push(shape_of(e));
+            }
+        }
+        Stmt::Binding(b) => {
+            collect_nested_returns(&b.value, out);
+            if is_tail {
+                out.push(ExitSource::Unknown);
+            }
+        }
+        Stmt::Assign(a) => {
+            collect_nested_returns(&a.value, out);
+            if is_tail {
+                out.push(ExitSource::Unknown);
+            }
+        }
+        Stmt::Sugared(s) => match &s.form {
+            rite_syntax::SugarForm::ForIn { body, .. }
+            | rite_syntax::SugarForm::While { body, .. }
+            | rite_syntax::SugarForm::Loop { body, .. } => {
+                // Returns escape the loop sugar; the loop's own value does not
+                // become the function's.
+                let mut inner = Vec::new();
+                collect_block_exits(body, &mut inner);
+                out.extend(
+                    inner
+                        .into_iter()
+                        .filter(|e| !matches!(e, ExitSource::Unknown)),
+                );
+            }
+            rite_syntax::SugarForm::Unless {
+                then_branch,
+                else_branch,
+                ..
+            } => {
+                collect_block_exits(then_branch, out);
+                if let Some(b) = else_branch {
+                    collect_block_exits(b, out);
+                }
+            }
+            rite_syntax::SugarForm::Say { value } => collect_nested_returns(value, out),
+            rite_syntax::SugarForm::Break | rite_syntax::SugarForm::Continue => {}
+        },
+    }
+}
+
+/// `^` written inside an expression's branches — `? c ⟦ ^ 1 ⟧`, a match arm.
+fn collect_nested_returns(expr: &Expr, out: &mut Vec<ExitSource>) {
+    match expr {
+        Expr::If(i) => {
+            collect_block_exits(&i.then_branch, out);
+            if let Some(b) = &i.else_branch {
+                collect_block_exits(b, out);
+            }
+        }
+        Expr::Match(m) => {
+            for arm in &m.arms {
+                collect_nested_returns(&arm.body, out);
+            }
+        }
+        // A parameterless block is a plain sequence, not a closure.
+        Expr::Block(b) if !b.has_param_list => collect_block_exits(b, out),
+        Expr::Group(g) => collect_nested_returns(&g.expr, out),
+        Expr::Unary(u) => collect_nested_returns(&u.expr, out),
+        _ => {}
+    }
+}
+
+/// Classify one expression's shape.
+fn shape_of(expr: &Expr) -> ExitSource {
+    match expr {
+        Expr::Literal(_) | Expr::Atom(_) | Expr::List(_) | Expr::Record(_) => {
+            ExitSource::Known(ReturnShape::NotResult)
+        }
+        // Arithmetic, comparison, logic and ranges all answer plain values.
+        Expr::Binary(_) => ExitSource::Known(ReturnShape::NotResult),
+        Expr::Unary(u) => match u.op {
+            UnaryOp::Not | UnaryOp::Neg => ExitSource::Known(ReturnShape::NotResult),
+            _ => shape_of(&u.expr),
+        },
+        Expr::Group(g) => shape_of(&g.expr),
+        Expr::Capability(cap) => host_shape(&cap.path.join(".")),
+        Expr::Call(c) => match c.callee.as_ref() {
+            Expr::Capability(cap) => host_shape(&cap.path.join(".")),
+            Expr::Ident(name) => match name.name.as_str() {
+                "ok" | "err" => ExitSource::Known(ReturnShape::Result),
+                // Other builtins are left unclassified rather than audited a
+                // second time here: `parse_int` answers a result, `str` does
+                // not, and guessing wrong would refuse valid code.
+                n if BUILTIN_NAMES.contains(&n) => ExitSource::Unknown,
+                n => ExitSource::Call(n.to_string()),
+            },
+            _ => ExitSource::Unknown,
+        },
+        // `e?` answers the payload. When `e` is a host call the payload is a
+        // plain value — no capability in the table answers `ok(ok(…))` — so
+        // the `?` of one is never itself a result.
+        Expr::Try(t) => {
+            let mut inner = t.expr.as_ref();
+            loop {
+                match inner {
+                    Expr::Group(g) => inner = &g.expr,
+                    Expr::Unary(u) if u.op == UnaryOp::Effect => inner = &u.expr,
+                    _ => break,
+                }
+            }
+            let host = match inner {
+                Expr::Call(c) => match c.callee.as_ref() {
+                    Expr::Capability(cap) => Some(cap.path.join(".")),
+                    _ => None,
+                },
+                Expr::Capability(cap) => Some(cap.path.join(".")),
+                _ => None,
+            };
+            match host.as_deref().and_then(host_returns_result) {
+                Some(true) => ExitSource::Known(ReturnShape::NotResult),
+                _ => ExitSource::Unknown,
+            }
+        }
+        Expr::Block(b) if !b.has_param_list => match b.body.last() {
+            Some(Item::Statement(Stmt::Expr(e))) => shape_of(e),
+            _ => ExitSource::Unknown,
+        },
+        _ => ExitSource::Unknown,
+    }
+}
+
+fn host_shape(path: &str) -> ExitSource {
+    match host_returns_result(path) {
+        Some(true) => ExitSource::Known(ReturnShape::Result),
+        Some(false) => ExitSource::Known(ReturnShape::NotResult),
+        None => ExitSource::Unknown,
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct FunctionMeta {
     pub name: String,
@@ -433,6 +616,10 @@ pub struct Resolver {
     /// over nothing has to be judged by, since whether a *particular* call is
     /// effectful is exactly what this analysis cannot always say.
     call_sites_seen: usize,
+    /// `?` applied to a call to a function declared in this program, with the
+    /// span to report against. Judged after every body has been walked, since
+    /// a function's return shape depends on what it calls.
+    try_on_user_call: Vec<(String, Span, rite_core::FileId)>,
     /// How many for/while/loop bodies enclose the current statement. A
     /// closure or function body resets it: `break` cannot cross either
     /// boundary, and saying so at check time beats a stray control signal at
@@ -527,6 +714,7 @@ pub fn resolve_with_qualifiers_and_predeclared(
     }
     r.resolve_program(program);
     r.infer_effects();
+    r.infer_return_shapes(program);
     let resolved = ResolvedProgram {
         ast: program.clone(),
         functions: r.functions.clone(),
@@ -563,6 +751,7 @@ impl Resolver {
             effects_seen: 0,
             call_edges: HashMap::new(),
             call_sites_seen: 0,
+            try_on_user_call: Vec::new(),
             loop_depth: 0,
         };
         // Predefine pure builtins
@@ -727,6 +916,122 @@ impl Resolver {
                 .entry(name)
                 .or_default()
                 .insert(callee.to_string());
+        }
+    }
+
+    /// Decide, for each function in this program, whether it can answer a
+    /// result — and report `?` applied to one that cannot (E017).
+    ///
+    /// The host half of this check reads `HOST_EFFECTS`, because a capability's
+    /// return shape is fixed. A function written in the program has to be
+    /// inferred from its exits, and its exits may be calls to other functions,
+    /// so this closes over the call graph to a fixed point exactly as
+    /// [`Resolver::infer_effects`] does.
+    ///
+    /// **Only a definite "never a result" is reported.** Anything the analysis
+    /// cannot pin down — a returned parameter, a field read, a pipeline, a
+    /// mixture of shapes — is left alone, because a false rejection here would
+    /// refuse a valid program. The gap this closes is the one
+    /// `examples/15-service` hit: `! repo.record_finding(conn, f)?` on a
+    /// function whose exits are all plain records passed `rite check` and died
+    /// on the first request.
+    fn infer_return_shapes(&mut self, program: &Program) {
+        if self.try_on_user_call.is_empty() {
+            return;
+        }
+        let mut sources: HashMap<String, Vec<ExitSource>> = HashMap::new();
+        for item in &program.items {
+            if let Item::Function(f) = item {
+                let mut exits = Vec::new();
+                collect_block_exits(&f.body, &mut exits);
+                // A body with no exit at all answers `none`.
+                if exits.is_empty() {
+                    exits.push(ExitSource::Known(ReturnShape::NotResult));
+                }
+                sources.insert(f.name.name.clone(), exits);
+            }
+        }
+
+        // Undetermined until proven otherwise; `None` also absorbs anything the
+        // walk could not classify, so a function only leaves this map with a
+        // shape the analysis is sure of.
+        let mut shapes: HashMap<String, Option<ReturnShape>> = HashMap::new();
+        let unknown: std::collections::HashSet<String> = sources
+            .iter()
+            .filter(|(_, exits)| exits.iter().any(|e| matches!(e, ExitSource::Unknown)))
+            .map(|(name, _)| name.clone())
+            .collect();
+
+        for _ in 0..sources.len().saturating_add(1) {
+            let mut changed = false;
+            for (name, exits) in &sources {
+                if unknown.contains(name) || shapes.get(name).is_some_and(Option::is_some) {
+                    continue;
+                }
+                let mut acc: Option<ReturnShape> = None;
+                let mut settled = true;
+                for exit in exits {
+                    let shape = match exit {
+                        ExitSource::Known(s) => Some(*s),
+                        ExitSource::Unknown => None,
+                        ExitSource::Call(callee) => {
+                            if unknown.contains(callee) {
+                                None
+                            } else {
+                                match shapes.get(callee) {
+                                    Some(Some(s)) => Some(*s),
+                                    // Not resolved yet: try again next round.
+                                    _ => {
+                                        settled = false;
+                                        continue;
+                                    }
+                                }
+                            }
+                        }
+                    };
+                    match (acc, shape) {
+                        (_, None) => {
+                            acc = None;
+                            settled = true;
+                            break;
+                        }
+                        (None, Some(s)) => acc = Some(s),
+                        // Two exits disagreeing is not a shape to diagnose on.
+                        (Some(a), Some(s)) if a != s => {
+                            acc = None;
+                            settled = true;
+                            break;
+                        }
+                        (Some(_), Some(_)) => {}
+                    }
+                }
+                if settled {
+                    shapes.insert(name.clone(), acc);
+                    changed = true;
+                }
+            }
+            if !changed {
+                break;
+            }
+        }
+
+        let sites = std::mem::take(&mut self.try_on_user_call);
+        for (name, span, file) in sites {
+            if shapes.get(&name) == Some(&Some(ReturnShape::NotResult)) {
+                self.diagnostics.push(
+                    simple_error(
+                        rite_core::E017_TRY_ON_NON_RESULT,
+                        format!("`?` on `{}`, which never answers a result", name),
+                        file,
+                        span,
+                        "every path out of this function answers a plain value",
+                    )
+                    .with_help(format!(
+                        "drop the `?`, or make `{}` answer `ok(…)` / `err(…)`",
+                        name
+                    )),
+                );
+            }
         }
     }
 
@@ -1681,6 +1986,22 @@ impl Resolver {
         let cap = match inner {
             Expr::Call(c) => match c.callee.as_ref() {
                 Expr::Capability(cap) => cap,
+                // `? ` on a call to a function written in this program. Its
+                // return shape is not known until every body has been walked,
+                // so the site is recorded and judged in
+                // [`Resolver::infer_return_shapes`].
+                Expr::Ident(name) => {
+                    let is_user_fn = self
+                        .functions
+                        .get(&name.name)
+                        .is_some_and(|m| m.span != Span::DUMMY);
+                    // A local binding of the same name may hold anything.
+                    if is_user_fn && self.lookup(&name.name).is_none() {
+                        self.try_on_user_call
+                            .push((name.name.clone(), c.span, file));
+                    }
+                    return;
+                }
                 _ => return,
             },
             // A bare capability reference is invoked (see `Expr::Capability`

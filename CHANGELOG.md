@@ -23,6 +23,15 @@
   still a wall — `break` inside `each ⟦ |x| … ⟧` has no loop to target and is
   an error at `rite check` (`E013`), as is `break` outside any loop.
 
+- **`rite check` rejects `?` on a *function you wrote* that never answers a
+  result (`E017`).** A function's shape is inferred from its exits and closed
+  over the call graph to a fixed point, the way effect-ness already is — so
+  `! init_schema(conn)?`, where `init_schema` ends on the unwrapped value of
+  `@db.exec`, is refused at check time instead of failing on the first
+  request. Only a definite answer is reported: a returned parameter, a field,
+  a pipeline, or disagreeing exits leave a function unclassified rather than
+  risk refusing valid code.
+
 - **`rite check` rejects `?` on a host call that never answers a result
   (`E017`).** `! @fs.exists(p)?` and `! @clock.sleep(ms)?` passed check and
   died on the line's first execution — in the field report, a poller's idle
