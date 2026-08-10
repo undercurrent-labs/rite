@@ -139,6 +139,14 @@ Tracks implementation status for the Rite language and V1 tooling. Detailed desi
     budget across branches. The scry-core field report reached for a bash fan-out
     because it did not find `parallel`; the book now cross-links it from the
     process and HTTP chapters.
+11. **`?` is checked against host functions only.** `HOST_EFFECTS` carries a
+    return-shape column, so `rite check` rejects `! @fs.exists(p)?` (E017).
+    A `?` on a *user* function that answers a plain value still passes and
+    fails at runtime — writing `examples/15-service` produced four of them.
+    Closing it needs a "returns a result" property inferred over the call
+    graph and closed to a fixed point, the way effect-ness already is: a body
+    whose tail is `ok(…)`/`err(…)`, a `?`-propagating call, or a declared
+    `result<T>` return. That is the same shape of analysis, not a type system.
 12. **Resource limits cover external input.** `max_collection_size` and
     `max_string_size` bound what a script builds (`range`, `repeat`, `concat`)
     *and* what it takes in: `@fs.read`/`read_bytes`/`lines` check the file's
