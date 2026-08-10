@@ -430,8 +430,13 @@ fn closure_value(c: &rite_sem::ClosureIr, compiled: &Compiled) -> Lowered {
         .iter()
         .map(|p| format!("{}.to_string()", rust_str(p)))
         .collect();
+    let ctor = if c.body.loop_body {
+        "native_closure_loop_body"
+    } else {
+        "native_closure"
+    };
     Ok(format!(
-        "rite_runtime::native_closure(vec![{}], ctx, {fn_name})",
+        "rite_runtime::{ctor}(vec![{}], ctx, {fn_name})",
         params.join(", ")
     ))
 }

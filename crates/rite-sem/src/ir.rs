@@ -65,6 +65,15 @@ pub struct BlockIr {
     pub params: Vec<LocalId>,
     pub body: Vec<ExprIr>,
     pub span: Span,
+    /// This block is the synthesized body of loop sugar (`for` / `while` /
+    /// `loop`). A `^` inside it returns from the *enclosing function*: the
+    /// closure boundary the sugar introduced must not capture it, so
+    /// `call_block` re-raises `EvalError::Return` instead of converting it to
+    /// the block's value. A hand-written `xs → each ⟦ |x| ^ v ⟧` closure keeps
+    /// the conversion. `serde(default)` because the IR is embedded in compiled
+    /// binaries: one built before this field existed keeps its behaviour.
+    #[serde(default)]
+    pub loop_body: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

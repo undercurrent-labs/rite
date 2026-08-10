@@ -100,6 +100,25 @@ pub fn native_closure(
         // body still reaches the scope that defined the name.
         env: std::sync::Arc::new(parking_lot::RwLock::new(ctx.env.clone())),
         func,
+        passthrough_return: false,
+    })
+}
+
+/// [`native_closure`] for a loop sugar's synthesized body: `^` inside it
+/// returns from the enclosing function, so the closure boundary re-raises
+/// `EvalError::Return` instead of converting it. Emitted by `rite build` for
+/// closures whose `BlockIr::loop_body` is set.
+pub fn native_closure_loop_body(
+    params: Vec<String>,
+    ctx: &RuntimeContext,
+    func: crate::value::NativeClosureFn,
+) -> Value {
+    Value::NativeClosure(crate::value::NativeClosure {
+        id: crate::eval::next_closure_id(),
+        params,
+        env: std::sync::Arc::new(parking_lot::RwLock::new(ctx.env.clone())),
+        func,
+        passthrough_return: true,
     })
 }
 
@@ -145,7 +164,7 @@ pub fn register_functions(ir: &ProgramIr, ctx: &mut RuntimeContext) {
             f.name.clone(),
             crate::eval::FunctionEntry {
                 params: f.param_names.clone(),
-                body: f.body.clone(),
+                body: std::sync::Arc::new(f.body.clone()),
             },
         );
         // Built once per function and shared by every clone of the closure. A
@@ -171,7 +190,7 @@ pub fn register_functions(ir: &ProgramIr, ctx: &mut RuntimeContext) {
             name: Some(f.name.as_str().into()),
             params: f.param_names.clone(),
             env: std::sync::Arc::new(parking_lot::RwLock::new(ctx.env.clone())),
-            body: f.body.clone(),
+            body: std::sync::Arc::new(f.body.clone()),
             contract: contract.clone(),
         });
         ctx.env.define_name(&f.name, clos, false);

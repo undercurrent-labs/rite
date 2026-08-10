@@ -97,14 +97,36 @@ loop 3 ⟦
 ⟧
 ```
 
+### `^` returns from the function
+
+A `^` inside a loop body returns from the **enclosing function**, exactly as it
+does anywhere else:
+
+```rite browser
+◆ first_even(xs) ⟦
+  for x in xs ⟦
+    ? x % 2 = 0 ⟦ ^ x ⟧
+  ⟧
+  ^ 0
+⟧
+! @console.println(str(first_even([1, 3, 4, 5])))
+```
+
+```text
+4
+```
+
+The loops are sugar — `for` lowers to `each`, `while` to a pair of closures —
+but the synthesized closure passes the return through rather than capturing
+it. A closure you write yourself keeps its own `^`: in
+`xs → each ⟦ |x| ^ x * 2 ⟧` the return ends that closure's call, not the
+function around it.
+
 ### No `break`, no `continue`
 
-Rite's loops are sugar: `for` lowers to `each`, `while` to a pair of closures.
-A `break` would be a non-local exit through a closure boundary, which is a
-construct the language does not have. The word is not reserved and never will
-match anything.
-
-Say what the loop should cover instead of escaping it midway:
+A `break` would be a non-local exit through a closure boundary, and the word is
+not reserved. Use `^` to leave the function entirely, or say what the loop
+should cover instead of escaping it midway:
 
 ```rite
 // stop at the first refusal — the take_while half of a break

@@ -1,0 +1,9 @@
+// A hand-written each closure keeps its own `^`: it ends that closure's
+// call, not the enclosing function. Only the loop sugar's synthesized body
+// propagates a return outward.
+pub def sum_doubled(xs) [[
+  total <~ 0
+  xs -> each { |x| total := total + x; ^ x }
+  ^ total
+]]
+^ sum_doubled([1, 2, 3])

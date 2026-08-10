@@ -4,7 +4,7 @@ use crate::ir::*;
 use crate::resolve::ResolvedProgram;
 use rite_core::Span;
 use rite_syntax::{
-    BinOp, Block, Expr, Item, LitKind, Pattern, RecordKey, ResultPatKind, Stmt, UnaryOp,
+    BinOp, Block, Expr, Item, LitKind, Pattern, RecordKey, ResultPatKind, Stmt, SugarForm, UnaryOp,
 };
 use std::collections::{HashMap, HashSet};
 
@@ -49,6 +49,7 @@ pub fn desugar_program(resolved: &ResolvedProgram) -> ProgramIr {
                     params: vec![],
                     body: vec![],
                     span: f.body.span,
+                    loop_body: false,
                 },
                 is_pub: f.is_pub,
                 span: f.span,
@@ -325,6 +326,7 @@ impl Desugar {
             params,
             body,
             span: block.span,
+            loop_body: false,
         }
     }
 
@@ -332,7 +334,43 @@ impl Desugar {
         match stmt {
             // The sugar's `lowered` form is the semantic truth; the source
             // spelling exists for the formatter alone.
-            Stmt::Sugared(s) => self.desugar_stmt(&s.lowered),
+            Stmt::Sugared(s) => {
+                let mut ir = self.desugar_stmt(&s.lowered);
+                // The loop sugars lower through a closure the source never
+                // wrote. `^` inside one must return from the enclosing
+                // function, not from that closure, so the synthesized body is
+                // flagged and `call_block` passes the return through. The
+                // match is on the exact shapes the parser emits; anything
+                // else is left alone.
+                match &s.form {
+                    SugarForm::ForIn { .. } | SugarForm::Loop { .. } => {
+                        if let ExprIr::Pipeline { stages, .. } = &mut ir {
+                            for stage in stages {
+                                if let ExprIr::Call { callee, args, .. } = &mut stage.expr {
+                                    if matches!(&**callee, ExprIr::Global(n) if n == "each") {
+                                        if let Some(ExprIr::Closure(c)) = args.last_mut() {
+                                            c.body.loop_body = true;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    SugarForm::While { .. } => {
+                        if let ExprIr::Call { callee, args, .. } = &mut ir {
+                            if matches!(&**callee, ExprIr::Global(n) if n == "while_loop") {
+                                // args[0] is the condition closure — an
+                                // expression, which cannot contain a `^`.
+                                if let Some(ExprIr::Closure(c)) = args.get_mut(1) {
+                                    c.body.loop_body = true;
+                                }
+                            }
+                        }
+                    }
+                    SugarForm::Say { .. } | SugarForm::Unless { .. } => {}
+                }
+                ir
+            }
             Stmt::Binding(b) => {
                 let value = self.desugar_expr(&b.value);
                 match &b.pattern {

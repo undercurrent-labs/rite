@@ -226,6 +226,60 @@ a2 * 2",
 }
 
 #[test]
+fn return_escapes_loop_sugar() {
+    parity(
+        "loop-return",
+        &[
+            // `^` in a for body returns from the enclosing function — the
+            // scry-core field report's `first_even` repro, which used to fall
+            // through and answer 0.
+            "◆ first_even(xs) ⟦
+  for x in xs ⟦
+    ? x % 2 = 0 ⟦ ^ x ⟧
+  ⟧
+  ^ 0
+⟧
+first_even([1, 3, 4, 5])",
+            "◆ over(limit) ⟦
+  n ↢ 0
+  while true ⟦
+    n := n + 1
+    ? n > limit ⟦ ^ n ⟧
+  ⟧
+  ^ 0 - 1
+⟧
+over(3)",
+            "◆ third() ⟦
+  seen ↢ 0
+  loop 10 ⟦
+    seen := seen + 1
+    ? seen = 3 ⟦ ^ seen ⟧
+  ⟧
+  ^ 0
+⟧
+third()",
+            // Nested loops: the return crosses both synthesized bodies.
+            "◆ pair(xs, ys) ⟦
+  for x in xs ⟦
+    for y in ys ⟦
+      ? x + y = 7 ⟦ ^ [x, y] ⟧
+    ⟧
+  ⟧
+  ^ []
+⟧
+pair([1, 2, 3], [4, 6])",
+            // A hand-written each closure keeps `^` local to itself.
+            "◆ sum_doubled(xs) ⟦
+  total ↢ 0
+  xs → each { |x| total := total + x; ^ x }
+  ^ total
+⟧
+sum_doubled([1, 2, 3])",
+        ],
+    );
+}
+
+#[test]
 fn conditionals_and_truthiness() {
     parity(
         "conditionals",

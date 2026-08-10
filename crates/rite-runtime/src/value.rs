@@ -70,6 +70,10 @@ pub struct NativeClosure {
     /// visible outside it — the same property `Closure` relies on.
     pub env: std::sync::Arc<parking_lot::RwLock<crate::env::Environment>>,
     pub func: NativeClosureFn,
+    /// The compiled twin of `BlockIr::loop_body`: this closure is a loop
+    /// sugar's synthesized body, so `call_value` re-raises `EvalError::Return`
+    /// instead of converting it to the closure's value.
+    pub passthrough_return: bool,
 }
 
 impl std::fmt::Debug for NativeClosure {
@@ -115,7 +119,11 @@ pub struct Closure {
     pub name: Option<std::sync::Arc<str>>,
     pub params: Vec<String>,
     pub env: Arc<parking_lot::RwLock<crate::env::Environment>>,
-    pub body: rite_sem::BlockIr,
+    /// `Arc` for the same reason `name` is `Arc<str>`: the body was ~64 inline
+    /// bytes on every `Value` (and one more deep `BlockIr` clone per closure
+    /// created), and growing `BlockIr` by one flag tipped `EvalError` over
+    /// clippy's large-`Err` threshold. Bodies are immutable once built.
+    pub body: Arc<rite_sem::BlockIr>,
     /// Declared types to enforce on entry and exit, if the source wrote any.
     pub contract: Option<Arc<FnContract>>,
 }

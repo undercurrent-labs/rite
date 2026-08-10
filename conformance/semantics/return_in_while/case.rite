@@ -1,0 +1,9 @@
+pub def find_over(limit) [[
+  n <~ 0
+  while true [[
+    n := n + 1
+    ? n > limit [[ ^ n ]]
+  ]]
+  ^ 0 - 1
+]]
+^ find_over(3)

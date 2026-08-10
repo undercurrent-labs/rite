@@ -60,13 +60,14 @@ impl<'a> Evaluator<'a> {
                 span: Span::DUMMY,
             }],
             span: Span::DUMMY,
+            loop_body: false,
         };
         Ok(Value::Function(Closure {
             id: CLOSURE_ID.fetch_add(1, Ordering::Relaxed),
             name: Some("compose".into()),
             params: vec!["x".into()],
             env: Arc::new(parking_lot::RwLock::new(env)),
-            body,
+            body: std::sync::Arc::new(body),
             contract: None,
         }))
     }

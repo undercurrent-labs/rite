@@ -366,7 +366,9 @@ pub fn next_closure_id() -> u64 {
 #[derive(Clone)]
 pub struct FunctionEntry {
     pub params: Vec<String>,
-    pub body: BlockIr,
+    /// Shared, not copied: the functions map is cloned per HTTP/TCP/MCP
+    /// handler dispatch, and bodies are immutable once built.
+    pub body: std::sync::Arc<BlockIr>,
 }
 
 impl RuntimeContext {

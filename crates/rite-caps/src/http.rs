@@ -404,6 +404,7 @@ impl HttpCap {
                             params: vec![],
                             body: vec![],
                             span: rite_core::Span::DUMMY,
+                            loop_body: false,
                         },
                     })
                 })

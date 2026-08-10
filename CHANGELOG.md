@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+### Changed
+
+- **`^` inside `for` / `while` / `loop` returns from the enclosing function.**
+  It used to be swallowed at the closure boundary the loop sugar introduces:
+  the loop ran to completion and the function fell through to whatever came
+  after, which the scry-core field report hit twice in production before
+  finding the cause. A program that relied on the old behaviour was relying on
+  the bug. A closure written by hand (`xs → each ⟦ |x| ^ v ⟧`) keeps its `^`
+  local, and binaries compiled before this release keep the behaviour they
+  were built with.
+
 ### Fixed
 
 - **A module's own names resolve within the module.** Copies merged into the

@@ -71,9 +71,10 @@ impl<'a> Evaluator<'a> {
                 let r = (c.func)(self.ctx, args).await;
                 self.ctx.env = saved;
                 // `^` inside a closure body ends the closure, as it does for an
-                // interpreted one.
+                // interpreted one — except a loop sugar's synthesized body,
+                // which passes it through (the twin of `BlockIr::loop_body`).
                 match r {
-                    Err(EvalError::Return(v)) => Ok(v),
+                    Err(EvalError::Return(v)) if !c.passthrough_return => Ok(v),
                     other => other,
                 }
             }
@@ -177,6 +178,12 @@ impl<'a> Evaluator<'a> {
         let result = async {
             for expr in &body.body {
                 match self.eval_operand(expr).await {
+                    // A loop sugar's synthesized body passes `^` through to the
+                    // enclosing function; `each`/`while_loop` re-raise it. Any
+                    // other block boundary converts it: `^` ends the closure.
+                    Err(EvalError::Return(v)) if body.loop_body => {
+                        return Err(EvalError::Return(v))
+                    }
                     Err(EvalError::Return(v)) => return Ok(v),
                     Err(e) => return Err(e.with_stack(self.ctx)),
                     Ok(v) => last = v,

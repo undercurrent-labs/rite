@@ -846,7 +846,7 @@ async fn run_decl(
         name: Some(decl.name.as_str().into()),
         params: contract.param_names.clone(),
         env: Arc::new(parking_lot::RwLock::new(ctx.env.clone())),
-        body: decl.body.clone(),
+        body: std::sync::Arc::new(decl.body.clone()),
         contract: Some(Arc::new(contract)),
     });
 
