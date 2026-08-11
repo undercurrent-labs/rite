@@ -157,8 +157,18 @@ grid ← [ [1, 2], [3, 4] ]
 ```
 
 The spaces are not style. `[[` is the ASCII spelling of `⟦`, the block opener, so
-`[[1, 2], [3, 4]]` is a parse error — `expected RBracket`. Write `[ [1, 2], [3, 4] ]`
-and the ambiguity disappears.
+`[[1, 2], [3, 4]]` is read as a *block* and rejected:
+
+```text
+error[E010]: unexpected Comma in statement position
+help: `[[` opens a block, not a nested list — a comma cannot appear between a
+      block's statements; for a list of lists write `[ [ … ] ]`
+```
+
+Write `[ [1, 2], [3, 4] ]` and the ambiguity disappears. The single-element
+case is the one to watch: `[["a", "b"]]` has no comma at the outer level, so it
+parsed silently as a block whose value is its last expression — `"b"` — until
+the parser started reporting what its recovery discards.
 
 `flatten` removes exactly **one** level, so a three-deep list needs two passes.
 

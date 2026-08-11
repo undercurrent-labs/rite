@@ -66,6 +66,19 @@ Optional **params** as a list (positional `?` in SQL):
 rows ← ! @db.query(conn, "SELECT * FROM events WHERE id = ?", [1])?
 ```
 
+`@db.query` also runs a statement that writes and answers rows, so
+`INSERT … RETURNING *` hands back what it just stored — with the real column
+names, so no follow-up `SELECT` is needed to learn an id:
+
+```rite
+saved ← ! @db.query(
+  conn,
+  "INSERT INTO events VALUES (?, ?) RETURNING *",
+  [4, "queued"]
+)?
+// [⟨id: 4, name: "queued"⟩]
+```
+
 ## Prepared statements
 
 ```rite

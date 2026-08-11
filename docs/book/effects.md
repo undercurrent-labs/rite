@@ -191,8 +191,16 @@ rite run app.rite \
 
 - `--allow db` — in-memory DuckDB only  
 - `--allow db=./data` — file-backed DBs under that path prefix
+- `--allow net=api.example.com` — that host only  
+- `--allow net=*` — every host, when you genuinely need the open internet
 
 Patterns are path/host oriented — tighten to the minimum your script needs.
+
+**Network scope is never implied.** A bare `--allow net` is refused, because
+"some network" has no sensible default: the error names `net=<host>` and
+`net=*` so the choice stays explicit. `fs:read` and `fs:write` do default their
+scope to `.` when written bare; the filesystem has an obvious starting point
+and the network does not.
 
 ### Inspect
 

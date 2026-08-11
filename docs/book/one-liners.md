@@ -262,7 +262,7 @@ value.
 |---------|--------|-----|
 | `room` unexpected token | `room` is reserved (game DSL) | Use another name (`place`, `chamber`) |
 | Nested list `[[1,2]]` parse error | `[[` is ASCII block open | Use `[ [1, 2], [3, 4] ]` with spaces |
-| `ok(42)` parse error | `ok` / `err` are keywords | Use match on atoms / host results + `?` |
+| `` `ok` cannot be a binding name `` | `ok` / `err` build results, so they cannot be bound | Name the binding something else (`hit`, `answer`) — `ok(42)` as a *value* is fine |
 
 ## Studio vs CLI
 
