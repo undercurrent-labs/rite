@@ -9,6 +9,16 @@ on:
 env:
   CARGO_TERM_COLOR: always
   RUSTFLAGS: -Dwarnings
+  # Debug info is ~90% of a test binary here: `rite-caps` statically links a
+  # bundled DuckDB, so each of its ~35 test executables is 811 MB with debug
+  # info and 82 MB without. Thirty-five of those exhausted the Linux runner's
+  # disk — the job died with "No space left on device", and on the next run as
+  # `ld terminated with signal 7 [Bus error]`, which is the same thing wearing
+  # a linker's clothes. Rite's own stack traces are built from its `SourceMap`,
+  # not DWARF, so dropping this costs a Rust backtrace its line numbers and
+  # nothing else.
+  CARGO_PROFILE_DEV_DEBUG: 0
+  CARGO_PROFILE_TEST_DEBUG: 0
 
 jobs:
   rust:
@@ -31,6 +41,17 @@ jobs:
       # rewrite every file on checkout and make the generation guard below see the
       # whole tree as modified.
       - uses: actions/checkout@v5
+      # Headroom on top of the debug-info setting above. The runner ships ~25 GB
+      # of toolchains this build never touches, and a bundled-DuckDB workspace
+      # is the kind that notices. `df` is left in the log: when this fails
+      # again, the first question is how much room there was.
+      - name: free disk space
+        if: runner.os == 'Linux'
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/lib/android \
+                      /opt/hostedtoolcache/CodeQL /usr/local/share/boost
+          df -h /
+        shell: bash
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
