@@ -139,10 +139,11 @@
   Private functions stay private: `helper.secret()` from the entry is still
   refused.
 
-- **Two shadowing traps are now check-time errors (`E022`).** A top-level
-  binding named like an imported function, and an export named like a builtin
-  (`entries`, `keep`, …) imported unqualified — both used to silently replace
-  the function they collided with.
+- **An import can no longer change what a name already means.** A top-level
+  binding named like an imported function is a check-time error (`E022`); an
+  export named like a builtin is simply not bound to the bare name, so
+  `queue.entries(…)` works and a bare `entries(…)` keeps meaning the builtin.
+  Both used to silently replace the thing they collided with.
 
 - **Parser recovery reports what it discards (`E010`).** `[["a", "b"]]` lexes
   `[[` as a block open, and the comma inside was thrown away without a

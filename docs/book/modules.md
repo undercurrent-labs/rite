@@ -72,10 +72,12 @@ Two collisions are errors at `rite check` rather than surprises at runtime:
 - **A top-level binding named like an imported function** (`E022`). The binding
   would replace the function for every bare call after it in the file. Rename
   the binding, or keep the module behind a qualifier with `use … as …`.
-- **An export named like a builtin** (`E022`). Importing it unqualified would
-  replace `entries`, `find`, `get`, … at every bare call site. Rename the
-  export, or import the module with an alias and call it qualified. The
-  reserved names are the [builtin reference](reference/builtins.md).
+An export named like a builtin is handled differently: it is simply **not bound
+to the bare name**. A module exporting `entries` stays perfectly usable as
+`queue.entries(…)`, while a bare `entries(…)` keeps meaning the builtin it
+meant before the import existed — so adding a `use` can never change what a
+name already in the file does. The names that behave this way are the
+[builtin reference](reference/builtins.md).
 
 ## The `@` qualifier
 

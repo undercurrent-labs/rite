@@ -352,7 +352,6 @@ pub(crate) struct McpServerState {
     /// the way `@http.listen` shares it per request — a `@db` connection
     /// opened before `@mcp.serve` works inside a tool.
     capabilities: Arc<dyn rite_runtime::CapabilityHost>,
-    handles: Arc<rite_runtime::HandleTable>,
     sources: rite_core::SourceMap,
     budget: rite_runtime::ExecutionBudget,
 }
@@ -845,7 +844,6 @@ async fn run_decl(
 ) -> Result<Outcome, RunFailure> {
     let mut ctx = RuntimeContext::new();
     ctx.capabilities = state.capabilities.clone();
-    ctx.handles = state.handles.clone();
     ctx.allow_all = state.perms.allow_all;
     ctx.console_allowed = state.perms.allow_all || state.perms.console;
     ctx.sources = state.sources.clone();
@@ -1017,7 +1015,6 @@ async fn serve(perms: &PermissionSet, ctx: &RuntimeContext) -> Result<Value, Eva
         functions: ctx.functions.clone(),
         log,
         capabilities: ctx.capabilities.clone(),
-        handles: ctx.handles.clone(),
         sources: ctx.sources.clone(),
         budget: ctx.budget.clone(),
     };

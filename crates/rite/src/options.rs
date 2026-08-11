@@ -166,12 +166,20 @@ pub fn parse_duration(s: &str) -> Result<Duration, String> {
         .trim()
         .parse()
         .map_err(|_| "expected a number with an optional unit (e.g. 30s, 5m, 12h)".to_string())?;
+    // Checked: the scale would otherwise panic in a debug build and wrap in a
+    // release one, turning a `--timeout` meant to be effectively unbounded into
+    // a few seconds.
+    let scaled = |secs: u64| -> Result<Duration, String> {
+        n.checked_mul(secs)
+            .map(Duration::from_secs)
+            .ok_or_else(|| format!("`{t}` is longer than this program can measure"))
+    };
     match unit {
         "ms" => Ok(Duration::from_millis(n)),
         "" | "s" => Ok(Duration::from_secs(n)),
-        "m" => Ok(Duration::from_secs(n * 60)),
-        "h" => Ok(Duration::from_secs(n * 3600)),
-        "d" => Ok(Duration::from_secs(n * 86_400)),
+        "m" => scaled(60),
+        "h" => scaled(3_600),
+        "d" => scaled(86_400),
         other => Err(format!("unknown unit `{other}` — use ms, s, m, h or d")),
     }
 }

@@ -1,3 +1,6 @@
+// An export named after a builtin is not bound to the bare name: the module
+// stays usable qualified, and `count` keeps meaning the builtin it meant
+// before the import existed.
 use ./queuemod
 
-^ entries()
+^ [queuemod.entries(), entries(<<a: 1>>)]

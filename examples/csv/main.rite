@@ -5,7 +5,7 @@ rows ← [
   ⟨name: "Bob", role: "ops"⟩
 ]
 
-text ← @csv.encode(rows)
+text ← @csv.encode(rows)?
 ! @console.println(text)
 
 decoded ← @csv.decode(text)?

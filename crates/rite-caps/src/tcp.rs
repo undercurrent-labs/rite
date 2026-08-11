@@ -424,7 +424,6 @@ impl TcpCap {
             module_env: ctx.env.clone(),
             functions: ctx.functions.clone(),
             capabilities: ctx.capabilities.clone(),
-            handles: ctx.handles.clone(),
             sources: ctx.sources.clone(),
             budget: ctx.budget.clone(),
         };
@@ -469,7 +468,6 @@ struct ConnScope {
     module_env: rite_runtime::Environment,
     functions: HashMap<String, rite_runtime::FunctionEntry>,
     capabilities: std::sync::Arc<dyn rite_runtime::CapabilityHost>,
-    handles: std::sync::Arc<rite_runtime::HandleTable>,
     sources: rite_core::SourceMap,
     budget: rite_runtime::ExecutionBudget,
 }
@@ -489,7 +487,8 @@ async fn serve_conn(
 ) {
     let mut ctx = RuntimeContext::new();
     ctx.capabilities = scope.capabilities;
-    ctx.handles = scope.handles;
+    // Per-connection handle table: this is where the accepted socket lives, and
+    // it must go when the connection does. See the note in `http::per_request_context`.
     ctx.allow_all = perms.allow_all;
     ctx.console_allowed = perms.allow_all || perms.console;
     ctx.sources = scope.sources;
@@ -535,9 +534,9 @@ async fn serve_conn(
             e => crate::http::emit_process_stderr(&format!("rite: tcp handler error: {e}\n")),
         }
     }
-    // The connection's lifetime is the block's. This close is load-bearing:
-    // the handle table is shared with the listen-time context now, so dropping
-    // this handler's `ctx` no longer drops the socket.
+    // The connection's lifetime is the block's. Dropping `ctx` would close it
+    // too, now that the table is this connection's own, but say so explicitly:
+    // the socket should go when the handler returns.
     ctx.handles.close(id);
 }
 

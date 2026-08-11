@@ -390,7 +390,10 @@ fn atoms_and_equality() {
             "1 = 1.0",
             // Atoms reaching a string must carry their name, not their interner index.
             "str(#ok)",
-            "\"status={#ready}\"",
+            // An atom *hole* (`"{#ready}"`) is not expandable — desugar builds a
+            // global whose name still carries the `#` — and is now refused at
+            // check time. Bind it first, which is the spelling that works.
+            "s ← #ready\n\"status={s}\"",
             "[#a, #b] → join(\", \")",
             "str([#a, ⟨s: #b⟩])",
         ],

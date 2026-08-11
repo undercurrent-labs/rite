@@ -54,7 +54,6 @@ pub struct ServerState {
     /// service opened a new single-writer DuckDB connection per request,
     /// corrupting the file under concurrent writes.
     pub capabilities: Arc<dyn rite_runtime::CapabilityHost>,
-    pub handles: Arc<rite_runtime::HandleTable>,
     /// Sources from listen time, so a handler error reports `file:line:col`
     /// instead of `fn at span 2403..2802`.
     pub sources: rite_core::SourceMap,
@@ -71,7 +70,12 @@ pub struct ServerState {
 fn per_request_context(state: &ServerState) -> RuntimeContext {
     let mut ctx = RuntimeContext::new();
     ctx.capabilities = state.capabilities.clone();
-    ctx.handles = state.handles.clone();
+    // The capability host is shared — that is what lets a `@db` connection or
+    // `@store` entry made before `listen` work inside a handler. The *handle
+    // table* is not: it is the per-request scratch space for `@fs.open` and
+    // accepted sockets, nothing removes a request's entries when it ends, and
+    // it is capped at `DEFAULT_OPEN_HANDLE_LIMIT`. Sharing it wedged a server
+    // after 1024 requests that opened a file and did not close it.
     ctx.allow_all = state.perms.allow_all;
     ctx.console_allowed = state.perms.allow_all || state.perms.console;
     ctx.sources = state.sources.clone();
@@ -122,7 +126,6 @@ fn server_state_from(
         // top-level bindings and functions they were written next to.
         module_env: ctx.env.clone(),
         capabilities: ctx.capabilities.clone(),
-        handles: ctx.handles.clone(),
         sources: ctx.sources.clone(),
         budget: ctx.budget.clone(),
     }
@@ -483,7 +486,6 @@ impl HttpCap {
             middleware: vec![],
             module_env: ctx.env.clone(),
             capabilities: ctx.capabilities.clone(),
-            handles: ctx.handles.clone(),
             sources: ctx.sources.clone(),
             budget: ctx.budget.clone(),
         };
@@ -915,7 +917,6 @@ fn run_middleware_chain<'a>(
                 // reached directly.
                 module_env: ctx.env.clone(),
                 capabilities: ctx.capabilities.clone(),
-                handles: ctx.handles.clone(),
                 sources: ctx.sources.clone(),
                 budget: ctx.budget.clone(),
             };
@@ -956,9 +957,8 @@ struct NextContinuation {
     functions: HashMap<String, FunctionEntry>,
     module_env: rite_runtime::Environment,
     /// Shared server state, so the context built for the continuation matches
-    /// the one the request started in — same host, handles, sources, limits.
+    /// the one the request started in — same host, sources, limits.
     capabilities: Arc<dyn rite_runtime::CapabilityHost>,
-    handles: Arc<rite_runtime::HandleTable>,
     sources: rite_core::SourceMap,
     budget: rite_runtime::ExecutionBudget,
 }
@@ -1023,7 +1023,6 @@ fn next_invoker(conts: Continuations) -> rite_runtime::HttpNextInvoker {
             let req = args.into_iter().next().unwrap_or(Value::None);
             let mut inner = RuntimeContext::new();
             inner.capabilities = cont.capabilities.clone();
-            inner.handles = cont.handles.clone();
             inner.allow_all = cont.perms.allow_all;
             inner.console_allowed = cont.perms.allow_all || cont.perms.console;
             inner.sources = cont.sources.clone();

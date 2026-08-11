@@ -625,15 +625,32 @@ fn inject_dependencies(program: &mut Program, graph: &ModuleGraph) {
         let qualifier = alias
             .clone()
             .unwrap_or_else(|| key.rsplit('.').next().unwrap_or(key.as_str()).to_string());
+        // The same treatment `merge_exports_into_entry` gives the entry: every
+        // function is copied under its mangled name and its intra-module calls
+        // are rewritten to match. Without the private copies and the rewrite, a
+        // module whose export called a private sibling resolved in the entry
+        // but not one level down — `use ./mid` where `mid` uses `helper` was
+        // E020 `undefined name` on the helper's own private function.
+        let module_fns: std::collections::HashSet<String> = dep
+            .program
+            .items
+            .iter()
+            .filter_map(|i| match i {
+                Item::Function(g) => Some(g.name.name.clone()),
+                _ => None,
+            })
+            .collect();
         for item in &dep.program.items {
             let Item::Function(f) = item else { continue };
-            if !f.is_pub {
-                continue;
-            }
             let mut qualified = f.clone();
             qualified.name.name = format!("{}__{}", qualifier, f.name.name);
             qualified.is_pub = false;
+            InternalRefRewriter::new(&qualifier, &module_fns).rewrite_fn(&mut qualified);
             program.items.insert(0, Item::Function(qualified));
+
+            if !f.is_pub {
+                continue;
+            }
 
             if alias.is_none() {
                 let clash = program
@@ -643,6 +660,7 @@ fn inject_dependencies(program: &mut Program, graph: &ModuleGraph) {
                 if !clash {
                     let mut flat = f.clone();
                     flat.is_pub = false;
+                    InternalRefRewriter::new(&qualifier, &module_fns).rewrite_fn(&mut flat);
                     program.items.insert(0, Item::Function(flat));
                 }
             }
@@ -804,31 +822,18 @@ pub fn merge_exports_into_entry(
                         );
                     }
                     Some(_) => {}
-                    None if crate::resolve::BUILTIN_NAMES.contains(&f.name.name.as_str()) => {
-                        // An export named after a builtin would replace that
-                        // builtin at every bare call site in the entry,
-                        // including ones written before the `use`. The
-                        // qualified copy is already injected, so the module
-                        // stays usable — only the bare name is refused.
-                        diagnostics.push(
-                            simple_error(
-                                E022_DUPLICATE_BINDING,
-                                format!(
-                                    "`{}` exported by `{}` shadows the builtin of the same name",
-                                    f.name.name, key
-                                ),
-                                entry.file,
-                                f.name.span,
-                                "importing this unqualified would replace the builtin",
-                            )
-                            .with_help(format!(
-                                "import it as `use {} as …` and call it qualified, or rename \
-                                 the export — the reserved names are listed in the builtin \
-                                 reference (docs/generated/builtins.md)",
-                                key
-                            )),
-                        );
-                    }
+                    // An export named after a builtin is simply not bound to
+                    // the bare name. The mangled copy is still injected, so
+                    // `qm.count(…)` works; a bare `count(…)` keeps meaning the
+                    // builtin it meant before the import existed.
+                    //
+                    // This used to be a hard error, which refused the whole
+                    // program even when the bare name was never written — an
+                    // import that cannot be used at all is a worse answer than
+                    // one that quietly declines to shadow. What the field
+                    // report needed was that adding a `use` never changes what
+                    // an existing name means, and not injecting achieves it.
+                    None if crate::resolve::BUILTIN_NAMES.contains(&f.name.name.as_str()) => {}
                     None => {
                         flat_origin.insert(f.name.name.clone(), key.clone());
                         let mut bare = f.clone();
@@ -853,7 +858,13 @@ pub fn merge_exports_into_entry(
                     inject(entry, q, false);
                 }
             }
-            if alias.is_none() && !flat_origin.contains_key(name) {
+            // Same rule as above: never bind a builtin's spelling to an
+            // import. This is the second path that injects a bare name, and
+            // skipping only the first one let the export back in.
+            if alias.is_none()
+                && !flat_origin.contains_key(name)
+                && !crate::resolve::BUILTIN_NAMES.contains(&name.as_str())
+            {
                 let already = entry
                     .items
                     .iter()

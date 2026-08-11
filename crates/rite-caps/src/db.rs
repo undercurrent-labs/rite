@@ -41,11 +41,13 @@ struct DbInner {
     /// stmt_id → (conn_id, sql)
     stmts: HashMap<u64, (u64, String)>,
     #[cfg(all(feature = "duckdb", not(target_arch = "wasm32")))]
-    /// conn_id → canonical file path, for the double-open check. DuckDB's file
-    /// lock is per *process*, so two `@db.open` calls on one file in one
+    /// conn_id → (canonical file path, opens for writing). DuckDB's file lock
+    /// is per *process*, so two writing `@db.open` calls on one file in one
     /// script both succeeded — two writers on a single-writer file, which is
-    /// the corruption path the cross-process lock exists to prevent.
-    open_paths: HashMap<u64, PathBuf>,
+    /// the corruption path the cross-process lock exists to prevent. Readers
+    /// are not restricted: DuckDB permits concurrent READ_ONLY handles, and
+    /// refusing them broke collectors that legitimately open one file twice.
+    open_paths: HashMap<u64, (PathBuf, bool)>,
 }
 
 pub struct DbCap {
@@ -303,23 +305,29 @@ impl DbCap {
         } else {
             let p = PathBuf::from(&path_spec);
             let p = perms.check_db_path(&p).map_err(EvalError::Permission)?;
-            // DuckDB's file lock is per process; a second open of the same
-            // file inside this script would be a second writer.
+            // DuckDB's file lock is per process, so a second *writing* open of
+            // the same file inside this script would be a second writer on a
+            // single-writer file. Two readers are fine, and a reader alongside
+            // a writer is DuckDB's business, not ours.
             let canonical = p.canonicalize().unwrap_or_else(|_| p.clone());
-            if let Some((held, _)) = self
-                .inner
-                .lock()
-                .open_paths
-                .iter()
-                .find(|(_, held)| **held == canonical)
-            {
-                return Err(EvalError::Message(format!(
-                    "db.open: `{}` is already open in this script (handle db.conn:{held}) \
-                     — share that handle, or close it first",
-                    path_spec,
-                )));
+            let opens_for_write = !matches!(access_mode, Some(duckdb::AccessMode::ReadOnly));
+            if opens_for_write {
+                if let Some((held, _)) = self
+                    .inner
+                    .lock()
+                    .open_paths
+                    .iter()
+                    .find(|(_, (held, held_writes))| *held_writes && *held == canonical)
+                {
+                    return Err(EvalError::Message(format!(
+                        "db.open: `{}` is already open for writing in this script (handle \
+                         db.conn:{held}) — share that handle, close it first, or open this \
+                         one with `access_mode: \"READ_ONLY\"`",
+                        path_spec,
+                    )));
+                }
             }
-            (open_file(&p)?, Some(canonical))
+            (open_file(&p)?, Some((canonical, opens_for_write)))
         };
         // A script controls arbitrary SQL, and DuckDB's SQL surface is a second
         // filesystem/network host (read_csv, COPY TO, ATTACH, INSTALL/LOAD, httpfs).
@@ -330,8 +338,8 @@ impl DbCap {
         {
             let mut inner = self.inner.lock();
             inner.conns.insert(id, conn);
-            if let Some(c) = canonical {
-                inner.open_paths.insert(id, c);
+            if let Some(entry) = canonical {
+                inner.open_paths.insert(id, entry);
             }
         }
         Ok(Value::ok(Value::Handle(HostHandle {

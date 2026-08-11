@@ -402,42 +402,60 @@ enum ExitSource {
 /// Every exit of a function body: explicit `^`, plus the tail expression.
 ///
 /// `^` inside a `for` / `while` / `loop` body leaves the *function* (the loop
-/// sugar passes it through), so those bodies are walked. A closure written with
-/// `|…|`, and an HTTP/MCP handler body, are boundaries: a `^` there belongs to
-/// them, so they are not.
-fn collect_block_exits(block: &Block, out: &mut Vec<ExitSource>) {
+/// sugar passes it through), so those bodies are walked for returns. Their
+/// *tail* is not an exit: `each` and `while_loop` discard the body's value, so
+/// a loop body ending in `ok(r)` says nothing about what the function answers —
+/// counting it recorded the shape of a value that is thrown away.
+///
+/// A closure written with `|…|`, and an HTTP/MCP handler body, are boundaries:
+/// a `^` there belongs to them, so they are not walked at all.
+///
+/// `locals` holds every name the function binds — parameters and bindings at
+/// any depth. A call through one of those is unknowable here: the value came
+/// from the caller.
+fn collect_block_exits(
+    block: &Block,
+    locals: &HashSet<String>,
+    tail_is_exit: bool,
+    out: &mut Vec<ExitSource>,
+) {
     for (i, item) in block.body.iter().enumerate() {
-        let last = i + 1 == block.body.len();
+        let last = tail_is_exit && i + 1 == block.body.len();
         match item {
             // A nested `def` owns its own returns.
             Item::Function(_) => {}
-            Item::Statement(stmt) => collect_stmt_exits(stmt, last, out),
+            Item::Statement(stmt) => collect_stmt_exits(stmt, locals, last, out),
             _ => {}
         }
     }
 }
 
-fn collect_stmt_exits(stmt: &Stmt, is_tail: bool, out: &mut Vec<ExitSource>) {
+fn collect_stmt_exits(
+    stmt: &Stmt,
+    locals: &HashSet<String>,
+    is_tail: bool,
+    out: &mut Vec<ExitSource>,
+) {
     match stmt {
         Stmt::Return(r) => out.push(match &r.value {
             // A bare `^` answers `none`.
             None => ExitSource::Known(ReturnShape::NotResult),
-            Some(e) => shape_of(e),
+            Some(e) => shape_of(e, locals),
         }),
         Stmt::Expr(e) => {
-            collect_nested_returns(e, out);
+            collect_nested_returns(e, locals, out);
             if is_tail {
-                out.push(shape_of(e));
+                out.push(shape_of(e, locals));
             }
         }
         Stmt::Binding(b) => {
-            collect_nested_returns(&b.value, out);
+            collect_nested_returns(&b.value, locals, out);
             if is_tail {
                 out.push(ExitSource::Unknown);
             }
         }
         Stmt::Assign(a) => {
-            collect_nested_returns(&a.value, out);
+            collect_nested_returns(&a.value, locals, out);
             if is_tail {
                 out.push(ExitSource::Unknown);
             }
@@ -446,56 +464,187 @@ fn collect_stmt_exits(stmt: &Stmt, is_tail: bool, out: &mut Vec<ExitSource>) {
             rite_syntax::SugarForm::ForIn { body, .. }
             | rite_syntax::SugarForm::While { body, .. }
             | rite_syntax::SugarForm::Loop { body, .. } => {
-                // Returns escape the loop sugar; the loop's own value does not
-                // become the function's.
-                let mut inner = Vec::new();
-                collect_block_exits(body, &mut inner);
-                out.extend(
-                    inner
-                        .into_iter()
-                        .filter(|e| !matches!(e, ExitSource::Unknown)),
-                );
+                // Returns escape the loop; the body's own value is discarded.
+                collect_block_exits(body, locals, false, out);
+                // Every loop form answers `none`.
+                if is_tail {
+                    out.push(ExitSource::Known(ReturnShape::NotResult));
+                }
             }
             rite_syntax::SugarForm::Unless {
                 then_branch,
                 else_branch,
                 ..
             } => {
-                collect_block_exits(then_branch, out);
+                collect_block_exits(then_branch, locals, false, out);
                 if let Some(b) = else_branch {
-                    collect_block_exits(b, out);
+                    collect_block_exits(b, locals, false, out);
+                }
+                // The sugar's own value is not modelled.
+                if is_tail {
+                    out.push(ExitSource::Unknown);
                 }
             }
-            rite_syntax::SugarForm::Say { value } => collect_nested_returns(value, out),
+            rite_syntax::SugarForm::Say { value } => {
+                collect_nested_returns(value, locals, out);
+                if is_tail {
+                    out.push(ExitSource::Known(ReturnShape::NotResult));
+                }
+            }
+            // These leave the loop rather than the function.
             rite_syntax::SugarForm::Break | rite_syntax::SugarForm::Continue => {}
         },
     }
 }
 
 /// `^` written inside an expression's branches — `? c ⟦ ^ 1 ⟧`, a match arm.
-fn collect_nested_returns(expr: &Expr, out: &mut Vec<ExitSource>) {
+///
+/// Only returns: a branch's tail is the *branch's* value, and whether that
+/// reaches the caller depends on where the enclosing expression sits.
+fn collect_nested_returns(expr: &Expr, locals: &HashSet<String>, out: &mut Vec<ExitSource>) {
     match expr {
         Expr::If(i) => {
-            collect_block_exits(&i.then_branch, out);
+            collect_block_exits(&i.then_branch, locals, false, out);
             if let Some(b) = &i.else_branch {
-                collect_block_exits(b, out);
+                collect_block_exits(b, locals, false, out);
             }
         }
         Expr::Match(m) => {
             for arm in &m.arms {
-                collect_nested_returns(&arm.body, out);
+                collect_nested_returns(&arm.body, locals, out);
             }
         }
         // A parameterless block is a plain sequence, not a closure.
-        Expr::Block(b) if !b.has_param_list => collect_block_exits(b, out),
-        Expr::Group(g) => collect_nested_returns(&g.expr, out),
-        Expr::Unary(u) => collect_nested_returns(&u.expr, out),
+        Expr::Block(b) if !b.has_param_list => collect_block_exits(b, locals, false, out),
+        Expr::Group(g) => collect_nested_returns(&g.expr, locals, out),
+        Expr::Unary(u) => collect_nested_returns(&u.expr, locals, out),
         _ => {}
     }
 }
 
+/// Every name a function binds: parameters, and bindings at any depth
+/// including closure parameters. Over-approximate on purpose — a name in here
+/// only ever turns a classification into `Unknown`.
+fn collect_local_names(block: &Block, out: &mut HashSet<String>) {
+    for p in &block.params {
+        out.insert(p.name.name.clone());
+    }
+    for item in &block.body {
+        match item {
+            Item::Function(f) => {
+                // A nested `def` is a name in this scope too.
+                out.insert(f.name.name.clone());
+            }
+            Item::Statement(stmt) => collect_local_names_stmt(stmt, out),
+            _ => {}
+        }
+    }
+}
+
+fn collect_local_names_stmt(stmt: &Stmt, out: &mut HashSet<String>) {
+    match stmt {
+        Stmt::Binding(b) => {
+            pattern_names(&b.pattern, out);
+            collect_local_names_expr(&b.value, out);
+        }
+        Stmt::Assign(a) => collect_local_names_expr(&a.value, out),
+        Stmt::Expr(e) => collect_local_names_expr(e, out),
+        Stmt::Return(r) => {
+            if let Some(e) = &r.value {
+                collect_local_names_expr(e, out);
+            }
+        }
+        Stmt::Sugared(s) => match &s.form {
+            rite_syntax::SugarForm::ForIn { var, body, .. } => {
+                out.insert(var.name.clone());
+                collect_local_names(body, out);
+            }
+            rite_syntax::SugarForm::While { body, .. }
+            | rite_syntax::SugarForm::Loop { body, .. } => collect_local_names(body, out),
+            rite_syntax::SugarForm::Unless {
+                then_branch,
+                else_branch,
+                ..
+            } => {
+                collect_local_names(then_branch, out);
+                if let Some(b) = else_branch {
+                    collect_local_names(b, out);
+                }
+            }
+            rite_syntax::SugarForm::Say { .. }
+            | rite_syntax::SugarForm::Break
+            | rite_syntax::SugarForm::Continue => {}
+        },
+    }
+}
+
+fn collect_local_names_expr(expr: &Expr, out: &mut HashSet<String>) {
+    match expr {
+        Expr::Block(b) => collect_local_names(b, out),
+        Expr::If(i) => {
+            collect_local_names(&i.then_branch, out);
+            if let Some(b) = &i.else_branch {
+                collect_local_names(b, out);
+            }
+        }
+        Expr::Match(m) => {
+            for arm in &m.arms {
+                pattern_names(&arm.pattern, out);
+                collect_local_names_expr(&arm.body, out);
+            }
+        }
+        Expr::Group(g) => collect_local_names_expr(&g.expr, out),
+        Expr::Unary(u) => collect_local_names_expr(&u.expr, out),
+        Expr::Call(c) => {
+            for a in &c.args {
+                collect_local_names_expr(a, out);
+            }
+        }
+        _ => {}
+    }
+}
+
+/// Names a pattern binds.
+fn pattern_names(pattern: &rite_syntax::Pattern, out: &mut HashSet<String>) {
+    use rite_syntax::Pattern;
+    match pattern {
+        Pattern::Ident(i) => {
+            out.insert(i.name.clone());
+        }
+        Pattern::List(l) => {
+            for p in &l.elements {
+                pattern_names(p, out);
+            }
+            if let Some(rest) = &l.rest {
+                pattern_names(rest, out);
+            }
+        }
+        Pattern::Record(r) => {
+            for f in &r.fields {
+                match &f.pattern {
+                    Some(p) => pattern_names(p, out),
+                    None => {
+                        out.insert(f.name.name.clone());
+                    }
+                }
+            }
+        }
+        Pattern::Result(r) => {
+            if let Some(p) = &r.binding {
+                pattern_names(p, out);
+            }
+        }
+        Pattern::Or(o) => {
+            for p in &o.alternatives {
+                pattern_names(p, out);
+            }
+        }
+        Pattern::Atom(_) | Pattern::Literal(_) | Pattern::Wildcard(_) => {}
+    }
+}
+
 /// Classify one expression's shape.
-fn shape_of(expr: &Expr) -> ExitSource {
+fn shape_of(expr: &Expr, locals: &HashSet<String>) -> ExitSource {
     match expr {
         Expr::Literal(_) | Expr::Atom(_) | Expr::List(_) | Expr::Record(_) => {
             ExitSource::Known(ReturnShape::NotResult)
@@ -504,12 +653,16 @@ fn shape_of(expr: &Expr) -> ExitSource {
         Expr::Binary(_) => ExitSource::Known(ReturnShape::NotResult),
         Expr::Unary(u) => match u.op {
             UnaryOp::Not | UnaryOp::Neg => ExitSource::Known(ReturnShape::NotResult),
-            _ => shape_of(&u.expr),
+            _ => shape_of(&u.expr, locals),
         },
-        Expr::Group(g) => shape_of(&g.expr),
+        Expr::Group(g) => shape_of(&g.expr, locals),
         Expr::Capability(cap) => host_shape(&cap.path.join(".")),
         Expr::Call(c) => match c.callee.as_ref() {
             Expr::Capability(cap) => host_shape(&cap.path.join(".")),
+            // A name the function binds itself — a parameter holding a
+            // callback, a local — says nothing about the top-level function
+            // that happens to share its spelling.
+            Expr::Ident(name) if locals.contains(&name.name) => ExitSource::Unknown,
             Expr::Ident(name) => match name.name.as_str() {
                 "ok" | "err" => ExitSource::Known(ReturnShape::Result),
                 // Other builtins are left unclassified rather than audited a
@@ -546,7 +699,7 @@ fn shape_of(expr: &Expr) -> ExitSource {
             }
         }
         Expr::Block(b) if !b.has_param_list => match b.body.last() {
-            Some(Item::Statement(Stmt::Expr(e))) => shape_of(e),
+            Some(Item::Statement(Stmt::Expr(e))) => shape_of(e, locals),
             _ => ExitSource::Unknown,
         },
         _ => ExitSource::Unknown,
@@ -942,8 +1095,13 @@ impl Resolver {
         let mut sources: HashMap<String, Vec<ExitSource>> = HashMap::new();
         for item in &program.items {
             if let Item::Function(f) = item {
+                let mut locals: HashSet<String> = HashSet::new();
+                for p in &f.params {
+                    locals.insert(p.name.name.clone());
+                }
+                collect_local_names(&f.body, &mut locals);
                 let mut exits = Vec::new();
-                collect_block_exits(&f.body, &mut exits);
+                collect_block_exits(&f.body, &locals, true, &mut exits);
                 // A body with no exit at all answers `none`.
                 if exits.is_empty() {
                     exits.push(ExitSource::Known(ReturnShape::NotResult));
@@ -1700,13 +1858,14 @@ impl Resolver {
                 continue;
             };
             let hole = after[..end].trim();
-            // What desugar's `parse_interp_expr` can actually expand: an
-            // empty hole (renders as nothing), an atom, or a dotted name
-            // path — its own trim included.
-            let body = hole.strip_prefix('#').unwrap_or(hole);
+            // What desugar's `parse_interp_expr` can actually expand: an empty
+            // hole (renders as nothing) or a dotted name path, its own trim
+            // included. An atom is *not* expandable — the expander builds a
+            // global whose name still carries the `#` — so `{#ready}` is
+            // refused here rather than dying at runtime as an undefined name.
             let is_path = hole.is_empty()
-                || (!body.is_empty()
-                    && body.split('.').all(|part| {
+                || (!hole.is_empty()
+                    && hole.split('.').all(|part| {
                         let mut chars = part.chars();
                         matches!(chars.next(), Some(c) if c.is_alphabetic() || c == '_')
                             && chars.all(|c| c.is_alphanumeric() || c == '_')

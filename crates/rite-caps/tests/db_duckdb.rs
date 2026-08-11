@@ -155,9 +155,10 @@ async fn run_allow_all_result(src: &str) -> Result<rite_runtime::Value, rite_run
     run_source("db.rite", src, &mut ctx).await
 }
 
-/// DuckDB's file lock is per process: two opens of one file in one script were
-/// two writers on a single-writer database — the actual corruption path, since
-/// the cross-process case is already refused by DuckDB itself.
+/// DuckDB's file lock is per process: two *writing* opens of one file in one
+/// script were two writers on a single-writer database — the actual corruption
+/// path, since the cross-process case is already refused by DuckDB itself.
+/// Concurrent READ_ONLY handles are fine and are not refused.
 #[tokio::test]
 async fn second_open_of_the_same_file_is_refused() {
     let dir = tempfile::tempdir().unwrap();
@@ -173,7 +174,7 @@ b ← ! @db.open("{p}")?
     let err = run_allow_all_result(&src).await.unwrap_err();
     let msg = err.to_string();
     assert!(
-        msg.contains("already open in this script"),
+        msg.contains("already open for writing in this script"),
         "expected a double-open refusal, got: {msg}"
     );
 

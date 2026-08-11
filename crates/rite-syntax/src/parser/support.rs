@@ -357,6 +357,13 @@ impl Parser {
                 | TokenKind::Delete
                 | TokenKind::Head
                 | TokenKind::Options
+                // Loop control reads as a statement, never as a name — but the
+                // words are ordinary field and key spellings in data the script
+                // did not choose: `metadata.continue` paginates a Kubernetes
+                // list, and `⟨continue: …⟩` comes straight back from
+                // `@json.decode`. Leaving them out made those unwritable.
+                | TokenKind::Break
+                | TokenKind::Continue
         )
     }
 
