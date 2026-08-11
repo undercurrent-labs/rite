@@ -1,5 +1,9 @@
-// Should fail without fs permission when reading
+// Should fail without fs permission when reading.
 // Run with: rite run tests/e2e/permission_denied.rite
 // (no --allow-all)
-result ← @fs.read("/etc/passwd")
+//
+// The `!` is what makes this a *permission* test: reads are effects, so
+// without the marker the run stops at `rite check` with E021 and never
+// reaches the permission layer at all.
+result ← ! @fs.read("/etc/passwd")
 result

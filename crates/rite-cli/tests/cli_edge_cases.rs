@@ -296,20 +296,26 @@ fn modules_example_runs() {
     );
 }
 
+/// A denied read exits 5, the published permission status.
+///
+/// The `!` matters: reads are effects, so without a marker this stops at
+/// `rite check` with E021 and never reaches the permission layer. The
+/// assertion used to accept any non-zero exit, so it passed on that missing
+/// marker — proving nothing about permissions.
 #[test]
-fn permission_denied_fs_exits_nonzero() {
-    let f = write_temp("deny", r#"@fs.read("/etc/passwd")"#);
+fn permission_denied_fs_exits_five() {
+    let f = write_temp("deny", r#"! @fs.read("/etc/passwd")"#);
     let out = run_rite(&["run", f.to_str().unwrap()]); // default secure
-                                                       // non-zero or runtime error message
     let err = String::from_utf8_lossy(&out.stderr);
     let out_s = String::from_utf8_lossy(&out.stdout);
+    assert_eq!(
+        out.status.code(),
+        Some(5),
+        "expected the permission exit status; stderr={err} stdout={out_s}"
+    );
     assert!(
-        !out.status.success()
-            || err.to_lowercase().contains("permission")
-            || out_s.to_lowercase().contains("permission")
-            || err.to_lowercase().contains("denied"),
-        "status={:?} stderr={err} stdout={out_s}",
-        out.status.code()
+        err.to_lowercase().contains("permission denied"),
+        "stderr did not name the permission failure: {err}"
     );
 }
 
